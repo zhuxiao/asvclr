@@ -1,2 +1,2 @@
-# asvlr
-Accurate Structural Variation caller for Long Reads
+# ASVLR
+Accurate Structural Variation Caller for Long Reads
