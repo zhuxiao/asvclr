@@ -21,7 +21,7 @@ Usage:
 >        asvlr call -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam  
 
 ------------------------------------------------------------------------------
-If you have problems or some suggestions, please connect: xzhu@hrbnu.edu.cn  
+If you have problems or some suggestions, please contact: xzhu@hrbnu.edu.cn  
 
 ---- Enjoying!!! -----
 
