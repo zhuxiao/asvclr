@@ -14,11 +14,11 @@ The reference and an sorted BAM file can be the input of ASVCLR, and the variant
 
 Usage: 
 >    (1) detect step:  
->        asvlr detect -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam  
+>        asvclr detect -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam  
 >    (2) assemble step:  
->        asvlr assemble -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam  
+>        asvclr assemble -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam  
 >    (3) call step:  
->        asvlr call -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam  
+>        asvclr call -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam  
 
 ------------------------------------------------------------------------------
 If you have problems or some suggestions, please contact: xzhu@hrbnu.edu.cn  
