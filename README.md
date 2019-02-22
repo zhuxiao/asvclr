@@ -22,16 +22,16 @@ There are three steps to run ASVCLR: detect, assemble and call, which are descri
 
 The reference and an sorted BAM file can be the input of ASVCLR, and the variants stored in the VCF file format is generated as the output.  
 
-Usage: 
-(1) detect step: 
+Usage:
+>    (1) detect step: 
 ```sh
 asvclr detect -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
 ```
-(2) assemble step:
+>    (2) assemble step:
 ```sh
 asvclr assemble -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
 ```
-(3) call step:
+>    (3) call step:
 ```sh
 asvclr call -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
 ```
