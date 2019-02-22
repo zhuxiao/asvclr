@@ -10,6 +10,8 @@
 
 using namespace std;
 
+#define REF_END_SKIP_SIZE					1000
+
 #define SUB_MIS_ALN_REG_SIZE				10
 #define SUB_MIS_ALN_REG_RATIO_THRES			(0.05f)
 #define GAPPED_MIS_ALN_REG_NUM_THRES		1
@@ -22,17 +24,18 @@ using namespace std;
 
 class misAlnReg {
 	public:
-		size_t startPos, endPos;
+		size_t startPos, endPos, chrlen;
 		Base *misAlnRegBaseArr;
 		uint16_t disagrNum;
-		uint16_t misAlnSubregNum, subRegNum, highClipBaseNum;		// 10-bp sub-region
+		uint16_t misAlnSubregNum, subRegNum, highClipBaseNum, zeroCovBaseNum;		// 10-bp sub-region
 		float disagrRegRatio;
 		bool misAlnFlag;
 
 	public:
-		misAlnReg(size_t startPos, size_t endPos, Base *misAlnRegBaseArr);
+		misAlnReg(size_t startPos, size_t endPos, size_t chrlen, Base *misAlnRegBaseArr);
 		void computeDisagrSubreg();
 		void computeHighClipBaseNum();
+		void computeZeroCovBaseNum();
 };
 
 #endif /* SRC_MISALNREG_H_ */

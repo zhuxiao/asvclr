@@ -89,7 +89,7 @@ bool Base::isDisagreeBase(){
 // determine whether the base is a zero coverage base
 bool Base::isZeroCovBase(){
 	bool flag = false;
-	if(coverage.num_bases[5]==0) flag = true; // zero coverage
+	if(coverage.num_bases[5]<3) flag = true; // zero coverage
 	return flag;
 }
 

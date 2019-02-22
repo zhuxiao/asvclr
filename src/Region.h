@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <htslib/faidx.h>
 
 #include "Paras.h"
 #include "Base.h"
@@ -39,6 +40,7 @@ typedef struct{
 class Region {
 	public:
 		Paras *paras;
+		faidx_t *fai;
 		string chrname;
 		size_t startRPos, endRPos, startMidPartPos, endMidPartPos, chrlen;
 		Base *regBaseArr;  // the local region base array
@@ -85,6 +87,7 @@ class Region {
 		vector<size_t> getSnvVector();
 		vector<reg_t*> getIndelVector();
 		vector<reg_t*> getClipRegVector();
+		vector<size_t> getZeroCovPosVector();
 
 	private:
 		bool IsWholeRefGap();
@@ -112,7 +115,7 @@ class Region {
 
 		// duplication and inversion
 		reg_t* getClipReg(size_t startCheckPos);
-		bool haveNoClipSig(size_t startPos, size_t endPos);
+		bool haveNoClipSig(size_t startPos, size_t endPos, double clip_ratio_thres);
 };
 
 #endif /* SRC_REGION_H_ */

@@ -18,6 +18,8 @@
 #include "covLoader.h"
 #include "clipReg.h"
 
+#define MIN_ADJACENT_REG_DIST		50
+
 using namespace std;
 
 class Block{
@@ -35,6 +37,7 @@ class Block{
 		vector<size_t> snvVector;
 		vector<reg_t*> indelVector;
 		vector<misAlnReg> misAlnRegVector;
+		vector<reg_t*> zeroCovRegVector;	// for long deletions
 
 		// clip regions
 		vector<reg_t*> clipRegVector;
@@ -87,11 +90,14 @@ class Block{
 		int computeAbSigs();
 		int processSingleRegion(size_t startRpos, size_t endRPos, size_t regFlag);
 		void copySVEvents(Region &reg);
+		void computeZeroCovReg(Region &reg);
+		void updateZeroCovRegUsingIndelReg(vector<reg_t*> &zeroCovRegVec, vector<reg_t*> &indelVec);
+		void updateSVRegUsingLongZeroCov();
+		void updateClipRegUsingLongZeroCov(vector<reg_t*> &regVec, vector<reg_t*> &zero_cov_vec);
+		void updateIndelRegUsingLongZeroCov(vector<reg_t*> &regVec, vector<reg_t*> &zero_cov_vec);
 		void removeFalseIndel();
 		void removeFalseSNV();
 		void sortRegVec(vector<reg_t*> &regVector);
-		void mergeOverlappedReg(vector<reg_t*> &regVector);
-		void updateReg(reg_t* reg1, reg_t* reg2);
 		void blockLocalAssembleIndel();
 		void blockLocalAssembleClipReg();
 		void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file);

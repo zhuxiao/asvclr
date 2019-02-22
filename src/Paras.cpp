@@ -53,7 +53,7 @@ int Paras::parseParas(int argc, char **argv)
     	return parseCallParas(argc-1, argv+1);
     }else if(strcmp(argv[1], "all")==0){
     	command = "all";
-    	showUsage(); return 1;
+    	return parseAllParas(argc-1, argv+1);
     }else{
     	cerr << "invalid command " << argv[1] << endl;
     	showUsage(); return 1;
@@ -88,6 +88,7 @@ int Paras::parseDetectParas(int argc, char **argv)
 		}
 	}
 
+	load_from_file_flag = true;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
@@ -117,6 +118,7 @@ int Paras::parseAssembleParas(int argc, char **argv)
 	int opt, threadNum_tmp = 0, mask_val;
 	blockSize = BLOCKSIZE;
 	slideSize = ASSEM_SLIDE_SIZE;
+	assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
@@ -126,7 +128,7 @@ int Paras::parseAssembleParas(int argc, char **argv)
 		switch(opt){
 			case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
-			case 'S': slideSize = stoi(optarg); break;
+			case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
 			case 'c': maxClipRegSize = stoi(optarg); break;
@@ -139,6 +141,7 @@ int Paras::parseAssembleParas(int argc, char **argv)
 		}
 	}
 
+	load_from_file_flag = true;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
@@ -168,6 +171,7 @@ int Paras::parseCallParas(int argc, char **argv)
 	int opt, threadNum_tmp = 0, mask_val;
 	blockSize = BLOCKSIZE;
 	slideSize = ASSEM_SLIDE_SIZE;
+	assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
@@ -177,7 +181,7 @@ int Paras::parseCallParas(int argc, char **argv)
 		switch(opt){
 			case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
-			case 'S': slideSize = stoi(optarg); break;
+			case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
 			case 'c': maxClipRegSize = stoi(optarg); break;
@@ -190,6 +194,61 @@ int Paras::parseCallParas(int argc, char **argv)
 		}
 	}
 
+	load_from_file_flag = true;
+	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+
+	if(mask_val==1) maskMisAlnRegFlag = true;
+	else if(mask_val==0) maskMisAlnRegFlag = false;
+	else{
+		cout << "Error: Please specify the correct mask flag for mis-aligned regions using -M option." << endl << endl;
+		showCallUsage();
+		return 1;
+	}
+
+	opt = argc - optind; // the number of SAMs on the command line
+	if(opt==1) inBamFile = argv[optind];
+	else { showCallUsage(); return 1; }
+
+	if(refFile.size()==0){
+		cout << "Error: Please specify the reference" << endl << endl;
+		showCallUsage();
+		return 1;
+	}
+
+	return 0;
+}
+
+// parse the parameters for 'all' command
+int Paras::parseAllParas(int argc, char **argv)
+{
+	int opt, threadNum_tmp = 0, mask_val;
+	blockSize = BLOCKSIZE;
+	slideSize = SLIDESIZE;
+	assemSlideSize = ASSEM_SLIDE_SIZE;
+	min_sv_size_usr = MIN_SV_SIZE_USR;
+	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
+	maxClipRegSize = MAX_CLIP_REG_SIZE;
+	mask_val = 1;
+
+	while( (opt = getopt(argc, argv, ":f:b:s:S:m:n:c:o:t:M:h")) != -1 ){
+		switch(opt){
+			case 'f': refFile = optarg; break;
+			case 'b': assemSlideSize = stoi(optarg); break;
+			case 's': slideSize = stoi(optarg); break;
+			case 'S': assemSlideSize = stoi(optarg); break;
+			case 'm': min_sv_size_usr = stoi(optarg); break;
+			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
+			case 'c': maxClipRegSize = stoi(optarg); break;
+			case 'o': outFilePrefix = optarg; break;
+			case 't': threadNum_tmp = stoi(optarg); break;
+			case 'M': mask_val = stoi(optarg); break;
+			case 'h': showUsage(); exit(0);
+			case '?': cout << "unknown option -" << (char)optopt << endl; exit(1);
+			case ':': cout << "the option -" << (char)optopt << " needs a value" << endl; exit(1);
+		}
+	}
+
+	load_from_file_flag = false;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
@@ -287,7 +346,7 @@ void Paras::showCallUsage()
 // output parameters
 void Paras::outputParas(){
 	if(refFile.size()) cout << "Ref file: " << refFile << endl;
-	if(inBamFile.size()) cout << "In file: " << inBamFile << endl;
+	if(inBamFile.size()) cout << "Align file: " << inBamFile << endl;
 	if(outFilePrefix.size()) cout << "Out prefix: " << outFilePrefix << endl;
 
 	cout << "Clipping number supporting SV: " << minClipReadsNumSupportSV << endl;

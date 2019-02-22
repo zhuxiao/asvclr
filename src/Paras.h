@@ -50,15 +50,12 @@ class Paras
 	public:
 		// user/system defined parameters
 		string command, refFile, inBamFile, outFilePrefix;
-		size_t blockSize, slideSize, min_sv_size_usr, num_threads, large_indel_size_thres;
-		bool maskMisAlnRegFlag;
+		size_t blockSize, slideSize, assemSlideSize, min_sv_size_usr, num_threads, large_indel_size_thres;
+		bool maskMisAlnRegFlag, load_from_file_flag;
 		size_t misAlnRegLenSum = 0;
 		size_t minClipReadsNumSupportSV;
 
 		size_t maxClipRegSize;
-
-		// assemble parameters
-		size_t assemSlideSize;  // unused yet
 
 		// estimated parameters
 		size_t min_ins_size_filt, min_del_size_filt, min_clip_size_filt;
@@ -83,6 +80,7 @@ class Paras
 		int parseDetectParas(int argc, char **argv);
 		int parseAssembleParas(int argc, char **argv);
 		int parseCallParas(int argc, char **argv);
+		int parseAllParas(int argc, char **argv);
 		void showUsage();
 		void showDetectUsage();
 		void showAssembleUsage();

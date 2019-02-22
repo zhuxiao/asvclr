@@ -335,10 +335,10 @@ void Block::extractMisAlnRegions(){
 		for(j=i; j<misAlnRegVector.size(); j++) {
 			it = misAlnRegVector.begin() + j;
 
-//			if(it->startPos>=5576001)
-//				cout << it->startPos << "-" << it->endPos << ":" << it->disagrRegRatio << endl;
+//			if(it->startPos>=1) // 5578000
+//				cout << it->startPos << "-" << it->endPos << ": " << "disagrRegRatio=" << it->disagrRegRatio << ", highClipBaseNum=" << it->highClipBaseNum << ", zeroCovBaseNum=" << it->zeroCovBaseNum << endl;
 
-			if(it->disagrRegRatio>=SUB_MIS_ALN_REG_RATIO_THRES and it->highClipBaseNum==0) {
+			if(it->disagrRegRatio>=SUB_MIS_ALN_REG_RATIO_THRES and it->highClipBaseNum==0 and it->zeroCovBaseNum==0) {
 				if(gappedNum<=GAPPED_MIS_ALN_REG_NUM_THRES) contiguousNum += gappedNum;
 				gappedNum = 0;
 				contiguousNum ++;
@@ -391,7 +391,7 @@ void Block::computeDisagrNumSingleRegion(size_t startRpos, size_t endRPos, size_
 	// compute the abnormal signatures in a region
 	if(tmp_reg.wholeRefGapFlag==false){
 		// compute disagreements and save to vector
-		misAlnReg misAln_reg(tmp_reg.startMidPartPos, tmp_reg.endMidPartPos, tmp_reg.regBaseArr+tmp_reg.startMidPartPos-tmp_reg.startRPos);
+		misAlnReg misAln_reg(tmp_reg.startMidPartPos, tmp_reg.endMidPartPos, chrlen, tmp_reg.regBaseArr+tmp_reg.startMidPartPos-tmp_reg.startRPos);
 		misAlnRegVector.push_back(misAln_reg);
 	}
 }
@@ -459,6 +459,15 @@ int Block::computeAbSigs(){
 		processSingleRegion(startPosWin, endPosWin, TAIL_REGION);
 	}
 
+	// merge adjacent zero coverage regions
+	mergeAdjacentReg(zeroCovRegVector, MIN_ADJACENT_REG_DIST);
+
+	// updateZeroCovReg
+	updateZeroCovRegUsingIndelReg(zeroCovRegVector, indelVector);
+
+	// update indel regions
+	updateSVRegUsingLongZeroCov();
+
 	return 0;
 }
 
@@ -496,20 +505,171 @@ int Block::processSingleRegion(size_t startRpos, size_t endRPos, size_t regFlag)
 
 // add SV events
 void Block::copySVEvents(Region &reg){
+	size_t i;
+	vector<reg_t*> regVec;
+	reg_t *reg_tmp;
+	vector<size_t> posVec;
+	size_t pos_tmp;
+
 	// copy clip region
-	vector<reg_t*> clipRegVec = reg.getClipRegVector();
-	vector<reg_t*>::iterator it;
-	for(it=clipRegVec.begin(); it!=clipRegVec.end(); it++) clipRegVector.push_back(*it);
+	regVec = reg.getClipRegVector();
+	for(i=0; i<regVec.size(); i++){
+		reg_tmp = regVec.at(i);
+		clipRegVector.push_back(reg_tmp);
+	}
 
 	// copy indel
-	vector<reg_t*> indelVecReg = reg.getIndelVector();
-	vector<reg_t*>::iterator it1;
-	for(it1=indelVecReg.begin(); it1!=indelVecReg.end(); it1++) indelVector.push_back(*it1);
+	regVec = reg.getIndelVector();
+	for(i=0; i<regVec.size(); i++){
+		reg_tmp = regVec.at(i);
+		indelVector.push_back(reg_tmp);
+	}
 
 	// copy SNV
-	vector<size_t> snvVecReg = reg.getSnvVector();
-	vector<size_t>::iterator it2;
-	for(it2=snvVecReg.begin(); it2!=snvVecReg.end(); it2++) snvVector.push_back(*it2);
+	posVec = reg.getSnvVector();
+	for(i=0; i<posVec.size(); i++){
+		pos_tmp = posVec.at(i);
+		snvVector.push_back(pos_tmp);
+	}
+
+	// compute zero coverage region
+	computeZeroCovReg(reg);
+}
+
+void Block::computeZeroCovReg(Region &reg){
+	size_t i, j;
+	reg_t *reg_tmp;
+	vector<size_t> posVec;
+	size_t pos1, pos2;
+	int32_t start_vec_idx, end_vec_idx;
+
+//	if(reg.startMidPartPos>3506000)
+//		cout << "klklklklklklklk, " << reg.startMidPartPos << endl;
+
+	posVec = reg.getZeroCovPosVector();
+	i = 0;
+	while(i<posVec.size()){
+		start_vec_idx = i;
+		end_vec_idx = -1;
+		for(j=i+1; j<posVec.size(); j++){
+			pos1 = posVec.at(j-1);
+			pos2 = posVec.at(j);
+			if(pos1+1==pos2){
+				end_vec_idx = j;
+			}else break;
+		}
+
+		if(start_vec_idx!=-1 and end_vec_idx!=-1){
+			reg_tmp = new reg_t();
+			reg_tmp->chrname = chrname;
+			reg_tmp->startRefPos = posVec.at(start_vec_idx);
+			reg_tmp->endRefPos = posVec.at(end_vec_idx);
+			reg_tmp->startLocalRefPos = reg_tmp->endLocalRefPos = 0;
+			reg_tmp->startQueryPos = reg_tmp->endQueryPos = 0;
+			reg_tmp->var_type = VAR_UNC;
+			reg_tmp->sv_len = 0;
+			reg_tmp->query_id = -1;
+			reg_tmp->blat_aln_id = -1;
+			reg_tmp->call_success_status = false;
+			reg_tmp->short_sv_flag = false;
+
+			zeroCovRegVector.push_back(reg_tmp);
+			i = end_vec_idx + 1;
+		}else i ++;
+	}
+}
+
+void Block::updateZeroCovRegUsingIndelReg(vector<reg_t*> &zeroCovRegVec, vector<reg_t*> &indelVec){
+	size_t i, j, minValue, maxValue;
+	reg_t *zero_cov_reg, *reg_tmp;
+	int32_t regIdx;
+	vector<int32_t> regIdx_vec;
+
+	for(i=0; i<indelVec.size(); i++){
+		reg_tmp = indelVec.at(i);
+		regIdx = getOverlappedRegIdx(reg_tmp, zeroCovRegVec);
+		regIdx_vec.push_back(regIdx);
+	}
+
+	// compute startRefPos and endRefPos
+	for(i=0; i<zeroCovRegVec.size(); i++){
+		zero_cov_reg = zeroCovRegVec.at(i);
+		// compute startRefPos and endRefPos
+		minValue = zero_cov_reg->startRefPos;
+		maxValue = zero_cov_reg->endRefPos;
+		for(j=0; j<indelVec.size(); j++){
+			regIdx = regIdx_vec.at(j);
+			if(regIdx==(int32_t)i){
+				reg_tmp = indelVec.at(j);
+				if(minValue>reg_tmp->startRefPos) minValue = reg_tmp->startRefPos;
+				if(maxValue<reg_tmp->endRefPos) maxValue = reg_tmp->endRefPos;
+			}
+		}
+		zero_cov_reg->startRefPos = minValue;
+		zero_cov_reg->endRefPos = maxValue;
+	}
+
+	mergeOverlappedReg(zeroCovRegVec); // merge overlapped region
+}
+
+void Block::updateSVRegUsingLongZeroCov(){
+
+//	cout << ">>>>>>>>>>> Before update clipRegVector: <<<<<<<<<<<<<<" << endl;
+//	printRegVec(clipRegVector, "clipRegVector");  // print clipRegVector
+//	printRegVec(zeroCovRegVector, "zeroCovRegVector");  // print zeroCovRegVector
+
+	// update clipping regions
+	updateClipRegUsingLongZeroCov(clipRegVector, zeroCovRegVector);
+
+//	cout << ">>>>>>>>>>> After update clipRegVector: <<<<<<<<<<<<<<" << endl;
+//	printRegVec(clipRegVector, "clipRegVector");  // print clipRegVector
+//	printRegVec(zeroCovRegVector, "zeroCovRegVector");  // print zeroCovRegVector
+
+//	cout << "<<<<<<<<<<<<<< Before update indelVector: >>>>>>>>>>>" << endl;
+//	printRegVec(indelVector, "indelVector");  // print indelVector
+//	printRegVec(zeroCovRegVector, "zeroCovRegVector");  // print zeroCovRegVector
+
+	// update indel regions
+	updateIndelRegUsingLongZeroCov(indelVector, zeroCovRegVector);
+
+//	cout << "<<<<<<<<<<<<<< After update indelVector: >>>>>>>>>>>" << endl;
+//	printRegVec(indelVector, "indelVector");  // print indelVector
+//	printRegVec(zeroCovRegVector, "zeroCovRegVector");  // print zeroCovRegVector
+}
+
+void Block::updateClipRegUsingLongZeroCov(vector<reg_t*> &regVec, vector<reg_t*> &zero_cov_vec){
+	size_t i;
+	reg_t *reg_tmp;
+	int32_t regIdx;
+
+	for(i=0; i<regVec.size(); ){
+		reg_tmp = regVec.at(i);
+		regIdx = getOverlappedRegIdx(reg_tmp, zero_cov_vec);
+		if(regIdx!=-1){
+			delete reg_tmp;
+			regVec.erase(regVec.begin()+i);
+		}else i++;
+	}
+}
+
+void Block::updateIndelRegUsingLongZeroCov(vector<reg_t*> &regVec, vector<reg_t*> &zero_cov_vec){
+	size_t i;
+	reg_t *zero_cov_reg, *reg_tmp;
+	int32_t regIdx;
+
+	for(i=0; i<regVec.size(); ){
+		reg_tmp = regVec.at(i);
+		regIdx = getOverlappedRegIdx(reg_tmp, zero_cov_vec);
+		if(regIdx!=-1){ // remove item
+			delete reg_tmp;
+			regVec.erase(regVec.begin()+i);
+		}else i++;
+	}
+	for(i=0; i<zero_cov_vec.size(); i++){
+		zero_cov_reg = zero_cov_vec.at(i);
+		regVec.push_back(zero_cov_reg);
+	}
+	zero_cov_vec.clear();
 }
 
 // remove false indels
@@ -552,34 +712,6 @@ void Block::sortRegVec(vector<reg_t*> &regVector){
 			}
 		}
 	}
-}
-
-// merge overlapped indels
-void Block::mergeOverlappedReg(vector<reg_t*> &regVector){
-	vector<reg_t*>::iterator it;
-	if(regVector.size()>=2){
-		for(it=regVector.begin(); (it+1)!=regVector.end(); ){
-			if(isOverlappedReg(*it, *(it+1))){
-				// merge
-				updateReg(*it, *(it+1));
-				delete(*(it+1));   // release the memory
-				regVector.erase(it+1);
-			}
-			else it++;
-		}
-		regVector.shrink_to_fit();
-	}
-}
-
-// merge two overlapped indels
-void Block::updateReg(reg_t* reg1, reg_t* reg2){
-	size_t new_startPos, new_endPos;
-	if(reg1->startRefPos<=reg2->startRefPos) new_startPos = reg1->startRefPos;
-	else new_startPos = reg2->startRefPos;
-	if(reg1->endRefPos>=reg2->endRefPos) new_endPos = reg1->endRefPos;
-	else new_endPos = reg2->endRefPos;
-	reg1->startRefPos = new_startPos;
-	reg1->endRefPos = new_endPos;
 }
 
 // save SV to file
@@ -697,23 +829,6 @@ void Block::blockLocalAssembleIndel(){
 
 		performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, paras->inBamFile, fai, *var_cand_indel_file);
 
-//		LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, paras->inBamFile, fai);
-//
-//		// extract the corresponding refseq from reference
-//		local_assembly.extractRefseq();
-//
-//		// extract the reads data from BAM file
-//		local_assembly.extractReadsDataFromBAM();
-//
-//		// local assembly using Canu
-//		local_assembly.localAssembleCanu();
-//
-//		// record assembly information
-//		local_assembly.recordAssemblyInfo(*var_cand_indel_file);
-
-		// empty the varVec
-		//varVec.clear();
-
 		i = end_reg_id + 1;
 	}
 }
@@ -732,8 +847,8 @@ void Block::blockLocalAssembleClipReg(){
 	for(i=0; i<(int32_t)mateClipRegVector.size(); i++){
 		clip_reg = mateClipRegVector.at(i);
 		if(clip_reg->leftClipRegNum==1 and clip_reg->rightClipRegNum==1){
-			reg1 = clip_reg->leftClipReg;
-			reg2 = clip_reg->rightClipReg;
+			reg1 = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
+			reg2 = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
 
 			generate_new_flag = false;
 			if(clip_reg->reg_mated_flag and reg1->chrname.compare(reg2->chrname)==0){

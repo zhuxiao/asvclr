@@ -53,11 +53,13 @@ class Genome{
 		int computeCoverage();
 		void removeRedundantTra();
 		void removeInvalidMateClipItem();
+		void removeOverlappedIndelFromMateClipReg();
 		mateClipReg_t* genomeGetOverlappedMateClipReg(mateClipReg_t *clip_reg_given, vector<Chrome*> &chrome_vec);
 		mateClipReg_t* getSameClipRegTRA(mateClipReg_t *clip_reg_given, vector<Chrome*> &chrome_vec);
 		void saveDetectResultToFile();
 		void mergeDetectResult();
 		void loadCallData();
+		void recallIndelsFromTRA();
 		void genomeCallTra();
 		varCand* constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp);
 		vector<int32_t> computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, mateClipReg_t *clip_reg);

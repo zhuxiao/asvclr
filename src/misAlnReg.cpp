@@ -7,18 +7,21 @@
 
 #include "misAlnReg.h"
 
-misAlnReg::misAlnReg(size_t startPos, size_t endPos, Base *misAlnRegBaseArr) {
+misAlnReg::misAlnReg(size_t startPos, size_t endPos, size_t chrlen, Base *misAlnRegBaseArr) {
 	this->startPos = startPos;
 	this->endPos = endPos;
+	this->chrlen = chrlen;
 	this->misAlnRegBaseArr = misAlnRegBaseArr;
 	this->disagrNum = 0;
 	this->misAlnSubregNum = 0;
 	this->subRegNum = 0;
 	this->disagrRegRatio = 0;
 	this->highClipBaseNum = 0;
+	this->zeroCovBaseNum = 0;
 	this->misAlnFlag = false;
 	computeDisagrSubreg();
 	computeHighClipBaseNum();
+	computeZeroCovBaseNum();
 }
 
 // compute the disagreements of sub regions in single misAln region
@@ -51,8 +54,7 @@ void misAlnReg::computeDisagrSubreg(){
 }
 
 // compute the number of bases which having much clipped events
-void misAlnReg::computeHighClipBaseNum()
-{
+void misAlnReg::computeHighClipBaseNum(){
 	size_t pos, posIdx;
 	highClipBaseNum = 0;
 	for(pos=startPos; pos<=endPos; pos++){
@@ -61,3 +63,14 @@ void misAlnReg::computeHighClipBaseNum()
 	}
 }
 
+// compute the number of bases which having much clipped events
+void misAlnReg::computeZeroCovBaseNum(){
+	size_t pos, posIdx;
+	if(startPos>=REF_END_SKIP_SIZE and endPos+REF_END_SKIP_SIZE<=chrlen){
+		zeroCovBaseNum = 0;
+		for(pos=startPos; pos<=endPos; pos++){
+			posIdx = pos - startPos;
+			if(misAlnRegBaseArr[posIdx].isZeroCovBase()) zeroCovBaseNum ++;
+		}
+	}
+}

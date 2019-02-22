@@ -33,7 +33,9 @@ using namespace std;
 #define RIGHT_END							1
 
 #define MIN_QUERY_SELF_OVERLAP_SIZE			100		// 100
-#define MAX_SAME_REG_THRES_SAME_ORIENT		500
+//#define MAX_SAME_REG_THRES_SAME_ORIENT		5000	// 500, use paras.maxClipRegSize instead
+
+#define MAX_DIST_SAME_CLIP_END				100000
 
 
 typedef struct{
@@ -60,7 +62,7 @@ typedef struct{
 	size_t leftClipRegNum, rightClipRegNum;
 
 	size_t sv_type, dup_num;
-	bool reg_mated_flag, valid_flag;
+	bool reg_mated_flag, valid_flag, call_success_flag;
 	varCand *var_cand, *left_var_cand_tra, *right_var_cand_tra;  // TRA
 	string chrname_leftTra1, chrname_rightTra1, chrname_leftTra2, chrname_rightTra2;
 	int32_t leftClipPosTra1, rightClipPosTra1, leftClipPosTra2, rightClipPosTra2;
@@ -106,6 +108,8 @@ class clipReg {
 		int32_t getItemIdxClipPosVec(clipPos_t &item, vector<clipPos_t> &vec);
 		void removeFalseOverlappedMateClipReg();
 		size_t computeMeanClipPos(vector<clipPos_t> &clipPosVector);
+		void removeFPClipSingleEnd(mateClipReg_t &mate_clip_reg);
+		void checkLocOrder(mateClipReg_t &mate_clip_reg);
 		void computeVarTypeClipReg(mateClipReg_t &mate_clip_reg, string &inBamFile);
 		void resetClipCheckFlag(vector<clipAlnData_t*> &clipAlnDataVector);
 		bool isSameChrome(vector<clipAlnData_t*> &query_aln_segs);
@@ -116,7 +120,7 @@ class clipReg {
 		void sortQueryAlnSegs(vector<clipAlnData_t*> &query_aln_segs);
 		bool isAdjacentClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, size_t dist_thres);
 		bool containCompleteDup(vector<clipAlnData_t*> &query_aln_segs, mateClipReg_t &mate_clip_reg);
-		size_t extractVarType(size_t dup_type_num, size_t inv_type_num, size_t tra_type_num);
+		size_t extractVarType(size_t dup_type_num, size_t inv_type_num, size_t tra_type_num, size_t min_reads_thres);
 		size_t computeDupNumClipReg(vector<size_t> &dup_num_vec);
 		void printClipVecs();
 		void printSingleClipVec(vector<clipPos_t> &clip_pos_vec);

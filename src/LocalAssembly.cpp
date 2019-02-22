@@ -14,7 +14,7 @@ LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, stri
 	this->varVec = varVec;
 	this->fai = fai;
 	this->inBamFile = inBamFile;
-	this->assembly_extend_size = assembly_extend_size;
+	this->assembly_extend_size = ASSEMBLY_SIDE_EXT_SIZE + assembly_extend_size;
 }
 
 LocalAssembly::~LocalAssembly() {
@@ -275,7 +275,7 @@ vector<string> LocalAssembly::joinQueryAlnSegs(vector<clipAlnData_t*> &query_aln
 	int32_t j, left_most_idx, overlap_size, gap_size, startQueryPos, endQueryPos;
 	clipAlnData_t *clip_aln, *pre_clip_aln;
 
-	pre_clip_aln = NULL;
+	pre_clip_aln = NULL; join_orient = ALN_PLUS_ORIENT;
 	startQueryPos = endQueryPos = -1;
 	qseq_result = qual_result = "";
 	for(i=0; i<query_aln_segs.size(); i++){

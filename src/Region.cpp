@@ -12,6 +12,11 @@ Region::Region(string& chrname, size_t startRpos, size_t endRPos, size_t chrlen,
 	this->chrlen = chrlen;
 	this->regBaseArr = regBaseArr;
 	this->regFlag = regFlag;
+	fai = fai_load(paras->refFile.c_str());
+	if(!fai){
+		cerr << __func__ << ": could not load fai index of " << paras->refFile << endl;;
+		exit(1);
+	}
 
 	switch(regFlag){
 		case HEAD_REGION:
@@ -54,7 +59,8 @@ Region::Region(string& chrname, size_t startRpos, size_t endRPos, size_t chrlen,
 }
 
 //Destructor
-Region::~Region() {
+Region::~Region(){
+	fai_destroy(fai);
 	if(!disagrePosVector.empty()) destroyDisagrePosVector();
 	if(!zeroCovPosVector.empty()) destroyZeroCovPosVector();
 	if(!abCovRegVector.empty()) destroyAbCovRegVector();
@@ -564,13 +570,18 @@ vector<reg_t*> Region::getClipRegVector(){
 	return clipRegVector;
 }
 
+// get indel vector
+vector<size_t> Region::getZeroCovPosVector(){
+	return zeroCovPosVector;
+}
+
 //
 void Region::detectHighClipReg(){
 	int32_t i = startMidPartPos - SUB_CLIP_REG_SIZE;
 	if(i<1) i = 1;
 	while(i<(int32_t)endMidPartPos){
-		//if(i>3784500)
-			//cout << i << endl;
+//		if(i>253000)
+//			cout << i << endl;
 		reg_t *reg = getClipReg(i);
 		if(reg) {
 			clipRegVector.push_back(reg);
@@ -598,7 +609,7 @@ reg_t* Region::getClipReg(size_t startCheckPos){
 		startPos_tmp = checkPos;
 		endPos_tmp = checkPos + subclipreg_size - 1;
 		if(endPos_tmp>endMidPartPos) endPos_tmp = endMidPartPos;
-		normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp);
+		normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp, HIGH_CLIP_RATIO_THRES);
 		if(normal_reg_flag==false){ // clip region
 			if(clip_reg_flag==false){ // first clip region
 				clip_reg_flag = true;
@@ -754,13 +765,20 @@ reg_t* Region::getClipReg(size_t startCheckPos){
 //		}
 //	}
 
-	if(startPos_clip!=-1 and endPos_clip!=-1) reg = allocateReg(startPos_clip, endPos_clip);
+	// check disagreements
+	if(startPos_clip!=-1 and endPos_clip!=-1){
+		// compute the number of disagreements
+		int32_t disagreeNum = computeDisagreeNum(regBaseArr+startPos_clip-startRPos, endPos_clip-startPos_clip+1);
+		normal_reg_flag = haveNoClipSig(startPos_clip, endPos_clip, HIGH_CLIP_RATIO_THRES*3);
+
+		if(disagreeNum>=1 or normal_reg_flag==false) reg = allocateReg(startPos_clip, endPos_clip);
+	}
 
 	return reg;
 }
 
 
-bool Region::haveNoClipSig(size_t startPos, size_t endPos){
+bool Region::haveNoClipSig(size_t startPos, size_t endPos, double clip_ratio_thres){
 	bool flag = true;
 	size_t i, j, clip_num;
 	vector<clipEvent_t*> clip_vec;
@@ -777,12 +795,12 @@ bool Region::haveNoClipSig(size_t startPos, size_t endPos){
 
 	if(localRegCov>0){
 		ratio = clip_num / localRegCov;
-		if(ratio>=HIGH_CLIP_RATIO_THRES) flag = false;
+		if(ratio>=clip_ratio_thres) flag = false;
 	}
 
 	if(flag){
 		for(i=startPos; i<=endPos; i++)
-			if((double)regBaseArr[i-startRPos].clipVector.size()/regBaseArr[i-startRPos].coverage.num_bases[5]>=HIGH_CLIP_RATIO_THRES){
+			if((double)regBaseArr[i-startRPos].clipVector.size()/regBaseArr[i-startRPos].coverage.num_bases[5]>=clip_ratio_thres){
 				flag = false;
 				break;
 			}

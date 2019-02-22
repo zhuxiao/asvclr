@@ -135,7 +135,7 @@ class varCand {
 		void computeVarLoc(localAln_t *local_aln);
 		void confirmShortVar(localAln_t *local_aln);
 		int32_t getMismatchNumAln(vector<string> &alignResultVec, int32_t start_check_idx, int32_t end_check_idx);
-		int32_t getDisagreeNum(Base *baseArray, int32_t arr_size);
+		//int32_t getDisagreeNum(Base *baseArray, int32_t arr_size);
 		int32_t computeHighIndelBaseNum(Base *baseArray, int32_t arr_size, float threshold);
 		void adjustVarLoc(localAln_t *local_aln);
 		int32_t getAdjustedStartAlnIdxVar(localAln_t *local_aln);
@@ -160,7 +160,8 @@ class varCand {
 		void determineClipRegVarType();
 		void determineClipRegDupType();
 		void determineClipRegInvType();
-		int32_t getInvBlatAlnItemIdx(reg_t *reg, vector<blat_aln_t*> &blat_aln_vec, size_t given_idx, aln_seg_t *seg1, aln_seg_t *seg2);
+		vector<int32_t> getInvBlatAlnItemIdx(reg_t *reg, vector<blat_aln_t*> &blat_aln_vec, size_t given_idx, aln_seg_t *seg1, aln_seg_t *seg2);
+		//reg_t* computeInvReg(reg_t *reg, int32_t blat_aln_idx, vector<int32_t> blat_aln_idx_inv_vec);
 		void updateVarVec();
 		reg_t* computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq, size_t var_type);
 		vector<size_t> computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq);

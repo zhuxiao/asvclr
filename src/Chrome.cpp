@@ -229,11 +229,11 @@ int Chrome::chrDetect(){
 	if(paras->num_threads<=1) chrDetect_st();  // single thread
 	else chrDetect_mt();  // multiple threads
 
-	// detect mated clip regions for duplications and inversions
-	chrComputeMateClipRegDupInv();
+	// detect mated clip regions
+	chrComputeMateClipReg();
 
 	// remove FP indels and Snvs in clipping regions
-	removeFPIndelSnvInClipReg();
+	removeFPIndelSnvInClipReg(mateClipRegVector);
 
 	// merge the results to single file
 	//chrMergeDetectResultToFile();
@@ -247,7 +247,7 @@ int Chrome::chrDetect(){
 int Chrome::chrDetect_st(){
 	Block* bloc;
 	for(size_t i=0; i<blockVector.size(); i++){
-//		if(i++==2)
+		//if(i>=5)
 		{
 			bloc = blockVector.at(i);
 			//cout << "detect files:" << bloc->out_dir_detect << "/" << bloc->snvFilenameDetect << ", " << bloc->indelFilenameDetect << endl;
@@ -281,7 +281,7 @@ int Chrome::chrDetect_mt(){
 }
 
 // detect mated clip regions for duplications and inversions
-void Chrome::chrComputeMateClipRegDupInv(){
+void Chrome::chrComputeMateClipReg(){
 	size_t i;
 	Block *bloc;
 	reg_t *reg;
@@ -298,18 +298,16 @@ void Chrome::chrComputeMateClipRegDupInv(){
 
 	// compute the mate flag for duplications and inversions
 	for(i=0; i<clipRegVector.size(); i++){
-
-		//if(i>=2)
+		//if(i>=63)
 		{
 			reg = clipRegVector.at(i);
-
 			if(clip_processed_flag_vec.at(i)==false){
 				cout << i << ": " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
 				clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, chrlen, paras->inBamFile, fai, paras);
 				clip_reg.computeMateClipReg();
 
-				precessClipRegs(i, clip_processed_flag_vec, clip_reg.mate_clip_reg);
+				processClipRegs(i, clip_processed_flag_vec, clip_reg.mate_clip_reg, reg);
 			}
 		}
 	}
@@ -322,53 +320,99 @@ void Chrome::chrComputeMateClipRegDupInv(){
 }
 
 // process clip regions and mate clip regions
-void Chrome::precessClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, mateClipReg_t &mate_clip_reg){
+void Chrome::processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, mateClipReg_t &mate_clip_reg, reg_t *clip_reg){
 	size_t i;
-	reg_t *reg;
+	reg_t *reg, *reg_tmp;
 	mateClipReg_t *clip_reg_new;
+	Block *bloc;
+	int32_t idx_tmp;;
 
-	// add mate clip region
-	if(mate_clip_reg.leftClipReg or mate_clip_reg.rightClipReg){
-		clip_reg_new = new mateClipReg_t();
-		clip_reg_new->leftClipReg = mate_clip_reg.leftClipReg;
-		clip_reg_new->leftClipPosNum = mate_clip_reg.leftClipPosNum;
-		clip_reg_new->rightClipReg = mate_clip_reg.rightClipReg;
-		clip_reg_new->rightClipPosNum = mate_clip_reg.rightClipPosNum;
-		clip_reg_new->leftMeanClipPos = mate_clip_reg.leftMeanClipPos;
-		clip_reg_new->rightMeanClipPos = mate_clip_reg.rightMeanClipPos;
+	if(mate_clip_reg.valid_flag){
+		// add mate clip region
+		if(mate_clip_reg.leftClipReg or mate_clip_reg.leftClipReg2 or mate_clip_reg.rightClipReg or mate_clip_reg.rightClipReg2){
+			clip_reg_new = new mateClipReg_t();
+			clip_reg_new->leftClipReg = mate_clip_reg.leftClipReg;
+			clip_reg_new->leftClipPosNum = mate_clip_reg.leftClipPosNum;
+			clip_reg_new->rightClipReg = mate_clip_reg.rightClipReg;
+			clip_reg_new->rightClipPosNum = mate_clip_reg.rightClipPosNum;
+			clip_reg_new->leftMeanClipPos = mate_clip_reg.leftMeanClipPos;
+			clip_reg_new->rightMeanClipPos = mate_clip_reg.rightMeanClipPos;
 
-		clip_reg_new->leftClipReg2 = mate_clip_reg.leftClipReg2;
-		clip_reg_new->rightClipReg2 = mate_clip_reg.rightClipReg2;
-		clip_reg_new->leftClipPosNum2 = mate_clip_reg.leftClipPosNum2;
-		clip_reg_new->rightClipPosNum2 = mate_clip_reg.rightClipPosNum2;
-		clip_reg_new->leftClipRegNum = mate_clip_reg.leftClipRegNum;
-		clip_reg_new->rightClipRegNum = mate_clip_reg.rightClipRegNum;
-		clip_reg_new->leftMeanClipPos2 = mate_clip_reg.leftMeanClipPos2;
-		clip_reg_new->rightMeanClipPos2 = mate_clip_reg.rightMeanClipPos2;
+			clip_reg_new->leftClipReg2 = mate_clip_reg.leftClipReg2;
+			clip_reg_new->rightClipReg2 = mate_clip_reg.rightClipReg2;
+			clip_reg_new->leftClipPosNum2 = mate_clip_reg.leftClipPosNum2;
+			clip_reg_new->rightClipPosNum2 = mate_clip_reg.rightClipPosNum2;
+			clip_reg_new->leftClipRegNum = mate_clip_reg.leftClipRegNum;
+			clip_reg_new->rightClipRegNum = mate_clip_reg.rightClipRegNum;
+			clip_reg_new->leftMeanClipPos2 = mate_clip_reg.leftMeanClipPos2;
+			clip_reg_new->rightMeanClipPos2 = mate_clip_reg.rightMeanClipPos2;
 
-		clip_reg_new->reg_mated_flag = mate_clip_reg.reg_mated_flag;
-		clip_reg_new->chrname_leftTra1 = clip_reg_new->chrname_rightTra1 = clip_reg_new->chrname_leftTra2 = clip_reg_new->chrname_rightTra2 = "";
-		clip_reg_new->leftClipPosTra1 = clip_reg_new->rightClipPosTra1 = clip_reg_new->leftClipPosTra2 = clip_reg_new->rightClipPosTra2 = -1;
-		clip_reg_new->sv_type = mate_clip_reg.sv_type;
-		clip_reg_new->dup_num = mate_clip_reg.dup_num;
-		clip_reg_new->valid_flag = mate_clip_reg.valid_flag;
-		mateClipRegVector.push_back(clip_reg_new);
-	}
-
-	// detect overlapped clip regions
-	if(mate_clip_reg.leftClipReg){ // left region
-		for(i=0; i<clipRegVector.size(); i++){
-			reg = clipRegVector.at(i);
-			if(isOverlappedReg(mate_clip_reg.leftClipReg, reg)) // overlapped
-				clip_processed_flag_vec.at(i) = true;
+			clip_reg_new->reg_mated_flag = mate_clip_reg.reg_mated_flag;
+			clip_reg_new->chrname_leftTra1 = clip_reg_new->chrname_rightTra1 = clip_reg_new->chrname_leftTra2 = clip_reg_new->chrname_rightTra2 = "";
+			clip_reg_new->leftClipPosTra1 = clip_reg_new->rightClipPosTra1 = clip_reg_new->leftClipPosTra2 = clip_reg_new->rightClipPosTra2 = -1;
+			clip_reg_new->sv_type = mate_clip_reg.sv_type;
+			clip_reg_new->dup_num = mate_clip_reg.dup_num;
+			clip_reg_new->valid_flag = mate_clip_reg.valid_flag;
+			clip_reg_new->call_success_flag = false;
+			mateClipRegVector.push_back(clip_reg_new);
 		}
-	}
-	if(mate_clip_reg.rightClipReg){ // right region
-		for(i=0; i<clipRegVector.size(); i++){
-			reg = clipRegVector.at(i);
-			if(isOverlappedReg(mate_clip_reg.rightClipReg, reg)) // overlapped
-				clip_processed_flag_vec.at(i) = true;
+
+		// detect overlapped clip regions
+		if(mate_clip_reg.leftClipReg){ // left region 1
+			for(i=0; i<clipRegVector.size(); i++){
+				reg = clipRegVector.at(i);
+				if(isOverlappedReg(mate_clip_reg.leftClipReg, reg)) // overlapped
+					clip_processed_flag_vec.at(i) = true;
+			}
 		}
+		if(mate_clip_reg.leftClipReg2){ // left region 2
+			for(i=0; i<clipRegVector.size(); i++){
+				reg = clipRegVector.at(i);
+				if(isOverlappedReg(mate_clip_reg.leftClipReg2, reg)) // overlapped
+					clip_processed_flag_vec.at(i) = true;
+			}
+		}
+		if(mate_clip_reg.rightClipReg){ // right region 1
+			for(i=0; i<clipRegVector.size(); i++){
+				reg = clipRegVector.at(i);
+				if(isOverlappedReg(mate_clip_reg.rightClipReg, reg)) // overlapped
+					clip_processed_flag_vec.at(i) = true;
+			}
+		}
+		if(mate_clip_reg.rightClipReg2){ // right region 2
+			for(i=0; i<clipRegVector.size(); i++){
+				reg = clipRegVector.at(i);
+				if(isOverlappedReg(mate_clip_reg.rightClipReg2, reg)) // overlapped
+					clip_processed_flag_vec.at(i) = true;
+			}
+		}
+	}else{
+		reg = new reg_t();
+		reg->chrname = chrname;
+		reg->startRefPos = clip_reg->startRefPos;
+		reg->endRefPos = clip_reg->endRefPos;
+		reg->startLocalRefPos = reg->endLocalRefPos = 0;
+		reg->startQueryPos = reg->endQueryPos = 0;
+		reg->var_type = VAR_UNC;
+		reg->sv_len = 0;
+		reg->query_id = -1;
+		reg->blat_aln_id = -1;
+		reg->call_success_status = false;
+		reg->short_sv_flag = false;
+
+		// get position
+		idx_tmp = -1;
+		bloc = blockVector.at(computeBlocID(clip_reg->startRefPos));
+		for(i=0; i<bloc->indelVector.size(); i++){
+			reg_tmp = bloc->indelVector.at(i);
+			if(reg->startRefPos<reg_tmp->startRefPos){
+				idx_tmp = i;
+				break;
+			}
+		}
+		// add item
+		if(idx_tmp!=-1) bloc->indelVector.insert(bloc->indelVector.begin()+idx_tmp, reg);
+		else bloc->indelVector.push_back(reg);
 	}
 }
 
@@ -386,7 +430,7 @@ void Chrome::mergeSameRegTRA(){
 			if(clip_reg_mate_end){
 				// merge nodes
 				end_flag1 = 0;
-				reg1 = NULL;
+				reg1 = NULL; pos_num1 = mean_pos1 = 0;
 				if(clip_reg->leftClipRegNum==1){
 					if(clip_reg->leftClipReg){
 						reg1 = clip_reg->leftClipReg;
@@ -411,7 +455,7 @@ void Chrome::mergeSameRegTRA(){
 					end_flag1 = 2;
 				}
 
-				reg2 = NULL;
+				reg2 = NULL; pos_num2 = mean_pos2 = 0;
 				if(clip_reg_mate_end->leftClipRegNum==1){
 					if(clip_reg_mate_end->leftClipReg){
 						reg2 = clip_reg_mate_end->leftClipReg;
@@ -439,7 +483,7 @@ void Chrome::mergeSameRegTRA(){
 					clip_reg_redudant = clip_reg_mate_end;
 					if(end_flag1==1){
 						// process double-region end
-						if(clip_reg_retained->rightClipReg->startRefPos>clip_reg_retained->rightClipReg2->startRefPos){
+						if(clip_reg_retained->rightClipRegNum==2 and clip_reg_retained->rightClipReg->startRefPos>clip_reg_retained->rightClipReg2->startRefPos){
 							reg_tmp = clip_reg_retained->rightClipReg;
 							clip_reg_retained->rightClipReg = clip_reg_retained->rightClipReg2;
 							clip_reg_retained->rightClipReg2 = reg_tmp;
@@ -468,6 +512,7 @@ void Chrome::mergeSameRegTRA(){
 							clip_reg_retained->leftMeanClipPos2 = mean_pos1;
 						}
 						clip_reg_retained->leftClipRegNum = 2;
+
 					}else{
 						// process double-region end
 						if(clip_reg_retained->leftClipReg->startRefPos>clip_reg_retained->leftClipReg2->startRefPos){
@@ -500,6 +545,16 @@ void Chrome::mergeSameRegTRA(){
 						}
 						clip_reg_retained->rightClipRegNum = 2;
 					}
+
+					// update redundant region information
+					if(clip_reg_redudant->leftClipReg==reg2) { clip_reg_redudant->leftClipReg = NULL; clip_reg_redudant->leftClipRegNum--; }
+					else if(clip_reg_redudant->leftClipReg2==reg2) { clip_reg_redudant->leftClipReg2 = NULL; clip_reg_redudant->leftClipRegNum--; }
+					else if(clip_reg_redudant->rightClipReg==reg2) { clip_reg_redudant->rightClipReg = NULL; clip_reg_redudant->rightClipRegNum--; }
+					else if(clip_reg_redudant->rightClipReg2==reg2) { clip_reg_redudant->rightClipReg2 = NULL; clip_reg_redudant->rightClipRegNum--; }
+					else{
+						cerr << "line=" << __LINE__ << ", invalid region, error!" << endl;
+						exit(1);
+					}
 					clip_reg_redudant->valid_flag = false;
 				}
 			}
@@ -510,16 +565,10 @@ void Chrome::mergeSameRegTRA(){
 	for(i=0; i<mateClipRegVector.size(); ){
 		clip_reg = mateClipRegVector.at(i);
 		if(clip_reg->valid_flag==false){
-			if(clip_reg->leftClipRegNum==2){
-				delete clip_reg->leftClipReg;
-				delete clip_reg->leftClipReg2;
-			}else if(clip_reg->rightClipRegNum==2){
-				delete clip_reg->rightClipReg;
-				delete clip_reg->rightClipReg2;
-			}else{
-				cerr << "In " << __func__ << "(), line=" << __LINE__ << ", invalid clip_reg, error!" << endl;
-				exit(1);
-			}
+			if(clip_reg->leftClipReg) delete clip_reg->leftClipReg;
+			if(clip_reg->rightClipReg) delete clip_reg->rightClipReg;
+			if(clip_reg->leftClipReg2) delete clip_reg->leftClipReg2;
+			if(clip_reg->rightClipReg2) delete clip_reg->rightClipReg2;
 			delete clip_reg;
 			mateClipRegVector.erase(mateClipRegVector.begin()+i);
 		}else i++;
@@ -578,12 +627,12 @@ void Chrome::removeFPClipRegsDupInv(){
 	// remove FP clip regions by detecting too long distance
 	for(i=0; i<mateClipRegVector.size(); i++){
 		mate_clip_reg = mateClipRegVector.at(i);
-		if(mate_clip_reg->reg_mated_flag){
+		if(mate_clip_reg->valid_flag and mate_clip_reg->reg_mated_flag){
 			if(mate_clip_reg->sv_type==VAR_DUP or mate_clip_reg->sv_type==VAR_INV){
-				if(mate_clip_reg->leftClipRegNum!=1 or mate_clip_reg->rightClipRegNum!=1){
-					cerr << "line=" << __LINE__ << ", invalid clipping region!" << endl;
-					exit(1);
-				}
+//				if(mate_clip_reg->leftClipRegNum!=1 or mate_clip_reg->rightClipRegNum!=1){
+//					cerr << "line=" << __LINE__ << ", invalid clipping region!" << endl;
+//					exit(1);
+//				}
 				reg = mate_clip_reg->leftClipReg ? mate_clip_reg->leftClipReg : mate_clip_reg->leftClipReg2;
 				reg2 = mate_clip_reg->rightClipReg ? mate_clip_reg->rightClipReg : mate_clip_reg->rightClipReg2;
 				if(reg->chrname.compare(reg2->chrname)==0){  // same chrome
@@ -652,7 +701,9 @@ void Chrome::removeFPClipRegsDupInv(){
 		mate_clip_reg = mateClipRegVector.at(i);
 		if(mate_clip_reg->valid_flag==false){
 			if(mate_clip_reg->leftClipReg) delete mate_clip_reg->leftClipReg;
+			if(mate_clip_reg->leftClipReg2) delete mate_clip_reg->leftClipReg2;
 			if(mate_clip_reg->rightClipReg) delete mate_clip_reg->rightClipReg;
+			if(mate_clip_reg->rightClipReg2) delete mate_clip_reg->rightClipReg2;
 			delete mate_clip_reg;
 			mateClipRegVector.erase(mateClipRegVector.begin()+i);
 		}else i++;
@@ -682,27 +733,33 @@ vector<size_t> Chrome::getOverlapClipReg(reg_t *given_reg){
 }
 
 // remove FP indels in clipping regions
-void Chrome::removeFPIndelSnvInClipReg(){
+void Chrome::removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec){
 	size_t i, j, pos;
 	Block *block;
 	reg_t *reg;
 	bool flag;
 
 	for(i=0; i<blockVector.size(); i++){
-		block = blockVector.at(i);
-		for(j=0; j<block->indelVector.size(); ){
-			reg = block->indelVector.at(j);
-			flag = isIndelInClipReg(reg, mateClipRegVector);
-			if(flag){
-				delete reg;
-				block->indelVector.erase(block->indelVector.begin()+j);
-			}else j++;
-		}
-		for(j=0; j<block->snvVector.size(); ){
-			pos = block->snvVector.at(j);
-			flag = isSnvInClipReg(pos, mateClipRegVector);
-			if(flag) block->snvVector.erase(block->snvVector.begin()+j);
-			else j++;
+
+		//if(i>=246)
+		{
+			//cout << "<><><><><><><> " << i << endl;
+
+			block = blockVector.at(i);
+			for(j=0; j<block->indelVector.size(); ){
+				reg = block->indelVector.at(j);
+				flag = isIndelInClipReg(reg, mate_clipReg_vec);
+				if(flag){
+					delete reg;
+					block->indelVector.erase(block->indelVector.begin()+j);
+				}else j++;
+			}
+			for(j=0; j<block->snvVector.size(); ){
+				pos = block->snvVector.at(j);
+				flag = isSnvInClipReg(pos, mate_clipReg_vec);
+				if(flag) block->snvVector.erase(block->snvVector.begin()+j);
+				else j++;
+			}
 		}
 	}
 }
@@ -711,14 +768,81 @@ void Chrome::removeFPIndelSnvInClipReg(){
 bool Chrome::isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_vec){
 	bool flag = false;
 	mateClipReg_t *clip_reg;
+	reg_t *reg_tmp;
+	string chrname_tmp, chrname_tmp2;
+	size_t start_pos, end_pos;
 
 	for(size_t i=0; i<mate_clipReg_vec.size(); i++){
+//		if(i>=0)
+//			cout << ",,,,,,,,,,,, " << i << endl;
+
 		clip_reg = mate_clipReg_vec.at(i);
-		if(clip_reg->reg_mated_flag){
-			if(reg->chrname.compare(clip_reg->leftClipReg->chrname)==0 and reg->chrname.compare(clip_reg->rightClipReg->chrname)==0){
-				if(isOverlappedPos(reg->startRefPos, reg->endRefPos, clip_reg->leftClipReg->startRefPos, clip_reg->rightClipReg->endRefPos)){
-					flag = true;
-					break;
+		if(clip_reg->valid_flag and clip_reg->reg_mated_flag){
+			if(clip_reg->sv_type==VAR_DUP or clip_reg->sv_type==VAR_INV){ // DUP or INV
+				chrname_tmp = "";
+				start_pos = end_pos = 0;
+				if(clip_reg->leftClipReg){
+					chrname_tmp = clip_reg->leftClipReg->chrname;
+					start_pos = clip_reg->leftClipReg->startRefPos;
+				}else if(clip_reg->leftClipReg2){
+					chrname_tmp = clip_reg->leftClipReg2->chrname;
+					start_pos = clip_reg->leftClipReg2->startRefPos;
+				}
+				if(clip_reg->rightClipReg){
+					chrname_tmp2 = clip_reg->rightClipReg->chrname;
+					end_pos = clip_reg->rightClipReg->endRefPos;
+				}else if(clip_reg->rightClipReg2){
+					chrname_tmp2 = clip_reg->rightClipReg2->chrname;
+					end_pos = clip_reg->rightClipReg2->endRefPos;
+				}
+
+				if(reg->chrname.compare(chrname_tmp)==0 and chrname_tmp.compare(chrname_tmp2)==0 and start_pos>0 and end_pos>0){
+					if(isOverlappedPos(reg->startRefPos, reg->endRefPos, start_pos, end_pos)){
+						flag = true;
+						break;
+					}
+				}
+			}else if(clip_reg->sv_type==VAR_TRA){  // TRA
+				// check left part
+				chrname_tmp = "";
+				start_pos = end_pos = 0;
+				if(clip_reg->leftClipRegNum==2){
+					chrname_tmp = clip_reg->leftClipReg->chrname;
+					start_pos = clip_reg->leftClipReg->startRefPos;
+					end_pos = clip_reg->leftClipReg2->endRefPos;
+				}else if(clip_reg->leftClipRegNum==1){
+					reg_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
+					chrname_tmp = reg_tmp->chrname;
+					start_pos = reg_tmp->startRefPos;
+					end_pos = reg_tmp->endRefPos;
+				}
+				if(reg->chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
+					if(isOverlappedPos(reg->startRefPos, reg->endRefPos, start_pos, end_pos)){
+						flag = true;
+						break;
+					}
+				}
+
+				// check right part
+				if(flag==false){
+					chrname_tmp = "";
+					start_pos = end_pos = 0;
+					if(clip_reg->rightClipRegNum==2){
+						chrname_tmp = clip_reg->rightClipReg->chrname;
+						start_pos = clip_reg->rightClipReg->startRefPos;
+						end_pos = clip_reg->rightClipReg2->endRefPos;
+					}else if(clip_reg->rightClipRegNum==1){
+						reg_tmp = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
+						chrname_tmp = reg_tmp->chrname;
+						start_pos = reg_tmp->startRefPos;
+						end_pos = reg_tmp->endRefPos;
+					}
+					if(reg->chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
+						if(isOverlappedPos(reg->startRefPos, reg->endRefPos, start_pos, end_pos)){
+							flag = true;
+							break;
+						}
+					}
 				}
 			}
 		}
@@ -731,14 +855,83 @@ bool Chrome::isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_v
 bool Chrome::isSnvInClipReg(size_t pos, vector<mateClipReg_t*> &mate_clipReg_vec){
 	bool flag = false;
 	mateClipReg_t *clip_reg;
+	reg_t *reg_tmp;
+	string chrname_tmp, chrname_tmp2;
+	size_t start_pos, end_pos;
 
 	for(size_t i=0; i<mate_clipReg_vec.size(); i++){
+//		if(i>=0)
+//			cout << ".............. " << i << endl;
+
 		clip_reg = mate_clipReg_vec.at(i);
-		if(clip_reg->reg_mated_flag){
-			if(chrname.compare(clip_reg->leftClipReg->chrname)==0 and chrname.compare(clip_reg->rightClipReg->chrname)==0){
-				if(pos>=clip_reg->leftClipReg->startRefPos and pos <=clip_reg->rightClipReg->endRefPos){
-					flag = true;
-					break;
+		if(clip_reg->valid_flag and clip_reg->reg_mated_flag){
+			if(clip_reg->sv_type==VAR_DUP or clip_reg->sv_type==VAR_INV){ // DUP or INV
+				chrname_tmp = "";
+				start_pos = end_pos = 0;
+				if(clip_reg->leftClipReg){
+					chrname_tmp = clip_reg->leftClipReg->chrname;
+					start_pos = clip_reg->leftClipReg->startRefPos;
+				}else if(clip_reg->leftClipReg2){
+					chrname_tmp = clip_reg->leftClipReg2->chrname;
+					start_pos = clip_reg->leftClipReg2->startRefPos;
+				}
+				if(clip_reg->rightClipReg){
+					chrname_tmp2 = clip_reg->rightClipReg->chrname;
+					end_pos = clip_reg->rightClipReg->endRefPos;
+				}else if(clip_reg->rightClipReg2){
+					chrname_tmp2 = clip_reg->rightClipReg2->chrname;
+					end_pos = clip_reg->rightClipReg2->endRefPos;
+				}
+
+				if(chrname.compare(chrname_tmp)==0 and chrname_tmp.compare(chrname_tmp2)==0 and start_pos>0 and end_pos>0){
+					if(pos>=start_pos and pos<=end_pos){
+						flag = true;
+						break;
+					}
+				}
+			}else if(clip_reg->sv_type==VAR_TRA){  // TRA
+				// check left part
+				chrname_tmp = "";
+				start_pos = end_pos = 0;
+				if(clip_reg->leftClipRegNum==2){
+					chrname_tmp = clip_reg->leftClipReg->chrname;
+					start_pos = clip_reg->leftClipReg->startRefPos;
+					end_pos = clip_reg->leftClipReg2->endRefPos;
+				}else if(clip_reg->leftClipRegNum==1){
+					reg_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
+					chrname_tmp = reg_tmp->chrname;
+					start_pos = reg_tmp->startRefPos;
+					end_pos = reg_tmp->endRefPos;
+				}
+
+				if(chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
+					if(pos>=start_pos and pos<=end_pos){
+						flag = true;
+						break;
+					}
+				}
+
+				// check right part
+				if(flag==false){
+					chrname_tmp = "";
+					start_pos = end_pos = 0;
+					if(clip_reg->rightClipRegNum==2){
+						chrname_tmp = clip_reg->rightClipReg->chrname;
+						start_pos = clip_reg->rightClipReg->startRefPos;
+						end_pos = clip_reg->rightClipReg2->endRefPos;
+					}else if(clip_reg->rightClipRegNum==1){
+						reg_tmp = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
+						chrname_tmp = reg_tmp->chrname;
+						start_pos = reg_tmp->startRefPos;
+						end_pos = reg_tmp->endRefPos;
+					}
+
+					if(chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
+						if(pos>=start_pos and pos<=end_pos){
+							flag = true;
+							break;
+						}
+					}
 				}
 			}
 		}
@@ -889,8 +1082,24 @@ void Chrome::chrResetMisAlnRegFile(){
 
 // load detected variation data for local assembly
 void Chrome::chrLoadDataAssemble(){
-	chrLoadIndelDataAssemble();
-	chrLoadClipRegDataAssemble();
+	size_t i;
+	mateClipReg_t* mate_clip_reg;
+	Block* tmp_bloc;
+
+	if(paras->load_from_file_flag){ // load data from file
+		chrLoadIndelDataAssemble();
+		chrLoadClipRegDataAssemble();
+	}
+
+	// initialize block information
+	for(i=0; i<mateClipRegVector.size(); i++){
+		mate_clip_reg = mateClipRegVector.at(i);
+		if(mate_clip_reg->leftClipReg and mate_clip_reg->leftClipReg->chrname.compare(chrname)==0) tmp_bloc = blockVector.at(computeBlocID(mate_clip_reg->leftClipReg->startRefPos));  // get the block
+		else if(mate_clip_reg->rightClipReg and mate_clip_reg->rightClipReg->chrname.compare(chrname)==0) tmp_bloc = blockVector.at(computeBlocID(mate_clip_reg->rightClipReg->startRefPos));  // get the block
+		else if(mate_clip_reg->leftClipReg2 and mate_clip_reg->leftClipReg2->chrname.compare(chrname)==0) tmp_bloc = blockVector.at(computeBlocID(mate_clip_reg->leftClipReg2->startRefPos));  // get the block
+		else if(mate_clip_reg->rightClipReg2 and mate_clip_reg->rightClipReg2->chrname.compare(chrname)==0) tmp_bloc = blockVector.at(computeBlocID(mate_clip_reg->rightClipReg2->startRefPos));  // get the block
+		tmp_bloc->mateClipRegVector.push_back(mate_clip_reg);
+	}
 }
 
 // load detected indel data for local assembly
@@ -914,9 +1123,9 @@ void Chrome::chrLoadIndelDataAssemble(){
 			str_vec = split(line, "\t");
 			begPos = stoi(str_vec[1]);
 			endPos = stoi(str_vec[2]);
-			tmp_bloc = blockVector[computeBlocID(begPos)];  // get the block
+			tmp_bloc = blockVector.at(computeBlocID(begPos));  // get the block
 
-			reg = new reg_t;
+			reg = new reg_t();
 			reg->chrname = chrname;
 			reg->startRefPos = begPos;
 			reg->endRefPos = endPos;
@@ -938,18 +1147,7 @@ void Chrome::chrLoadIndelDataAssemble(){
 
 // load detected indel data for local assembly
 void Chrome::chrLoadClipRegDataAssemble(){
-	size_t i;
-	mateClipReg_t* mate_clip_reg;
-	Block* tmp_bloc;
-
 	chrLoadMateClipRegData();
-
-	for(i=0; i<mateClipRegVector.size(); i++){
-		mate_clip_reg = mateClipRegVector.at(i);
-		if(mate_clip_reg->leftClipReg) tmp_bloc = blockVector[computeBlocID(mate_clip_reg->leftClipReg->startRefPos)];  // get the block
-		else if(mate_clip_reg->rightClipReg) tmp_bloc = blockVector[computeBlocID(mate_clip_reg->rightClipReg->startRefPos)];  // get the block
-		tmp_bloc->mateClipRegVector.push_back(mate_clip_reg);
-	}
 }
 
 void Chrome::chrLoadMateClipRegData(){
@@ -985,15 +1183,12 @@ void Chrome::chrLoadMateClipRegData(){
 			if(str_vec.at(12).compare("0")==0) mate_flag = false;
 			else mate_flag = true;
 
+			left_size = left_size2 = right_size = right_size2 = 0; var_type = VAR_UNC; dup_num_tmp = 0;
 			if(str_vec.at(13).compare("####")==0){
 				if(str_vec.at(14).compare("-")!=0) { left_size = stoi(str_vec.at(14)); }
-				else left_size = 0;
 				if(str_vec.at(15).compare("-")!=0) { left_size2 = stoi(str_vec.at(15)); }
-				else left_size2 = 0;
 				if(str_vec.at(16).compare("-")!=0) { right_size = stoi(str_vec.at(16)); }
-				else right_size = 0;
 				if(str_vec.at(17).compare("-")!=0) { right_size2 = stoi(str_vec.at(17)); }
-				else right_size2 = 0;
 
 				if(str_vec.at(18).compare("UNC")==0) var_type = VAR_UNC;
 				else if(str_vec.at(18).compare("DUP")==0) var_type = VAR_DUP;
@@ -1002,7 +1197,6 @@ void Chrome::chrLoadMateClipRegData(){
 				else if(str_vec.at(18).compare("MIX")==0) var_type = VAR_MIX;
 
 				if(str_vec.at(19).compare("-")!=0) { dup_num_tmp = stoi(str_vec.at(19)); }
-				else dup_num_tmp = 0;
 			}
 
 			mate_clip_reg = new mateClipReg_t();
@@ -1012,6 +1206,7 @@ void Chrome::chrLoadMateClipRegData(){
 			mate_clip_reg->rightClipReg2 = reg4;
 			mate_clip_reg->reg_mated_flag = mate_flag;
 			mate_clip_reg->valid_flag = true;
+			mate_clip_reg->call_success_flag = false;
 			mate_clip_reg->sv_type = var_type;
 			mate_clip_reg->leftMeanClipPos = left_size;
 			mate_clip_reg->leftMeanClipPos2 = left_size2;
@@ -1040,7 +1235,7 @@ int32_t Chrome::computeBlocID(size_t begPos){
 	int32_t bloc_ID;
 
 	bloc_ID = begPos / (paras->blockSize - 2 * paras->slideSize);
-	if(bloc_ID==blockNum) bloc_ID = blockNum - 1;
+	if(bloc_ID>=blockNum) bloc_ID = blockNum - 1;
 
 	return bloc_ID;
 }
@@ -1144,13 +1339,6 @@ int Chrome::chrCall(){
 	cout << "2222222222222" << endl;
 	removeFPNewVarVec();
 
-	// fill variation sequence
-	//cout << "333333333333333333333" << endl;
-	//chrFillVarseq();
-
-	// save SV to file
-	//saveCallSV2File();
-
 	return 0;
 }
 
@@ -1164,7 +1352,7 @@ void Chrome::chrCall_st(){
 void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
-		//if(i==10 or i==23 or i==26)
+		//if(i==14)
 		{
 			cout << ">>>>>>>>> " << i << endl;
 			var_cand = var_cand_vec.at(i);
@@ -1196,8 +1384,10 @@ void Chrome::chrCall_mt(){
 
 void Chrome::chrLoadDataCall(){
 	// load misAln regions
-	loadMisAlnRegData();
-	sortMisAlnRegData();
+	if(mis_aln_vec.size()==0){
+		loadMisAlnRegData();
+		sortMisAlnRegData();
+	}
 
 	loadVarCandData();
 	if(!isVarCandDataSorted(var_cand_vec)) { sortVarCandData(var_cand_vec); /*var_cand.outputAssemDataToFile(outfilename);*/ }
@@ -1304,8 +1494,8 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			}
 			if(mate_clip_reg){
 				if(mate_clip_reg->sv_type==VAR_DUP or mate_clip_reg->sv_type==VAR_INV){ // DUP or INV
-					var_cand_tmp->leftClipRefPos = mate_clip_reg->leftMeanClipPos;
-					var_cand_tmp->rightClipRefPos = mate_clip_reg->rightMeanClipPos;
+					var_cand_tmp->leftClipRefPos = mate_clip_reg->leftMeanClipPos>0 ? mate_clip_reg->leftMeanClipPos : mate_clip_reg->leftMeanClipPos2;
+					var_cand_tmp->rightClipRefPos = mate_clip_reg->rightMeanClipPos>0 ? mate_clip_reg->rightMeanClipPos : mate_clip_reg->rightMeanClipPos2;
 					var_cand_tmp->sv_type = mate_clip_reg->sv_type;
 					var_cand_tmp->dup_num = mate_clip_reg->dup_num;
 					mate_clip_reg->var_cand = var_cand_tmp;
@@ -1361,7 +1551,7 @@ mateClipReg_t* Chrome::getMateClipReg(reg_t *reg1, reg_t *reg2, int32_t *clip_re
 	mateClipReg_t *mate_clip_reg;
 	size_t i;
 	int32_t idx;
-	reg_t *reg;
+	reg_t *reg, *reg1_tmp, *reg2_tmp;
 
 	idx = -1; *clip_reg_idx_tra = -1;
 	for(i=0; i<mateClipRegVector.size(); i++){
@@ -1371,27 +1561,32 @@ mateClipReg_t* Chrome::getMateClipReg(reg_t *reg1, reg_t *reg2, int32_t *clip_re
 				//if(((reg1==NULL and mate_clip_reg->leftClipReg==NULL) or (reg1 and mate_clip_reg->leftClipReg and reg1->chrname.compare(mate_clip_reg->leftClipReg->chrname)==0 and reg1->startRefPos==mate_clip_reg->leftClipReg->startRefPos and reg1->endRefPos==mate_clip_reg->leftClipReg->endRefPos))
 				//	and ((reg2==NULL and mate_clip_reg->rightClipReg==NULL) or (reg2 and mate_clip_reg->rightClipReg and reg2->chrname.compare(mate_clip_reg->rightClipReg->chrname)==0 and reg2->startRefPos==mate_clip_reg->rightClipReg->startRefPos and reg2->endRefPos==mate_clip_reg->rightClipReg->endRefPos)))
 				if(reg1 and reg2){
-					if((reg1->chrname.compare(mate_clip_reg->leftClipReg->chrname)==0 and reg1->startRefPos==mate_clip_reg->leftClipReg->startRefPos and reg1->endRefPos==mate_clip_reg->leftClipReg->endRefPos)
-						and (reg2->chrname.compare(mate_clip_reg->rightClipReg->chrname)==0 and reg2->startRefPos==mate_clip_reg->rightClipReg->startRefPos and reg2->endRefPos==mate_clip_reg->rightClipReg->endRefPos))
+					reg1_tmp = mate_clip_reg->leftClipReg ? mate_clip_reg->leftClipReg : mate_clip_reg->leftClipReg2;
+					reg2_tmp = mate_clip_reg->rightClipReg ? mate_clip_reg->rightClipReg : mate_clip_reg->rightClipReg2;
+					if((reg1->chrname.compare(reg1_tmp->chrname)==0 and reg1->startRefPos==reg1_tmp->startRefPos and reg1->endRefPos==reg1_tmp->endRefPos)
+						and (reg2->chrname.compare(reg2_tmp->chrname)==0 and reg2->startRefPos==reg2_tmp->startRefPos and reg2->endRefPos==reg2_tmp->endRefPos))
 						idx = i;
 				}
 			}else if(mate_clip_reg->sv_type==VAR_TRA){ // TRA
 				if(reg1 and reg2){
-					if((reg1->chrname.compare(mate_clip_reg->leftClipReg->chrname)==0 and reg1->startRefPos==mate_clip_reg->leftClipReg->startRefPos and reg1->endRefPos==mate_clip_reg->leftClipReg->endRefPos)
+					if((mate_clip_reg->leftClipReg and mate_clip_reg->rightClipReg)
+						and (reg1->chrname.compare(mate_clip_reg->leftClipReg->chrname)==0 and reg1->startRefPos==mate_clip_reg->leftClipReg->startRefPos and reg1->endRefPos==mate_clip_reg->leftClipReg->endRefPos)
 						and (reg2->chrname.compare(mate_clip_reg->rightClipReg->chrname)==0 and reg2->startRefPos==mate_clip_reg->rightClipReg->startRefPos and reg2->endRefPos==mate_clip_reg->rightClipReg->endRefPos)){
 						idx = i; *clip_reg_idx_tra = 0;
-					}else if((reg1->chrname.compare(mate_clip_reg->leftClipReg->chrname)==0 and reg1->startRefPos==mate_clip_reg->leftClipReg->startRefPos and reg1->endRefPos==mate_clip_reg->leftClipReg->endRefPos)
+					}else if((mate_clip_reg->leftClipReg and mate_clip_reg->leftClipReg2)
+						and (reg1->chrname.compare(mate_clip_reg->leftClipReg->chrname)==0 and reg1->startRefPos==mate_clip_reg->leftClipReg->startRefPos and reg1->endRefPos==mate_clip_reg->leftClipReg->endRefPos)
 						and (reg2->chrname.compare(mate_clip_reg->leftClipReg2->chrname)==0 and reg2->startRefPos==mate_clip_reg->leftClipReg2->startRefPos and reg2->endRefPos==mate_clip_reg->leftClipReg2->endRefPos)){
 						idx = i; *clip_reg_idx_tra = 3;
-					}else if((reg1->chrname.compare(mate_clip_reg->rightClipReg->chrname)==0 and reg1->startRefPos==mate_clip_reg->rightClipReg->startRefPos and reg1->endRefPos==mate_clip_reg->rightClipReg->endRefPos)
-							and (reg2->chrname.compare(mate_clip_reg->rightClipReg2->chrname)==0 and reg2->startRefPos==mate_clip_reg->rightClipReg2->startRefPos and reg2->endRefPos==mate_clip_reg->rightClipReg2->endRefPos)){
+					}else if((mate_clip_reg->rightClipReg and mate_clip_reg->rightClipReg2)
+						and (reg1->chrname.compare(mate_clip_reg->rightClipReg->chrname)==0 and reg1->startRefPos==mate_clip_reg->rightClipReg->startRefPos and reg1->endRefPos==mate_clip_reg->rightClipReg->endRefPos)
+						and (reg2->chrname.compare(mate_clip_reg->rightClipReg2->chrname)==0 and reg2->startRefPos==mate_clip_reg->rightClipReg2->startRefPos and reg2->endRefPos==mate_clip_reg->rightClipReg2->endRefPos)){
 							idx = i; *clip_reg_idx_tra = 4;
 						}
 				}else if(reg1 or reg2){
 					reg = reg1 ? reg1 : reg2;
-					if(reg->chrname.compare(mate_clip_reg->leftClipReg->chrname)==0 and reg->startRefPos==mate_clip_reg->leftClipReg->startRefPos and reg->endRefPos==mate_clip_reg->leftClipReg->endRefPos){
+					if(mate_clip_reg->leftClipReg and reg->chrname.compare(mate_clip_reg->leftClipReg->chrname)==0 and reg->startRefPos==mate_clip_reg->leftClipReg->startRefPos and reg->endRefPos==mate_clip_reg->leftClipReg->endRefPos){
 						idx = i; *clip_reg_idx_tra = 1;
-					}else if(reg->chrname.compare(mate_clip_reg->rightClipReg->chrname)==0 and reg->startRefPos==mate_clip_reg->rightClipReg->startRefPos and reg->endRefPos==mate_clip_reg->rightClipReg->endRefPos){
+					}else if(mate_clip_reg->rightClipReg and reg->chrname.compare(mate_clip_reg->rightClipReg->chrname)==0 and reg->startRefPos==mate_clip_reg->rightClipReg->startRefPos and reg->endRefPos==mate_clip_reg->rightClipReg->endRefPos){
 						idx = i; *clip_reg_idx_tra = 2;
 					}
 				}
@@ -1673,8 +1868,6 @@ void Chrome::removeFPNewVarVecIndel(vector<varCand*> &var_cand_vec){
 
 void Chrome::saveCallSV2File(){
 	saveCallIndelClipReg2File(out_filename_call_indel, out_filename_call_clipReg);
-	//saveCallIndel2File(out_filename_call_indel);
-	//saveCallClipReg2File(out_filename_call_clipReg);
 }
 
 void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfilename_clipReg){
@@ -1699,137 +1892,136 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 		var_cand = var_cand_vec[i];
 		for(j=0; j<var_cand->varVec.size(); j++){
 			reg = var_cand->varVec[j];
-			file_id = 0;
-			switch(reg->var_type){
-				case VAR_UNC: sv_type = "UNCERTAIN"; break;
-				case VAR_INS: sv_type = "INS"; break;
-				case VAR_DEL: sv_type = "DEL"; break;
-				case VAR_DUP: sv_type = "DUP"; file_id = 1; break;
-				case VAR_INV: sv_type = "INV"; file_id = 1; break;
-				case VAR_TRA: sv_type = "TRA"; file_id = 1; break;
-				default: sv_type = "MIX"; break;
+			if(reg->call_success_status){
+				file_id = 0;
+				switch(reg->var_type){
+					case VAR_UNC: sv_type = "UNCERTAIN"; break;
+					case VAR_INS: sv_type = "INS"; break;
+					case VAR_DEL: sv_type = "DEL"; break;
+					case VAR_DUP: sv_type = "DUP"; file_id = 1; break;
+					case VAR_INV: sv_type = "INV"; file_id = 1; break;
+					case VAR_TRA: sv_type = "TRA"; file_id = 1; break;
+					default: sv_type = "MIX"; break;
+				}
+				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+				if(reg->var_type!=VAR_TRA)
+					line += "\t" + to_string(reg->sv_len);
+				else
+					line += "\t-";
+				if(reg->var_type==VAR_DUP)
+					line += "\t" + to_string(reg->dup_num);
+				else
+					line += "\t-";
+				line += "\t" + reg->refseq + "\t" + reg->altseq;
+
+//				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
+//				if(reg->var_type==VAR_INS or reg->var_type==VAR_DEL)
+//					line += "\t" + to_string(reg->sv_len);
+//				else if(reg->var_type==VAR_DUP)
+//					line += "\t" + to_string(reg->sv_len) + "\t" + to_string(reg->dup_num);
+//				else
+//					line += "\t.";
+				if(file_id==0) outfile_indel << line << endl;
+				else outfile_clipReg << line << endl;
 			}
-			line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + reg->refseq + "\t" + reg->altseq + "\t" + sv_type;
-			if(reg->var_type==VAR_INS or reg->var_type==VAR_DEL)
-				line += "\t" + to_string(reg->sv_len);
-			else if(reg->var_type==VAR_DUP)
-				line += "\t" + to_string(reg->sv_len) + "\t" + to_string(reg->dup_num);
-			else
-				line += "\t.";
-			if(file_id==0) outfile_indel << line << endl;
-			else outfile_clipReg << line << endl;
 		}
 	}
+
 	for(i=0; i<var_cand_clipReg_vec.size(); i++){
 		var_cand = var_cand_clipReg_vec[i];
-		reg = var_cand->clip_reg;
-		if(var_cand->call_success){
-			file_id = 1;
-			switch(reg->var_type){
-				case VAR_UNC: sv_type = "UNCERTAIN"; break;
-				case VAR_INS: sv_type = "INS"; file_id = 0; break;
-				case VAR_DEL: sv_type = "DEL"; file_id = 0; break;
-				case VAR_DUP: sv_type = "DUP"; break;
-				case VAR_INV: sv_type = "INV"; break;
-				case VAR_TRA: sv_type = "TRA"; break;
-				default: sv_type = "MIX"; break;
-			}
+		if(var_cand->clip_reg_flag==false){ // indel
+			for(j=0; j<var_cand->varVec.size(); j++){
+				reg = var_cand->varVec[j];
+				if(reg->call_success_status){
+					file_id = 0;
+					switch(reg->var_type){
+						case VAR_UNC: sv_type = "UNCERTAIN"; break;
+						case VAR_INS: sv_type = "INS"; break;
+						case VAR_DEL: sv_type = "DEL"; break;
+						case VAR_DUP: sv_type = "DUP"; file_id = 1; break;
+						case VAR_INV: sv_type = "INV"; file_id = 1; break;
+						case VAR_TRA: sv_type = "TRA"; file_id = 1; break;
+						default: sv_type = "MIX"; break;
+					}
+					line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+					if(reg->var_type!=VAR_TRA)
+						line += "\t" + to_string(reg->sv_len);
+					else
+						line += "\t-";
+					if(reg->var_type==VAR_DUP)
+						line += "\t" + to_string(reg->dup_num);
+					else
+						line += "\t-";
+					line += "\t" + reg->refseq + "\t" + reg->altseq;
 
-			line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + reg->refseq + "\t" + reg->altseq + "\t" + sv_type;
-			if(reg->var_type==VAR_DUP)
-				line += "\t" + to_string(reg->sv_len) + "\t" + to_string(reg->dup_num);
-			else
-				line += "\t.";
-			if(file_id==1) outfile_clipReg << line << endl;
-			else outfile_indel << line << endl;
-		}else{
-			file_id = 1;
-			switch(var_cand->sv_type){
-				case VAR_UNC: sv_type = "UNCERTAIN"; break;
-				case VAR_INS: sv_type = "INS"; file_id = 0; break;
-				case VAR_DEL: sv_type = "DEL"; file_id = 0; break;
-				case VAR_DUP: sv_type = "DUP"; break;
-				case VAR_INV: sv_type = "INV"; break;
-				case VAR_TRA: sv_type = "TRA"; break;
-				default: sv_type = "MIX"; break;
+//					line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
+//					if(reg->var_type==VAR_INS or reg->var_type==VAR_DEL)
+//						line += "\t" + to_string(reg->sv_len);
+//					else if(reg->var_type==VAR_DUP)
+//						line += "\t" + to_string(reg->sv_len) + "\t" + to_string(reg->dup_num);
+//					else
+//						line += "\t.";
+
+					if(file_id==0) outfile_indel << line << endl;
+					else outfile_clipReg << line << endl;
+				}
 			}
-			line = var_cand->chrname + "\t" + to_string(var_cand->leftClipRefPos) + "\t" + to_string(var_cand->rightClipRefPos) + "\t" + "." + "\t" + "." + "\t" + sv_type;
-			line += "\t.";
-			if(file_id==1) outfile_clipReg << line << endl;
-			else outfile_indel << line << endl;
+		}else{ // cliping region
+			reg = var_cand->clip_reg;
+			if(var_cand->call_success){
+				file_id = 1;
+				switch(reg->var_type){
+					case VAR_UNC: sv_type = "UNCERTAIN"; break;
+					case VAR_INS: sv_type = "INS"; file_id = 0; break;
+					case VAR_DEL: sv_type = "DEL"; file_id = 0; break;
+					case VAR_DUP: sv_type = "DUP"; break;
+					case VAR_INV: sv_type = "INV"; break;
+					case VAR_TRA: sv_type = "TRA"; break;
+					default: sv_type = "MIX"; break;
+				}
+
+				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+				if(reg->var_type!=VAR_TRA)
+					line += "\t" + to_string(reg->sv_len);
+				else
+					line += "\t-";
+				if(reg->var_type==VAR_DUP)
+					line += "\t" + to_string(reg->dup_num);
+				else
+					line += "\t-";
+				line += "\t" + reg->refseq + "\t" + reg->altseq;
+
+//				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
+//				if(reg->var_type==VAR_DUP)
+//					line += "\t" + to_string(reg->sv_len) + "\t" + to_string(reg->dup_num);
+//				else
+//					line += "\t.";
+				if(file_id==1) outfile_clipReg << line << endl;
+				else outfile_indel << line << endl;
+			}else{ // not confirmed SV
+//				if(var_cand->sv_type!=VAR_UNC){
+//					file_id = 1;
+//					switch(var_cand->sv_type){
+//						case VAR_UNC: sv_type = "UNCERTAIN"; break;
+//						case VAR_INS: sv_type = "INS"; file_id = 0; break;
+//						case VAR_DEL: sv_type = "DEL"; file_id = 0; break;
+//						case VAR_DUP: sv_type = "DUP"; break;
+//						case VAR_INV: sv_type = "INV"; break;
+//						case VAR_TRA: sv_type = "TRA"; break;
+//						default: sv_type = "MIX"; break;
+//					}
+//					line = var_cand->chrname;
+//					if(var_cand->leftClipRefPos>0 and var_cand->rightClipRefPos>0) line += "\t" + to_string(var_cand->leftClipRefPos) + "\t" + to_string(var_cand->rightClipRefPos);
+//					else line += "\t-\t-";
+//					line += "\t.\t.\t" + sv_type + "\t.";
+//					if(file_id==1) outfile_clipReg << line << endl;
+//					else outfile_indel << line << endl;
+//				}
+			}
 		}
 	}
 
 	outfile_indel.close();
 	outfile_clipReg.close();
 }
-
-//void Chrome::saveCallIndel2File(string &outfilename){
-//	size_t i, j;
-//	ofstream outfile;
-//	varCand *var_cand;
-//	reg_t *reg;
-//	string line, sv_type;
-//
-//	outfile.open(outfilename);
-//	if(!outfile.is_open()){
-//		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << outfilename << endl;
-//		exit(1);
-//	}
-//
-//	for(i=0; i<var_cand_vec.size(); i++){
-//		var_cand = var_cand_vec[i];
-//		for(j=0; j<var_cand->varVec.size(); j++){
-//			reg = var_cand->varVec[j];
-//			switch(reg->var_type){
-//				case VAR_UNC: sv_type = "UNCERTAIN"; break;
-//				case VAR_INS: sv_type = "INS"; break;
-//				case VAR_DEL: sv_type = "DEL"; break;
-//				default: sv_type = "MIX"; break;
-//			}
-//			line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + reg->refseq + "\t" + reg->altseq + "\t" + sv_type;
-//			if(reg->var_type==VAR_INS or reg->var_type==VAR_DEL)
-//				line += "\t" + to_string(reg->sv_len);
-//			else
-//				line += "\t.";
-//			outfile << line << endl;
-//		}
-//	}
-//	outfile.close();
-//}
-//
-//void Chrome::saveCallClipReg2File(string &outfilename){
-//	ofstream outfile;
-//	varCand *var_cand;
-//	reg_t *reg;
-//	string line, sv_type;
-//
-//	outfile.open(outfilename);
-//	if(!outfile.is_open()){
-//		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << outfilename << endl;
-//		exit(1);
-//	}
-//
-//	for(size_t i=0; i<var_cand_clipReg_vec.size(); i++){
-//		var_cand = var_cand_clipReg_vec[i];
-//		reg = var_cand->clip_reg;
-//		if(var_cand->call_success){
-//			switch(reg->var_type){
-//				case VAR_UNC: sv_type = "UNCERTAIN"; break;
-//				case VAR_DUP: sv_type = "DUP"; break;
-//				case VAR_INV: sv_type = "INV"; break;
-//				case VAR_TRA: sv_type = "TRA"; break;
-//				default: sv_type = "MIX"; break;
-//			}
-//
-//			line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + reg->refseq + "\t" + reg->altseq + "\t" + sv_type;
-//			if(reg->var_type==VAR_DUP)
-//				line += "\t" + to_string(reg->sv_len);
-//			else
-//				line += "\t.";
-//			outfile << line << endl;
-//		}
-//	}
-//	outfile.close();
-//}
 

@@ -23,6 +23,7 @@ using namespace std;
 #define ASSEMBLY_SIDE_LEN				10000
 #define ASSEMBLY_GENOME_SIZE_INITIAL	30000
 #define ASSEMBLY_STEP_SIZE				10000
+#define ASSEMBLY_SIDE_EXT_SIZE			1000
 
 class LocalAssembly {
 	public:

@@ -22,28 +22,31 @@ using namespace std;
 
 class Chrome{
 	public:
+		Paras *paras;
+		string chrname;
+		int32_t chrlen;
+
 		// output directory
 		string out_dir_detect, out_dir_assemble, out_dir_call;
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
 		string out_filename_call_snv, out_filename_call_indel, out_filename_call_clipReg;
 
 		vector<mateClipReg_t*> mateClipRegVector;
+		vector<varCand*> var_cand_vec;
+		vector<varCand*> var_cand_clipReg_vec;
+
+		vector<Block*> blockVector;
 
 	private:
-		Paras *paras;
-		string chrname;
-		int32_t chrlen, blockNum;
+		int32_t blockNum;
 		string blocks_out_file;
-		vector<Block*> blockVector;
 		faidx_t *fai;
 
 		// clip regions
 		vector<reg_t*> clipRegVector;  // only for duplication and inversion
 
 		// call
-		vector<varCand*> var_cand_vec;
 		vector<reg_t*> mis_aln_vec;
-		vector<varCand*> var_cand_clipReg_vec;
 
 		// assembly info and misAln region
 		string var_cand_indel_filename, misAln_reg_filename, var_cand_clipReg_filename;
@@ -57,6 +60,7 @@ class Chrome{
 		void saveChrBlocksToFile();
 		void chrFillDataEst(size_t op_est);
 		int chrDetect();
+		void removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec);;
 		void chrMergeDetectResultToFile();
 		void chrLoadDataAssemble();
 		int chrLocalAssemble();
@@ -67,6 +71,7 @@ class Chrome{
 		void removeVarCandNodeClipReg(varCand *var_cand);
 		void chrFillVarseq();
 		void saveCallSV2File();
+
 
 	private:
 		void init();
@@ -108,13 +113,12 @@ class Chrome{
 		void removeRedundantVarItemsInNewCalledVarvec(reg_t *reg_idx, int32_t idx, vector<varCand*> &var_cand_vec);
 		void removeFPNewVarVec();
 		void removeFPNewVarVecIndel(vector<varCand*> &var_cand_vec);
-		void removeFPIndelSnvInClipReg();
 		bool isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_vec);
 		bool isSnvInClipReg(size_t pos, vector<mateClipReg_t*> &mate_clipReg_vec);
 
 		// DUP, INV, TRA
-		void chrComputeMateClipRegDupInv();
-		void precessClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, mateClipReg_t &mate_clip_reg);
+		void chrComputeMateClipReg();
+		void processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, mateClipReg_t &mate_clip_reg, reg_t *reg);
 		mateClipReg_t *getMateRegEndSameClipReg(mateClipReg_t *clip_reg, vector<mateClipReg_t*> &mate_clipReg_vec);
 		void removeFPClipRegsDupInv();
 		vector<size_t> getOverlapClipReg(reg_t *given_reg);
@@ -123,8 +127,6 @@ class Chrome{
 
 		// save SV to file
 		void saveCallIndelClipReg2File(string &outfilename_indel, string &outfilename_clipReg);
-		//void saveCallIndel2File(string &outfilename);
-		//void saveCallClipReg2File(string &outfilename);
 };
 
 #endif /* SRC_CHROME_H_ */

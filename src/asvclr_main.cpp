@@ -22,10 +22,9 @@ int main(int argc, char **argv) {
 	genome.generateGenomeBlocks();
 
 	// detect indels
-	if(paras.command=="detect")
+	if(paras.command.compare("detect")==0 or paras.command.compare("all")==0)
 	{
 		cout << "[" << time.getTime() << "]: detect structural variations ..." << endl;
-
 		genome.genomeDetect();
 
 		cout << "Total misAln region size: " << paras.misAlnRegLenSum << endl;
@@ -33,22 +32,24 @@ int main(int argc, char **argv) {
 	}
 
 	// assemble
-	if(paras.command=="assemble")
+	if(paras.command.compare("assemble")==0 or paras.command.compare("all")==0)
 	{
 		cout << "[" << time.getTime() << "]: local assemble ..." << endl;
 
 		// local assemble
+		paras.slideSize = paras.assemSlideSize;
 		genome.genomeLocalAssemble();
 
 		cout << "[" << time.getTime() << "]: local assemble finished." << endl;
 	}
 
 	// call
-	if(paras.command=="call")
+	if(paras.command.compare("call")==0 or paras.command.compare("all")==0)
 	{
 		cout << "[" << time.getTime() << "]: call variants ..." << endl;
 
 		// call variants
+		paras.slideSize = paras.assemSlideSize;
 		genome.genomeCall();
 
 		cout << "[" << time.getTime() << "]: call variants finished." << endl;
