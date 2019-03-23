@@ -760,6 +760,21 @@ void printMateClipReg(mateClipReg_t *mate_clip_reg){
 	cout << "\tvalid_flag=" << mate_clip_reg->valid_flag << ", call_success_flag=" << mate_clip_reg->call_success_flag << ", leftClipRegNum=" << mate_clip_reg->leftClipRegNum << ", rightClipRegNum=" << mate_clip_reg->rightClipRegNum << ", sv_type=" << mate_clip_reg->sv_type << ", dup_num=" << mate_clip_reg->dup_num << endl;
 }
 
+// preprocess pipe command characters
+string preprocessPipeChar(string &cmd_str){
+	char ch;
+	string ret_str = "";
+
+	for(size_t i=0; i<cmd_str.size(); i++){
+		ch = cmd_str.at(i);
+		if(ch=='|') // pipe character
+			ret_str += "_";
+		else
+			ret_str += ch;
+	}
+	return ret_str;
+}
+
 
 
 Time::Time() {

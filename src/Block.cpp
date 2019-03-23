@@ -11,14 +11,16 @@ pthread_mutex_t mutex_write_misAln = PTHREAD_MUTEX_INITIALIZER;
 
 // Constructor with parameters
 Block::Block(string chrname, size_t chrlen, size_t startPos, size_t endPos, faidx_t *fai,  Paras *paras){
+	string chrname_tmp;
 	this->paras =  paras;
 	this->chrname = chrname;
 	this->chrlen = chrlen;
 	this->startPos = startPos;
 	this->endPos = endPos;
 	this->fai = fai;
-	workdir = chrname;
-	outCovFile = chrname + "_" + to_string(startPos) + "-" + to_string(endPos) + ".bed";
+	chrname_tmp = preprocessPipeChar(chrname);
+	workdir = chrname_tmp;
+	outCovFile = chrname_tmp + "_" + to_string(startPos) + "-" + to_string(endPos) + ".bed";
 	baseArr = NULL;
 
 	winSize = paras->slideSize * 3;
@@ -31,13 +33,13 @@ Block::Block(string chrname, size_t chrlen, size_t startPos, size_t endPos, faid
 	snvDetectPrefix_local = "snv_cand";
 	indelDetectPrefix_local = "indel_cand";
 	clipRegDetectPrefix_local = "clipReg_cand";
-	snvFilenameDetect = snvDetectPrefix_local + "_" + chrname + "_" + to_string(startPos) + "-" + to_string(endPos) + ".bed";
-	indelFilenameDetect = indelDetectPrefix_local + "_" + chrname + "_" + to_string(startPos) + "-" + to_string(endPos) + ".bed";
-	clipRegFilenameDetect = clipRegDetectPrefix_local + "_" + chrname + "_" + to_string(startPos) + "-" + to_string(endPos) + ".bed";
+	snvFilenameDetect = snvDetectPrefix_local + "_" + chrname_tmp + "_" + to_string(startPos) + "-" + to_string(endPos) + ".bed";
+	indelFilenameDetect = indelDetectPrefix_local + "_" + chrname_tmp + "_" + to_string(startPos) + "-" + to_string(endPos) + ".bed";
+	clipRegFilenameDetect = clipRegDetectPrefix_local + "_" + chrname_tmp + "_" + to_string(startPos) + "-" + to_string(endPos) + ".bed";
 
 	// assemble output files
 	indelAssemblePrefix_local = "contig";
-	indelFilenameAssemble = indelAssemblePrefix_local + "_" + chrname + "_" + to_string(startPos) + "-" + to_string(endPos) + ".fa";
+	indelFilenameAssemble = indelAssemblePrefix_local + "_" + chrname_tmp + "_" + to_string(startPos) + "-" + to_string(endPos) + ".fa";
 
 	var_cand_indel_file = NULL;
 	misAln_reg_file = NULL;
@@ -59,6 +61,8 @@ void Block::setOutputDir(string& out_dir_detect_prefix, string& out_dir_assemble
 	out_dir_detect = out_dir_detect_prefix;
 	out_dir_assemble = out_dir_assemble_prefix;
 	out_dir_call = out_dir_call_prefix + "/" + chrname + "_" + to_string(startPos) + "-" + to_string(endPos);
+
+	out_dir_call = preprocessPipeChar(out_dir_call);
 }
 
 // initialize the base array of the block

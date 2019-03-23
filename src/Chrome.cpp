@@ -47,6 +47,10 @@ void Chrome::setOutputDir(string& out_dir_detect_prefix, string& out_dir_assembl
 	out_dir_assemble = out_dir_assemble_prefix + "/" + chrname;
 	out_dir_call = out_dir_call_prefix + "/" + chrname;
 
+	out_dir_detect = preprocessPipeChar(out_dir_detect);
+	out_dir_assemble = preprocessPipeChar(out_dir_assemble);
+	out_dir_call = preprocessPipeChar(out_dir_call);
+
 	out_filename_detect_snv = out_dir_detect + "_SNV_candidate";
 	out_filename_detect_indel = out_dir_detect + "_INDEL_candidate";
 	out_filename_detect_clipReg = out_dir_detect + "_clipReg_candidate";
@@ -1352,9 +1356,9 @@ void Chrome::chrCall_st(){
 void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
-		//if(i==14)
+		//if(i==163 or i==282 or i==609)
 		{
-			cout << ">>>>>>>>> " << i << endl;
+			cout << ">>>>>>>>> " << i << ", " << var_cand_vec.at(i)->alnfilename << endl;
 			var_cand = var_cand_vec.at(i);
 			var_cand->callVariants();
 		}
@@ -1914,6 +1918,10 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 					line += "\t-";
 				line += "\t" + reg->refseq + "\t" + reg->altseq;
 
+				if(reg->var_type==VAR_UNC){
+					cout << "line=" << __LINE__ << ": " << line << ", short_sv_flag=" << reg->short_sv_flag << endl << endl << endl;
+				}
+
 //				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
 //				if(reg->var_type==VAR_INS or reg->var_type==VAR_DEL)
 //					line += "\t" + to_string(reg->sv_len);
@@ -1954,6 +1962,10 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 						line += "\t-";
 					line += "\t" + reg->refseq + "\t" + reg->altseq;
 
+					if(reg->var_type==VAR_UNC){
+						cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
+					}
+
 //					line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
 //					if(reg->var_type==VAR_INS or reg->var_type==VAR_DEL)
 //						line += "\t" + to_string(reg->sv_len);
@@ -1990,6 +2002,10 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 				else
 					line += "\t-";
 				line += "\t" + reg->refseq + "\t" + reg->altseq;
+
+				if(reg->var_type==VAR_UNC){
+					cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
+				}
 
 //				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
 //				if(reg->var_type==VAR_DUP)

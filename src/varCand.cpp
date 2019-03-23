@@ -2365,6 +2365,9 @@ void varCand::determineClipRegInvType(){
 						call_success = true;
 
 						cout << "----------> INV: " << clip_reg->chrname << ":" << clip_reg->startRefPos << "-" << clip_reg->endRefPos << ", startLocalRefPos=" << clip_reg->startLocalRefPos << ", endLocalRefPos=" << clip_reg->endLocalRefPos << ", startQueryPos=" << clip_reg->startQueryPos << ", endQueryPos=" << clip_reg->endQueryPos << ", sv_len=" << clip_reg->sv_len << ", sim_ratio_inv=" << sim_ratio_inv << endl;
+					}else{
+						delete clip_reg;
+						clip_reg = NULL;
 					}
 
 					delete local_aln;
@@ -2425,14 +2428,6 @@ vector<int32_t> varCand::getInvBlatAlnItemIdx(reg_t *reg, vector<blat_aln_t*> &b
 
 	return blat_aln_idx_vec;
 }
-
-//reg_t* varCand::computeInvReg(reg_t *reg, int32_t blat_aln_idx, vector<int32_t> blat_aln_idx_inv_vec){
-//	reg_t *reg_inv;
-//
-//
-//
-//	return reg_inv;
-//}
 
 // compute left and right clipping positions
 reg_t* varCand::computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq, size_t var_type){

@@ -42,6 +42,7 @@ void updateReg(reg_t* reg1, reg_t* reg2);
 void mergeAdjacentReg(vector<reg_t*> &regVec, size_t dist_thres);
 void printRegVec(vector<reg_t*> &regVec, string header);
 void printMateClipReg(mateClipReg_t *mate_clip_reg);
+string preprocessPipeChar(string &cmd_str);
 
 class Time{
 	private:

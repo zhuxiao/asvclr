@@ -7,10 +7,10 @@ pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size) {
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
-	this->readsfilename = readsfilename;
-	this->contigfilename = contigfilename;
-	this->refseqfilename = refseqfilename;
-	this->tmpdir = tmpdir;
+	this->readsfilename = preprocessPipeChar(readsfilename);
+	this->contigfilename = preprocessPipeChar(contigfilename);
+	this->refseqfilename = preprocessPipeChar(refseqfilename);
+	this->tmpdir = preprocessPipeChar(tmpdir);
 	this->varVec = varVec;
 	this->fai = fai;
 	this->inBamFile = inBamFile;
@@ -61,7 +61,7 @@ void LocalAssembly::extractRefseq(){
 		exit(1);
 	}
 
-	outfile << ">" + reg + "|" + to_string(left_shift_size) + "|" + to_string(right_shift_size) + "|" + contigfilename << endl;  // header
+	outfile << ">" + reg + "___" + to_string(left_shift_size) + "___" + to_string(right_shift_size) + "___" + contigfilename << endl;  // header
 	outfile << refseq_loader.refseq << endl;  // seq
 
 	outfile.close();
@@ -398,6 +398,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 	cmd2 = "mv " + tmp_ctg_filename + " " + contigfilename;   // move and rename file
 	cmd4 = "rm -rf " + tmpdir;  // delete files
 
+
 	// increase the genome size
 	genomeSize_Canu = ASSEMBLY_GENOME_SIZE_INITIAL;
 	step_size = ASSEMBLY_STEP_SIZE;
@@ -475,7 +476,7 @@ void LocalAssembly::recordAssemblyInfo(ofstream &assembly_info_file){
 	}
 
 	getline(infile, header);
-	str_vec = split(header, "|");
+	str_vec = split(header, "___");
 	left_shift_size_str = str_vec[1];
 	right_shift_size_str = str_vec[2];
 

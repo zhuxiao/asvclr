@@ -618,6 +618,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->varVec.shrink_to_fit();
 
 		var_cand_new->alnfilename = var_cand->alnfilename.substr(0, var_cand->alnfilename.size()-5) + "_" + var_cand_tmp->chrname + "_" + to_string(var_cand_tmp->leftClipRefPos) + "-" + to_string(var_cand_tmp->rightClipRefPos) + ".sim4";
+		var_cand_new->alnfilename = preprocessPipeChar(var_cand_new->alnfilename);
 		var_cand_new->align_success = false;
 		var_cand_new->clip_reg_flag = true;
 
