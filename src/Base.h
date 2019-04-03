@@ -34,6 +34,9 @@ class Base
 		bool isZeroCovBase();
 		bool isHighIndelBase(float threshold);
 		size_t getLargeIndelNum(size_t thres);
+		size_t getTotalIndelNum();
+		size_t getTotalClipNum();
+		size_t getTotalCovNum();
 
 	private:
 		void init();

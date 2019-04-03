@@ -18,9 +18,10 @@ class FastaSeqLoader {
 
 	public:
 		FastaSeqLoader(string &fastafilename);
+		virtual ~FastaSeqLoader();
 		string getFastaSeq(size_t fa_id, size_t aln_orient);
 		string getFastaSeqByPos(size_t fa_id, size_t startPos, size_t endPos, size_t aln_orient); // ctg_id starts from 0, pos starts from 1
-		virtual ~FastaSeqLoader();
+		size_t getFastaSeqLen(size_t fa_id);
 
 	private:
 		void initFastaSeq();

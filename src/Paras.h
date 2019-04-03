@@ -9,7 +9,7 @@
 using namespace std;
 
 // program variables
-#define PROG_NAME		"cindel_lr"
+#define PROG_NAME		"asvclr"
 #define PROG_VERSION	"0.1.0"
 
 #define SIZE_EST_OP		0

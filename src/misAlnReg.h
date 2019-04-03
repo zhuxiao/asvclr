@@ -14,6 +14,7 @@ using namespace std;
 
 #define SUB_MIS_ALN_REG_SIZE				10
 #define SUB_MIS_ALN_REG_RATIO_THRES			(0.05f)
+#define HIGH_SUB_MIS_ALN_REG_RATIO_THRES	(0.3f)
 #define GAPPED_MIS_ALN_REG_NUM_THRES		1
 #define MIN_MIS_ALN_REG_NUM_THRES			2
 #define SUB_REG_MAX_MIS_ALN_NUM_THRES		2

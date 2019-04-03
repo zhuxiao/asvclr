@@ -367,8 +367,8 @@ void Region::detectIndelReg(){
 	int32_t i = startMidPartPos - subRegSize;
 	if(i<1) i = 1;
 	while(i<(int32_t)endMidPartPos){
-//		if(i>29500)
-//			cout << i << endl;
+		//if(i>24935500)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
+		//	cout << i << endl;
 
 		reg = getIndelReg(i);
 		if(reg){
@@ -382,7 +382,9 @@ void Region::detectIndelReg(){
 // get the indel region given the start checking chromosome position
 reg_t* Region::getIndelReg(size_t startCheckPos){
 	reg_t *reg = NULL;
-	size_t i, checkPos, reg_size1, reg_size2, num1, num3, extendSize;
+	size_t i, checkPos, reg_size1, reg_size2, num1, num3, num4, extendSize;
+	vector<double> num_vec;
+	double high_indel_clip_ratio;
 	int32_t startPos1, endPos1, startPos2;
 	int32_t startPos_indel = -1, endPos_indel = -1;
 	bool indel_beg_flag, indel_end_flag;
@@ -398,9 +400,6 @@ reg_t* Region::getIndelReg(size_t startCheckPos){
 		startPos1 = -1;
 		reg_size1 = 0;
 		for(i=checkPos; i<=endMidPartPos; i++){
-			//if(i>=3785000)
-				//cout << i << endl;
-
 			if(regBaseArr[i-startRPos].coverage.idx_RefBase==4){ // skip the Ns region
 				startPos1 = -1;
 				reg_size1 = 0;
@@ -470,8 +469,11 @@ reg_t* Region::getIndelReg(size_t startCheckPos){
 				num1 = getDisZeroCovNum(startPos_indel, endPos_indel);
 				//num2 = getMismatchBasesAround(startPos_indel, endPos_indel);
 				num3 = getLargeIndelBaseNum(startPos_indel, endPos_indel);
+				num_vec = getTotalHighIndelClipRatioBaseNum(startPos_indel, endPos_indel);
+				num4 = num_vec.at(0);
+				high_indel_clip_ratio = num_vec.at(1);
 				//if(num1>0 or num2>=DISAGREE_NUM_THRES_REG or num3>0) {
-				if(num1>0 or num3>0) {
+				if(num1>0 or num3>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
 					reg = allocateReg(startPos_indel, endPos_indel);
 					break;
 				}else checkPos = endPos_indel + 1;
@@ -492,7 +494,7 @@ bool Region::haveNoAbSigs(Base *base, size_t pos){
 		return false;
 //	else if(getMismatchBasesAround(pos-DISAGREE_CHK_REG, pos+DISAGREE_CHK_REG)>=DISAGREE_NUM_THRES_REG)
 //		return false;
-	else if(base->getLargeIndelNum(paras->large_indel_size_thres)>=3)
+	else if(base->getLargeIndelNum(paras->large_indel_size_thres)>=3 or (double)(base->getTotalIndelNum()+base->getTotalClipNum())/base->getTotalCovNum()>=HIGH_INDEL_CLIP_RATIO_THRES)
 		return false;
 	return true;
 }
@@ -547,6 +549,33 @@ size_t Region::getLargeIndelNum(size_t startPos, size_t endPos){
 		large_indel_num += regBaseArr[i-startRPos].getLargeIndelNum(paras->large_indel_size_thres);
 	}
 	return large_indel_num;
+}
+
+// get the number of high ratio indel bases
+vector<double> Region::getTotalHighIndelClipRatioBaseNum(size_t startPos, size_t endPos){
+	size_t i, indel_num, clip_num, total_cov, len;
+	double ratio, total, total2;
+	Base *base;
+	vector<double> base_num_vec;
+
+	total = total2 = 0;
+	for(i=startPos; i<=endPos; i++){
+		base  = regBaseArr + i - startRPos;
+		indel_num = base->getTotalIndelNum();
+		clip_num = base->getTotalClipNum();
+		total_cov = base->getTotalCovNum();
+		ratio = (double)(indel_num + clip_num) / total_cov;
+		if(ratio>=HIGH_INDEL_CLIP_RATIO_THRES) total ++;
+		if(ratio>=SECOND_INDEL_CLIP_RATIO_THRES) total2 ++;
+	}
+
+	len = endPos - startPos + 1;
+	ratio = (double)total2 / len;
+
+	base_num_vec.push_back(total);
+	base_num_vec.push_back(ratio);
+
+	return base_num_vec;
 }
 
 // determine the dif type for indel candidate

@@ -118,3 +118,15 @@ size_t Base::getLargeIndelNum(size_t thres){
 	}
 	return large_indel_num;
 }
+
+size_t Base::getTotalIndelNum(){
+	return insVector.size() + delVector.size() + num_shortIns + num_shortdel;
+}
+
+size_t Base::getTotalClipNum(){
+	return clipVector.size() + num_shortClip;
+}
+
+size_t Base::getTotalCovNum(){
+	return coverage.num_bases[5];
+}

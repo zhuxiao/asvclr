@@ -251,7 +251,7 @@ int Chrome::chrDetect(){
 int Chrome::chrDetect_st(){
 	Block* bloc;
 	for(size_t i=0; i<blockVector.size(); i++){
-		//if(i>=5)
+		//if(i>=142)
 		{
 			bloc = blockVector.at(i);
 			//cout << "detect files:" << bloc->out_dir_detect << "/" << bloc->snvFilenameDetect << ", " << bloc->indelFilenameDetect << endl;
@@ -1356,9 +1356,9 @@ void Chrome::chrCall_st(){
 void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
-		//if(i==163 or i==282 or i==609)
+		//if(i>=350)
 		{
-			cout << ">>>>>>>>> " << i << ", " << var_cand_vec.at(i)->alnfilename << endl;
+			//cout << ">>>>>>>>> " << i << ", " << var_cand_vec.at(i)->alnfilename << endl;
 			var_cand = var_cand_vec.at(i);
 			var_cand->callVariants();
 		}
@@ -1762,11 +1762,6 @@ void Chrome::removeRedundantIndel(vector<varCand*> &var_cand_vec){
 		}
 	}
 }
-
-// remove redundant called indels
-//void Chrome::removeRedundantClipReg(vector<varCand*> &var_cand_clipReg_vec){
-//
-//}
 
 // determine whether the variant is redundant by checking varVector using binary search
 bool Chrome::isRedundantVarItemBinSearch(reg_t *reg, vector<varCand*> &var_cand_vec){

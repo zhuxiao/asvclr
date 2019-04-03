@@ -648,13 +648,15 @@ void mergeOverlappedReg(vector<reg_t*> &regVector){
 
 	for(i=0; i<regVector.size(); i++){
 		reg1 = regVector.at(i);
-		for(j=i+1; j<regVector.size(); ){
-			reg2 = regVector.at(j);
-			if(isOverlappedReg(reg1, reg2)){
-				updateReg(reg1, reg2);
-				delete reg2;
-				regVector.erase(regVector.begin()+j);
-			}else j++;
+		if(reg1->call_success_status){
+			for(j=i+1; j<regVector.size(); ){
+				reg2 = regVector.at(j);
+				if(reg2->call_success_status and isOverlappedReg(reg1, reg2)){
+					updateReg(reg1, reg2);
+					delete reg2;
+					regVector.erase(regVector.begin()+j);
+				}else j++;
+			}
 		}
 	}
 	regVector.shrink_to_fit();

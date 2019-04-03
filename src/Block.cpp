@@ -339,10 +339,10 @@ void Block::extractMisAlnRegions(){
 		for(j=i; j<misAlnRegVector.size(); j++) {
 			it = misAlnRegVector.begin() + j;
 
-//			if(it->startPos>=1) // 5578000
-//				cout << it->startPos << "-" << it->endPos << ": " << "disagrRegRatio=" << it->disagrRegRatio << ", highClipBaseNum=" << it->highClipBaseNum << ", zeroCovBaseNum=" << it->zeroCovBaseNum << endl;
+			//if(it->startPos>=142883000) // 5578000
+			//	cout << it->startPos << "-" << it->endPos << ": " << "disagrRegRatio=" << it->disagrRegRatio << ", highClipBaseNum=" << it->highClipBaseNum << ", zeroCovBaseNum=" << it->zeroCovBaseNum << endl;
 
-			if(it->disagrRegRatio>=SUB_MIS_ALN_REG_RATIO_THRES and it->highClipBaseNum==0 and it->zeroCovBaseNum==0) {
+			if((it->disagrRegRatio>=SUB_MIS_ALN_REG_RATIO_THRES and it->highClipBaseNum==0 and it->zeroCovBaseNum==0) or (it->disagrRegRatio>=HIGH_SUB_MIS_ALN_REG_RATIO_THRES and it->highClipBaseNum==0)) {
 				if(gappedNum<=GAPPED_MIS_ALN_REG_NUM_THRES) contiguousNum += gappedNum;
 				gappedNum = 0;
 				contiguousNum ++;
@@ -355,7 +355,8 @@ void Block::extractMisAlnRegions(){
 				}
 			}
 		}
-		if(flag==false and contiguousNum>0)	flag = true;
+		//if(flag==false and contiguousNum>0) flag = true;
+		if(flag==false and contiguousNum>=MIN_MIS_ALN_REG_NUM_THRES) flag = true;
 
 		if(flag) for(j=0; j<contiguousNum; j++) {
 			if(misAlnRegVector[i+j].highClipBaseNum==0)

@@ -122,7 +122,6 @@ class varCand {
 		void blatFilterByShortAlnSegs();
 		void blatFilterByGenomeCoverage();
 		void blatFilterByQueryCoverage();
-		//void removeInvalidAlnSegs();
 		float computeRepeatCovRatio(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void determineIndelType();

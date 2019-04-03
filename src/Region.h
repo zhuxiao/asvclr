@@ -25,7 +25,10 @@ using namespace std;
 #define SUB_REG_SIZE			10
 #define SUB_CLIP_REG_SIZE		100
 
-#define LARGE_INDEL_RATIO_THRES		(0.1f)
+#define LARGE_INDEL_RATIO_THRES				(0.1f)
+#define HIGH_INDEL_CLIP_RATIO_THRES			(0.6f)
+#define SECOND_INDEL_CLIP_RATIO_THRES		(0.3f)
+#define HIGH_INDEL_CLIP_BASE_RATIO_THRES	(0.1f)
 
 typedef struct{
 	string chrname;
@@ -112,6 +115,7 @@ class Region {
 		size_t getDisZeroCovNum(size_t startPos, size_t endPos);
 		size_t getLargeIndelBaseNum(size_t startPos, size_t endPos);
 		size_t getLargeIndelNum(size_t startPos, size_t endPos);
+		vector<double> getTotalHighIndelClipRatioBaseNum(size_t startPos, size_t endPos);
 
 		// duplication and inversion
 		reg_t* getClipReg(size_t startCheckPos);

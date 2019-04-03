@@ -331,9 +331,6 @@ void varCand::blatFilter(){
 
 	// filter by genome coverage
 	blatFilterByGenomeCoverage();
-
-	// remove invalid blat align segments
-	//removeInvalidAlnSegs();
 }
 
 // filter by short align segments
@@ -524,22 +521,6 @@ void varCand::updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query
 	}
 }
 
-// remove invalid blat align segments
-//void varCand::removeInvalidAlnSegs(){
-//	blat_aln_t* blat_item;
-//	for(size_t i=0; i<blat_aln_vec.size(); ){
-//		blat_item = blat_aln_vec.at(i);
-//		if(!blat_item->valid_aln) {  // remove blat align segments
-//			vector<aln_seg_t*>::iterator seg;
-//			for(seg=blat_item->aln_segs.begin(); seg!=blat_item->aln_segs.end(); seg++) // free aln_segs
-//				delete *seg;
-//			delete blat_item;
-//			blat_aln_vec.erase(blat_aln_vec.begin()+i);
-//		}else i ++;
-//	}
-//	blat_aln_vec.shrink_to_fit();
-//}
-
 // call indel types
 void varCand::determineIndelType(){
 	int32_t  i, j, k, query_dist, ref_dist, decrease_size, var_type, startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
@@ -709,9 +690,17 @@ void varCand::callShortVariants(){
 						// get sub local reference sequence
 						FastaSeqLoader refseqloader(refseqfilename);
 						local_aln->refseq = refseqloader.getFastaSeqByPos(0, local_aln->startLocalRefPos, local_aln->endLocalRefPos, ALN_PLUS_ORIENT);
+
+						//cout << local_aln->refseq << endl;
+
 						if(reg->aln_orient==ALN_MINUS_ORIENT) reverseComplement(local_aln->refseq);
+
 						FastaSeqLoader ctgseqloader(ctgfilename);
-						local_aln->ctgseq = ctgseqloader.getFastaSeqByPos(reg->query_id, local_aln->startQueryPos, local_aln->endQueryPos, reg->aln_orient);
+						//local_aln->ctgseq = ctgseqloader.getFastaSeqByPos(reg->query_id, local_aln->startQueryPos, local_aln->endQueryPos, reg->aln_orient);
+						local_aln->ctgseq = ctgseqloader.getFastaSeqByPos(reg->query_id, local_aln->startQueryPos, local_aln->endQueryPos, ALN_PLUS_ORIENT);
+
+						//cout << local_aln->ctgseq << endl;
+						//cout << local_aln->refseq << endl;
 
 						// pairwise alignment
 						upperSeq(local_aln->ctgseq);
@@ -825,7 +814,7 @@ aln_seg_t* varCand::getAlnSeg(reg_t *reg){
 void varCand::computeLocalLocsAlnShortVar(localAln_t *local_aln){
 	reg_t *reg = local_aln->reg;
 	aln_seg_t *aln_seg = local_aln->aln_seg;
-	int32_t left_dist, right_dist;
+	int32_t left_dist, right_dist, querylen;
 
 	if(aln_seg->ref_start+VAR_ALN_EXTEND_SIZE<reg->startRefPos)
 		left_dist = reg->startRefPos - aln_seg->ref_start - VAR_ALN_EXTEND_SIZE;
@@ -842,6 +831,13 @@ void varCand::computeLocalLocsAlnShortVar(localAln_t *local_aln){
 	local_aln->endRefPos = aln_seg->ref_end - right_dist;
 	local_aln->endLocalRefPos = aln_seg->subject_end - right_dist;
 	local_aln->endQueryPos = aln_seg->query_end - right_dist;
+
+	if(reg->aln_orient==ALN_MINUS_ORIENT) {
+		FastaSeqLoader ctgseqloader(ctgfilename);
+		querylen = ctgseqloader.getFastaSeqLen(reg->query_id);
+		local_aln->startQueryPos = querylen - local_aln->endQueryPos + 1;
+		local_aln->endQueryPos = querylen - local_aln->startQueryPos + 1;
+	}
 }
 
 // compute sequence alignment (LCS)
@@ -1038,7 +1034,7 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 
 	// print the alignment around variations
 	if(start_aln_idx_var==-1 or end_aln_idx_var==-1){
-		cerr << "start_aln_idx_var=" << start_aln_idx_var << ", end_aln_idx_var=" << end_aln_idx_var << endl;
+		cerr << "line=" << __LINE__ << ", start_aln_idx_var=" << start_aln_idx_var << ", end_aln_idx_var=" << end_aln_idx_var << endl;
 		//exit(1);
 	}else {
 #if ALIGN_DEBUG
@@ -1741,28 +1737,41 @@ void varCand::computeVarType(reg_t *reg){
 
 // update varVec vector
 void varCand::updateVarVec(vector<vector<reg_t*>> &regVec, vector<reg_t*> &foundRegVec, vector<reg_t*> &varVec){
-	int32_t i, j, reg_idx;
+	size_t i, j;
+	int32_t reg_idx;
 	reg_t *reg;
 	vector<reg_t*> reg_vec_item;
+	vector<bool> flag_vec;
 
 	if(regVec.size()>0){
-		for(i=0; i<(int32_t)foundRegVec.size(); i++){
+		for(i=0; i<varVec.size(); i++) flag_vec.push_back(true);
+		for(i=0; i<foundRegVec.size(); i++){
 			reg = foundRegVec[i];
 			reg_vec_item = regVec[i];
 			if(reg_vec_item.size()>1 or reg_vec_item[0]!=reg){
 				reg_idx = getVectorIdx(reg, varVec);
 				if(reg_idx!=-1){
-					for(j=0; j<(int32_t)reg_vec_item.size(); j++)
+					for(j=0; j<reg_vec_item.size(); j++)
+					{
 						varVec.insert(varVec.begin()+reg_idx+j, reg_vec_item[j]);
-					varVec.erase(varVec.begin()+reg_idx+reg_vec_item.size());
-					varVec.shrink_to_fit();
-					delete reg;
+						flag_vec.insert(flag_vec.begin()+reg_idx+j, true);
+					}
+					flag_vec.at(reg_idx+reg_vec_item.size()) = false;
 				}else{
 					cerr << "line=" << __LINE__ << ", error reg_idx=-1!" << endl;
 					exit(1);
 				}
 			}
 		}
+
+		for(i=0; i<varVec.size(); ){
+			if(flag_vec.at(i)==false){
+				delete varVec.at(i);
+				varVec.erase(varVec.begin()+i);
+				flag_vec.erase(flag_vec.begin()+i);
+			}else i++;
+		}
+		varVec.shrink_to_fit();
 	}
 }
 
@@ -2000,7 +2009,7 @@ void varCand::distinguishShortDupInvFromIndels(){
 
 		//cout << "startRefPos=" << reg->startRefPos << ", endRefPos=" << reg->endRefPos << ", startLocalRefPos=" << reg->startLocalRefPos << ", endLocalRefPos=" << reg->endLocalRefPos << ", startQueryPos=" << reg->startQueryPos << ", endQueryPos=" << reg->endQueryPos << ", aln_orient=" << reg->aln_orient << ", var_type=" << reg->var_type << ", sv_len=" << reg->sv_len << ", short_sv_flag=" << reg->short_sv_flag << endl;
 
-		if(reg->short_sv_flag==false){
+		if(reg->call_success_status and reg->short_sv_flag==false){
 			if(reg->var_type==VAR_INS and reg->sv_len>=MIN_SHORT_DUP_SIZE){ // distinguish DUP from indels
 				// get sequences
 				FastaSeqLoader refseqloader(refseqfilename);

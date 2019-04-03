@@ -80,3 +80,7 @@ string FastaSeqLoader::getFastaSeqByPos(size_t fa_id, size_t startPos, size_t en
 
 	return ret;
 }
+
+size_t FastaSeqLoader::getFastaSeqLen(size_t fa_id){
+	return fastaSeqVec[fa_id].size();
+}

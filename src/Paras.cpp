@@ -303,7 +303,7 @@ void Paras::showDetectUsage()
 	cout << "     -c INT       maximal clipping region size to detect [10000]" << endl;
 	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
 	cout << "     -t INT       number of threads [0]" << endl;
-	cout << "     -M           Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
+	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
 	cout << "     -h           show this help message and exit" << endl;
 }
 
@@ -321,7 +321,7 @@ void Paras::showAssembleUsage()
 	cout << "     -c INT       maximal clipping region size to assemble [10000]" << endl;
 	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
 	cout << "     -t INT       number of threads [0]" << endl;
-	cout << "     -M           Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
+	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
 	cout << "     -h           show this help message and exit" << endl;
 }
 
@@ -339,7 +339,7 @@ void Paras::showCallUsage()
 	cout << "     -c INT       maximal clipping region size to call [10000]" << endl;
 	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
 	cout << "     -t INT       number of threads [0]" << endl;
-	cout << "     -M           Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
+	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
 	cout << "     -h           show this help message and exit" << endl;
 }
 
