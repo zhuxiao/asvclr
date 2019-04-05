@@ -379,7 +379,7 @@ void varCand::blatFilterByQueryCoverage(){
 	validNum = 0;
 	for(i=0; i<blat_aln_vec.size(); i++) if(blat_aln_vec[i]->valid_aln) validNum ++;
 	if(validNum>(size_t)ctg_num and ctg_num>0){
-		query_cov_array = new int8_t *[ctg_num]();
+		query_cov_array = new int8_t *[validNum]();
 		// get the number of best blat alignments
 		best_aln_num = 0;
 		for(i=0; i<blat_aln_vec.size(); i++){
@@ -399,6 +399,10 @@ void varCand::blatFilterByQueryCoverage(){
 					memset(query_cov_array[best_aln_num]+start_query_pos-1, 1, sizeof(int8_t)*((int32_t)end_query_pos-start_query_pos+1));
 				}
 				best_aln_num ++;
+				if(best_aln_num>validNum){
+					cerr << "line=" << __LINE__ << ", best_aln_num=" << best_aln_num << ", validNum=" << validNum << ", error!" << endl;
+					exit(1);
+				}
 			}
 		}
 
@@ -412,7 +416,8 @@ void varCand::blatFilterByQueryCoverage(){
 			}
 		}
 
-		for(i=0; i<(size_t)ctg_num; i++) delete[] query_cov_array[i];
+		//for(i=0; i<(size_t)ctg_num; i++) delete[] query_cov_array[i];
+		for(i=0; i<best_aln_num; i++) delete[] query_cov_array[i];
 		delete[] query_cov_array;
 	}
 }
