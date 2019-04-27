@@ -3,6 +3,8 @@
 
 #include <iostream>
 #include <string>
+#include <vector>
+#include <fstream>
 #include <getopt.h>
 #include <unistd.h>
 
@@ -36,11 +38,12 @@ using namespace std;
 #define NUM_PERCENTILE_EST				0.99995
 #define AUX_ARR_SIZE					1001
 
+#define MAX_REG_SUM_SIZE_EST			500000
+
 #define ASSEMBLY_SUCCESS			"ASS_SUCCESS"
 #define ASSEMBLY_FAILURE			"ASS_FAILURE"
 #define ALIGN_SUCCESS				"ALN_SUCCESS"
 #define ALIGN_FAILURE				"ALN_FAILURE"
-
 #define CALL_SUCCESS				"CALL_SUCCESS"
 #define CALL_FAILURE				"CALL_FAILURE"
 
@@ -49,13 +52,15 @@ class Paras
 {
 	public:
 		// user/system defined parameters
-		string command, refFile, inBamFile, outFilePrefix;
+		string command, refFile, inBamFile, outFilePrefix, canu_version;
 		size_t blockSize, slideSize, assemSlideSize, min_sv_size_usr, num_threads, large_indel_size_thres;
 		bool maskMisAlnRegFlag, load_from_file_flag;
 		size_t misAlnRegLenSum = 0;
 		size_t minClipReadsNumSupportSV;
 
 		size_t maxClipRegSize;
+
+		size_t reg_sum_size_est, max_reg_sum_size_est;
 
 		// estimated parameters
 		size_t min_ins_size_filt, min_del_size_filt, min_clip_size_filt;
@@ -64,6 +69,7 @@ class Paras
 		// auxiliary data for estimation
 		size_t insSizeEstArr[AUX_ARR_SIZE], delSizeEstArr[AUX_ARR_SIZE], clipSizeEstArr[AUX_ARR_SIZE];
 		size_t insNumEstArr[AUX_ARR_SIZE], delNumEstArr[AUX_ARR_SIZE], clipNumEstArr[AUX_ARR_SIZE];
+
 
 
 	public:
@@ -76,6 +82,7 @@ class Paras
 
 	private:
 		void init();
+		string getCanuVersion();
 		int parseParas(int argc, char **argv);
 		int parseDetectParas(int argc, char **argv);
 		int parseAssembleParas(int argc, char **argv);
@@ -86,6 +93,7 @@ class Paras
 		void showAssembleUsage();
 		void showCallUsage();
 		size_t estimateSinglePara(size_t *arr, size_t n, double threshold, size_t min_val);
+		vector<string> split(const  string& s, const string& delim);
 };
 
 #endif /* SRC_PARAS_H_ */

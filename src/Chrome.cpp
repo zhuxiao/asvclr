@@ -220,6 +220,8 @@ void Chrome::chrFillDataEst(size_t op_est){
 			// fill the data
 			block_tmp->blockFillDataEst(op_est);
 			delete block_tmp;
+
+			paras->reg_sum_size_est += endPos - begPos + 1;
 		}
 	}
 }

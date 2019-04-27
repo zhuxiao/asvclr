@@ -27,7 +27,7 @@ using namespace std;
 
 class LocalAssembly {
 	public:
-		string chrname, readsfilename, contigfilename, refseqfilename, tmpdir, inBamFile;
+		string chrname, readsfilename, contigfilename, refseqfilename, tmpdir, inBamFile, canu_version;
 		size_t chrlen, assembly_extend_size;
 		vector<reg_t*> varVec;
 		faidx_t *fai;
@@ -37,7 +37,7 @@ class LocalAssembly {
 		vector<clipAlnData_t*> clipAlnDataVector;
 
 	public:
-		LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size);
+		LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, string &canu_version);
 		virtual ~LocalAssembly();
 		void extractRefseq();
 		void extractReadsDataFromBAM();

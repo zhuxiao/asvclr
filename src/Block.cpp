@@ -296,12 +296,14 @@ int Block::computeMisAlnDisagrReg(){
 	}
 
 	// process the inner regions
-	tmp_endPos = endPos - 2 * paras->slideSize;
-	for(pos=startPos; pos<=tmp_endPos; pos+=paras->slideSize){
-		startPosWin = pos;
-		endPosWin = startPosWin + winSize - 1;
-		computeDisagrNumSingleRegion(startPosWin, endPosWin, INNER_REGION);
-	}
+	if(endPos>=2*paras->slideSize){
+		tmp_endPos = endPos - 2 * paras->slideSize;
+		for(pos=startPos; pos<=tmp_endPos; pos+=paras->slideSize){
+			startPosWin = pos;
+			endPosWin = startPosWin + winSize - 1;
+			computeDisagrNumSingleRegion(startPosWin, endPosWin, INNER_REGION);
+		}
+	}else pos = startPos;
 
 	// process the tail region
 	if(!tailIgnFlag){
@@ -444,13 +446,15 @@ int Block::computeAbSigs(){
 	}
 
 	// process the inner regions
-	tmp_endPos = endPos - 2 * paras->slideSize;
-	for(pos=startPos; pos<=tmp_endPos; pos+=paras->slideSize){
-		startPosWin = pos;
-		endPosWin = startPosWin + winSize - 1;
-		if(endPosWin>endPos) endPosWin = endPos;
-		processSingleRegion(startPosWin, endPosWin, INNER_REGION);
-	}
+	if(endPos>=2*paras->slideSize){
+		tmp_endPos = endPos - 2 * paras->slideSize;
+		for(pos=startPos; pos<=tmp_endPos; pos+=paras->slideSize){
+			startPosWin = pos;
+			endPosWin = startPosWin + winSize - 1;
+			if(endPosWin>endPos) endPosWin = endPos;
+			processSingleRegion(startPosWin, endPosWin, INNER_REGION);
+		}
+	}else pos = startPos;
 
 	// process the tail region
 	if(!tailIgnFlag){
@@ -458,8 +462,7 @@ int Block::computeAbSigs(){
 		endPosWin = startPosWin + winSize - 1;
 		if(endPosWin>endPos) endPosWin = endPos;
 		else if(endPosWin<endPos){
-			cerr << __func__ << ", line=" << __LINE__ << ": endPosWin=" << endPosWin
-				 << ", endPos=" << endPos << ", error!" << endl; exit(1);
+			cerr << __func__ << "(), line=" << __LINE__ << ": endPosWin=" << endPosWin << ", endPos=" << endPos << ", error!" << endl; exit(1);
 		}
 		processSingleRegion(startPosWin, endPosWin, TAIL_REGION);
 	}
@@ -832,7 +835,7 @@ void Block::blockLocalAssembleIndel(){
 
 		cout << "################### " << readsfilename << ", len=" << indelVector[end_reg_id]->endRefPos-indelVector[beg_reg_id]->startRefPos << endl;
 
-		performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, paras->inBamFile, fai, *var_cand_indel_file);
+		performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_indel_file);
 
 		i = end_reg_id + 1;
 	}
@@ -874,7 +877,7 @@ void Block::blockLocalAssembleClipReg(){
 
 				cout << "=================== " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
 
-				performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+				performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_clipReg_file);
 
 			}else{
 				// assemble reg1
@@ -889,7 +892,7 @@ void Block::blockLocalAssembleClipReg(){
 
 					cout << "------------------- left region: " << readsfilename << ", len=" << reg1->endRefPos-reg1->startRefPos << endl;
 
-					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_clipReg_file);
 
 				}
 
@@ -905,7 +908,7 @@ void Block::blockLocalAssembleClipReg(){
 
 					cout << "------------------- right region: " << readsfilename << ", len=" << reg2->endRefPos-reg2->startRefPos << endl;
 
-					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg2->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg2->chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_clipReg_file);
 
 				}
 			}
@@ -940,7 +943,7 @@ void Block::blockLocalAssembleClipReg(){
 
 				cout << "=================== " << readsfilename << ", len=" << reg4->endRefPos-reg1->startRefPos << endl;
 
-				performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+				performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_clipReg_file);
 			}else{
 
 				// assemble left regions
@@ -967,7 +970,7 @@ void Block::blockLocalAssembleClipReg(){
 
 					cout << "-=-=-=-=-=-=-=-=-=- left region: " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
 
-					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_clipReg_file);
 //				}else{
 //					// assemble reg1
 //					if(reg1){
@@ -981,7 +984,7 @@ void Block::blockLocalAssembleClipReg(){
 //
 //						cout << "------------------- left region 1: " << readsfilename << ", len=" << reg1->endRefPos-reg1->startRefPos << endl;
 //
-//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_clipReg_file);
 //					}
 //
 //					// assemble reg2
@@ -996,7 +999,7 @@ void Block::blockLocalAssembleClipReg(){
 //
 //						cout << "------------------- left region 2: " << readsfilename << ", len=" << reg2->endRefPos-reg2->startRefPos << endl;
 //
-//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg2->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg2->chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_clipReg_file);
 //					}
 //				}
 
@@ -1024,7 +1027,7 @@ void Block::blockLocalAssembleClipReg(){
 
 					cout << "-=-=-=-=-=-=-=-=-=- right region: " << readsfilename << ", len=" << reg4->endRefPos-reg3->startRefPos << endl;
 
-					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_clipReg_file);
 //				}else{
 //					// assemble reg3
 //					if(reg3){
@@ -1038,7 +1041,7 @@ void Block::blockLocalAssembleClipReg(){
 //
 //						cout << "------------------- right region 3: " << readsfilename << ", len=" << reg3->endRefPos-reg3->startRefPos << endl;
 //
-//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_clipReg_file);
 //					}
 //
 //					// assemble reg4
@@ -1053,7 +1056,7 @@ void Block::blockLocalAssembleClipReg(){
 //
 //						cout << "------------------- right region 4: " << readsfilename << ", len=" << reg4->endRefPos-reg4->startRefPos << endl;
 //
-//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg4->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg4->chrname, paras->inBamFile, fai, paras->canu_version, *var_cand_clipReg_file);
 //					}
 //				}
 			}
@@ -1064,9 +1067,9 @@ void Block::blockLocalAssembleClipReg(){
 }
 
 // perform local assembly
-void Block::performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file){
+void Block::performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, string &canu_version, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, 0);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, 0, canu_version);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();

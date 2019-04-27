@@ -27,17 +27,17 @@ Region::Region(string& chrname, size_t startRpos, size_t endRPos, size_t chrlen,
 		case INNER_REGION:
 			startMidPartPos = startRpos + paras->slideSize;
 			if(startMidPartPos>endRPos) {
-				cerr << __func__ << ", line=" << __LINE__ << ": error!" << endl; exit(1);
+				cerr << __func__ << "(), line=" << __LINE__ << ": error!" << endl; exit(1);
 			}
 			endMidPartPos = startMidPartPos + paras->slideSize - 1;
 			if(endMidPartPos>endRPos) {
-				cerr << __func__ << ", line=" << __LINE__ << ": error!" << endl; exit(1);
+				cerr << __func__ << "(), line=" << __LINE__ << ": error!" << endl; exit(1);
 			}
 			break;
 		case TAIL_REGION:
 			startMidPartPos = startRpos + paras->slideSize;
 			if(startMidPartPos>endRPos) {
-				cerr << __func__ << ", line=" << __LINE__ << ": error!" << endl; exit(1);
+				cerr << __func__ << "(), line=" << __LINE__ << ": error!" << endl; exit(1);
 			}
 			endMidPartPos = startMidPartPos + paras->slideSize - 1;
 			if(endMidPartPos>endRPos) endMidPartPos = endRPos;

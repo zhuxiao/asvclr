@@ -88,19 +88,29 @@ void Genome::saveGenomeBlocksToFile(){
 
 // estimate the insertion/deletion/clipping parameters
 void Genome::estimateSVSizeNum(){
+	Chrome *chr;
+	size_t i;
+
 	// initialize the data
 	paras->initEst();
 
 	// fill the size data using each chromosome
-	vector<Chrome*>::iterator chr;
-	for(chr=chromeVector.begin(); chr!=chromeVector.end(); chr++)
-		(*chr)->chrFillDataEst(SIZE_EST_OP);
+	paras->reg_sum_size_est = 0;
+	for(i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		chr->chrFillDataEst(SIZE_EST_OP);
+		if(paras->reg_sum_size_est>=paras->max_reg_sum_size_est) break;
+	}
 	// size estimate
 	paras->estimate(SIZE_EST_OP);
 
 	// fill the num data using each chromosome
-	for(chr=chromeVector.begin(); chr!=chromeVector.end(); chr++)
-		(*chr)->chrFillDataEst(NUM_EST_OP);
+	paras->reg_sum_size_est = 0;
+	for(i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		chr->chrFillDataEst(NUM_EST_OP);
+		if(paras->reg_sum_size_est>=paras->max_reg_sum_size_est) break;
+	}
 	// size estimate
 	paras->estimate(NUM_EST_OP);
 }
@@ -113,6 +123,11 @@ int Genome::genomeDetect(){
 		//if(i==2)
 		{
 			chr = chromeVector.at(i);
+
+//			if(chr->chrname.compare("chrUn_KI270312v1")==0)
+//				cout << chr->chrname << ", len=" << chr->chrlen << endl;
+//			else continue;
+
 			chr->chrDetect();
 		}
 	}
@@ -1398,7 +1413,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				for(i=0; i<3; i++){
 					assembly_extend_size = ASSEMBLY_SIDE_LEN * i;
 					// local assembly
-					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
+					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, paras->canu_version, assembly_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -1478,7 +1493,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				for(i=0; i<3; i++){
 					assembly_extend_size = ASSEMBLY_SIDE_LEN * i;
 					// local assembly
-					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
+					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, paras->canu_version, assembly_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -1528,9 +1543,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 }
 
 // perform local assembly
-void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
+void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, string &canu_version, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, assembly_extend_size);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->canu_version);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();

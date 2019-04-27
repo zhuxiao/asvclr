@@ -29,6 +29,45 @@ void Paras::init()
 	min_ins_num_filt = 0;
 	min_del_num_filt = 0;
 	min_clip_num_filt = 0;
+
+	reg_sum_size_est = 0;
+	max_reg_sum_size_est = MAX_REG_SUM_SIZE_EST;
+
+	canu_version = getCanuVersion();
+}
+
+// get the Canu program version
+string Paras::getCanuVersion(){
+	string canu_version_str, canu_version_cmd, canu_version_filename, line, canu_prog_name;
+	ifstream infile;
+	vector<string> str_vec;
+
+	canu_version_filename = "canu_version";
+	canu_version_cmd = "canu -version > " + canu_version_filename;
+	system(canu_version_cmd.c_str());
+
+	infile.open(canu_version_filename);
+	if(!infile.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << canu_version_filename << endl;
+		exit(1);
+	}
+
+	canu_version_str = "";
+	getline(infile, line);
+	if(line.size()){
+		str_vec = split(line, " ");
+		canu_prog_name = str_vec.at(0);
+
+		if(canu_prog_name.compare("Canu")==0) canu_version_str = str_vec.at(1);
+		else{
+			cout << "Canu may be not correctly installed, please check its installation before running this program." << endl;
+			exit(1);
+		}
+	}
+
+	infile.close();
+
+	return canu_version_str;
 }
 
 // parse the parameters
@@ -348,6 +387,7 @@ void Paras::outputParas(){
 	if(refFile.size()) cout << "Ref file: " << refFile << endl;
 	if(inBamFile.size()) cout << "Align file: " << inBamFile << endl;
 	if(outFilePrefix.size()) cout << "Out prefix: " << outFilePrefix << endl;
+	cout << "Canu version: " << canu_version << endl;
 
 	cout << "Clipping number supporting SV: " << minClipReadsNumSupportSV << endl;
 	cout << "Block size: " << blockSize << endl;
@@ -437,5 +477,27 @@ size_t Paras::estimateSinglePara(size_t *arr, size_t n, double threshold, size_t
 	if(val<min_val) val = min_val;
 
 	return val;
+}
+
+// string split function
+vector<string> Paras::split(const string& s, const string& delim)
+{
+    vector<string> elems;
+    size_t pos = 0;
+    size_t len = s.length();
+    size_t delim_len = delim.length();
+    if (delim_len == 0) return elems;
+    while (pos < len)
+    {
+        int find_pos = s.find(delim, pos);
+        if (find_pos < 0)
+        {
+            elems.push_back(s.substr(pos, len - pos));
+            break;
+        }
+        elems.push_back(s.substr(pos, find_pos - pos));
+        pos = find_pos + delim_len;
+    }
+    return elems;
 }
 
