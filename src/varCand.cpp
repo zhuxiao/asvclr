@@ -849,7 +849,9 @@ void varCand::computeLocalLocsAlnShortVar(localAln_t *local_aln){
 void varCand::computeSeqAlignment(localAln_t *local_aln){
 	int32_t i, j, matchScore, mismatchScore, gapScore, gapOpenScore, tmp_gapScore1, tmp_gapScore2, maxValue, scoreIJ;
 	int32_t rowsNum = local_aln->ctgseq.size() + 1, colsNum = local_aln->refseq.size() + 1;
-	int32_t *scoreArr, *pathArr, path_val, arrSize;
+	int32_t *scoreArr;
+	size_t arrSize;
+	int8_t *pathArr, path_val;
 	int32_t maxValueLastRow, maxValueLastCol, maxCol, maxRow;
 	int32_t mismatchNum, itemNum;
 	string queryAlnResult, midAlnResult, subjectAlnResult;
@@ -861,7 +863,7 @@ void varCand::computeSeqAlignment(localAln_t *local_aln){
 
 	arrSize = rowsNum * colsNum;
 	scoreArr = (int32_t*) calloc (arrSize, sizeof(int32_t));
-	pathArr = (int32_t*) calloc (arrSize, sizeof(int32_t));
+	pathArr = (int8_t*) calloc (arrSize, sizeof(int8_t));
 
 	for(i=0; i<rowsNum; i++) scoreArr[i*colsNum] = 0;
 	for(j=1; j<colsNum; j++) scoreArr[j] = 0;
