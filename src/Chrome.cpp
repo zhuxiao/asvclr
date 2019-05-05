@@ -1549,7 +1549,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 	}
 	infile.close();
 
-	cout << "lineNum=" << lineNum << endl;
+	cout << var_cand_filename << "\tlineNum=" << lineNum << endl;
 }
 
 // get the mate clip region
