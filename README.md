@@ -7,13 +7,13 @@ ASVCLR is an accurate Structural Variation Caller for Long Reads, such as PacBio
 ## Prerequisites
 ASVCLR depends on the following libraries and tools:
 * HTSlib (http://www.htslib.org/download/)
-* Canu (v1.7.1) (https://github.com/marbl/canu/releases)
+* Canu (v1.7.1) (https://github.com/marbl/canu/releases/tag/v1.7.1)
 * BLAT (http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/blat/)
 * g++.
 
 The above library and tools should be installed before compiling ASVCLR. Canu and BLAT should be globally accessible in the computer system, these executable files `canu` and `blat` should be placed or linked to the `$PATH` directory.
 
-Note that: Canu v1.7.1 is about 5 to 10 folds faster than Canu v1.8, but it may cannot construct the assembly results (contigs) in some genomic regions as the overlap failure, therefore if you care more about the accuracy of the results than the running time, please use Canu v1.8 instead.
+Note that: Canu v1.7.1 is about 5 to 10 folds faster than Canu v1.8 (https://github.com/marbl/canu/releases), but it may cannot construct the assembly results (contigs) in some genomic regions as the overlap failure, therefore if you care more about the accuracy of the results than the running time, please use Canu v1.8 instead.
 
 According to our human chromosome 1 simulated results, the Recall was increased from xxx to xxx, the Precision was increased from xxx to xxx, and the F1 score was increased from xxx to xxx when using Canu v1.8 instead of v.1.7.1, which is a very small improvement.
 
