@@ -15,7 +15,7 @@ The above library and tools should be installed before compiling ASVCLR. Canu an
 
 Note that: Canu v1.7.1 is about 5 to 10 folds faster than Canu v1.8, but it may cannot construct the assembly results (contigs) in some genomic regions as the overlap failure, therefore if you care more about the accuracy of the results than the running time, please use Canu v1.8 instead.
 
-According to our human chromosome 1 simulated results, the Recall was increased from xxx to xxx, the Precision was increased from xxx to xxx, and the F1 score was increased from xxx to xxx when using Canu v1.8 instead of v.17.1, which is a very small improvement.
+According to our human chromosome 1 simulated results, the Recall was increased from xxx to xxx, the Precision was increased from xxx to xxx, and the F1 score was increased from xxx to xxx when using Canu v1.8 instead of v.1.7.1, which is a very small improvement.
 
 
 ## Compiling ASVCLR
