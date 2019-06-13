@@ -13,7 +13,7 @@ ASVCLR depends on the following libraries and tools:
 
 The above library and tools should be installed before compiling ASVCLR. Canu and BLAT should be globally accessible in the computer system, these executable files `canu` and `blat` should be placed or linked to the `$PATH` directory.
 
-Note that: Canu v1.7.1 is about 5 to 10 folds faster than Canu v1.8, but it may cannot construct the assembly results in some genomic regions, therefore if you care more about the accuracy of the results than the running time, please use Canu v1.8 instead.
+Note that: Canu v1.7.1 is about 5 to 10 folds faster than Canu v1.8, but it may cannot construct the assembly results (contigs) in some genomic regions as the overlap failure, therefore if you care more about the accuracy of the results than the running time, please use Canu v1.8 instead.
 
 According to our human chromosome 1 simulated results, the Recall was increased from xxx to xxx, the Precision was increased from xxx to xxx, and the F1 score was increased from xxx to xxx when using Canu v1.8 instead of v.17.1, which is a very small improvement.
 
@@ -52,24 +52,21 @@ Commands:
 
 ## Usage
 
-Alternatively, there are three steps to run ASVCLR: `detect`, `assemble` and `call`, which are described as following:  
-* __`detect`__: Detect structural variation regions according to abnormal features, including insertions, deletions, duplications, inversions and translocations. Note that these detected regions usually are not accurate enough as well as other SV callers, and may need further processing.  
-* __`assemble`__: Perform local assembly for the detected variant regions using Canu, and extract the corresponding local reference.  
-* __`call`__: Align the assembly result (contigs) to its local reference using BLAT to generate the sim4 formated alignments, and call each type variations using the BLAT alignments.  
+Alternatively, there are three steps to run ASVCLR: `detect`, `assemble` and `call`. 
 
 The reference and an sorted BAM file will be the input of ASVCLR, and the variants stored in the VCF file format and translocations in BEDPE file format will be generated as the output.
 
 
-### Detect Step
+### `Detect` Step
  
-Detect structural variation regions according to abnormal features, including insertions, deletions, duplications, inversions and translocations. Note that these detected regions usual    ly are not accurate enough as well as other SV callers, and may need further processing.
+Structural variant regions will be detected according to abnormal features. These regions includes insertions, deletions, duplications, inversions and translocations.
 
 ```sh
 $ asvclr detect -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 
-### Assemble Step:
+### `Assemble` Step
 
 Perform local assembly for the detected variant regions using Canu, and extract the corresponding local reference.
 
@@ -78,7 +75,7 @@ $ asvclr assemble -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 
-### Call Step:
+### `Call` Step
 
 Align the assembly result (contigs) to its local reference using BLAT to generate the sim4 formated alignments, and call each type variations using the BLAT alignments.
 
