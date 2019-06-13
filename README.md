@@ -52,7 +52,13 @@ Commands:
 
 ## Usage
 
-Alternatively, there are three steps to run ASVCLR: `detect`, `assemble` and `call`. 
+Alternatively, there are three steps to run ASVCLR: `detect`, `assemble` and `call`.
+
+```sh
+$ asvclr detect -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr assemble -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr call -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
+```
 
 The reference and an sorted BAM file will be the input of ASVCLR, and the variants stored in the VCF file format and translocations in BEDPE file format will be generated as the output.
 
@@ -147,7 +153,7 @@ Options:
 
 ## Output Result Description
 
-There are two kinds ofoutput files: VCF file and BEDPE file. Insertions, deletions, inversions and duplications are stored in the VCF file format, and translocations are saved in the BEDPE file format.
+There are two kinds of output files: VCF file and BEDPE file. Insertions, deletions, inversions and duplications are stored in the VCF file format, and translocations are saved in the BEDPE file format.
 
 
 
