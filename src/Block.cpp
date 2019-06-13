@@ -190,9 +190,9 @@ void Block::fillDataEst(size_t op_est){
 
 // block process
 void Block::blockDetect(){
-	pthread_mutex_lock(&mutex_print);
-	cout << chrname << ":" << startPos << "-" << endPos << endl;
-	pthread_mutex_unlock(&mutex_print);
+//	pthread_mutex_lock(&mutex_print);
+//	cout << chrname << ":" << startPos << "-" << endPos << endl;
+//	pthread_mutex_unlock(&mutex_print);
 
 	// initialize the alignment data
 	initBaseArray();
@@ -220,6 +220,10 @@ void Block::blockDetect(){
 	// merge overlapped indels and clip regions
 	mergeOverlappedReg(indelVector);
 	mergeOverlappedReg(clipRegVector);
+
+	// remove redundant items
+	removeRedundantItems(indelVector);
+	removeRedundantItems(clipRegVector);
 
 	// save SV to file
 	saveSV2File();

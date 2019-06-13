@@ -43,6 +43,9 @@ void mergeAdjacentReg(vector<reg_t*> &regVec, size_t dist_thres);
 void printRegVec(vector<reg_t*> &regVec, string header);
 void printMateClipReg(mateClipReg_t *mate_clip_reg);
 string preprocessPipeChar(string &cmd_str);
+bool isFileExist(string &filename);
+void removeRedundantItems(vector<reg_t*> &reg_vec);
+
 
 class Time{
 	private:

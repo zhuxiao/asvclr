@@ -777,6 +777,30 @@ string preprocessPipeChar(string &cmd_str){
 	return ret_str;
 }
 
+bool isFileExist(string &filename){
+	bool flag = false;
+	struct stat fileStat;
+	if (stat(filename.c_str(), &fileStat) == 0)
+		if(fileStat.st_size>0)
+			flag = true;
+	return flag;
+}
+
+void removeRedundantItems(vector<reg_t*> &reg_vec){
+	size_t i, j;
+	reg_t *reg, *reg_tmp;
+
+	for(i=0; i<reg_vec.size(); i++){
+		reg = reg_vec.at(i);
+		for(j=i+1; j<reg_vec.size(); ){
+			reg_tmp = reg_vec.at(j);
+			if(reg_tmp->chrname.compare(reg->chrname)==0 and reg_tmp->startRefPos==reg->startRefPos and reg_tmp->endRefPos==reg->endRefPos){ // redundant item
+				delete reg_tmp;
+				reg_vec.erase(reg_vec.begin()+j);
+			}else j++;
+		}
+	}
+}
 
 
 Time::Time() {

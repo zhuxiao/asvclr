@@ -5,7 +5,6 @@
 #include <cstring>
 #include <fstream>
 #include <vector>
-#include <sys/stat.h>
 #include <limits.h>
 
 #include <htslib/faidx.h>

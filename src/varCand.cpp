@@ -52,7 +52,7 @@ void varCand::destroyVarCand(){
 // align contig to refseq
 void varCand::alnCtg2Refseq(){
 	//cout << "BLAT align: " << ctgfilename << endl;
-	if(assem_success)
+	if(assem_success and !isFileExist(alnfilename))
 		blatAln(alnfilename, ctgfilename, refseqfilename); // BLAT alignment
 }
 
@@ -103,7 +103,9 @@ void varCand::loadBlatAlnData(){
 		// filter the blat align data
 		blatFilter();
 	}else{
+		pthread_mutex_lock(&mutex_print_var_cand);
 		cout << "Align Failure: " << ctgfilename << endl;
+		pthread_mutex_unlock(&mutex_print_var_cand);
 	}
 }
 
@@ -137,12 +139,7 @@ void varCand::callClipRegVariants(){
 
 // update align status
 void varCand::assignBlatAlnStatus(){
-	bool flag = false;
-	struct stat fileStat;
-	if (stat(alnfilename.c_str(), &fileStat) == 0)
-		if(fileStat.st_size>0)
-			flag = true;
-	align_success = flag;
+	align_success = isFileExist(alnfilename);
 }
 
 // parse BLAT alignments
@@ -1142,7 +1139,7 @@ int32_t varCand::computeHighIndelBaseNum(Base *baseArray, int32_t arr_size, floa
 void varCand::adjustVarLoc(localAln_t *local_aln){
 	int32_t start_aln_idx_var_new, end_aln_idx_var_new, tmp;
 
-	if(local_aln->start_aln_idx_var!=-1 and local_aln->end_aln_idx_var){
+	if(local_aln->start_aln_idx_var!=-1 and local_aln->end_aln_idx_var!=-1){
 		// compute the adjusted locations
 		start_aln_idx_var_new = getAdjustedStartAlnIdxVar(local_aln);
 		end_aln_idx_var_new = getAdjustedEndAlnIdxVar(local_aln);
@@ -1152,7 +1149,10 @@ void varCand::adjustVarLoc(localAln_t *local_aln){
 				tmp = start_aln_idx_var_new;
 				start_aln_idx_var_new = end_aln_idx_var_new;
 				end_aln_idx_var_new = tmp;
+
+				pthread_mutex_lock(&mutex_print_var_cand);
 				cout << "adjusted variant locations have been exchanged!" << endl;
+				pthread_mutex_unlock(&mutex_print_var_cand);
 			}
 
 		// adjust the locations
@@ -2066,7 +2066,9 @@ void varCand::distinguishShortDupInvFromIndels(){
 					reg->dup_num = dup_num_int;
 					reg->sv_len = query_dist - ref_dist;
 
+					pthread_mutex_lock(&mutex_print_var_cand);
 					cout << "----------> Short DUP: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", startLocalRefPos=" << reg->startLocalRefPos << ", endLocalRefPos=" << reg->endLocalRefPos << ", startQueryPos=" << reg->startQueryPos << ", endQueryPos=" << reg->endQueryPos << ", sv_len=" << reg->sv_len << endl;
+					pthread_mutex_unlock(&mutex_print_var_cand);
 				}
 
 			}else if(reg->sv_len<0.2*(reg->endRefPos-reg->startRefPos+1)){ // distinguish INV from indels
@@ -2105,7 +2107,9 @@ void varCand::distinguishShortDupInvFromIndels(){
 							reg->call_success_status = true;
 							reg->short_sv_flag = true;
 
+							pthread_mutex_lock(&mutex_print_var_cand);
 							cout << "==========> Short INV: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", startLocalRefPos=" << reg->startLocalRefPos << ", endLocalRefPos=" << reg->endLocalRefPos << ", startQueryPos=" << reg->startQueryPos << ", endQueryPos=" << reg->endQueryPos << ", sv_len=" << reg->sv_len << ", sim_ratio_inv=" << sim_ratio_inv << endl;
+							pthread_mutex_unlock(&mutex_print_var_cand);
 						}else{
 							// compute inversion region
 							determineClipRegInvType();
@@ -2379,7 +2383,9 @@ void varCand::determineClipRegInvType(){
 						clip_reg->short_sv_flag = false;
 						call_success = true;
 
+						pthread_mutex_lock(&mutex_print_var_cand);
 						cout << "----------> INV: " << clip_reg->chrname << ":" << clip_reg->startRefPos << "-" << clip_reg->endRefPos << ", startLocalRefPos=" << clip_reg->startLocalRefPos << ", endLocalRefPos=" << clip_reg->endLocalRefPos << ", startQueryPos=" << clip_reg->startQueryPos << ", endQueryPos=" << clip_reg->endQueryPos << ", sv_len=" << clip_reg->sv_len << ", sim_ratio_inv=" << sim_ratio_inv << endl;
+						pthread_mutex_unlock(&mutex_print_var_cand);
 					}else{
 						delete clip_reg;
 						clip_reg = NULL;

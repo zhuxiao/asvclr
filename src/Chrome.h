@@ -85,6 +85,8 @@ class Chrome{
 		void chrLoadClipRegDataAssemble();
 		int chrDetect_st();
 		int chrDetect_mt();
+		void removeRedundantIndelDetect();
+		void removeRedundantIndelItemDetect(reg_t *reg, size_t bloc_idx, size_t indel_vec_idx);
 		void chrSetVarCandFiles();
 		void chrResetVarCandFiles();
 		void chrSetMisAlnRegFile();
@@ -118,6 +120,7 @@ class Chrome{
 
 		// DUP, INV, TRA
 		void chrComputeMateClipReg();
+		void removeRedundantItemsClipReg(vector<reg_t*> &clipReg_vec, vector<bool> &clip_processed_flag_vec);
 		void processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, mateClipReg_t &mate_clip_reg, reg_t *reg);
 		mateClipReg_t *getMateRegEndSameClipReg(mateClipReg_t *clip_reg, vector<mateClipReg_t*> &mate_clipReg_vec);
 		void removeFPClipRegsDupInv();

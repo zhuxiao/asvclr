@@ -215,7 +215,7 @@ void Chrome::chrFillDataEst(size_t op_est){
 		}
 
 		if(flag){ // valid region
-			cout << "Est region: " << chrname << ":" << begPos << "-" << endPos << endl;
+			//cout << "Est region: " << chrname << ":" << begPos << "-" << endPos << endl;
 			block_tmp = allocateBlock(chrname, chrlen, begPos, endPos, fai, false, false);
 			// fill the data
 			block_tmp->blockFillDataEst(op_est);
@@ -240,6 +240,9 @@ int Chrome::chrDetect(){
 
 	// remove FP indels and Snvs in clipping regions
 	removeFPIndelSnvInClipReg(mateClipRegVector);
+
+	// remove redundant Indel for 'detect' command
+	removeRedundantIndelDetect();
 
 	// merge the results to single file
 	//chrMergeDetectResultToFile();
@@ -286,6 +289,44 @@ int Chrome::chrDetect_mt(){
 	return 0;
 }
 
+// remove repeatedly detected indels
+void Chrome::removeRedundantIndelDetect(){
+	size_t i, j;
+	Block *bloc;
+	reg_t *reg;
+
+	for(i=0; i<blockVector.size(); i++){
+		bloc = blockVector.at(i);
+		for(j=0; j<bloc->indelVector.size(); j++){
+			reg = bloc->indelVector.at(j);
+			if(reg->startRefPos==102827401){
+				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+			}
+			removeRedundantIndelItemDetect(reg, i, j);
+		}
+	}
+}
+
+void Chrome::removeRedundantIndelItemDetect(reg_t *reg, size_t bloc_idx, size_t indel_vec_idx){
+	size_t i, j, start_indel_vec_idx;
+	Block *bloc;
+	reg_t *reg_tmp;
+
+	for(i=bloc_idx; i<blockVector.size(); i++){
+		bloc = blockVector.at(i);
+		if(i==bloc_idx) start_indel_vec_idx = indel_vec_idx + 1;
+		else start_indel_vec_idx = 0;
+		for(j=start_indel_vec_idx; j<bloc->indelVector.size(); ){
+			reg_tmp = bloc->indelVector.at(j);
+			if(reg_tmp->chrname.compare(reg->chrname)==0 and reg_tmp->startRefPos==reg->startRefPos and reg_tmp->endRefPos==reg->endRefPos){
+				// invalid item, and delete it
+				delete reg_tmp;
+				bloc->indelVector.erase(bloc->indelVector.begin()+j);
+			}else j++;
+		}
+	}
+}
+
 // detect mated clip regions for duplications and inversions
 void Chrome::chrComputeMateClipReg(){
 	size_t i;
@@ -301,6 +342,9 @@ void Chrome::chrComputeMateClipReg(){
 		}
 	}
 	clipRegVector.shrink_to_fit();
+
+	// remove redundant items
+	removeRedundantItemsClipReg(clipRegVector, clip_processed_flag_vec);
 
 	// compute the mate flag for duplications and inversions
 	for(i=0; i<clipRegVector.size(); i++){
@@ -323,6 +367,24 @@ void Chrome::chrComputeMateClipReg(){
 
 	// remove FPs by detecting false overlapped clip regions for DUPs and INVs
 	removeFPClipRegsDupInv();
+}
+
+void Chrome::removeRedundantItemsClipReg(vector<reg_t*> &clipReg_vec, vector<bool> &processed_flag_vec){
+	size_t i, j;
+	reg_t *reg, *reg_tmp;
+
+	for(i=0; i<clipReg_vec.size(); i++){
+		reg = clipReg_vec.at(i);
+		for(j=i+1; j<clipReg_vec.size(); ){
+			reg_tmp = clipReg_vec.at(j);
+			if(reg_tmp->chrname.compare(reg->chrname)==0 and reg_tmp->startRefPos==reg->startRefPos and reg_tmp->endRefPos==reg->endRefPos){ // redundant item
+				//cout << "redundant: " << reg_tmp->chrname << ":" << reg_tmp->startRefPos << "-" << reg_tmp->endRefPos << endl;
+				delete reg_tmp;
+				clipReg_vec.erase(clipReg_vec.begin()+j);
+				processed_flag_vec.erase(processed_flag_vec.begin()+j);
+			}else j++;
+		}
+	}
 }
 
 // process clip regions and mate clip regions
@@ -1338,12 +1400,12 @@ int Chrome::chrCall(){
 	else chrCall_mt();  // multiple threads
 
 	// remove redundant new called variants
-	cout << "11111111111" << endl;
-	removeRedundantVar();
-
-	// remove FPs of new called variants
-	cout << "2222222222222" << endl;
-	removeFPNewVarVec();
+//	cout << "11111111111" << endl;
+//	removeRedundantVar();
+//
+//	// remove FPs of new called variants
+//	cout << "2222222222222" << endl;
+//	removeFPNewVarVec();
 
 	return 0;
 }

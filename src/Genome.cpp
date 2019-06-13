@@ -91,6 +91,8 @@ void Genome::estimateSVSizeNum(){
 	Chrome *chr;
 	size_t i;
 
+	cout << "Estimating parameters:" << endl;
+
 	// initialize the data
 	paras->initEst();
 
@@ -124,10 +126,11 @@ int Genome::genomeDetect(){
 		{
 			chr = chromeVector.at(i);
 
-//			if(chr->chrname.compare("chrUn_KI270312v1")==0)
+//			if(chr->chrname.compare("chr4")==0)
 //				cout << chr->chrname << ", len=" << chr->chrlen << endl;
 //			else continue;
 
+			cout << "processing: " << chr->chrname << ", size: " << chr->chrlen << endl;
 			chr->chrDetect();
 		}
 	}
@@ -369,10 +372,10 @@ int Genome::genomeCall(){
 	// call variants
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("chr21")==0)  // if(i==2)
+		//if(chr->chrname.compare("chr4")==0)  // if(i==2)
 			chr->chrCall();
 	}
-
+/*
 	// call TRA according to mate clip regions
 	genomeCallTra();
 
@@ -391,7 +394,7 @@ int Genome::genomeCall(){
 
 	// merge call results into single file
 	mergeCallResult();
-
+*/
 	return 0;
 }
 
@@ -554,7 +557,7 @@ void Genome::genomeCallTra(){
 		chr = chromeVector.at(i);
 		mate_clipReg_vec = chr->mateClipRegVector;
 		for(j=0; j<mate_clipReg_vec.size(); j++){
-			cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << endl;
+			cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << ", " << chr->chrname << endl;
 
 			clip_reg = chr->mateClipRegVector.at(j);
 			clip_reg->call_success_flag = false;
