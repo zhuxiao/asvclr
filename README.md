@@ -27,7 +27,7 @@ $ ./autogen.sh
 and the binary file 'asvclr' will be output into the folder 'bin' in the package directory.
 
 
-## Quick usage
+## Quick Usage
 
 Simply, ASVCLR can be run by typing the `all` command:
 ```sh
@@ -65,6 +65,27 @@ Structural variant regions will be detected according to abnormal features. Thes
 $ asvclr detect -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
 ```
 
+And the help information are shown below:
+
+```sh
+$ asvclr detect
+Program: asvclr (Accurate Structural Variation Caller for Long Reads)
+Version: 0.1.0 (using htslib 1.9)
+
+Usage: asvclr detect [options] <in.bam>|<in.sam>
+
+Options: 
+     -f FILE      reference file name (required)
+     -b INT       block size [1000000]
+     -s INT       detect slide size [500]
+     -m INT       minimal SV size to detect [2]
+     -n INT       minimal clipping reads supporting a SV [7]
+     -c INT       maximal clipping region size to detect [10000]
+     -o FILE      prefix of the output file [stdout]
+     -t INT       number of threads [0]
+     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
+     -h           show this help message and exit
+```
 
 ### `Assemble` Step
 
@@ -74,6 +95,26 @@ Perform local assembly for the detected variant regions using Canu, and extract 
 $ asvclr assemble -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
 ```
 
+And the help information are shown below:
+
+```sh
+$ asvclr assemble
+Program: asvclr (Accurate Structural Variation Caller for Long Reads)
+Version: 0.1.0 (using htslib 1.9)
+
+Usage: asvclr assemble [options] <in.bam>|<in.sam>
+
+Options: 
+     -f FILE      reference file name (required)
+     -b INT       block size [1000000]
+     -S INT       assemble slide size [10000]
+     -c INT       maximal clipping region size to assemble [10000]
+     -o FILE      prefix of the output file [stdout]
+     -t INT       number of threads [0]
+     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
+     -h           show this help message and exit
+
+```
 
 ### `Call` Step
 
@@ -83,13 +124,35 @@ Align the assembly result (contigs) to its local reference using BLAT to generat
 $ asvclr call -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
 ```
 
+And the help information are shown below:
+
+```sh
+$ asvclr call
+Program: asvclr (Accurate Structural Variation Caller for Long Reads)
+Version: 0.1.0 (using htslib 1.9)
+
+Usage: asvclr call [options] <in.bam>|<in.sam>
+
+Options: 
+     -f FILE      reference file name (required)
+     -b INT       block size [1000000]
+     -S INT       assemble slide size [10000]
+     -c INT       maximal clipping region size to call [10000]
+     -o FILE      prefix of the output file [stdout]
+     -t INT       number of threads [0]
+     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
+     -h           show this help message and exit
+```
+
 
 ## Output Result Description
+
+There are two kinds ofoutput files: VCF file and BEDPE file. Insertions, deletions, inversions and duplications are stored in the VCF file format, and translocations are saved in the BEDPE file format.
 
 
 
 ------------------
 If you have problems or some suggestions, please contact: xzhu@hrbnu.edu.cn without hesitation. 
 
----- Enjoying!!! -----
+---- Enjoy !!! -----
 
