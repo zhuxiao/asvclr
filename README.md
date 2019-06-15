@@ -185,6 +185,9 @@ chr1	-	3000000	chr2	-	4000001	TRA	-	-	-	-	-	-
 ```
 
 ------------------
+
+## Contact
+
 If you have problems or some suggestions, please contact: xzhu@hrbnu.edu.cn without hesitation. 
 
 ---- Enjoy !!! -----
