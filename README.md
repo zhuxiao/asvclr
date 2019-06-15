@@ -67,7 +67,7 @@ The reference and an sorted BAM file will be the input of ASVCLR, and the varian
 
 ### `Detect` Step
  
-Structural variant regions will be detected according to abnormal features. These regions includes insertions, deletions, duplications, inversions and translocations.
+Structural variant regions will be detected according to variant signatures. These regions includes insertions, deletions, duplications, inversions and translocations.
 
 ```sh
 $ asvclr detect -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
