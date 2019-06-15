@@ -181,7 +181,7 @@ chr3	1079105	1079633	DUP	1055	2	AGTTAATTCATTAATACTAATACTATCG...	AGTTAATTCATTAATA
 chr1	1000002	2005000	chr2	2000002	2005000	TRA	4999	4999	TATGAATGCCGCAGCTGGAAACTC...	AAAACGAGTTTTAGTTCAGTAGG...	AAAACGAGTTTTAGTTCAGTAGG...	TATGAATGCCGCAGCTGGAAACTC...
 chr1	-	3000000	chr2	-	4000001	TRA	-	-	-	-	-	-
 ```
-The last variant item is a translocation breakpoint whose location are 3000000 of chr1 (4000001 of chr2).
+The last variant item is a translocation breakpoint whose location are 3000000 of chr1 and 4000001 of chr2.
 
 ------------------
 
