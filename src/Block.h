@@ -100,7 +100,7 @@ class Block{
 		void sortRegVec(vector<reg_t*> &regVector);
 		void blockLocalAssembleIndel();
 		void blockLocalAssembleClipReg();
-		void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, string &canu_version, ofstream &assembly_info_file);
+		void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file);
 		void saveSV2File();
 
 		// duplication and inversion

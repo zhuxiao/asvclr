@@ -74,7 +74,7 @@ class Genome{
 		void genomeFillVarseq();
 		void genomeFillVarseqTra();
 		void fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &assembly_info_file);
-		void performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, string &canu_version, ofstream &assembly_info_file);
+		void performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file);
 		vector<int32_t> getRefShiftSize(string &refseqfilename);
 		vector<size_t> computeQueryLocTra(varCand *var_cand, mateClipReg_t *clip_reg, size_t end_flag);
 		void genomeSaveCallSV2File();

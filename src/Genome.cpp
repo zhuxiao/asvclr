@@ -1416,7 +1416,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				for(i=0; i<3; i++){
 					assembly_extend_size = ASSEMBLY_SIDE_LEN * i;
 					// local assembly
-					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, paras->canu_version, assembly_info_file);
+					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -1496,7 +1496,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				for(i=0; i<3; i++){
 					assembly_extend_size = ASSEMBLY_SIDE_LEN * i;
 					// local assembly
-					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, paras->canu_version, assembly_info_file);
+					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -1546,9 +1546,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 }
 
 // perform local assembly
-void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, string &canu_version, ofstream &assembly_info_file){
+void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->canu_version);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, assembly_extend_size);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();

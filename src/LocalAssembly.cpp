@@ -4,7 +4,7 @@
 
 pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 
-LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, string &canu_version) {
+LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size) {
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
 	this->readsfilename = preprocessPipeChar(readsfilename);
@@ -15,7 +15,7 @@ LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, stri
 	this->fai = fai;
 	this->inBamFile = inBamFile;
 	this->assembly_extend_size = ASSEMBLY_SIDE_EXT_SIZE + assembly_extend_size;
-	this->canu_version = canu_version;
+	//this->canu_version = canu_version;
 }
 
 LocalAssembly::~LocalAssembly() {
@@ -392,10 +392,11 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 	string canu_cmd, assem_prefix, cmd2, cmd3, cmd4, tmp_ctg_filename, gnuplotTested_str, fast_option;
 	int i, genomeSize_Canu, step_size;
 	bool flag;
+	struct stat fileStat;
 
-	gnuplotTested_str = "";
-	if(canu_version.compare("1.7.1")==0 or canu_version.compare("1.7")==0 or canu_version.compare("1.6")==0)
-		gnuplotTested_str = " gnuplotTested=true";
+//	gnuplotTested_str = "";
+//	if(canu_version.compare("1.7.1")==0 or canu_version.compare("1.7")==0 or canu_version.compare("1.6")==0)
+//		gnuplotTested_str = " gnuplotTested=true";
 
 //	fast_option = "";
 //	if(canu_version.compare("1.8")==0)
@@ -411,14 +412,15 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 	genomeSize_Canu = ASSEMBLY_GENOME_SIZE_INITIAL;
 	step_size = ASSEMBLY_STEP_SIZE;
 	flag = false;
-	for(i=1; i<=5; i++){
-		//canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
-		canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
-		//canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + fast_option + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+	for(i=1; i<=3; i++){
+		// try canu1.7
+		////canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+		//canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+		////canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + fast_option + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+		canu_cmd = "canu1.7 -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 		system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
 		// save assembly result and remove temporary files if successfully assembled
-		struct stat fileStat;
 		if (stat(tmp_ctg_filename.c_str(), &fileStat) == 0)
 			if(fileStat.st_size>0) flag = true; // contig generated successfully
 
@@ -427,8 +429,25 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 			system(cmd4.c_str());  // remove temporary files
 			break;
 		}else { // contig generated failed
-			genomeSize_Canu += i * step_size;
 			system(cmd4.c_str());  // remove temporary files
+
+			// try canu1.8
+			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+			cout << canu_cmd << endl;
+			system(canu_cmd.c_str());  // local assembly, invoke Canu command
+
+			// save assembly result and remove temporary files if successfully assembled
+			if (stat(tmp_ctg_filename.c_str(), &fileStat) == 0)
+				if(fileStat.st_size>0) flag = true; // contig generated successfully
+
+			if(flag){ // contig generated successfully
+				rename(tmp_ctg_filename.c_str(), contigfilename.c_str());
+				system(cmd4.c_str());  // remove temporary files
+				break;
+			}else { // contig generated failed
+				system(cmd4.c_str());  // remove temporary files
+				genomeSize_Canu += i * step_size;
+			}
 		}
 	}
 	return flag;
@@ -439,10 +458,11 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 	string canu_cmd, assem_prefix, cmd2, cmd3, cmd4, tmp_ctg_filename, gnuplotTested_str, fast_option;
 	int i, genomeSize_Canu, step_size;
 	bool flag;
+	struct stat fileStat;
 
-	gnuplotTested_str = "";
-	if(canu_version.compare("1.7.1")==0 or canu_version.compare("1.7")==0 or canu_version.compare("1.6")==0)
-		gnuplotTested_str = " gnuplotTested=true";
+//	gnuplotTested_str = "";
+//	if(canu_version.compare("1.7.1")==0 or canu_version.compare("1.7")==0 or canu_version.compare("1.6")==0)
+//		gnuplotTested_str = " gnuplotTested=true";
 
 //	fast_option = "";
 //	if(canu_version.compare("1.8")==0)
@@ -458,14 +478,15 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 	step_size = ASSEMBLY_STEP_SIZE;
 	genomeSize_Canu = ASSEMBLY_GENOME_SIZE_INITIAL - step_size;
 	flag = false;
-	for(i=1; i<=5 and genomeSize_Canu>=step_size; i++){
-		//canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
-		canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
-		//canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + fast_option + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+	for(i=1; i<=3 and genomeSize_Canu>=step_size; i++){
+		// try canu1.7
+		////canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+		//canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+		////canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + fast_option + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+		canu_cmd = "canu1.7 -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 		system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
 		// save assembly result and remove temporary files if successfully assembled
-		struct stat fileStat;
 		if (stat(tmp_ctg_filename.c_str(), &fileStat) == 0)
 			if(fileStat.st_size>0) flag = true; // contig generated successfully
 
@@ -474,8 +495,25 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 			system(cmd4.c_str());  // remove temporary files
 			break;
 		}else { // contig generated failed
-			genomeSize_Canu -= i * step_size;
 			system(cmd4.c_str());  // remove temporary files
+
+			// try canu1.8
+			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+			cout << canu_cmd << endl;
+			system(canu_cmd.c_str());  // local assembly, invoke Canu command
+
+			// save assembly result and remove temporary files if successfully assembled
+			if (stat(tmp_ctg_filename.c_str(), &fileStat) == 0)
+				if(fileStat.st_size>0) flag = true; // contig generated successfully
+
+			if(flag){ // contig generated successfully
+				rename(tmp_ctg_filename.c_str(), contigfilename.c_str());
+				system(cmd4.c_str());  // remove temporary files
+				break;
+			}else { // contig generated failed
+				system(cmd4.c_str());  // remove temporary files
+				genomeSize_Canu -= i * step_size;
+			}
 		}
 	}
 	return flag;

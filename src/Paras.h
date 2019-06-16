@@ -52,7 +52,7 @@ class Paras
 {
 	public:
 		// user/system defined parameters
-		string command, refFile, inBamFile, outFilePrefix, canu_version;
+		string command, refFile, inBamFile, outFilePrefix; //, canu_version;
 		size_t blockSize, slideSize, assemSlideSize, min_sv_size_usr, num_threads, large_indel_size_thres;
 		bool maskMisAlnRegFlag, load_from_file_flag;
 		size_t misAlnRegLenSum = 0;
@@ -82,7 +82,7 @@ class Paras
 
 	private:
 		void init();
-		string getCanuVersion();
+		//string getCanuVersion();
 		int parseParas(int argc, char **argv);
 		int parseDetectParas(int argc, char **argv);
 		int parseAssembleParas(int argc, char **argv);
