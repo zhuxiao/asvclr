@@ -14,7 +14,7 @@ ASVCLR depends on the following libraries and tools:
 
 The above library and tools should be installed before compiling ASVCLR. Canu v1.7, v1.8 and BLAT should be globally accessible in the computer system, these executable files `canu1.7`, `canu1.8` and `blat` should be placed or linked to the `$PATH` directory.
 
-Note that: Canu v1.7 is about 5 to 10 folds faster than Canu v1.8, however, it may have less ability to construct the assembly results (i.e. contigs) in some genomic regions due to the overlap failure during the assembly process, therefore the Canu 1.7 and v1.8 are combined used during local assembly: first try v1.7, and if that fails then try v1.8.
+Note that: Canu v1.7 is about 5 to 10 folds faster than Canu v1.8, however, Canu v1.8 has better ability to construct the assembly results (i.e. contigs) in some genomic regions due to the overlap failure during the assembly process, therefore the Canu 1.7 and v1.8 are combined used during the local assembly: first try v1.7, and if that fails then v1.8 will be used.
 
 ### Content to be removed
 Moreover, according to our human chromosome 1 simulated results, the Recall was increased from xxx to xxx, the Precision was increased from xxx to xxx, and the F1 score was increased from xxx to xxx when using Canu v1.8 instead of v.1.7.1, which was a slight increase. Therefore, Canu v1.7.1 is recommended in ASVCLR.
