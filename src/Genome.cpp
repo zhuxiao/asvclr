@@ -375,7 +375,7 @@ int Genome::genomeCall(){
 		//if(chr->chrname.compare("chr4")==0)  // if(i==2)
 			chr->chrCall();
 	}
-/*
+
 	// call TRA according to mate clip regions
 	genomeCallTra();
 
@@ -394,7 +394,7 @@ int Genome::genomeCall(){
 
 	// merge call results into single file
 	mergeCallResult();
-*/
+
 	return 0;
 }
 

@@ -1400,12 +1400,12 @@ int Chrome::chrCall(){
 	else chrCall_mt();  // multiple threads
 
 	// remove redundant new called variants
-//	cout << "11111111111" << endl;
-//	removeRedundantVar();
-//
-//	// remove FPs of new called variants
-//	cout << "2222222222222" << endl;
-//	removeFPNewVarVec();
+	cout << "11111111111" << endl;
+	removeRedundantVar();
+
+	// remove FPs of new called variants
+	cout << "2222222222222" << endl;
+	removeFPNewVarVec();
 
 	return 0;
 }
