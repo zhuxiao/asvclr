@@ -299,9 +299,6 @@ void Chrome::removeRedundantIndelDetect(){
 		bloc = blockVector.at(i);
 		for(j=0; j<bloc->indelVector.size(); j++){
 			reg = bloc->indelVector.at(j);
-			if(reg->startRefPos==102827401){
-				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
-			}
 			removeRedundantIndelItemDetect(reg, i, j);
 		}
 	}
@@ -352,7 +349,7 @@ void Chrome::chrComputeMateClipReg(){
 		{
 			reg = clipRegVector.at(i);
 			if(clip_processed_flag_vec.at(i)==false){
-				cout << i << ": " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+				//cout << i << ": " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
 				clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, chrlen, paras->inBamFile, fai, paras);
 				clip_reg.computeMateClipReg();
