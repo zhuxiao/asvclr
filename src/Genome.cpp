@@ -1581,7 +1581,7 @@ vector<int32_t> Genome::getRefShiftSize(string &refseqfilename){
 	}
 
 	getline(infile, header_str);
-	str_vec = split(header_str, "|");
+	str_vec = split(header_str, "___");
 	left_shift_size = stoi(str_vec[1]);
 	right_shift_size = stoi(str_vec[2]);
 
@@ -1778,14 +1778,6 @@ void Genome::saveTraCall2File(){
 				if(clip_reg->rightClipPosTra2>0) line += "\t" + to_string(clip_reg->rightClipPosTra2);
 				else line += "\t-";
 				line += "\tTRA";
-				if(clip_reg->refseq_tra.size()>0) line += "\t" + clip_reg->refseq_tra;
-				else line += "\t-";
-				if(clip_reg->altseq_tra.size()>0) line += "\t" + clip_reg->altseq_tra;
-				else line += "\t-";
-				if(clip_reg->refseq_tra2.size()>0) line += "\t" + clip_reg->refseq_tra2;
-				else line += "\t-";
-				if(clip_reg->altseq_tra2.size()>0) line += "\t" + clip_reg->altseq_tra2;
-				else line += "\t-";
 
 				if(clip_reg->leftClipPosTra1>0 and clip_reg->rightClipPosTra1>0){
 					sv_len = clip_reg->rightClipPosTra1 - clip_reg->leftClipPosTra1 + 1;
@@ -1795,6 +1787,15 @@ void Genome::saveTraCall2File(){
 					sv_len = clip_reg->rightClipPosTra2 - clip_reg->leftClipPosTra2 + 1;
 					line += "\t" + to_string(sv_len);
 				}else line += "\t-";
+
+				if(clip_reg->refseq_tra.size()>0) line += "\t" + clip_reg->refseq_tra;
+				else line += "\t-";
+				if(clip_reg->altseq_tra.size()>0) line += "\t" + clip_reg->altseq_tra;
+				else line += "\t-";
+				if(clip_reg->refseq_tra2.size()>0) line += "\t" + clip_reg->refseq_tra2;
+				else line += "\t-";
+				if(clip_reg->altseq_tra2.size()>0) line += "\t" + clip_reg->altseq_tra2;
+				else line += "\t-";
 
 				outfile_tra << line << endl;
 				//cout << line << endl;
