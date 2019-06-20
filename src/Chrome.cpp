@@ -1417,10 +1417,10 @@ void Chrome::chrCall_st(){
 void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
-		//if(i>=350)
+		var_cand = var_cand_vec.at(i);
+		//if(var_cand->ctgfilename.compare("2_assemble/chr1/contig_chr1_181290401-181290500.fa")==0)
 		{
-			//cout << ">>>>>>>>> " << i << ", " << var_cand_vec.at(i)->alnfilename << endl;
-			var_cand = var_cand_vec.at(i);
+			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << endl;
 			var_cand->callVariants();
 		}
 	}
@@ -1974,6 +1974,8 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 					line += "\t-";
 				line += "\t" + reg->refseq + "\t" + reg->altseq;
 
+				if(reg->short_sv_flag) line += "\tShortSV";
+
 				if(reg->var_type==VAR_UNC){
 					cout << "line=" << __LINE__ << ": " << line << ", short_sv_flag=" << reg->short_sv_flag << endl << endl << endl;
 				}
@@ -2018,6 +2020,8 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 						line += "\t-";
 					line += "\t" + reg->refseq + "\t" + reg->altseq;
 
+					if(reg->short_sv_flag) line += "\tShortSV";
+
 					if(reg->var_type==VAR_UNC){
 						cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
 					}
@@ -2058,6 +2062,8 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 				else
 					line += "\t-";
 				line += "\t" + reg->refseq + "\t" + reg->altseq;
+
+				if(reg->short_sv_flag) line += "\tShortSV";
 
 				if(reg->var_type==VAR_UNC){
 					cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;

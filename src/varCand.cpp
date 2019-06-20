@@ -695,11 +695,15 @@ void varCand::callShortVariants(){
 
 						//cout << local_aln->refseq << endl;
 
-						if(reg->aln_orient==ALN_MINUS_ORIENT) reverseComplement(local_aln->refseq);
+						//if(reg->aln_orient==ALN_MINUS_ORIENT) reverseComplement(local_aln->refseq);
 
 						FastaSeqLoader ctgseqloader(ctgfilename);
-						//local_aln->ctgseq = ctgseqloader.getFastaSeqByPos(reg->query_id, local_aln->startQueryPos, local_aln->endQueryPos, reg->aln_orient);
-						local_aln->ctgseq = ctgseqloader.getFastaSeqByPos(reg->query_id, local_aln->startQueryPos, local_aln->endQueryPos, ALN_PLUS_ORIENT);
+						local_aln->ctgseq = ctgseqloader.getFastaSeqByPos(reg->query_id, local_aln->startQueryPos, local_aln->endQueryPos, reg->aln_orient);
+						//local_aln->ctgseq = ctgseqloader.getFastaSeqByPos(reg->query_id, local_aln->startQueryPos, local_aln->endQueryPos, ALN_PLUS_ORIENT);
+
+						//cout << local_aln->ctgseq << endl;
+
+						//if(reg->aln_orient==ALN_MINUS_ORIENT) reverseComplement(local_aln->ctgseq);
 
 						//cout << local_aln->ctgseq << endl;
 						//cout << local_aln->refseq << endl;
@@ -816,7 +820,7 @@ aln_seg_t* varCand::getAlnSeg(reg_t *reg){
 void varCand::computeLocalLocsAlnShortVar(localAln_t *local_aln){
 	reg_t *reg = local_aln->reg;
 	aln_seg_t *aln_seg = local_aln->aln_seg;
-	int32_t left_dist, right_dist, querylen;
+	int32_t left_dist, right_dist, querylen; //, tmp_pos;
 
 	if(aln_seg->ref_start+VAR_ALN_EXTEND_SIZE<reg->startRefPos)
 		left_dist = reg->startRefPos - aln_seg->ref_start - VAR_ALN_EXTEND_SIZE;
@@ -834,12 +838,13 @@ void varCand::computeLocalLocsAlnShortVar(localAln_t *local_aln){
 	local_aln->endLocalRefPos = aln_seg->subject_end - right_dist;
 	local_aln->endQueryPos = aln_seg->query_end - right_dist;
 
-	if(reg->aln_orient==ALN_MINUS_ORIENT) {
-		FastaSeqLoader ctgseqloader(ctgfilename);
-		querylen = ctgseqloader.getFastaSeqLen(reg->query_id);
-		local_aln->startQueryPos = querylen - local_aln->endQueryPos + 1;
-		local_aln->endQueryPos = querylen - local_aln->startQueryPos + 1;
-	}
+//	if(reg->aln_orient==ALN_MINUS_ORIENT) {
+//		FastaSeqLoader ctgseqloader(ctgfilename);
+//		querylen = ctgseqloader.getFastaSeqLen(reg->query_id);
+//		tmp_pos = local_aln->startQueryPos;
+//		local_aln->startQueryPos = querylen - local_aln->endQueryPos + 1;
+//		local_aln->endQueryPos = querylen - tmp_pos + 1;
+//	}
 }
 
 // compute sequence alignment (LCS)
@@ -1958,9 +1963,15 @@ vector<int32_t> varCand::confirmVarMargins(int32_t left_dist, int32_t right_dist
 // compute local locations
 void varCand::computeLocalLocsAln(localAln_t *local_aln){
 	reg_t *reg = local_aln->reg, *cand_reg = local_aln->cand_reg;
-	int32_t dist0, dist1, dist2;
+	int32_t dist0, dist1, dist2, dif_cand_reg;
 	size_t querylen, subject_len;
 	blat_aln_t *blat_aln;
+
+	// get the maximal difference size
+	if(cand_reg->endRefPos-cand_reg->startRefPos>cand_reg->endQueryPos-cand_reg->startQueryPos){
+		dif_cand_reg = cand_reg->endRefPos-cand_reg->startRefPos;
+	}else
+		dif_cand_reg = cand_reg->endQueryPos-cand_reg->startQueryPos;
 
 	if(reg->endRefPos-reg->startRefPos>cand_reg->endRefPos-cand_reg->startRefPos)
 		dist0 = ((reg->endRefPos - reg->startRefPos) / VAR_ALN_EXTEND_SIZE + 1) * VAR_ALN_EXTEND_SIZE;
@@ -1972,6 +1983,7 @@ void varCand::computeLocalLocsAln(localAln_t *local_aln){
 	else
 		dist1 = dist0;
 
+	dist1 += dif_cand_reg;
 	if(cand_reg->startLocalRefPos<cand_reg->startQueryPos){
 		if((int32_t)cand_reg->startLocalRefPos<dist1) dist1 = cand_reg->startLocalRefPos - 1;
 	}else{
@@ -1982,6 +1994,8 @@ void varCand::computeLocalLocsAln(localAln_t *local_aln){
 		dist2 = dist0;
 	else
 		dist2 = dist0 + cand_reg->endRefPos - reg->endRefPos;
+
+	dist2 += dif_cand_reg;
 	blat_aln = blat_aln_vec.at(cand_reg->blat_aln_id);
 	querylen = blat_aln->query_len;
 	if(cand_reg->endQueryPos+dist2>querylen) dist2 = querylen - cand_reg->endQueryPos;
