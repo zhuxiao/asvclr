@@ -19,13 +19,13 @@ void Genome::init(){
 	Chrome *chr;
 	string chrname_tmp;
 
-	out_filename_detect_snv = out_dir_detect + "/" + "genome_SNV_candidate";
-	out_filename_detect_indel = out_dir_detect + "/" + "genome_INDEL_candidate";
-	out_filename_detect_clipReg = out_dir_detect + "/" + "genome_clipReg_candidate";
+	out_filename_detect_snv = out_dir_detect + "/" + "genome_SNV_candidates";
+	out_filename_detect_indel = out_dir_detect + "/" + "genome_INDEL_candidate.bed";
+	out_filename_detect_clipReg = out_dir_detect + "/" + "genome_clipReg_candidate.bed";
 	out_filename_call_snv = out_dir_call + "/" + "genome_SNV";
-	out_filename_call_indel = out_dir_call + "/" + "genome_INDEL";
-	out_filename_call_clipReg = out_dir_call + "/" + "genome_clipReg";
-	out_filename_call_tra = out_dir_call + "/" + "genome_TRA";
+	out_filename_call_indel = out_dir_call + "/" + "genome_INDEL.bed";
+	out_filename_call_clipReg = out_dir_call + "/" + "genome_clipReg.bed";
+	out_filename_call_tra = out_dir_call + "/" + "genome_TRA.bedpe";
 
 	// load the fai
 	fai = fai_load(paras->refFile.c_str());
