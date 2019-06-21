@@ -32,7 +32,7 @@ And the binary file `asvclr` will be output into the folder `bin` in this packag
 
 Simply, ASVCLR can be run by typing the `all` command:
 ```sh
-$ asvclr all -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr all -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
 ```
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
@@ -86,9 +86,9 @@ Commands:
 Alternatively, there are three steps to run ASVCLR: `detect`, `assemble` and `call`.
 
 ```sh
-$ asvclr detect -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
-$ asvclr assemble -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
-$ asvclr call -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr detect -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr assemble -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr call -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 The reference and an sorted BAM file will be the input of ASVCLR, and the variants stored in the BED file format and translocations in BEDPE file format will be generated as the output.
@@ -99,7 +99,7 @@ The reference and an sorted BAM file will be the input of ASVCLR, and the varian
 Structural variant regions will be detected according to variant signatures. These regions includes insertions, deletions, duplications, inversions and translocations.
 
 ```sh
-$ asvclr detect -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr detect -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 And the help information are shown below:
@@ -132,7 +132,7 @@ Options:
 Perform local assembly for the detected variant regions using Canu, and extract the corresponding local reference.
 
 ```sh
-$ asvclr assemble -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr assemble -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 And the help information are shown below:
@@ -163,7 +163,7 @@ Options:
 Align the assembly result (contigs) to its local reference using BLAT to generate the sim4 formated alignments, and call each type variations using the BLAT alignments.
 
 ```sh
-$ asvclr call -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr call -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 And the help information are shown below:
