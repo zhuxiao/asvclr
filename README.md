@@ -57,7 +57,7 @@ Options:
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
      -h           show this help message and exit
 ```
-Where, the htslib version is the version of HTSlib installed on your machine.
+where, the htslib version is the version of HTSlib installed on the machine.
 
 Besides, the overall help information can be shown as below:
 
