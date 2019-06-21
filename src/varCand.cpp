@@ -820,7 +820,7 @@ aln_seg_t* varCand::getAlnSeg(reg_t *reg){
 void varCand::computeLocalLocsAlnShortVar(localAln_t *local_aln){
 	reg_t *reg = local_aln->reg;
 	aln_seg_t *aln_seg = local_aln->aln_seg;
-	int32_t left_dist, right_dist, querylen; //, tmp_pos;
+	int32_t left_dist, right_dist; //, querylen; //, tmp_pos;
 
 	if(aln_seg->ref_start+VAR_ALN_EXTEND_SIZE<reg->startRefPos)
 		left_dist = reg->startRefPos - aln_seg->ref_start - VAR_ALN_EXTEND_SIZE;

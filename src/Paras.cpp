@@ -110,9 +110,9 @@ int Paras::parseDetectParas(int argc, char **argv)
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
 	mask_val = 1;
 
-	while( (opt = getopt(argc, argv, ":f:b:s:c:o:t:M:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:s:c:o:t:M:h")) != -1 ){
 		switch(opt){
-			case 'f': refFile = optarg; break;
+			//case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -138,15 +138,21 @@ int Paras::parseDetectParas(int argc, char **argv)
 		return 1;
 	}
 
-	opt = argc - optind; // the number of SAMs on the command line
-	if(opt==1) inBamFile = argv[optind];
-	else { showDetectUsage(); return 1; }
-
-	if(refFile.size()==0){
-		cout << "Error: Please specify the reference" << endl << endl;
+	opt = argc - optind; // the rederence and BAM file on the command line
+	if(opt>=2) {
+		refFile = argv[optind];
+		inBamFile = argv[optind+1];
+	}else{
+		cout << "Error: Please specify the reference file and coordinate-sorted BAM file." << endl << endl;
 		showDetectUsage();
 		return 1;
 	}
+
+//	if(refFile.size()==0){
+//		cout << "Error: Please specify the reference" << endl << endl;
+//		showDetectUsage();
+//		return 1;
+//	}
 
 	return 0;
 }
@@ -163,9 +169,9 @@ int Paras::parseAssembleParas(int argc, char **argv)
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
 	mask_val = 1;
 
-	while( (opt = getopt(argc, argv, ":f:b:S:m:n:c:o:t:M:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:S:m:n:c:o:t:M:h")) != -1 ){
 		switch(opt){
-			case 'f': refFile = optarg; break;
+			//case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
 			case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -191,15 +197,21 @@ int Paras::parseAssembleParas(int argc, char **argv)
 		return 1;
 	}
 
-	opt = argc - optind; // the number of SAMs on the command line
-	if(opt==1) inBamFile = argv[optind];
-	else { showAssembleUsage(); return 1; }
-
-	if(refFile.size()==0){
-		cout << "Error: Please specify the reference" << endl << endl;
+	opt = argc - optind; // the reference file and BAM file on the command line
+	if(opt>=2) {
+		refFile = argv[optind];
+		inBamFile = argv[optind+1];
+	}else{
+		cout << "Error: Please specify the reference file and coordinate-sorted BAM file." << endl << endl;
 		showAssembleUsage();
 		return 1;
 	}
+
+//	if(refFile.size()==0){
+//		cout << "Error: Please specify the reference" << endl << endl;
+//		showAssembleUsage();
+//		return 1;
+//	}
 
 	return 0;
 }
@@ -216,9 +228,9 @@ int Paras::parseCallParas(int argc, char **argv)
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
 	mask_val = 1;
 
-	while( (opt = getopt(argc, argv, ":f:b:S:m:n:c:o:t:M:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:S:m:n:c:o:t:M:h")) != -1 ){
 		switch(opt){
-			case 'f': refFile = optarg; break;
+			//case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
 			case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -244,15 +256,21 @@ int Paras::parseCallParas(int argc, char **argv)
 		return 1;
 	}
 
-	opt = argc - optind; // the number of SAMs on the command line
-	if(opt==1) inBamFile = argv[optind];
-	else { showCallUsage(); return 1; }
-
-	if(refFile.size()==0){
-		cout << "Error: Please specify the reference" << endl << endl;
+	opt = argc - optind; // the reference file and BAM file on the command line
+	if(opt>=2) {
+		refFile = argv[optind];
+		inBamFile = argv[optind+1];
+	}else{
+		cout << "Error: Please specify the reference file and coordinate-sorted BAM file." << endl << endl;
 		showCallUsage();
 		return 1;
 	}
+
+//	if(refFile.size()==0){
+//		cout << "Error: Please specify the reference" << endl << endl;
+//		showCallUsage();
+//		return 1;
+//	}
 
 	return 0;
 }
@@ -269,9 +287,9 @@ int Paras::parseAllParas(int argc, char **argv)
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
 	mask_val = 1;
 
-	while( (opt = getopt(argc, argv, ":f:b:s:S:m:n:c:o:t:M:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:s:S:m:n:c:o:t:M:h")) != -1 ){
 		switch(opt){
-			case 'f': refFile = optarg; break;
+			//case 'f': refFile = optarg; break;
 			case 'b': assemSlideSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
 			case 'S': assemSlideSize = stoi(optarg); break;
@@ -298,9 +316,15 @@ int Paras::parseAllParas(int argc, char **argv)
 		return 1;
 	}
 
-	opt = argc - optind; // the number of SAMs on the command line
-	if(opt==1) inBamFile = argv[optind];
-	else { showCallUsage(); return 1; }
+	opt = argc - optind; // the reference file and BAM file on the command line
+	if(opt>=2) {
+		refFile = argv[optind];
+		inBamFile = argv[optind+1];
+	}else{
+		cout << "Error: Please specify the reference file and coordinate-sorted BAM file." << endl << endl;
+		showAllUsage();
+		return 1;
+	}
 
 	if(refFile.size()==0){
 		cout << "Error: Please specify the reference" << endl << endl;
@@ -314,8 +338,8 @@ int Paras::parseAllParas(int argc, char **argv)
 // show the usage
 void Paras::showUsage()
 {
-	cout << "Program: asvclr (Accurate Structural Variation Caller for Long Reads)" << endl;
-	cout << "Version: 0.1.0 (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
 	cout << "Usage:  asvclr  <command> [options]" << endl << endl;
 
 	cout << "Commands:" << endl;
@@ -329,12 +353,16 @@ void Paras::showUsage()
 // show the usage for detect command
 void Paras::showDetectUsage()
 {
-	cout << "Program: asvclr (Accurate Structural Variation Caller for Long Reads)" << endl;
-	cout << "Version: 0.1.0 (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage: asvclr detect [options] <in.bam>|<in.sam> [region ...]?" << endl << endl;
+	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [region ...]?" << endl << endl;
+
+	cout << "Description:" << endl;
+	cout << "     REF_FILE     Reference file" << endl;
+	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
 
 	cout << "Options: " << endl;
-	cout << "     -f FILE      reference file name (required)" << endl;
+	//cout << "     -f FILE      reference file name (required)" << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -s INT       detect slide size [500]" << endl;
 	cout << "     -m INT       minimal SV size to detect [2]" << endl;
@@ -349,15 +377,19 @@ void Paras::showDetectUsage()
 // show the usage for assemble command
 void Paras::showAssembleUsage()
 {
-	cout << "Program: asvclr (Accurate Structural Variation Caller for Long Reads)" << endl;
-	cout << "Version: 0.1.0 (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage: asvclr assemble [options] <in.bam>|<in.sam> [region ...]?" << endl << endl;
+	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE> [region ...]?" << endl << endl;
+
+	cout << "Description:" << endl;
+	cout << "     REF_FILE     Reference file" << endl;
+	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
 
 	cout << "Options: " << endl;
-	cout << "     -f FILE      reference file name (required)" << endl;
+	//cout << "     -f FILE      reference file name (required)" << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -S INT       assemble slide size [10000]" << endl;
-	cout << "     -c INT       maximal clipping region size to assemble [10000]" << endl;
+	cout << "     -c INT       maximal clipping region size [10000]" << endl;
 	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
 	cout << "     -t INT       number of threads [0]" << endl;
 	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
@@ -367,15 +399,44 @@ void Paras::showAssembleUsage()
 // show the usage for call command
 void Paras::showCallUsage()
 {
-	cout << "Program: asvclr (Accurate Structural Variation Caller for Long Reads)" << endl;
-	cout << "Version: 0.1.0 (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage: asvclr call [options] <in.bam>|<in.sam> [region ...]?" << endl << endl;
+	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Usage: asvclr call [options] <REF_FILE> <BAM_FILE> [region ...]?" << endl << endl;
+
+	cout << "Description:" << endl;
+	cout << "     REF_FILE     Reference file" << endl;
+	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
 
 	cout << "Options: " << endl;
-	cout << "     -f FILE      reference file name (required)" << endl;
+	//cout << "     -f FILE      reference file name (required)" << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
+	cout << "     -S INT       assemble slide size used in 'assemble' command [10000]" << endl;
+	cout << "     -c INT       maximal clipping region size [10000]" << endl;
+	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
+	cout << "     -t INT       number of threads [0]" << endl;
+	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
+	cout << "     -h           show this help message and exit" << endl;
+}
+
+// show the usage for all command
+void Paras::showAllUsage()
+{
+	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [region ...]?" << endl << endl;
+
+	cout << "Description:" << endl;
+	cout << "     REF_FILE     Reference file" << endl;
+	cout << "     BAM_FILE     Reference coordinate sorted file" << endl << endl;
+
+	cout << "Options: " << endl;
+	//cout << "     -f FILE      reference file name (required)" << endl;
+	cout << "     -b INT       block size [1000000]" << endl;
+	cout << "     -s INT       detect slide size [500]" << endl;
 	cout << "     -S INT       assemble slide size [10000]" << endl;
-	cout << "     -c INT       maximal clipping region size to call [10000]" << endl;
+	cout << "     -m INT       minimal SV size to detect [2]" << endl;
+	cout << "     -n INT       minimal clipping reads supporting a SV [7]" << endl;
+	cout << "     -c INT       maximal clipping region size [10000]" << endl;
 	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
 	cout << "     -t INT       number of threads [0]" << endl;
 	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;

@@ -11,7 +11,8 @@
 using namespace std;
 
 // program variables
-#define PROG_NAME		"asvclr"
+#define PROG_NAME		"ASVCLR"
+#define PROG_DESC		"Accurate Structural Variation Caller for Long Reads"
 #define PROG_VERSION	"0.1.0"
 
 #define SIZE_EST_OP		0
@@ -92,6 +93,7 @@ class Paras
 		void showDetectUsage();
 		void showAssembleUsage();
 		void showCallUsage();
+		void showAllUsage();
 		size_t estimateSinglePara(size_t *arr, size_t n, double threshold, size_t min_val);
 		vector<string> split(const  string& s, const string& delim);
 };
