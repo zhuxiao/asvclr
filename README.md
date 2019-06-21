@@ -36,6 +36,32 @@ $ asvclr all -t 14 -c 20000 -f hg38.fa hg38_ngmlr_sorted.bam
 ```
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
+Program: ASVCLR (Accurate Structural Variation Caller for Long Reads)
+Version: 0.1.0 (using htslib 1.9)
+
+Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [region ...]?
+
+Description:
+     REF_FILE     Reference file
+     BAM_FILE     Reference coordinate sorted file [To do: several files]
+
+Options: 
+     -b INT       block size [1000000]
+     -s INT       detect slide size [500]
+     -S INT       assemble slide size [10000]
+     -m INT       minimal SV size to detect [2]
+     -n INT       minimal clipping reads supporting a SV [7]
+     -c INT       maximal clipping region size [10000]
+     -o FILE      prefix of the output file [stdout]
+     -t INT       number of threads [0]
+     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
+     -h           show this help message and exit
+```
+Where, the htslib version is the version of HTSlib installed on your machine.
+
+Besides, the overall help information can be shown as below:
+
+```sh
 $ asvclr
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
 Version: 0.1.0 (using htslib 1.9)
@@ -79,10 +105,13 @@ $ asvclr detect
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
 Version: 0.1.0 (using htslib 1.9)
 
-Usage: asvclr detect [options] <in.bam>|<in.sam>
+Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [region ...]?
+
+Description:
+     REF_FILE     Reference file
+     BAM_FILE     Coordinate sorted BAM file [To do: several files]
 
 Options: 
-     -f FILE      reference file name (required)
      -b INT       block size [1000000]
      -s INT       detect slide size [500]
      -m INT       minimal SV size to detect [2]
@@ -109,18 +138,20 @@ $ asvclr assemble
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
 Version: 0.1.0 (using htslib 1.9)
 
-Usage: asvclr assemble [options] <in.bam>|<in.sam>
+Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE> [region ...]?
+
+Description:
+     REF_FILE     Reference file
+     BAM_FILE     Coordinate sorted BAM file [To do: several files]
 
 Options: 
-     -f FILE      reference file name (required)
      -b INT       block size [1000000]
      -S INT       assemble slide size [10000]
-     -c INT       maximal clipping region size to assemble [10000]
+     -c INT       maximal clipping region size [10000]
      -o FILE      prefix of the output file [stdout]
      -t INT       number of threads [0]
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
      -h           show this help message and exit
-
 ```
 
 ### `Call` Step
@@ -138,13 +169,14 @@ $ asvclr call
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
 Version: 0.1.0 (using htslib 1.9)
 
-Usage: asvclr call [options] <in.bam>|<in.sam>
+Description:
+     REF_FILE     Reference file
+     BAM_FILE     Coordinate sorted BAM file [To do: several files]
 
 Options: 
-     -f FILE      reference file name (required)
      -b INT       block size [1000000]
-     -S INT       assemble slide size [10000]
-     -c INT       maximal clipping region size to call [10000]
+     -S INT       assemble slide size used in 'assemble' command [10000]
+     -c INT       maximal clipping region size [10000]
      -o FILE      prefix of the output file [stdout]
      -t INT       number of threads [0]
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no

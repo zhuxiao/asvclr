@@ -427,7 +427,7 @@ void Paras::showAllUsage()
 
 	cout << "Description:" << endl;
 	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Reference coordinate sorted file" << endl << endl;
+	cout << "     BAM_FILE     Reference coordinate sorted file [To do: several files]" << endl << endl;
 
 	cout << "Options: " << endl;
 	//cout << "     -f FILE      reference file name (required)" << endl;
