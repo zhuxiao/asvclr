@@ -66,7 +66,11 @@ $ asvclr
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
 Version: 0.1.0 (using htslib 1.9)
 
-Usage:  asvclr  <command> [options]
+Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [region ...]?
+
+Description:
+     REF_FILE     Reference file
+     BAM_FILE     Coordinate sorted BAM file [To do: several files]
 
 Commands:
      detect       detect indel signatures in aligned reads

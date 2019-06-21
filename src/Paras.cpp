@@ -340,7 +340,11 @@ void Paras::showUsage()
 {
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage:  asvclr  <command> [options]" << endl << endl;
+	cout << "Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [region ...]?" << endl << endl;
+
+	cout << "Description:" << endl;
+	cout << "     REF_FILE     Reference file" << endl;
+	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
 
 	cout << "Commands:" << endl;
 	cout << "     detect       detect indel signatures in aligned reads" << endl;
