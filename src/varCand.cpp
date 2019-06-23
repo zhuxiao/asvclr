@@ -1042,7 +1042,7 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 
 	// print the alignment around variations
 	if(start_aln_idx_var==-1 or end_aln_idx_var==-1){
-		cerr << "line=" << __LINE__ << ", start_aln_idx_var=" << start_aln_idx_var << ", end_aln_idx_var=" << end_aln_idx_var << endl;
+		//cerr << "line=" << __LINE__ << ", start_aln_idx_var=" << start_aln_idx_var << ", end_aln_idx_var=" << end_aln_idx_var << endl;
 		//exit(1);
 	}else {
 #if ALIGN_DEBUG
