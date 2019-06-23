@@ -837,9 +837,9 @@ void Block::blockLocalAssembleIndel(){
 
 		for(k=beg_reg_id; k<=end_reg_id; k++) varVec.push_back(indelVector[k]);
 
-		pthread_mutex_lock(&mutex_print);
-		cout << "################### " << readsfilename << ", len=" << indelVector[end_reg_id]->endRefPos-indelVector[beg_reg_id]->startRefPos << endl;
-		pthread_mutex_unlock(&mutex_print);
+//		pthread_mutex_lock(&mutex_print);
+//		cout << "################### " << readsfilename << ", len=" << indelVector[end_reg_id]->endRefPos-indelVector[beg_reg_id]->startRefPos << endl;
+//		pthread_mutex_unlock(&mutex_print);
 
 		performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, paras->inBamFile, fai, *var_cand_indel_file);
 
@@ -881,9 +881,9 @@ void Block::blockLocalAssembleClipReg(){
 				varVec.push_back(reg1);
 				varVec.push_back(reg2);
 
-				pthread_mutex_lock(&mutex_print);
-				cout << "=================== " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
-				pthread_mutex_unlock(&mutex_print);
+//				pthread_mutex_lock(&mutex_print);
+//				cout << "=================== " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
+//				pthread_mutex_unlock(&mutex_print);
 
 				performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
 
@@ -898,7 +898,9 @@ void Block::blockLocalAssembleClipReg(){
 
 					varVec.push_back(reg1);
 
-					cout << "------------------- left region: " << readsfilename << ", len=" << reg1->endRefPos-reg1->startRefPos << endl;
+//					pthread_mutex_lock(&mutex_print);
+//					cout << "------------------- left region: " << readsfilename << ", len=" << reg1->endRefPos-reg1->startRefPos << endl;
+//					pthread_mutex_unlock(&mutex_print);
 
 					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
 
@@ -914,9 +916,9 @@ void Block::blockLocalAssembleClipReg(){
 
 					varVec.push_back(reg2);
 
-					pthread_mutex_lock(&mutex_print);
-					cout << "------------------- right region: " << readsfilename << ", len=" << reg2->endRefPos-reg2->startRefPos << endl;
-					pthread_mutex_unlock(&mutex_print);
+//					pthread_mutex_lock(&mutex_print);
+//					cout << "------------------- right region: " << readsfilename << ", len=" << reg2->endRefPos-reg2->startRefPos << endl;
+//					pthread_mutex_unlock(&mutex_print);
 
 					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg2->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
 
@@ -951,9 +953,9 @@ void Block::blockLocalAssembleClipReg(){
 				varVec.push_back(reg3);
 				varVec.push_back(reg4);
 
-				pthread_mutex_lock(&mutex_print);
-				cout << "=================== " << readsfilename << ", len=" << reg4->endRefPos-reg1->startRefPos << endl;
-				pthread_mutex_unlock(&mutex_print);
+//				pthread_mutex_lock(&mutex_print);
+//				cout << "=================== " << readsfilename << ", len=" << reg4->endRefPos-reg1->startRefPos << endl;
+//				pthread_mutex_unlock(&mutex_print);
 
 				performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
 			}else{
@@ -980,9 +982,9 @@ void Block::blockLocalAssembleClipReg(){
 					varVec.push_back(reg1);
 					varVec.push_back(reg2);
 
-					pthread_mutex_lock(&mutex_print);
-					cout << "-=-=-=-=-=-=-=-=-=- left region: " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
-					pthread_mutex_unlock(&mutex_print);
+//					pthread_mutex_lock(&mutex_print);
+//					cout << "-=-=-=-=-=-=-=-=-=- left region: " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
+//					pthread_mutex_unlock(&mutex_print);
 
 					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
 //				}else{
@@ -1043,9 +1045,9 @@ void Block::blockLocalAssembleClipReg(){
 					varVec.push_back(reg3);
 					varVec.push_back(reg4);
 
-					pthread_mutex_lock(&mutex_print);
-					cout << "-=-=-=-=-=-=-=-=-=- right region: " << readsfilename << ", len=" << reg4->endRefPos-reg3->startRefPos << endl;
-					pthread_mutex_unlock(&mutex_print);
+//					pthread_mutex_lock(&mutex_print);
+//					cout << "-=-=-=-=-=-=-=-=-=- right region: " << readsfilename << ", len=" << reg4->endRefPos-reg3->startRefPos << endl;
+//					pthread_mutex_unlock(&mutex_print);
 
 					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
 //				}else{
@@ -1085,9 +1087,9 @@ void Block::blockLocalAssembleClipReg(){
 //				}
 			}
 		}else{
-			pthread_mutex_lock(&mutex_print);
-			cout << "############ leftClipRegNum=" << clip_reg->leftClipRegNum << ", rightClipRegNum=" << clip_reg->rightClipRegNum << endl << endl;
-			pthread_mutex_unlock(&mutex_print);
+//			pthread_mutex_lock(&mutex_print);
+//			cout << "############ leftClipRegNum=" << clip_reg->leftClipRegNum << ", rightClipRegNum=" << clip_reg->rightClipRegNum << endl << endl;
+//			pthread_mutex_unlock(&mutex_print);
 		}
 	}
 }

@@ -1039,7 +1039,7 @@ size_t clipReg::extractVarType(size_t dup_type_num, size_t inv_type_num, size_t 
 	}else
 		var_type = VAR_UNC;
 
-	cout << "In " << __func__ << "(): dup_type_num=" << dup_type_num << ", inv_type_num=" << inv_type_num << ", tra_type_num=" << tra_type_num << endl;
+	//cout << "In " << __func__ << "(): dup_type_num=" << dup_type_num << ", inv_type_num=" << inv_type_num << ", tra_type_num=" << tra_type_num << endl;
 
 	return var_type;
 }

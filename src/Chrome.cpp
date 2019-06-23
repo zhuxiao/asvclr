@@ -63,6 +63,13 @@ void Chrome::setOutputDir(string& out_dir_detect_prefix, string& out_dir_assembl
 	var_cand_clipReg_filename = out_dir_assemble + "_var_cand_clipReg";
 }
 
+string Chrome::getVarcandIndelFilename(){
+	return var_cand_indel_filename;
+}
+string Chrome::getVarcandClipregFilename(){
+	return var_cand_clipReg_filename;
+}
+
 // generate the chromosome blocks
 int Chrome::generateChrBlocks(){
 	int pos, begPos, endPos;
@@ -1091,7 +1098,7 @@ void Chrome::chrMergeDetectResultToFile(){
 		line += "\t" + to_string(mate_clip_reg->leftClipPosNum) + "\t" + to_string(mate_clip_reg->leftClipPosNum2) + "\t" + to_string(mate_clip_reg->rightClipPosNum) + "\t" + to_string(mate_clip_reg->rightClipPosNum2);
 
 		out_file_clipReg << line << endl;
-		cout << line << endl;
+		//cout << line << endl;
 	}
 	out_file_clipReg.close();
 }
@@ -1390,18 +1397,18 @@ void Chrome::outputAssemDataToFile(string &filename){
 int Chrome::chrCall(){
 	mkdir(out_dir_call.c_str(), S_IRWXU | S_IROTH);  // create the directory for call command
 
-	cout << "Begin calling variants ..." << endl;
+	cout << "processing: " << chrname << endl;
 
 	// call variants
 	if(paras->num_threads<=1) chrCall_st();  // single thread
 	else chrCall_mt();  // multiple threads
 
 	// remove redundant new called variants
-	cout << "11111111111" << endl;
+	//cout << "11111111111" << endl;
 	removeRedundantVar();
 
 	// remove FPs of new called variants
-	cout << "2222222222222" << endl;
+	//cout << "2222222222222" << endl;
 	removeFPNewVarVec();
 
 	return 0;
@@ -1608,7 +1615,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 	}
 	infile.close();
 
-	cout << var_cand_filename << "\tlineNum=" << lineNum << endl;
+	//cout << var_cand_filename << "\tlineNum=" << lineNum << endl;
 }
 
 // get the mate clip region

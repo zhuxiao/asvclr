@@ -455,9 +455,9 @@ void Paras::outputParas(){
 	//cout << "Canu version: " << canu_version << endl;
 
 	cout << "Clipping number supporting SV: " << minClipReadsNumSupportSV << endl;
-	cout << "Block size: " << blockSize << endl;
-	cout << "Slide size: " << slideSize << endl;
-	cout << "Maximal clipping region size: " << maxClipRegSize << endl;
+	cout << "Block size: " << blockSize << " bp" << endl;
+	cout << "Slide size: " << slideSize << " bp" << endl;
+	cout << "Maximal clipping region size: " << maxClipRegSize << " bp" << endl;
 	cout << "Num threads: " << num_threads << endl;
 	if(maskMisAlnRegFlag) cout << "Mask mis-aligned regions: yes" << endl << endl;
 	else cout << "Mask mis-aligned regions: no" << endl << endl;
@@ -466,13 +466,13 @@ void Paras::outputParas(){
 // output the estimation parameters
 void Paras::outputEstParas(string info){
 	cout << info << endl;
-	cout << "min_ins_size_filt: " << min_ins_size_filt << endl;
-	cout << "min_del_size_filt: " << min_del_size_filt << endl;
-//	cout << "min_clip_size_filt: " << min_clip_size_filt << endl;
+	cout << "min_ins_size_filt: " << min_ins_size_filt << " bp" << endl;
+	cout << "min_del_size_filt: " << min_del_size_filt << " bp" << endl;
+//	cout << "min_clip_size_filt: " << min_clip_size_filt << " bp" << endl;
 	cout << "min_ins_num_filt: " << min_ins_num_filt << endl;
 	cout << "min_del_num_filt: " << min_del_num_filt << endl;
 	cout << "min_clip_num_filt: " << min_clip_num_filt << endl;
-	cout << "large_indel_size_thres: " << large_indel_size_thres << endl << endl;
+	cout << "large_indel_size_thres: " << large_indel_size_thres << " bp" << endl << endl;
 }
 
 // initialize the estimation auxiliary data

@@ -802,10 +802,30 @@ void removeRedundantItems(vector<reg_t*> &reg_vec){
 	}
 }
 
+// get line count of file
+int32_t getLineCount(string &filename){
+	int32_t num;
+	ifstream infile;
+	string line;
+
+	infile.open(filename);
+	if(!infile.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << filename << endl;
+		exit(1);
+	}
+
+	num = 0;
+	while(getline(infile, line)) if(line.size()>0 and line.at(0)!='#') num ++;
+	infile.close();
+
+	return num;
+}
+
 
 Time::Time() {
-	timestamp = 0;
+	timestamp = start = end = start_all = end_all = 0;
 	time_tm = NULL;
+	time(&start_all);
 }
 
 Time::~Time() {
@@ -824,4 +844,56 @@ void Time::printTime(){
 	cout << getTime() << endl;
 }
 
+void Time::setStartTime(){
+	time(&start);
+}
 
+void Time::printSubCmdElapsedTime(){
+	double cost_sec, cost_hour, cost_min, cost_day;
+
+	if(start!=0){
+		time(&end);
+		cost_sec = difftime(end, start);
+		cost_min = cost_sec / 60;
+		cost_hour = cost_min / 60;
+		cost_day = cost_hour / 24;
+
+		start = end = 0; // reset time
+
+		if(cost_day>1)
+			cout << "Sub-command elapsed time: " << cost_day << " days = " << cost_hour << " hours = " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
+		else if(cost_hour>1)
+			cout << "Sub-command elapsed time: " << cost_hour << " hours = " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
+		else if(cost_min>1)
+			cout << "Sub-command elapsed time: " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
+		else
+			cout << "Sub-command elapsed time: " << cost_sec << " seconds" << endl << endl;
+	}else{
+		cerr << "Please set the start time before calculating the running time" << endl;
+		exit(1);
+	}
+}
+
+void Time::printOverallElapsedTime(){
+	double cost_sec, cost_hour, cost_min, cost_day;
+
+	if(start_all!=0){
+		time(&end_all);
+		cost_sec = difftime(end_all, start_all);
+		cost_min = cost_sec / 60;
+		cost_hour = cost_min / 60;
+		cost_day = cost_hour / 24;
+
+		if(cost_day>1)
+			cout << "Sub-command elapsed time: " << cost_day << " days = " << cost_hour << " hours = " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
+		else if(cost_hour>1)
+			cout << "Sub-command elapsed time: " << cost_hour << " hours = " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
+		else if(cost_min>1)
+			cout << "Sub-command elapsed time: " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
+		else
+			cout << "Sub-command elapsed time: " << cost_sec << " seconds" << endl << endl;
+	}else{
+		cerr << "Please set the overall start time before calculating the overall running time" << endl;
+		exit(1);
+	}
+}

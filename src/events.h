@@ -15,7 +15,8 @@ using namespace std;
 #define VAR_DUP				3	// duplication
 #define VAR_INV				4	// inversion
 #define VAR_TRA				5	// translocation
-#define VAR_INV_TRA			6	// inverted translocation
+#define VAR_BND				6	// translocation
+#define VAR_INV_TRA			7	// inverted translocation
 #define VAR_MIX				10	// mixed variation
 
 #define CTG_END_SKIP_SIZE		1000

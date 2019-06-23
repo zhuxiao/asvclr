@@ -26,6 +26,7 @@ void Genome::init(){
 	out_filename_call_indel = out_dir_call + "/" + "genome_INDEL.bed";
 	out_filename_call_clipReg = out_dir_call + "/" + "genome_clipReg.bed";
 	out_filename_call_tra = out_dir_call + "/" + "genome_TRA.bedpe";
+	out_filename_call_vars = out_dir_call + "/" + "genome_variants.bed";
 
 	// load the fai
 	fai = fai_load(paras->refFile.c_str());
@@ -130,7 +131,7 @@ int Genome::genomeDetect(){
 //				cout << chr->chrname << ", len=" << chr->chrlen << endl;
 //			else continue;
 
-			cout << "processing: " << chr->chrname << ", size: " << chr->chrlen << endl;
+			cout << "processing: " << chr->chrname << ", size: " << chr->chrlen << " bp" << endl;
 			chr->chrDetect();
 		}
 	}
@@ -145,6 +146,9 @@ int Genome::genomeDetect(){
 	saveDetectResultToFile();
 
 	mergeDetectResult();
+
+	// compute statistics for detect command
+	computeVarNumStatDetect();
 
 	return 0;
 }
@@ -356,6 +360,7 @@ int Genome::genomeLocalAssemble(){
 			chr->chrLocalAssemble();     // local assembly
 		}
 	}
+	computeVarNumStatAssemble(); // compute statistics for assemble command
 	return 0;
 }
 
@@ -365,6 +370,8 @@ int Genome::genomeCall(){
 	Chrome *chr;
 
 	mkdir(out_dir_call.c_str(), S_IRWXU | S_IROTH);  // create directory for call command
+
+	cout << "Begin calling variants ..." << endl;
 
 	// load data for call command
 	loadCallData();
@@ -394,6 +401,9 @@ int Genome::genomeCall(){
 
 	// merge call results into single file
 	mergeCallResult();
+
+	// compute statistics for call command
+	computeVarNumStatCall();
 
 	return 0;
 }
@@ -528,14 +538,14 @@ void Genome::recallIndelsFromTRA(){
 					total_success ++;
 					clip_reg->valid_flag = false;
 				}else{
-					cout << "chr " << i << ", j=" << j << ", recall Indel failed" << endl;
-					printMateClipReg(clip_reg);
+					//cout << "chr " << i << ", j=" << j << ", recall Indel failed" << endl;
+					//printMateClipReg(clip_reg);
 				}
 			}
 		}
-		cout << "chr " << i << ": success_num=" << success_num << endl;
+		//cout << "chr " << i << ": success_num=" << success_num << endl;
 	}
-	cout << "Genome: total=" << total << ", total_success=" << total_success << endl;
+	//cout << "Genome: total=" << total << ", total_success=" << total_success << endl;
 }
 
 // call TRA according to mate clip regions
@@ -557,7 +567,7 @@ void Genome::genomeCallTra(){
 		chr = chromeVector.at(i);
 		mate_clipReg_vec = chr->mateClipRegVector;
 		for(j=0; j<mate_clipReg_vec.size(); j++){
-			cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << ", " << chr->chrname << endl;
+			//cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << ", " << chr->chrname << endl;
 
 			clip_reg = chr->mateClipRegVector.at(j);
 			clip_reg->call_success_flag = false;
@@ -596,7 +606,7 @@ void Genome::genomeCallTra(){
 
 						if(clip_reg->call_success_flag) break;
 					}else{
-						cout << "hhhhhhhhhhhh" << endl;
+						//cout << "hhhhhhhhhhhh" << endl;
 					}
 				}
 			}
@@ -607,9 +617,9 @@ void Genome::genomeCallTra(){
 				total ++;
 			}
 		}
-		cout << "chr " << i << ": success_num=" << success_num << endl;
+		//cout << "chr " << i << ": success_num=" << success_num << endl;
 	}
-	cout << "Genome: total=" << total << endl;
+	//cout << "Genome: total=" << total << endl;
 }
 
 varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
@@ -1808,7 +1818,7 @@ void Genome::saveTraCall2File(){
 
 // merge call results into single file
 void Genome::mergeCallResult(){
-	ofstream out_file_indel, out_file_clipReg;
+	ofstream out_file_indel, out_file_clipReg, out_file_vars;
 
 	out_file_indel.open(out_filename_call_indel);
 	if(!out_file_indel.is_open()){
@@ -1820,6 +1830,12 @@ void Genome::mergeCallResult(){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_call_clipReg << endl;
 		exit(1);
 	}
+	out_file_vars.open(out_filename_call_vars);
+	if(!out_file_vars.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_call_vars << endl;
+		exit(1);
+	}
+
 
 	for(size_t i=0; i<chromeVector.size(); i++){
 		copySingleFile(chromeVector.at(i)->out_filename_call_indel, out_file_indel); // indel
@@ -1827,6 +1843,12 @@ void Genome::mergeCallResult(){
 	}
 	out_file_indel.close();
 	out_file_clipReg.close();
+
+	// merge indels, clipping variants, translocations to single file
+	copySingleFile(out_filename_call_indel, out_file_vars); // indels
+	copySingleFile(out_filename_call_clipReg, out_file_vars); // INV, DUP
+	copySingleFile(out_filename_call_tra, out_file_vars); // TRA
+	out_file_vars.close();
 }
 
 // save results in VCF file format for detect command
@@ -1981,5 +2003,159 @@ void Genome::saveVCFHeader(ofstream &fp){
 	fp << "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">" << endl;
 	fp << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT" << endl;
 
+}
+
+// compute the statistics for 'detect' command
+void Genome::computeVarNumStatDetect(){
+	size_t total, indel_num, clipReg_num;
+
+	indel_num = getLineCount(out_filename_detect_indel);
+	clipReg_num = getLineCount(out_filename_detect_clipReg);
+
+	total = indel_num + clipReg_num;
+
+	cout << "############## Brief statistics for variants detection ##############" << endl;
+	cout << "There are " << total << " variant candidates detected in total:" << endl;
+	cout << "\t" << indel_num << " candidate indels" << endl;
+	cout << "\t" << clipReg_num << " candidate clipping regions" << endl;
+}
+
+// compute statistics for 'assemble' command
+void Genome::computeVarNumStatAssemble(){
+	int32_t total, total_indel, total_clipReg, total_succ_indel, total_fail_indel, total_succ_clipReg, total_fail_clipReg, succ_tmp, fail_tmp;
+	vector<int32_t> num_vec;
+	Chrome *chr;
+	string filename;
+
+	total_indel = total_clipReg = total_succ_indel = total_fail_indel = total_succ_clipReg = total_fail_clipReg = 0;
+	for(size_t i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+
+		filename = chr->getVarcandIndelFilename();
+		num_vec = getSuccFailNumAssemble(filename);
+		succ_tmp = num_vec.at(0);
+		fail_tmp = num_vec.at(1);
+		total_succ_indel += succ_tmp;
+		total_fail_indel += fail_tmp;
+		total_indel += succ_tmp + fail_tmp;
+
+		filename = chr->getVarcandClipregFilename();
+		num_vec = getSuccFailNumAssemble(filename);
+		succ_tmp = num_vec.at(0);
+		fail_tmp = num_vec.at(1);
+		total_succ_clipReg += succ_tmp;
+		total_fail_clipReg += fail_tmp;
+		total_clipReg += succ_tmp + fail_tmp;
+	}
+	total = total_indel + total_clipReg;
+
+	cout << "############## Brief statistics for local assembly ##############" << endl;
+	cout << "There are " << total << " local assembly regions in total:" << endl;
+	cout << "\t" << total_indel << " indel regions: " << total_succ_indel << " successful, " << total_fail_indel << " failed" << endl;
+	cout << "\t" << total_clipReg << " clipping regions: " << total_succ_clipReg << " successful, " << total_fail_clipReg << " failed" << endl;
+}
+
+vector<int32_t> Genome::getSuccFailNumAssemble(string &filename){
+	ifstream infile;
+	string line;
+	vector<string> str_vec;
+	vector<int32_t> succ_fail_vec;
+	int32_t num_succ, num_fail;
+
+	infile.open(filename);
+	if(!infile.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << filename << endl;
+		exit(1);
+	}
+
+	// read each line and check the success and failed flag
+	num_succ = num_fail = 0;
+	while(getline(infile, line))
+		if(line.size()>0 and line.at(0)!='#'){
+			str_vec = split(line, "\t");
+			if(str_vec.at(5).compare(ASSEMBLY_SUCCESS)==0) num_succ ++;
+			else num_fail ++;
+		}
+
+	succ_fail_vec.push_back(num_succ);
+	succ_fail_vec.push_back(num_fail);
+
+	infile.close();
+
+	return succ_fail_vec;
+}
+
+// compute statistics for 'call' command
+void Genome::computeVarNumStatCall(){
+	ifstream infile;
+	string line;
+	vector<string> str_vec;
+	vector<int32_t> succ_fail_vec;
+	int32_t total, num_ins, num_del, num_inv, num_dup, num_tra, num_unc;
+	size_t sv_type;
+
+	infile.open(out_filename_call_vars);
+	if(!infile.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_call_vars << endl;
+		exit(1);
+	}
+
+	num_ins = num_del = num_inv = num_dup = num_tra = num_unc = 0;
+	while(getline(infile, line)){
+		if(line.size()>0 and line.at(0)!='#'){
+			sv_type = getSVTypeSingleLine(line);
+			switch(sv_type){
+				case VAR_UNC: num_unc ++; break;
+				case VAR_INS: num_ins ++; break;
+				case VAR_DEL: num_del ++; break;
+				case VAR_DUP: num_dup ++; break;
+				case VAR_INV: num_inv ++; break;
+				case VAR_TRA:
+				case VAR_BND: num_tra ++; break;
+				//case VAR_INV_TRA: num_ins ++; break;
+				//case VAR_MIX: num_ins ++; break;
+			}
+		}
+	}
+
+	total = num_ins + num_del + num_inv + num_dup + num_tra;
+
+	cout << "############## Brief statistics for variants call ##############" << endl;
+	cout << "There are " << total << " variants in total:" << endl;
+	cout << "\t" << "insertions: " << num_ins << endl;
+	cout << "\t" << "deletions: " << num_del << endl;
+	cout << "\t" << "tandem duplications: " << num_dup << endl;
+	cout << "\t" << "inversions: " << num_inv << endl;
+	cout << "\t" << "translocations: " << num_tra << endl;
+	cout << "\t" << "unresolved: " << num_unc << endl;
+
+	infile.close();
+}
+
+size_t Genome::getSVTypeSingleLine(string &line){
+	size_t sv_type = VAR_UNC;
+	vector<string> str_vec;
+	string str_tmp;
+
+	str_vec = split(line, "\t");
+	str_tmp = str_vec.at(3);
+	if(str_tmp.compare("INS")==0 or str_tmp.compare("insertion")==0){
+		sv_type = VAR_INS;
+	}else if(str_tmp.compare("DEL")==0 or str_tmp.compare("deletion")==0){
+		sv_type = VAR_DEL;
+	}else if(str_tmp.compare("DUP")==0 or str_tmp.compare("duplication")==0){
+		sv_type = VAR_DUP;
+	}else if(str_tmp.compare("INV")==0 or str_tmp.compare("inversion")==0){
+		sv_type = VAR_INV;
+	}else{
+		if(str_vec.size()>=8 and (str_vec.at(6).compare("TRA")==0 or str_vec.at(6).compare("translocation")==0 or str_vec.at(6).compare("BND")==0)){
+			if(str_vec.at(6).compare("TRA")==0 or str_vec.at(6).compare("translocation")==0) sv_type = VAR_TRA;
+			else sv_type = VAR_BND;
+		}else{
+			sv_type = VAR_MIX;
+		}
+	}
+
+	return sv_type;
 }
 

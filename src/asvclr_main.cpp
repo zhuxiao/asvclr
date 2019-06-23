@@ -24,16 +24,19 @@ int main(int argc, char **argv) {
 	// detect indels
 	if(paras.command.compare("detect")==0 or paras.command.compare("all")==0)
 	{
+		time.setStartTime();
 		cout << "[" << time.getTime() << "]: detect structural variations ..." << endl;
 		genome.genomeDetect();
 
-		cout << "Total misAln region size: " << paras.misAlnRegLenSum << endl;
+		cout << "Total misAln region size: " << paras.misAlnRegLenSum << " bp" << endl;
 		cout << "[" << time.getTime() << "]: detect structural variations finished." << endl;
+		time.printSubCmdElapsedTime();
 	}
 
 	// assemble
 	if(paras.command.compare("assemble")==0 or paras.command.compare("all")==0)
 	{
+		time.setStartTime();
 		cout << "[" << time.getTime() << "]: local assemble ..." << endl;
 
 		// local assemble
@@ -41,11 +44,13 @@ int main(int argc, char **argv) {
 		genome.genomeLocalAssemble();
 
 		cout << "[" << time.getTime() << "]: local assemble finished." << endl;
+		time.printSubCmdElapsedTime();
 	}
 
 	// call
 	if(paras.command.compare("call")==0 or paras.command.compare("all")==0)
 	{
+		time.setStartTime();
 		cout << "[" << time.getTime() << "]: call variants ..." << endl;
 
 		// call variants
@@ -53,10 +58,13 @@ int main(int argc, char **argv) {
 		genome.genomeCall();
 
 		cout << "[" << time.getTime() << "]: call variants finished." << endl;
+		time.printSubCmdElapsedTime();
 	}
 
 	// save results in VCF file format
 	//genome.saveResultVCF();
+
+	time.printOverallElapsedTime();
 
 	return 0;
 }

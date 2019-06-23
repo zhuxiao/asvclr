@@ -45,11 +45,12 @@ void printMateClipReg(mateClipReg_t *mate_clip_reg);
 string preprocessPipeChar(string &cmd_str);
 bool isFileExist(string &filename);
 void removeRedundantItems(vector<reg_t*> &reg_vec);
+int32_t getLineCount(string &filename);
 
 
 class Time{
 	private:
-		time_t timestamp;
+		time_t timestamp, start, end, start_all, end_all;
 		struct tm *time_tm;
 		struct timeval time_val;
 
@@ -58,6 +59,9 @@ class Time{
 		virtual ~Time();
 		string getTime();
 		void printTime();
+		void setStartTime();
+		void printSubCmdElapsedTime();
+		void printOverallElapsedTime();
 };
 
 #endif /* SRC_UTIL_H_ */

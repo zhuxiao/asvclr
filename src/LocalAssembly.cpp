@@ -383,7 +383,7 @@ int32_t LocalAssembly::getLeftMostAlnSeg(vector<clipAlnData_t*> &query_aln_segs)
 bool LocalAssembly::localAssembleCanu(){
 	bool flag = localAssembleCanu_IncreaseGenomeSize();
 	if(!flag) flag = localAssembleCanu_DecreaseGenomeSize();
-	if(!flag) cout << "ASS_FAILURE: " << contigfilename << endl;
+	//if(!flag) cout << "ASS_FAILURE: " << contigfilename << endl;
 	return flag;
 }
 
@@ -401,6 +401,12 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 //	fast_option = "";
 //	if(canu_version.compare("1.8")==0)
 //		fast_option = " -fast";
+
+	// check the file
+	if (stat(contigfilename.c_str(), &fileStat) == 0)
+		if(fileStat.st_size>0) { // contig was generated successfully previously
+			return true;
+		}
 
 	// generate command string
 	assem_prefix = "assembly";
@@ -433,7 +439,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 
 			// try canu1.8
 			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
-			cout << canu_cmd << endl;
+			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
 			// save assembly result and remove temporary files if successfully assembled
@@ -468,13 +474,19 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 //	if(canu_version.compare("1.8")==0)
 //		fast_option = " -fast";
 
+	// check the file
+	if (stat(contigfilename.c_str(), &fileStat) == 0)
+		if(fileStat.st_size>0) { // contig was generated successfully previously
+			return true;
+		}
+
 	// generate command string
 	assem_prefix = "assembly";
 	tmp_ctg_filename = tmpdir + "/" + assem_prefix + ".contigs.fasta";
 	cmd2 = "mv " + tmp_ctg_filename + " " + contigfilename;   // move and rename file
 	cmd4 = "rm -rf " + tmpdir;  // delete files
 
-	// increase the genome size
+	// decrease the genome size
 	step_size = ASSEMBLY_STEP_SIZE;
 	genomeSize_Canu = ASSEMBLY_GENOME_SIZE_INITIAL - step_size;
 	flag = false;
@@ -499,7 +511,7 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 
 			// try canu1.8
 			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
-			cout << canu_cmd << endl;
+			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
 			// save assembly result and remove temporary files if successfully assembled

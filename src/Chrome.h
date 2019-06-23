@@ -56,6 +56,8 @@ class Chrome{
 		Chrome(string& chrname, int chrlen, faidx_t *fai, Paras *paras);
 		virtual ~Chrome();
 		void setOutputDir(string& out_dir_detect_prefix, string& out_dir_assemble_prefix, string& out_dir_call_prefix);
+		string getVarcandIndelFilename();
+		string getVarcandClipregFilename();
 		int generateChrBlocks();
 		void saveChrBlocksToFile();
 		void chrFillDataEst(size_t op_est);

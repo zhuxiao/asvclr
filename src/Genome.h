@@ -29,7 +29,7 @@ class Genome{
 		string out_dir_tra = out_dir_call + "/" + "tra";
 
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
-		string out_filename_call_snv, out_filename_call_indel, out_filename_call_clipReg, out_filename_call_tra;
+		string out_filename_call_snv, out_filename_call_indel, out_filename_call_clipReg, out_filename_call_tra, out_filename_call_vars;
 
 		//vector<varCand*> var_cand_vec;
 
@@ -86,6 +86,13 @@ class Genome{
 		void saveIndelVCF(string &in, string &out_vcf);
 		void saveSnvVCF(string &in, string &out_vcf);
 		void saveVCFHeader(ofstream &fp);
+
+		// output statistics
+		void computeVarNumStatDetect();
+		void computeVarNumStatAssemble();
+		vector<int32_t> getSuccFailNumAssemble(string &filename);
+		void computeVarNumStatCall();
+		size_t getSVTypeSingleLine(string &line);
 };
 
 
