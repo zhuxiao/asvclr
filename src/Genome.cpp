@@ -161,9 +161,6 @@ void Genome::removeRedundantTra(){
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		for(j=0; j<chr->mateClipRegVector.size(); j++){
-//			if(j>=3)
-//				cout << "dsdsdsdsdsdsd " << j << endl;
-
 			clip_reg = chr->mateClipRegVector.at(j);
 			if(clip_reg->valid_flag and clip_reg->reg_mated_flag and clip_reg->sv_type==VAR_TRA){
 				if(clip_reg->leftClipPosTra1==-1 and clip_reg->leftClipPosTra2==-1 and clip_reg->rightClipPosTra1==-1 and clip_reg->rightClipPosTra2==-1){
@@ -281,19 +278,19 @@ mateClipReg_t* Genome::getSameClipRegTRA(mateClipReg_t *clip_reg_given, vector<C
 				if(clip_reg->leftClipPosTra1!=-1 and clip_reg_given->leftClipPosTra1!=-1){
 					if(clip_reg->chrname_leftTra1.compare(clip_reg_given->chrname_leftTra1)!=0 or clip_reg->leftClipPosTra1<clip_reg_given->leftClipPosTra1-CLIP_END_EXTEND_SIZE or clip_reg->leftClipPosTra1>clip_reg_given->leftClipPosTra1+CLIP_END_EXTEND_SIZE)
 						same_flag = false;
-				}
+				}else same_flag = false;
 				if(same_flag and clip_reg->rightClipPosTra1!=-1 and clip_reg_given->rightClipPosTra1!=-1){
 					if(clip_reg->chrname_rightTra1.compare(clip_reg_given->chrname_rightTra1)!=0 or clip_reg->rightClipPosTra1<clip_reg_given->rightClipPosTra1-CLIP_END_EXTEND_SIZE or clip_reg->rightClipPosTra1>clip_reg_given->rightClipPosTra1+CLIP_END_EXTEND_SIZE)
 						same_flag = false;
-				}
+				}else same_flag = false;
 				if(same_flag and clip_reg->leftClipPosTra2!=-1 and clip_reg_given->leftClipPosTra2!=-1){
 					if(clip_reg->chrname_leftTra2.compare(clip_reg_given->chrname_leftTra2)!=0 or clip_reg->leftClipPosTra2<clip_reg_given->leftClipPosTra2-CLIP_END_EXTEND_SIZE or clip_reg->leftClipPosTra2>clip_reg_given->leftClipPosTra2+CLIP_END_EXTEND_SIZE)
 						same_flag = false;
-				}
+				}else same_flag = false;
 				if(same_flag and clip_reg->rightClipPosTra2!=-1 and clip_reg_given->rightClipPosTra2!=-1){
 					if(clip_reg->chrname_rightTra2.compare(clip_reg_given->chrname_rightTra2)!=0 or clip_reg->rightClipPosTra2<clip_reg_given->rightClipPosTra2-CLIP_END_EXTEND_SIZE or clip_reg->rightClipPosTra2>clip_reg_given->rightClipPosTra2+CLIP_END_EXTEND_SIZE)
 						same_flag = false;
-				}
+				}else same_flag = false;
 			}else same_flag = false;
 
 			if(same_flag){
@@ -611,7 +608,7 @@ void Genome::genomeCallTra(){
 				}
 			}
 			if(clip_reg->call_success_flag){
-				cout << "chr " << i << ", j=" << j << ", TRA success" << endl;
+				//cout << "chr " << i << ", j=" << j << ", TRA success" << endl;
 
 				success_num ++;
 				total ++;
@@ -740,7 +737,7 @@ vector<int32_t> Genome::computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, 
 						if(aln_orient==ALN_PLUS_ORIENT)  end_tra_aln_seg_idx = 0;
 						else end_tra_aln_seg_idx = blat_aln->aln_segs.size() - 1;
 
-						cout << "head: " << missing_size_head << ", " << var_cand->chrname << ":" << start_query_pos << "-" << end_query_pos << endl;
+						//cout << "head: " << missing_size_head << ", " << var_cand->chrname << ":" << start_query_pos << "-" << end_query_pos << endl;
 					}else if(query_part_flag==1){ // query inner
 						aln_seg1 = blat_aln->aln_segs.at(maxIdx);
 						aln_seg2 = blat_aln->aln_segs.at(maxIdx+1);
@@ -759,7 +756,7 @@ vector<int32_t> Genome::computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, 
 							end_tra_aln_seg_idx = maxIdx;
 						}
 
-						cout << "inner: " << missing_size_inner << ", " << var_cand->chrname << ":" << start_query_pos << "-" << end_query_pos << endl;
+						//cout << "inner: " << missing_size_inner << ", " << var_cand->chrname << ":" << start_query_pos << "-" << end_query_pos << endl;
 					}else if(query_part_flag==2){ // query tail
 						start_query_pos = blat_aln->query_len - missing_size_tail + 1;
 						end_query_pos = blat_aln->query_len;
@@ -768,7 +765,7 @@ vector<int32_t> Genome::computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, 
 						else start_tra_aln_seg_idx = 0;
 						end_tra_aln_seg_idx = -1;
 
-						cout << "tail: " << missing_size_tail << ", " << var_cand->chrname << ":" << start_query_pos << "-" << end_query_pos << endl;
+						//cout << "tail: " << missing_size_tail << ", " << var_cand->chrname << ":" << start_query_pos << "-" << end_query_pos << endl;
 					}
 					aln_idx_vec.push_back(tra_blat_aln_idx);
 					aln_idx_vec.push_back(start_tra_aln_seg_idx);
@@ -788,12 +785,12 @@ vector<int32_t> Genome::computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, 
 							end_mate_query_pos = blat_aln_mate->query_len - aln_seg2->query_start + 1;
 						}
 
-						cout << "mate TRA: " << "start_mate_query_pos=" << start_mate_query_pos << ", end_mate_query_pos=" << end_mate_query_pos << endl;
+						//cout << "mate TRA: " << "start_mate_query_pos=" << start_mate_query_pos << ", end_mate_query_pos=" << end_mate_query_pos << endl;
 
 						// compute TRA clipping locations
 						tra_loc_vec = computeTraClippingLoc(query_part_flag, var_cand, aln_idx_vec, var_cand_tmp, mate_aln_idx_vec);
 
-						cout << "TRA location: " << var_cand->chrname << ":" << tra_loc_vec.at(0) << "-" << tra_loc_vec.at(1) << ", " << var_cand_tmp->chrname << ":" << tra_loc_vec.at(2) << "-" << tra_loc_vec.at(3) << endl;
+						//cout << "TRA location: " << var_cand->chrname << ":" << tra_loc_vec.at(0) << "-" << tra_loc_vec.at(1) << ", " << var_cand_tmp->chrname << ":" << tra_loc_vec.at(2) << "-" << tra_loc_vec.at(3) << endl;
 
 						call_success_flag = computeTraCallSuccessFlag(tra_loc_vec, tra_loc_vec2, var_cand, var_cand_tmp, clip_reg);
 
@@ -932,7 +929,7 @@ bool Genome::isValidTraReg(size_t start_query_pos, size_t end_query_pos, size_t 
 	total_len = maxPos - minPos + 1;
 	shared_ratio = shared_len / total_len;
 
-	cout << "shared_len=" << shared_len << ", total_len=" << total_len << ", shared_ratio=" << shared_ratio << endl;
+	//cout << "shared_len=" << shared_len << ", total_len=" << total_len << ", shared_ratio=" << shared_ratio << endl;
 
 	if(shared_ratio>MIN_VALID_TRA_RATIO) valid_flag = true;
 	else valid_flag = false;
@@ -976,7 +973,7 @@ vector<int32_t> Genome::computeTraClippingLoc(size_t query_clip_part_flag, varCa
 			left_tra_refPos1 = aln_seg2->ref_start;
 		right_tra_refPos1 = -1;
 	}
-	cout << "left_tra_refPos1=" << left_tra_refPos1 << ", right_tra_refPos1=" << right_tra_refPos1 << endl;
+	//cout << "left_tra_refPos1=" << left_tra_refPos1 << ", right_tra_refPos1=" << right_tra_refPos1 << endl;
 
 	if(query_clip_part_flag==0){ // query head
 		aln_seg2 = blat_aln_tmp->aln_segs.at(mate_aln_idx_vec.at(2));
@@ -1005,7 +1002,7 @@ vector<int32_t> Genome::computeTraClippingLoc(size_t query_clip_part_flag, varCa
 		}
 		right_tra_refPos2 = -1;
 	}
-	cout << "left_tra_refPos2=" << left_tra_refPos2 << ", right_tra_refPos2=" << right_tra_refPos2 << endl;
+	//cout << "left_tra_refPos2=" << left_tra_refPos2 << ", right_tra_refPos2=" << right_tra_refPos2 << endl;
 
 	tra_loc_vec.push_back(left_tra_refPos1);
 	tra_loc_vec.push_back(right_tra_refPos1);
@@ -1683,7 +1680,7 @@ vector<size_t> Genome::computeQueryLocTra(varCand *var_cand, mateClipReg_t *clip
 					start_query_pos = blat_aln->query_len - (aln_seg2->query_start - 1) + 1;
 					end_query_pos = blat_aln->query_len - (aln_seg1->query_end + 1) + 1;
 				}
-				cout << ">>>>>> missing inner TRA: " << var_cand->chrname << ":" << start_ref_pos << "-" << end_ref_pos << ", " << blat_aln->query_id << ":" << start_query_pos << "-" << end_query_pos << endl;
+				//cout << ">>>>>> missing inner TRA: " << var_cand->chrname << ":" << start_ref_pos << "-" << end_ref_pos << ", " << blat_aln->query_id << ":" << start_query_pos << "-" << end_query_pos << endl;
 			}else if(missing_size_inner<MIN_CLIP_DIST_THRES){
 				// no missing parts for inner query, and compute the start and end align segments
 				segIdx_start = segIdx_end = -1;
@@ -1719,7 +1716,7 @@ vector<size_t> Genome::computeQueryLocTra(varCand *var_cand, mateClipReg_t *clip
 						start_query_pos = blat_aln->query_len - aln_seg2->query_end + 1;
 						end_query_pos = blat_aln->query_len - aln_seg1->query_start + 1;
 					}
-					cout << ">>>>>> inner TRA: " << var_cand->chrname << ":" << start_ref_pos << "-" << end_ref_pos << ", " << blat_aln->query_id << ":" << start_query_pos << "-" << end_query_pos << endl;
+					//cout << ">>>>>> inner TRA: " << var_cand->chrname << ":" << start_ref_pos << "-" << end_ref_pos << ", " << blat_aln->query_id << ":" << start_query_pos << "-" << end_query_pos << endl;
 				}else aln_seg1 = aln_seg2 = NULL;
 			}
 
@@ -2127,7 +2124,7 @@ void Genome::computeVarNumStatCall(){
 	cout << "\t" << "tandem duplications: " << num_dup << endl;
 	cout << "\t" << "inversions: " << num_inv << endl;
 	cout << "\t" << "translocations: " << num_tra << endl;
-	cout << "\t" << "unresolved: " << num_unc << endl;
+	//cout << "\t" << "unresolved: " << num_unc << endl;
 
 	infile.close();
 }
