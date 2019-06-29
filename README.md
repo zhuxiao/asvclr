@@ -222,7 +222,7 @@ The last variant item is a translocation breakpoint whose locations are 3000000 
 
 ## Contact
 
-If you have problems or some suggestions, please contact: xzhu@hrbnu.edu.cn without hesitation. 
+If you have problems or some suggestions, please contact: zhuxiao_hit@yeah.net without hesitation. 
 
 ---- Enjoy !!! -----
 
