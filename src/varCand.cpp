@@ -2,7 +2,7 @@
 #include "varCand.h"
 #include "util.h"
 
-pthread_mutex_t mutex_print_var_cand = PTHREAD_MUTEX_INITIALIZER;
+//pthread_mutex_t mutex_print_var_cand = PTHREAD_MUTEX_INITIALIZER;
 
 varCand::varCand(){
 	this->chrname = "";
@@ -150,6 +150,8 @@ void varCand::blatParse(){
 	int32_t ref_start_all, query_loc, blat_aln_id;
 	blat_aln_t *blat_aln_item;
 	aln_seg_t *aln_seg;
+
+	if(blat_aln_vec.size()>0) return;
 
 	infile.open(alnfilename);
 	if(!infile.is_open()){
@@ -367,56 +369,109 @@ void varCand::blatFilterByShortAlnSegs(){
 
 // filter by query coverage
 void varCand::blatFilterByQueryCoverage(){
-	size_t i, j, validNum, best_aln_num, start_query_pos, end_query_pos;
+	size_t i, j;
+	int32_t ctg_id_tmp, start_query_pos, end_query_pos;
 	int8_t **query_cov_array;
 	blat_aln_t *blat_aln;
 	aln_seg_t *aln_seg;
 	float covRatio;
 
-	validNum = 0;
-	for(i=0; i<blat_aln_vec.size(); i++) if(blat_aln_vec[i]->valid_aln) validNum ++;
-	if(validNum>(size_t)ctg_num and ctg_num>0){
-		query_cov_array = new int8_t *[validNum]();
-		// get the number of best blat alignments
-		best_aln_num = 0;
-		for(i=0; i<blat_aln_vec.size(); i++){
-			blat_aln = blat_aln_vec[i];
-			if(blat_aln->best_aln){
-				query_cov_array[best_aln_num] = new int8_t[blat_aln->query_len+1]();
-				// compute the query coverage based on the first blat alignment block for each query
-				for(j=0; j<blat_aln->aln_segs.size(); j++){
-					aln_seg = blat_aln->aln_segs[j];
-					if(aln_seg->aln_orient==ALN_PLUS_ORIENT){
-						start_query_pos = aln_seg->query_start;
-						end_query_pos = aln_seg->query_end;
-					}else{
-						start_query_pos = blat_aln->query_len - aln_seg->query_end + 1;
-						end_query_pos = blat_aln->query_len - aln_seg->query_start + 1;
-					}
-					memset(query_cov_array[best_aln_num]+start_query_pos-1, 1, sizeof(int8_t)*((int32_t)end_query_pos-start_query_pos+1));
-				}
-				best_aln_num ++;
-				if(best_aln_num>validNum){
-					cerr << "line=" << __LINE__ << ", best_aln_num=" << best_aln_num << ", validNum=" << validNum << ", error!" << endl;
-					exit(1);
-				}
-			}
-		}
+	query_cov_array = new int8_t *[ctg_num]();
 
-		// compute the coverage of other blat alignment blocks
-		for(i=0; i<blat_aln_vec.size(); i++){
-			blat_aln = blat_aln_vec[i];
-			if(blat_aln->valid_aln and !blat_aln->best_aln){
-				covRatio = computeRepeatCovRatio(blat_aln, query_cov_array[blat_aln->query_id], true); // compute the coverage
-				if(covRatio>=INVALID_COV_RATIO_THRES) blat_aln->valid_aln = false;
-				else updateCovArray(blat_aln, query_cov_array[blat_aln->query_id], true); // update the coverage
-			}
+	ctg_id_tmp = -1;
+	for(i=0; i<blat_aln_vec.size(); i++){
+		blat_aln = blat_aln_vec.at(i);
+		if((int32_t)blat_aln->query_id!=ctg_id_tmp) query_cov_array[++ctg_id_tmp] = new int8_t[blat_aln->query_len+1]();
+		if(ctg_id_tmp>=ctg_num){
+			cerr << "line=" << __LINE__ << ", ctg_id_tmp=" << ctg_id_tmp << ", ctg_num=" << ctg_num << ", error!" << endl;
+			exit(1);
 		}
-
-		//for(i=0; i<(size_t)ctg_num; i++) delete[] query_cov_array[i];
-		for(i=0; i<best_aln_num; i++) delete[] query_cov_array[i];
-		delete[] query_cov_array;
 	}
+
+	// fill coverage array according to the best blat alignments
+	for(i=0; i<blat_aln_vec.size(); i++){
+		blat_aln = blat_aln_vec.at(i);
+		if(blat_aln->best_aln){
+			// compute the query coverage based on the best blat alignment block for each query
+			for(j=0; j<blat_aln->aln_segs.size(); j++){
+				aln_seg = blat_aln->aln_segs.at(j);
+				if(aln_seg->aln_orient==ALN_PLUS_ORIENT){
+					start_query_pos = aln_seg->query_start;
+					end_query_pos = aln_seg->query_end;
+				}else{
+					start_query_pos = blat_aln->query_len - aln_seg->query_end + 1;
+					end_query_pos = blat_aln->query_len - aln_seg->query_start + 1;
+				}
+				memset(query_cov_array[blat_aln->query_id]+start_query_pos-1, 1, sizeof(int8_t)*((int32_t)end_query_pos-start_query_pos+1));
+			}
+		}
+	}
+
+	// compute the coverage for other blat alignment blocks
+	for(i=0; i<blat_aln_vec.size(); i++){
+		blat_aln = blat_aln_vec.at(i);
+		if(blat_aln->valid_aln and blat_aln->best_aln==false){
+			covRatio = computeRepeatCovRatio(blat_aln, query_cov_array[blat_aln->query_id], true); // compute the coverage
+			if(covRatio>=INVALID_COV_RATIO_THRES) blat_aln->valid_aln = false;
+			else updateCovArray(blat_aln, query_cov_array[blat_aln->query_id], true); // update the coverage
+		}
+	}
+
+	for(i=0; i<ctg_num; i++)
+		delete[] query_cov_array[i];
+	delete[] query_cov_array;
+
+//	size_t i, j, validNum, best_aln_num, start_query_pos, end_query_pos;
+//	int8_t **query_cov_array;
+//	blat_aln_t *blat_aln;
+//	aln_seg_t *aln_seg;
+//	float covRatio;
+//
+//	validNum = 0;
+//	for(i=0; i<blat_aln_vec.size(); i++) if(blat_aln_vec[i]->valid_aln) validNum ++;
+//	if(validNum>(size_t)ctg_num and ctg_num>0){
+//		query_cov_array = new int8_t *[validNum]();
+//		// get the number of best blat alignments
+//		best_aln_num = 0;
+//		for(i=0; i<blat_aln_vec.size(); i++){
+//			blat_aln = blat_aln_vec.at(i);
+//			if(blat_aln->best_aln){
+//				query_cov_array[best_aln_num] = new int8_t[blat_aln->query_len+1]();
+//				// compute the query coverage based on the first blat alignment block for each query
+//				for(j=0; j<blat_aln->aln_segs.size(); j++){
+//					aln_seg = blat_aln->aln_segs.at(j);
+//					if(aln_seg->aln_orient==ALN_PLUS_ORIENT){
+//						start_query_pos = aln_seg->query_start;
+//						end_query_pos = aln_seg->query_end;
+//					}else{
+//						start_query_pos = blat_aln->query_len - aln_seg->query_end + 1;
+//						end_query_pos = blat_aln->query_len - aln_seg->query_start + 1;
+//					}
+//					memset(query_cov_array[best_aln_num]+start_query_pos-1, 1, sizeof(int8_t)*((int32_t)end_query_pos-start_query_pos+1));
+//				}
+//				best_aln_num ++;
+//				if(best_aln_num>validNum){
+//					cerr << "line=" << __LINE__ << ", best_aln_num=" << best_aln_num << ", validNum=" << validNum << ", error!" << endl;
+//					exit(1);
+//				}
+//			}
+//		}
+//
+//		// compute the coverage of other blat alignment blocks
+//		for(i=0; i<blat_aln_vec.size(); i++){
+//			blat_aln = blat_aln_vec.at(i);
+//			if(blat_aln->valid_aln and blat_aln->best_aln==false){
+//				covRatio = computeRepeatCovRatio(blat_aln, query_cov_array[blat_aln->query_id], true); // compute the coverage
+//				if(covRatio>=INVALID_COV_RATIO_THRES) blat_aln->valid_aln = false;
+//				else updateCovArray(blat_aln, query_cov_array[blat_aln->query_id], true); // update the coverage
+//			}
+//		}
+//
+//		//for(i=0; i<(size_t)ctg_num; i++) delete[] query_cov_array[i];
+//		for(i=0; i<best_aln_num; i++)
+//			delete[] query_cov_array[i];
+//		delete[] query_cov_array;
+//	}
 }
 
 // filter by genome coverage
@@ -438,7 +493,7 @@ void varCand::blatFilterByGenomeCoverage(){
 			if(blat_aln->valid_aln){
 				sum = 0;
 				for(j=0; j<blat_aln->aln_segs.size(); j++){
-					aln_seg = blat_aln->aln_segs[j];
+					aln_seg = blat_aln->aln_segs.at(j);
 					sum += aln_seg->subject_end - aln_seg->subject_start + 1;
 				}
 				if(maxValue<sum){
@@ -455,9 +510,8 @@ void varCand::blatFilterByGenomeCoverage(){
 		memset(subject_cov_array, 0, sizeof(int8_t)*subject_len); // reset to 0: not covered
 
 		// compute the genome coverage based on the largest blat alignment block
-
 		for(i=0; i<blat_aln->aln_segs.size(); i++){
-			aln_seg = blat_aln->aln_segs[i];
+			aln_seg = blat_aln->aln_segs.at(i);
 			memset(subject_cov_array+aln_seg->subject_start-1, 1, sizeof(int8_t)*((int32_t)aln_seg->subject_end-aln_seg->subject_start+1));
 		}
 
@@ -508,7 +562,7 @@ void varCand::updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query
 	size_t startPos, endPos;
 	aln_seg_t *aln_seg;
 	for(size_t i=0; i<blat_aln->aln_segs.size(); i++){
-		aln_seg = blat_aln->aln_segs[i];
+		aln_seg = blat_aln->aln_segs.at(i);
 		if(query_flag){
 			if(aln_seg->aln_orient==ALN_PLUS_ORIENT){
 				startPos = aln_seg->query_start;

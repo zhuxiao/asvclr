@@ -1316,6 +1316,8 @@ int32_t Chrome::computeBlocID(size_t begPos){
 int Chrome::chrLocalAssemble(){
 	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IROTH);  // create the directory for assemble command
 
+	cout << "processing: " << chrname << endl;
+
 	// open the assembly information file
 	chrSetVarCandFiles();
 

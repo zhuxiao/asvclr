@@ -350,9 +350,9 @@ int Genome::genomeLocalAssemble(){
 	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IROTH);  // create directory for assemble command
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
-		//if(i==2)
+		chr = chromeVector.at(i);
+		//if(chr->chrname.compare("chrM")==0)
 		{
-			chr = chromeVector.at(i);
 			chr->chrLoadDataAssemble();  // load the variation data
 			chr->chrLocalAssemble();     // local assembly
 		}
@@ -434,6 +434,9 @@ void Genome::recallIndelsFromTRA(){
 		chr = chromeVector.at(i);
 		mate_clipReg_vec = chr->mateClipRegVector;
 		for(j=0; j<mate_clipReg_vec.size(); j++){
+//			if(i>=9 and j>=17)
+//				cout << "line=" << __LINE__ << ", i=" << i << ", j=" << j << ", " << chr->chrname << endl;
+
 			total ++;
 			clip_reg = chr->mateClipRegVector.at(j);
 			reg1 = reg2 = NULL;
@@ -455,8 +458,8 @@ void Genome::recallIndelsFromTRA(){
 							blat_aln = var_cand->blat_aln_vec.at(k);
 							if(blat_aln->valid_aln){
 								for(m=1; m<blat_aln->aln_segs.size(); m++){
-									seg1 = blat_aln->aln_segs[m-1];
-									seg2 = blat_aln->aln_segs[m];
+									seg1 = blat_aln->aln_segs.at(m-1);
+									seg2 = blat_aln->aln_segs.at(m);
 									if((seg1->ref_end>=var_cand->leftClipRefPos-CLIP_END_EXTEND_SIZE and seg1->ref_end<=var_cand->rightClipRefPos+CLIP_END_EXTEND_SIZE) and (seg2->ref_start>=var_cand->leftClipRefPos-CLIP_END_EXTEND_SIZE and seg2->ref_start<=var_cand->rightClipRefPos+CLIP_END_EXTEND_SIZE)){
 										segIdx_start = m - 1;
 
@@ -564,7 +567,8 @@ void Genome::genomeCallTra(){
 		chr = chromeVector.at(i);
 		mate_clipReg_vec = chr->mateClipRegVector;
 		for(j=0; j<mate_clipReg_vec.size(); j++){
-			//cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << ", " << chr->chrname << endl;
+//			if(i>=23 and j>=31)
+//				cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << ", " << chr->chrname << endl;
 
 			clip_reg = chr->mateClipRegVector.at(j);
 			clip_reg->call_success_flag = false;

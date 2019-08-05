@@ -6,7 +6,7 @@
 #include "Region.h"
 #include "util.h"
 
-pthread_mutex_t mutex_print = PTHREAD_MUTEX_INITIALIZER;
+//pthread_mutex_t mutex_print = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_write_misAln = PTHREAD_MUTEX_INITIALIZER;
 
 // Constructor with parameters
@@ -797,9 +797,9 @@ void Block::resetMisAlnRegFile(){
 
 // local assembly
 void Block::blockLocalAssemble(){
-	pthread_mutex_lock(&mutex_print);
-	cout << chrname << ":" << startPos << "-" << endPos << endl;
-	pthread_mutex_unlock(&mutex_print);
+//	pthread_mutex_lock(&mutex_print);
+//	cout << chrname << ":" << startPos << "-" << endPos << endl;
+//	pthread_mutex_unlock(&mutex_print);
 
 	blockLocalAssembleIndel();
 	blockLocalAssembleClipReg();
