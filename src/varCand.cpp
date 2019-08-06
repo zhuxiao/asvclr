@@ -155,7 +155,7 @@ void varCand::blatParse(){
 
 	infile.open(alnfilename);
 	if(!infile.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << alnfilename << endl;
+		cerr << __func__ << "(), line=" << __LINE__ << ": cannot open file:" << alnfilename << endl;
 		exit(1);
 	}
 
@@ -170,16 +170,13 @@ void varCand::blatParse(){
 				line_vec = split(line, "=");
 				line_vec1 = split(line_vec[1].substr(1), ",");
 
-				//line_vec = split(line, ",");
 				len_vec = split(line_vec1[line_vec1.size()-1].substr(1), " ");
 				if(line_vec[0][3]=='1') {
 					// get the query name
-					//best_aln = false;
 					query_loc = getQueryNameLoc(line_vec1[0], query_name_vec);
 					if(query_loc==-1){
 						query_name_vec.push_back(line_vec1[0]);
 						query_loc = query_name_vec.size() - 1;
-						//best_aln = true;
 					}
 
 					blat_aln_item = new blat_aln_t;
@@ -187,7 +184,6 @@ void varCand::blatParse(){
 					blat_aln_item->query_id = query_loc;
 					blat_aln_item->query_len = stoi(len_vec[0]); // query length
 					blat_aln_item->head_hanging = blat_aln_item->tail_hanging = false;
-					//blat_aln_item->best_aln = best_aln;
 					blat_aln_item->best_aln = false;
 					blat_aln_item->valid_aln = false;
 					blat_aln_item->aln_orient = ALN_PLUS_ORIENT;
