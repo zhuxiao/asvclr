@@ -13,6 +13,9 @@ Paras::Paras(int argc, char **argv)
 {
 	init();
 	if(parseParas(argc, argv)!=0) exit(1);
+
+	// check bam file
+	if(checkBamFile()!=0) exit(1);
 }
 
 // initialization
@@ -69,6 +72,55 @@ void Paras::init()
 //
 //	return canu_version_str;
 //}
+
+// check Bam file, and generate the BAM index if it is unavailable
+int Paras::checkBamFile(){
+	samFile *in = 0;
+	string idx_filename;
+	int ret = 1;
+
+	if ((in = sam_open(inBamFile.c_str(), "r")) == 0) {
+		cerr << __func__ << ": failed to open " << inBamFile.c_str() << " for reading" << endl;
+		exit(1);
+	}
+
+	hts_idx_t *idx = sam_index_load(in, inBamFile.c_str()); // load index
+	if (idx == NULL) { // index is unavailable, then generate it
+		if(in) sam_close(in);
+
+		cout << __func__ << ": BAM index is unavailable, now generate it, please wait ...\n" << endl;
+
+		// construct the index file name
+		if(inBamFile.substr(inBamFile.size()-4).compare(".bam")==0)
+			idx_filename = inBamFile.substr(0, inBamFile.size()-4) + ".bai";
+		else
+			idx_filename = inBamFile + ".bai";
+
+		ret = sam_index_build3(inBamFile.c_str(), idx_filename.c_str(), 0, num_threads);
+		switch (ret) {
+			case 0:
+				break;
+			case -2:
+				cerr << __func__ << ", failed to open " << inBamFile << endl;
+				break;
+			case -3:
+				cerr << __func__ << inBamFile << " is in a format that cannot be usefully indexed" << endl;
+				break;
+			case -4:
+				cerr << __func__ << ", failed to create or write index" << endl;
+				break;
+			default:
+				cerr << __func__ << ", failed to create index for " << inBamFile << endl;
+				break;
+		}
+	}else{
+		ret = 0;
+		hts_idx_destroy(idx); // destroy the BAM index
+		if(in) sam_close(in);
+	}
+
+	return ret;
+}
 
 // parse the parameters
 int Paras::parseParas(int argc, char **argv)

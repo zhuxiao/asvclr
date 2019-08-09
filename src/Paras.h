@@ -8,6 +8,10 @@
 #include <getopt.h>
 #include <unistd.h>
 
+#include <htslib/sam.h>
+//#include <htslib/hts.h>
+//#include <htslib/faidx.h>
+
 using namespace std;
 
 // program variables
@@ -84,6 +88,7 @@ class Paras
 	private:
 		void init();
 		//string getCanuVersion();
+		int checkBamFile();
 		int parseParas(int argc, char **argv);
 		int parseDetectParas(int argc, char **argv);
 		int parseAssembleParas(int argc, char **argv);
