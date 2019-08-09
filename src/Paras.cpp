@@ -501,6 +501,9 @@ void Paras::showAllUsage()
 
 // output parameters
 void Paras::outputParas(){
+	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+
 	if(refFile.size()) cout << "Ref file: " << refFile << endl;
 	if(inBamFile.size()) cout << "Align file: " << inBamFile << endl;
 	if(outFilePrefix.size()) cout << "Out prefix: " << outFilePrefix << endl;
