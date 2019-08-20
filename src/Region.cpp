@@ -211,7 +211,7 @@ int Region::computeAbCovReg(){
 		covRatio2block = tmp_cov / meanBlockCov;
 		covRatio2local = tmp_cov / localRegCov;
 		if((covRatio2block<0.6 and covRatio2local<0.6) or (covRatio2block>2 and covRatio2local>2)) {  // abnormal coverage condition
-			reg = allocateReg(startPosSubReg, endPosSubReg);
+			reg = allocateReg(chrname, startPosSubReg, endPosSubReg);
 			abCovRegVector.push_back(reg);
 		}
 	}
@@ -221,7 +221,7 @@ int Region::computeAbCovReg(){
 }
 
 // allocate reg
-reg_t* Region::allocateReg(size_t startPosReg, size_t endPosReg){
+reg_t* Region::allocateReg(string &chrname, size_t startPosReg, size_t endPosReg){
 	reg_t *reg = new reg_t();
 	if(!reg){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot allocate memory" << endl;
@@ -297,7 +297,7 @@ void Region::detectSNV(){
 		SNV_flag = computeSNVFlag(*disagr, startCheckPos, endCheckPos);
 		if(SNV_flag){
 			if(haveMuchShortIndelsAround(startCheckPos, endCheckPos))  // further check around
-				indelVector.push_back(allocateReg(*disagr, *disagr));
+				indelVector.push_back(allocateReg(chrname, *disagr, *disagr));
 			else{
 				snvVector.push_back(*disagr); // add the SNV
 				disagr = disagrePosVector.erase(disagr);
@@ -314,10 +314,55 @@ bool Region::computeSNVFlag(size_t pos, size_t startCheckPos, size_t endCheckPos
 
 	if(isInReg(pos, indelVector)) SNV_flag = false;
 
-	if(SNV_flag) // check the maxBase and idx_ref
-		if(regBaseArr[pos-startRPos].coverage.idx_max==regBaseArr[pos-startRPos].coverage.idx_RefBase
-			or (double)regBaseArr[pos-startRPos].coverage.num_max/regBaseArr[pos-startRPos].coverage.num_bases[5]<MIN_RATIO_SNV)
+	if(SNV_flag){ // check the maxBase and idx_ref
+		if(regBaseArr[pos-startRPos].coverage.idx_max==regBaseArr[pos-startRPos].coverage.idx_RefBase or (double)regBaseArr[pos-startRPos].coverage.num_max/regBaseArr[pos-startRPos].coverage.num_bases[5]<MIN_RATIO_SNV){
 			SNV_flag = false;
+		}else if(regBaseArr[pos-startRPos].coverage.idx_RefBase==5){ // mixed base
+			switch(regBaseArr[pos-startRPos].coverage.refBase){
+				case 'M':
+				case 'm':
+					if(regBaseArr[pos-startRPos].coverage.idx_max==0 or regBaseArr[pos-startRPos].coverage.idx_max==1) SNV_flag = false;
+					break;
+				case 'R':
+				case 'r':
+					if(regBaseArr[pos-startRPos].coverage.idx_max==0 or regBaseArr[pos-startRPos].coverage.idx_max==2) SNV_flag = false;
+					break;
+				case 'S':
+				case 's':
+					if(regBaseArr[pos-startRPos].coverage.idx_max==1 or regBaseArr[pos-startRPos].coverage.idx_max==2) SNV_flag = false;
+					break;
+				case 'V':
+				case 'v':
+					if(regBaseArr[pos-startRPos].coverage.idx_max==0 or regBaseArr[pos-startRPos].coverage.idx_max==1 or regBaseArr[pos-startRPos].coverage.idx_max==2) SNV_flag = false;
+					break;
+				case 'W':
+				case 'w':
+					if(regBaseArr[pos-startRPos].coverage.idx_max==0 or regBaseArr[pos-startRPos].coverage.idx_max==3) SNV_flag = false;
+					break;
+				case 'Y':
+				case 'y':
+					if(regBaseArr[pos-startRPos].coverage.idx_max==1 or regBaseArr[pos-startRPos].coverage.idx_max==3) SNV_flag = false;
+					break;
+				case 'H':
+				case 'h':
+					if(regBaseArr[pos-startRPos].coverage.idx_max==0 or regBaseArr[pos-startRPos].coverage.idx_max==1 or regBaseArr[pos-startRPos].coverage.idx_max==3) SNV_flag = false;
+					break;
+				case 'K':
+				case 'k':
+					if(regBaseArr[pos-startRPos].coverage.idx_max==2 or regBaseArr[pos-startRPos].coverage.idx_max==3) SNV_flag = false;
+					break;
+				case 'D':
+				case 'd':
+					if(regBaseArr[pos-startRPos].coverage.idx_max==0 or regBaseArr[pos-startRPos].coverage.idx_max==2 or regBaseArr[pos-startRPos].coverage.idx_max==3) SNV_flag = false;
+					break;
+				case 'B':
+				case 'b':
+					if(regBaseArr[pos-startRPos].coverage.idx_max==1 or regBaseArr[pos-startRPos].coverage.idx_max==2 or regBaseArr[pos-startRPos].coverage.idx_max==3) SNV_flag = false;
+					break;
+				default: cerr << __func__ << ": unknown base: " << regBaseArr[pos-startRPos].coverage.refBase << endl; exit(1);
+			}
+		}
+	}
 
 	// check the coverage
 	if(SNV_flag){
@@ -474,7 +519,7 @@ reg_t* Region::getIndelReg(size_t startCheckPos){
 				high_indel_clip_ratio = num_vec.at(1);
 				//if(num1>0 or num2>=DISAGREE_NUM_THRES_REG or num3>0) {
 				if(num1>0 or num3>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
-					reg = allocateReg(startPos_indel, endPos_indel);
+					reg = allocateReg(chrname, startPos_indel, endPos_indel);
 					break;
 				}else checkPos = endPos_indel + 1;
 			}else checkPos = endPos_indel + 1;
@@ -800,7 +845,7 @@ reg_t* Region::getClipReg(size_t startCheckPos){
 		int32_t disagreeNum = computeDisagreeNum(regBaseArr+startPos_clip-startRPos, endPos_clip-startPos_clip+1);
 		normal_reg_flag = haveNoClipSig(startPos_clip, endPos_clip, HIGH_CLIP_RATIO_THRES*3);
 
-		if(disagreeNum>=1 or normal_reg_flag==false) reg = allocateReg(startPos_clip, endPos_clip);
+		if(disagreeNum>=1 or normal_reg_flag==false) reg = allocateReg(chrname, startPos_clip, endPos_clip);
 	}
 
 	return reg;

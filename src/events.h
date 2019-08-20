@@ -26,8 +26,11 @@ typedef struct
 {
 	// [0..4]: A, C, G, T, N, sum(A+C+G+T+N)
 	// idx_RefBase points to the element in the num_bases[] array
-	uint16_t num_bases[6], idx_RefBase;
-	uint16_t idx_max, num_max;  // the maximal base index and the corresponding base count
+	uint16_t num_bases[6];
+	int8_t idx_RefBase; // idx_RefBase: 5 for mixed base symbols
+	int8_t idx_max;
+	int16_t num_max;  // the maximal base index and the corresponding base count
+	char refBase; // A, C, G, T, N(A+C+G+T), M(A+C), R(A+G), S(C+G), V(A+C+G), W(A+T), Y(C+T), H(A+C+T), K(G+T), D(A+G+T), B(C+G+T), ACMGRSVTWYHKDBN
 }baseCoverage_t;
 
 typedef struct{

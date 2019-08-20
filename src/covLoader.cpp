@@ -40,12 +40,14 @@ void covLoader::freeBaseArray(Base *baseArray){
 }
 
 int covLoader::assignRefBase(Base *baseArray, faidx_t *fai){
+	size_t pos;
 	// get the region sequence
 	string reg = chrname + ":" + to_string(startPos) + "-" + to_string(endPos);
 
 	RefSeqLoader refseq_loader(reg, fai);
 	refseq_loader.getRefSeq();
 
+	pos = startPos;
 	for(int i=0; i<refseq_loader.refseq_len; i++){
 		switch(refseq_loader.refseq[i]){
 			case 'A':
@@ -58,8 +60,30 @@ int covLoader::assignRefBase(Base *baseArray, faidx_t *fai){
 			case 't': baseArray[i].coverage.idx_RefBase = 3; break;
 			case 'N':
 			case 'n': baseArray[i].coverage.idx_RefBase = 4; break;
-			default: cerr << __func__ << ": unknown base: " << refseq_loader.refseq[i] << endl; exit(1);
+			case 'M':
+			case 'm':
+			case 'R':
+			case 'r':
+			case 'S':
+			case 's':
+			case 'V':
+			case 'v':
+			case 'W':
+			case 'w':
+			case 'Y':
+			case 'y':
+			case 'H':
+			case 'h':
+			case 'K':
+			case 'k':
+			case 'D':
+			case 'd':
+			case 'B':
+			case 'b': baseArray[i].coverage.idx_RefBase = 5; break;
+			default: cerr << __func__ << ": unknown base: " << refseq_loader.refseq[i] << " at location: " << chrname << ":" << pos << endl; exit(1);
 		}
+		baseArray[i].coverage.refBase = refseq_loader.refseq[i];
+		pos ++;
 	}
 	return 0;
 }
@@ -68,13 +92,13 @@ int covLoader::assignRefBase(Base *baseArray, faidx_t *fai){
 void covLoader::generateBaseCoverage(Base *baseArr, vector<bam1_t*> alnDataVector){
 	vector<struct alnSeg*> alnSegs;
 	vector<bam1_t*>::iterator aln;
-//	string qname;
+	//string qname;
 	for(aln=alnDataVector.begin(); aln!=alnDataVector.end(); aln++)
 		if(!((*aln)->core.flag & BAM_FUNMAP)){ // aligned
-//			qname = bam_get_qname(*aln);
-//			if(qname.compare("chr1_493_1000_1:0:0_0:0:0_24a33f")==0){
-//				cout << qname << endl;
-//			}
+			//qname = bam_get_qname(*aln);
+			//if(qname.compare("cc7f944e_142691_4447")==0){
+			//	cout << qname << endl;
+			//}
 			alnSegs = generateAlnSegs(*aln); // generate align segments
 			updateBaseInfo(baseArr, alnSegs); // update base information
 			destroyAlnSegs(alnSegs);
@@ -274,8 +298,10 @@ void covLoader::destroyMDSeg(vector<struct MD_seg*> segs_MD){
 // update the block base array information according to read alignments
 int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> alnSegs){
 	baseCoverage_t *cover;
-	size_t pos, tmp_endPos, misbase, idx, endflag;
+	size_t pos, tmp_endPos, misbase;
+	int32_t idx, endflag;
 	vector<struct alnSeg*>::iterator seg;
+
 	for(seg=alnSegs.begin(); seg!=alnSegs.end(); seg++){
 		switch((*seg)->opflag){
 			case BAM_CMATCH:
@@ -283,7 +309,7 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> alnSegs){
 					for(pos=(*seg)->startRpos; pos<=tmp_endPos; pos++)
 						if(pos>=startPos and pos<=endPos){
 							cover = &(baseArr[pos-startPos].coverage);
-							if(cover->idx_RefBase>=0 and cover->idx_RefBase<=5)
+							if(cover->idx_RefBase>=0 and cover->idx_RefBase<=4)
 								cover->num_bases[cover->idx_RefBase] ++;
 							else{
 								cerr << __func__ << ", line=" << __LINE__ << ": invalid idx_RefBase " << cover->idx_RefBase << endl;

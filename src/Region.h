@@ -103,7 +103,7 @@ class Region {
 		void destroyIndelVector();
 		void destroyClipRegVector();
 		int computeAbCovReg();
-		reg_t* allocateReg(size_t startPosReg, size_t endPosReg);
+		reg_t* allocateReg(string &chrname, size_t startPosReg, size_t endPosReg);
 		double computeMeanCovReg(size_t startPosReg, size_t endPosReg);
 		int computeHighIndelEventRegNum();
 		size_t computeReadIndelEventNumReg(size_t startPosReg, size_t endPosReg);

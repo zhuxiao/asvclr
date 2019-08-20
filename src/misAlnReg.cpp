@@ -37,7 +37,7 @@ void misAlnReg::computeDisagrSubreg(){
 	disagrNum = 0;
 	for(pos=startPos; pos<endPos; pos++){
 		posIdx = pos - startPos;
-		if(misAlnRegBaseArr[posIdx].coverage.idx_RefBase!=4){ // A, C, G, T, but N
+		if(misAlnRegBaseArr[posIdx].coverage.idx_RefBase!=4){ // A, C, G, T, Mixed, but N
 			if(misAlnRegBaseArr[posIdx].isDisagreeBase()){
 				disagrNum ++;
 				regIdx = (pos - startPos) / SUB_MIS_ALN_REG_SIZE + 1;

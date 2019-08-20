@@ -413,7 +413,7 @@ void varCand::blatFilterByQueryCoverage(){
 		}
 	}
 
-	for(i=0; i<ctg_num; i++)
+	for(i=0; i<(size_t)ctg_num; i++)
 		delete[] query_cov_array[i];
 	delete[] query_cov_array;
 
@@ -897,7 +897,7 @@ void varCand::computeLocalLocsAlnShortVar(localAln_t *local_aln){
 //	}
 }
 
-// compute sequence alignment (LCS)
+// compute sequence alignment (LCS), all characters are in upper case
 void varCand::computeSeqAlignment(localAln_t *local_aln){
 	int64_t i, j, matchScore, mismatchScore, gapScore, gapOpenScore, tmp_gapScore1, tmp_gapScore2, maxValue, scoreIJ;
 	int64_t rowsNum = local_aln->ctgseq.size() + 1, colsNum = local_aln->refseq.size() + 1, arrSize;
@@ -906,6 +906,7 @@ void varCand::computeSeqAlignment(localAln_t *local_aln){
 	int64_t maxValueLastRow, maxValueLastCol, maxCol, maxRow;
 	int32_t mismatchNum, itemNum;
 	string queryAlnResult, midAlnResult, subjectAlnResult;
+	bool baseMatchFlag;
 
 	matchScore = MATCH_SCORE;
 	mismatchScore = MISMATCH_SCORE;
@@ -924,10 +925,68 @@ void varCand::computeSeqAlignment(localAln_t *local_aln){
 	// compute the scores of each element
 	for(i=1; i<rowsNum; i++){
 		for(j=1; j<colsNum; j++){
-			if(local_aln->ctgseq[i-1]==local_aln->refseq[j-1])
-				scoreIJ = matchScore;
-			else
-				scoreIJ = mismatchScore;
+			baseMatchFlag = isBaseMatch(local_aln->ctgseq[i-1], local_aln->refseq[j-1]);
+//			if(local_aln->ctgseq[i-1]==local_aln->refseq[j-1])
+//				scoreIJ = matchScore;
+//			else if(local_aln->refseq[j-1]!='A' and local_aln->refseq[j-1]!='C' and local_aln->refseq[j-1]!='G' and local_aln->refseq[j-1]!='T' and local_aln->refseq[j-1]!='N'){
+//				// check mixed bases
+//				switch(local_aln->refseq[j-1]){
+//					case 'M':
+//					case 'm':
+//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C') scoreIJ = matchScore;
+//						else scoreIJ = mismatchScore;
+//						break;
+//					case 'R':
+//					case 'r':
+//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='G') scoreIJ = matchScore;
+//						else scoreIJ = mismatchScore;
+//						break;
+//					case 'S':
+//					case 's':
+//						if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G') scoreIJ = matchScore;
+//						else scoreIJ = mismatchScore;
+//						break;
+//					case 'V':
+//					case 'v':
+//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G') scoreIJ = matchScore;
+//						else scoreIJ = mismatchScore;
+//						break;
+//					case 'W':
+//					case 'w':
+//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
+//						else scoreIJ = mismatchScore;
+//						break;
+//					case 'Y':
+//					case 'y':
+//						if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
+//						else scoreIJ = mismatchScore;
+//						break;
+//					case 'H':
+//					case 'h':
+//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
+//						else scoreIJ = mismatchScore;
+//						break;
+//					case 'K':
+//					case 'k':
+//						if(local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
+//						else scoreIJ = mismatchScore;
+//						break;
+//					case 'D':
+//					case 'd':
+//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
+//						else scoreIJ = mismatchScore;
+//						break;
+//					case 'B':
+//					case 'b':
+//						if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
+//						else scoreIJ = mismatchScore;
+//						break;
+//					default: cerr << __func__ << ": unknown base: " << local_aln->refseq[j-1] << endl; exit(1);
+//				}
+//			}else scoreIJ = mismatchScore;
+
+			if(baseMatchFlag) scoreIJ = matchScore;
+			else scoreIJ = mismatchScore;
 
 			if(pathArr[(i-1)*colsNum+j]!=1)
 				tmp_gapScore1 = gapOpenScore;
@@ -989,11 +1048,72 @@ void varCand::computeSeqAlignment(localAln_t *local_aln){
 	while(i>0 && j>0){
 		if(pathArr[i*colsNum+j]==0){ // from (i-1, j-1)
 			queryAlnResult += local_aln->ctgseq[i-1];
-			if(local_aln->ctgseq[i-1]!=local_aln->refseq[j-1]) {
+			baseMatchFlag = isBaseMatch(local_aln->ctgseq[i-1], local_aln->refseq[j-1]);
+//			if(local_aln->ctgseq[i-1]!=local_aln->refseq[j-1]) {
+//				if(local_aln->refseq[j-1]!='A' and local_aln->refseq[j-1]!='C' and local_aln->refseq[j-1]!='G' and local_aln->refseq[j-1]!='T' and local_aln->refseq[j-1]!='N'){
+//					// check mixed bases
+//					baseMatchFlag = false;
+//					switch(local_aln->refseq[j-1]){
+//						case 'M':
+//						case 'm':
+//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C') match_flag = true;
+//							break;
+//						case 'R':
+//						case 'r':
+//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='G') match_flag = true;
+//							break;
+//						case 'S':
+//						case 's':
+//							if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G') match_flag = true;
+//							break;
+//						case 'V':
+//						case 'v':
+//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G') match_flag = true;
+//							break;
+//						case 'W':
+//						case 'w':
+//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='T') match_flag = true;
+//							break;
+//						case 'Y':
+//						case 'y':
+//							if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='T') match_flag = true;
+//							break;
+//						case 'H':
+//						case 'h':
+//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='T') match_flag = true;
+//							break;
+//						case 'K':
+//						case 'k':
+//							if(local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') match_flag = true;
+//							break;
+//						case 'D':
+//						case 'd':
+//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') match_flag = true;
+//							break;
+//						case 'B':
+//						case 'b':
+//							if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') match_flag = true;
+//							break;
+//						default: cerr << __func__ << ": unknown base: " << local_aln->refseq[j-1] << endl; exit(1);
+//					}
+//					if(match_flag)
+//						midAlnResult += '|';
+//					else
+//						mismatchNum ++;
+//						midAlnResult += ' ';
+//				}else{
+//					mismatchNum ++;
+//					midAlnResult += ' ';
+//				}
+//			}else
+//				midAlnResult += '|';
+
+			if(baseMatchFlag) midAlnResult += '|';
+			else{
 				mismatchNum ++;
 				midAlnResult += ' ';
-			}else
-				midAlnResult += '|';
+			}
+
 			subjectAlnResult += local_aln->refseq[j-1];
 			i --;
 			j --;
@@ -1865,7 +1985,7 @@ vector<int32_t> varCand::computeDisagreeNumAndHighIndelBaseNum(string &chrname, 
 	// compute the number of disagreements
 	disagreeNum = computeDisagreeNum(baseArray, endRefPos-startRefPos+1);
 
-	// further to do: compute the number of high indel bases
+	// compute the number of high indel bases
 	highIndelBaseNum = computeHighIndelBaseNum(baseArray, endRefPos-startRefPos+1, MIN_HIGH_INDEL_BASE_RATIO);
 
 	// compute margins of variations
@@ -1954,6 +2074,7 @@ vector<int32_t> varCand::confirmVarMargins(int32_t left_dist, int32_t right_dist
 	vector<int32_t> distVec;
 	int32_t i, leftDist, rightDist, tmp_len, ref_len, ctg_len, misNum;
 	string refseq, ctgseq, reg_str;
+	bool baseMatchFlag;
 
 	// get the region sequence
 	reg_str = chrname + ":" + to_string(startRefPos) + "-" + to_string(endRefPos);
@@ -1977,7 +2098,9 @@ vector<int32_t> varCand::confirmVarMargins(int32_t left_dist, int32_t right_dist
 	leftDist = 0;
 	misNum = 0;
 	for(i=0; i<tmp_len; i++){
-		if(refseq[i]==ctgseq[i])
+		baseMatchFlag = isBaseMatch(ctgseq[i], refseq[i]);
+		//if(refseq[i]==ctgseq[i])
+		if(baseMatchFlag)
 			leftDist ++;
 		else{
 			misNum ++;
@@ -1988,7 +2111,9 @@ vector<int32_t> varCand::confirmVarMargins(int32_t left_dist, int32_t right_dist
 	rightDist = 0;
 	misNum = 0;
 	for(i=0; i<tmp_len; i++){
-		if(refseq[ref_len-1-i]==ctgseq[ctg_len-1-i])
+		baseMatchFlag = isBaseMatch(ctgseq[ctg_len-1-i], refseq[ref_len-1-i]);
+		//if(refseq[ref_len-1-i]==ctgseq[ctg_len-1-i])
+		if(baseMatchFlag)
 			rightDist ++;
 		else{
 			misNum ++;
@@ -2664,6 +2789,7 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 	localAln_t *local_aln;
 	string refseq_aln, midseq_aln, queryseq_aln;
 	vector<size_t> shift_size_vec;
+	bool baseMatchFlag;
 
 	minCheckRefPos = reg->startRefPos - 200;
 	if(minCheckRefPos<1) minCheckRefPos = 1;
@@ -2684,11 +2810,13 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 	refPos = startCheckRefPos;
 	queryPos = startCheckQueryPos;
 	while(queryPos>=1 and localRefPos>=1){
-		if(queryseq.at(queryPos-1)==refseq.at(localRefPos-1)){
+		baseMatchFlag = isBaseMatch(queryseq.at(queryPos-1), refseq.at(localRefPos-1));
+
+		//if(queryseq.at(queryPos-1)==refseq.at(localRefPos-1)){
+		if(baseMatchFlag){
 			queryPos --; localRefPos --; refPos --;
 		}else{
 			misNum = 0;
-
 
 			if(localRefPos<subseq_len) subseq_len = localRefPos;
 			if(queryPos<subseq_len) subseq_len = queryPos;
@@ -2766,6 +2894,7 @@ vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, al
 	localAln_t *local_aln;
 	string midseq_aln;
 	vector<size_t> shift_size_vec;
+	bool baseMatchFlag;
 
 	maxCheckRefPos = reg->endRefPos + 200;
 
@@ -2785,7 +2914,10 @@ vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, al
 	refPos = startCheckRefPos;
 	queryPos = startCheckQueryPos;
 	while(queryPos<=queryseq.size() and localRefPos<=refseq.size()){
-		if(queryseq.at(queryPos-1)==refseq.at(localRefPos-1)){
+		baseMatchFlag = isBaseMatch(queryseq.at(queryPos-1), refseq.at(localRefPos-1));
+
+		//if(queryseq.at(queryPos-1)==refseq.at(localRefPos-1)){
+		if(baseMatchFlag){
 			queryPos ++; localRefPos ++; refPos ++;
 		}else{
 			misNum = 0;

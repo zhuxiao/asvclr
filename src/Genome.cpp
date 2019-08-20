@@ -120,20 +120,19 @@ void Genome::estimateSVSizeNum(){
 
 // detect variations for genome
 int Genome::genomeDetect(){
+	Time time;
+
 	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IROTH);  // create the directory for detect command
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
-		//if(i==2)
-		{
-			chr = chromeVector.at(i);
+		chr = chromeVector.at(i);
 
-//			if(chr->chrname.compare("chr4")==0)
-//				cout << chr->chrname << ", len=" << chr->chrlen << endl;
-//			else continue;
+//		if(chr->chrname.compare("3")==0)
+//			cout << chr->chrname << ", len=" << chr->chrlen << endl;
+//		else continue;
 
-			cout << "processing: " << chr->chrname << ", size: " << chr->chrlen << " bp" << endl;
-			chr->chrDetect();
-		}
+		cout << "[" << time.getTime() << "]: processing Chr: " << chr->chrname << ", size: " << chr->chrlen << " bp" << endl;
+		chr->chrDetect();
 	}
 
 	// remove redundant translocations
@@ -560,9 +559,6 @@ void Genome::genomeCallTra(){
 
 	total = 0;
 	for(i=0; i<chromeVector.size(); i++){
-//		if(i<1)
-//			continue;
-
 		success_num = 0;
 		chr = chromeVector.at(i);
 		mate_clipReg_vec = chr->mateClipRegVector;
@@ -660,7 +656,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 	return var_cand_new;
 }
 
-// compute variant type
+// compute variant location
 vector<int32_t> Genome::computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, mateClipReg_t *clip_reg){
 	size_t i, j, aln_orient, missing_size_head, missing_size_inner, missing_size_tail;
 	size_t start_query_pos, end_query_pos, start_mate_query_pos, end_mate_query_pos;

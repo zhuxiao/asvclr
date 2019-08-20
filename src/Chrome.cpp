@@ -263,7 +263,7 @@ int Chrome::chrDetect(){
 int Chrome::chrDetect_st(){
 	Block* bloc;
 	for(size_t i=0; i<blockVector.size(); i++){
-		//if(i>=142)
+		//if(i>=60)
 		{
 			bloc = blockVector.at(i);
 			//cout << "detect files:" << bloc->out_dir_detect << "/" << bloc->snvFilenameDetect << ", " << bloc->indelFilenameDetect << endl;
@@ -812,26 +812,20 @@ void Chrome::removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec)
 	bool flag;
 
 	for(i=0; i<blockVector.size(); i++){
-
-		//if(i>=246)
-		{
-			//cout << "<><><><><><><> " << i << endl;
-
-			block = blockVector.at(i);
-			for(j=0; j<block->indelVector.size(); ){
-				reg = block->indelVector.at(j);
-				flag = isIndelInClipReg(reg, mate_clipReg_vec);
-				if(flag){
-					delete reg;
-					block->indelVector.erase(block->indelVector.begin()+j);
-				}else j++;
-			}
-			for(j=0; j<block->snvVector.size(); ){
-				pos = block->snvVector.at(j);
-				flag = isSnvInClipReg(pos, mate_clipReg_vec);
-				if(flag) block->snvVector.erase(block->snvVector.begin()+j);
-				else j++;
-			}
+		block = blockVector.at(i);
+		for(j=0; j<block->indelVector.size(); ){
+			reg = block->indelVector.at(j);
+			flag = isIndelInClipReg(reg, mate_clipReg_vec);
+			if(flag){
+				delete reg;
+				block->indelVector.erase(block->indelVector.begin()+j);
+			}else j++;
+		}
+		for(j=0; j<block->snvVector.size(); ){
+			pos = block->snvVector.at(j);
+			flag = isSnvInClipReg(pos, mate_clipReg_vec);
+			if(flag) block->snvVector.erase(block->snvVector.begin()+j);
+			else j++;
 		}
 	}
 }
@@ -845,9 +839,6 @@ bool Chrome::isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_v
 	size_t start_pos, end_pos;
 
 	for(size_t i=0; i<mate_clipReg_vec.size(); i++){
-//		if(i>=0)
-//			cout << ",,,,,,,,,,,, " << i << endl;
-
 		clip_reg = mate_clipReg_vec.at(i);
 		if(clip_reg->valid_flag and clip_reg->reg_mated_flag){
 			if(clip_reg->sv_type==VAR_DUP or clip_reg->sv_type==VAR_INV){ // DUP or INV
@@ -932,9 +923,6 @@ bool Chrome::isSnvInClipReg(size_t pos, vector<mateClipReg_t*> &mate_clipReg_vec
 	size_t start_pos, end_pos;
 
 	for(size_t i=0; i<mate_clipReg_vec.size(); i++){
-//		if(i>=0)
-//			cout << ".............. " << i << endl;
-
 		clip_reg = mate_clipReg_vec.at(i);
 		if(clip_reg->valid_flag and clip_reg->reg_mated_flag){
 			if(clip_reg->sv_type==VAR_DUP or clip_reg->sv_type==VAR_INV){ // DUP or INV
@@ -1314,9 +1302,11 @@ int32_t Chrome::computeBlocID(size_t begPos){
 
 // local assembly for chrome
 int Chrome::chrLocalAssemble(){
+	Time time;
+
 	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IROTH);  // create the directory for assemble command
 
-	cout << "processing: " << chrname << endl;
+	cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
 
 	// open the assembly information file
 	chrSetVarCandFiles();
@@ -1397,9 +1387,11 @@ void Chrome::outputAssemDataToFile(string &filename){
 
 
 int Chrome::chrCall(){
+	Time time;
+
 	mkdir(out_dir_call.c_str(), S_IRWXU | S_IROTH);  // create the directory for call command
 
-	cout << "processing: " << chrname << endl;
+	cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
 
 	// call variants
 	if(paras->num_threads<=1) chrCall_st();  // single thread

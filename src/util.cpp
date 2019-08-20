@@ -107,6 +107,31 @@ void reverseComplement(string &seq){
 			case 'C': seq[i] = 'G'; break;
 			case 'G': seq[i] = 'C'; break;
 			case 'T': seq[i] = 'A'; break;
+			case 'N': seq[i] = 'N'; break;
+			case 'n': seq[i] = 'n'; break;
+
+			// mixed bases
+			case 'M': seq[i] = 'K'; break;
+			case 'm': seq[i] = 'k'; break;
+			case 'R': seq[i] = 'Y'; break;
+			case 'r': seq[i] = 'y'; break;
+			case 'S': seq[i] = 'S'; break;
+			case 's': seq[i] = 's'; break;
+			case 'V': seq[i] = 'B'; break;
+			case 'v': seq[i] = 'b'; break;
+			case 'W': seq[i] = 'W'; break;
+			case 'w': seq[i] = 'w'; break;
+			case 'Y': seq[i] = 'R'; break;
+			case 'y': seq[i] = 'r'; break;
+			case 'H': seq[i] = 'D'; break;
+			case 'h': seq[i] = 'd'; break;
+			case 'K': seq[i] = 'M'; break;
+			case 'k': seq[i] = 'm'; break;
+			case 'D': seq[i] = 'H'; break;
+			case 'd': seq[i] = 'h'; break;
+			case 'B': seq[i] = 'V'; break;
+			case 'b': seq[i] = 'v'; break;
+			default: cerr << __func__ << ": unknown base: " << seq[i] << endl; exit(1);
 		}
 	}
 }
@@ -819,6 +844,72 @@ int32_t getLineCount(string &filename){
 	infile.close();
 
 	return num;
+}
+
+bool isBaseMatch(char ctgBase, char refBase){
+	bool match_flag = false;
+
+	if(ctgBase==refBase){
+		match_flag = true;
+	}else{
+		switch(refBase){
+			case 'A':
+			case 'a':
+			case 'C':
+			case 'c':
+			case 'G':
+			case 'g':
+			case 'T':
+			case 't':
+			case 'N':
+			case 'n':
+				match_flag = false;
+				break;
+			case 'M':
+			case 'm':
+				if(ctgBase=='A' or ctgBase=='C') match_flag = true;
+				break;
+			case 'R':
+			case 'r':
+				if(ctgBase=='A' or ctgBase=='G') match_flag = true;
+				break;
+			case 'S':
+			case 's':
+				if(ctgBase=='C' or ctgBase=='G') match_flag = true;
+				break;
+			case 'V':
+			case 'v':
+				if(ctgBase=='A' or ctgBase=='C' or ctgBase=='G') match_flag = true;
+				break;
+			case 'W':
+			case 'w':
+				if(ctgBase=='A' or ctgBase=='T') match_flag = true;
+				break;
+			case 'Y':
+			case 'y':
+				if(ctgBase=='C' or ctgBase=='T') match_flag = true;
+				break;
+			case 'H':
+			case 'h':
+				if(ctgBase=='A' or ctgBase=='C' or ctgBase=='T') match_flag = true;
+				break;
+			case 'K':
+			case 'k':
+				if(ctgBase=='G' or ctgBase=='T') match_flag = true;
+				break;
+			case 'D':
+			case 'd':
+				if(ctgBase=='A' or ctgBase=='G' or ctgBase=='T') match_flag = true;
+				break;
+			case 'B':
+			case 'b':
+				if(ctgBase=='C' or ctgBase=='G' or ctgBase=='T') match_flag = true;
+				break;
+			default: cerr << __func__ << ": unknown base: " << refBase << endl; exit(1);
+		}
+	}
+
+	return match_flag;
 }
 
 

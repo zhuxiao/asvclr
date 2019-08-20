@@ -81,8 +81,74 @@ void Base::updateCovInfo(){
 // determine whether the base is a disagreements
 bool Base::isDisagreeBase(){
 	bool flag = false;
-	if(coverage.idx_max!=coverage.idx_RefBase or (double)coverage.num_max/coverage.num_bases[5]<=DISAGREE_THRES)
+	int32_t baseNum_A, baseNum_C, baseNum_G, baseNum_T, total_cov;
+	double total_tmp;
+
+	if((double)coverage.num_max/coverage.num_bases[5]<=DISAGREE_THRES)
 		flag = true;
+	else if(coverage.idx_max!=coverage.idx_RefBase){
+		if(coverage.idx_RefBase==5){
+			baseNum_A = coverage.num_bases[0];
+			baseNum_C = coverage.num_bases[1];
+			baseNum_G = coverage.num_bases[2];
+			baseNum_T = coverage.num_bases[3];
+			total_cov = coverage.num_bases[5];
+			switch(coverage.refBase){
+				case 'M':
+				case 'm':
+					total_tmp = baseNum_A + baseNum_C;
+					if((coverage.idx_max!=0 and coverage.idx_max!=1) or total_tmp/total_cov<=DISAGREE_THRES) flag = true;
+					break;
+				case 'R':
+				case 'r':
+					total_tmp = baseNum_A + baseNum_G;
+					if((coverage.idx_max!=0 and coverage.idx_max!=2) or total_tmp/total_cov<=DISAGREE_THRES) flag = true;
+					break;
+				case 'S':
+				case 's':
+					total_tmp = baseNum_C + baseNum_G;
+					if((coverage.idx_max!=1 and coverage.idx_max!=2) or total_tmp/total_cov<=DISAGREE_THRES) flag = true;
+					break;
+				case 'V':
+				case 'v':
+					total_tmp = baseNum_A + baseNum_C + baseNum_G;
+					if((coverage.idx_max!=0 and coverage.idx_max!=1 and coverage.idx_max!=2) or total_tmp/total_cov<=DISAGREE_THRES) flag = true;
+					break;
+				case 'W':
+				case 'w':
+					total_tmp = baseNum_A + baseNum_T;
+					if((coverage.idx_max!=0 and coverage.idx_max!=3) or total_tmp/total_cov<=DISAGREE_THRES) flag = true;
+					break;
+				case 'Y':
+				case 'y':
+					total_tmp = baseNum_C + baseNum_T;
+					if((coverage.idx_max!=1 and coverage.idx_max!=3) or total_tmp/total_cov<=DISAGREE_THRES) flag = true;
+					break;
+				case 'H':
+				case 'h':
+					total_tmp = baseNum_A + baseNum_C + baseNum_T;
+					if((coverage.idx_max!=0 and coverage.idx_max!=1 and coverage.idx_max!=3) or total_tmp/total_cov<=DISAGREE_THRES) flag = true;
+					break;
+				case 'K':
+				case 'k':
+					total_tmp = baseNum_G + baseNum_T;
+					if((coverage.idx_max!=2 and coverage.idx_max!=3) or total_tmp/total_cov<=DISAGREE_THRES) flag = true;
+					break;
+				case 'D':
+				case 'd':
+					total_tmp = baseNum_A + baseNum_G + baseNum_T;
+					if((coverage.idx_max!=0 and coverage.idx_max!=2 and coverage.idx_max!=3) or total_tmp/total_cov<=DISAGREE_THRES) flag = true;
+					break;
+				case 'B':
+				case 'b':
+					total_tmp = baseNum_C + baseNum_G + baseNum_T;
+					if((coverage.idx_max!=1 and coverage.idx_max!=2 and coverage.idx_max!=3) or total_tmp/total_cov<=DISAGREE_THRES) flag = true;
+					break;
+				default: cerr << __func__ << ": unknown base: " << coverage.refBase << endl; exit(1);
+			}
+		}else
+			flag = true;
+	}
 	return flag;
 }
 

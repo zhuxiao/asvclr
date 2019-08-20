@@ -555,9 +555,6 @@ void Block::computeZeroCovReg(Region &reg){
 	size_t pos1, pos2;
 	int32_t start_vec_idx, end_vec_idx;
 
-//	if(reg.startMidPartPos>3506000)
-//		cout << "klklklklklklklk, " << reg.startMidPartPos << endl;
-
 	posVec = reg.getZeroCovPosVector();
 	i = 0;
 	while(i<posVec.size()){

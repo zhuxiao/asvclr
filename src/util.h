@@ -46,7 +46,7 @@ string preprocessPipeChar(string &cmd_str);
 bool isFileExist(string &filename);
 void removeRedundantItems(vector<reg_t*> &reg_vec);
 int32_t getLineCount(string &filename);
-
+bool isBaseMatch(char ctgBase, char refBase);
 
 class Time{
 	private:
