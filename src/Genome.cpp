@@ -556,6 +556,10 @@ void Genome::genomeCallTra(){
 	varCand *var_cand, *var_cand_tmp;
 	blat_aln_t *item_blat;
 	vector<int32_t> tra_loc_vec;
+	Time time;
+
+
+	cout << "[" << time.getTime() << "]: call TRAs ..." << endl;
 
 	total = 0;
 	for(i=0; i<chromeVector.size(); i++){

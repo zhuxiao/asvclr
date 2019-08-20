@@ -976,13 +976,13 @@ void Time::printOverallElapsedTime(){
 		cost_day = cost_hour / 24;
 
 		if(cost_day>1)
-			cout << "Sub-command elapsed time: " << cost_day << " days = " << cost_hour << " hours = " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
+			cout << "Overall elapsed time: " << cost_day << " days = " << cost_hour << " hours = " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
 		else if(cost_hour>1)
-			cout << "Sub-command elapsed time: " << cost_hour << " hours = " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
+			cout << "Overall elapsed time: " << cost_hour << " hours = " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
 		else if(cost_min>1)
-			cout << "Sub-command elapsed time: " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
+			cout << "Overall elapsed time: " << cost_min << " minutes = " << cost_sec << " seconds" << endl << endl;
 		else
-			cout << "Sub-command elapsed time: " << cost_sec << " seconds" << endl << endl;
+			cout << "Overall elapsed time: " << cost_sec << " seconds" << endl << endl;
 	}else{
 		cerr << "Please set the overall start time before calculating the overall running time" << endl;
 		exit(1);
