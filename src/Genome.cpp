@@ -1,5 +1,14 @@
 #include <sys/stat.h>
+#include <iostream>
+#include <fstream>
+#include <string>
+
 #include "Genome.h"
+#include "Thread.h"
+
+using namespace std;
+
+//class MultiThread;
 
 // Constructor with parameters
 Genome::Genome(Paras *paras){
@@ -126,13 +135,11 @@ int Genome::genomeDetect(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-
-//		if(chr->chrname.compare("3")==0)
-//			cout << chr->chrname << ", len=" << chr->chrlen << endl;
-//		else continue;
-
-		cout << "[" << time.getTime() << "]: processing Chr: " << chr->chrname << ", size: " << chr->chrlen << " bp" << endl;
-		chr->chrDetect();
+		//if(chr->chrname.compare("chr2")==0)
+		{
+			cout << "[" << time.getTime() << "]: processing Chr: " << chr->chrname << ", size: " << chr->chrlen << " bp" << endl;
+			chr->chrDetect();
+		}
 	}
 
 	// remove redundant translocations
@@ -375,27 +382,33 @@ int Genome::genomeCall(){
 	// call variants
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("chr1")==0)  // if(i==2)
+		if(chr->chrname.compare("chr2")==0)  // if(i==2)
 			chr->chrCall();
 	}
 
 	// call TRA according to mate clip regions
 	genomeCallTra();
 
+	cout << "1111111111111" << endl;
 	removeRedundantTra();
 
+	cout << "2222222222222" << endl;
 	mergeCloseRangeTra();
 
 	// find indels back for mate clip regions
+	cout << "3333333333333" << endl;
 	recallIndelsFromTRA();
 
 	// fill variation sequence
+	cout << "4444444444444" << endl;
 	genomeFillVarseq();
 
 	// save SV to file
+	cout << "5555555555555" << endl;
 	genomeSaveCallSV2File();
 
 	// merge call results into single file
+	cout << "6666666666666" << endl;
 	mergeCallResult();
 
 	// compute statistics for call command
@@ -433,8 +446,8 @@ void Genome::recallIndelsFromTRA(){
 		chr = chromeVector.at(i);
 		mate_clipReg_vec = chr->mateClipRegVector;
 		for(j=0; j<mate_clipReg_vec.size(); j++){
-//			if(i>=9 and j>=17)
-//				cout << "line=" << __LINE__ << ", i=" << i << ", j=" << j << ", " << chr->chrname << endl;
+			//if(i>=0 and j>=247)
+			//	cout << "line=" << __LINE__ << ", i=" << i << ", j=" << j << ", " << chr->chrname << endl;
 
 			total ++;
 			clip_reg = chr->mateClipRegVector.at(j);
@@ -496,6 +509,7 @@ void Genome::recallIndelsFromTRA(){
 										reg->blat_aln_id = i;
 										reg->call_success_status = true;
 										reg->short_sv_flag = false;
+										reg->zero_cov_flag = false;
 
 										ref_dist = reg->endLocalRefPos - reg->startLocalRefPos + 1;
 										query_dist = reg->endQueryPos - reg->startQueryPos + 1;
@@ -507,7 +521,8 @@ void Genome::recallIndelsFromTRA(){
 										else reg2 = reg;
 
 										break;
-									}
+									}else
+										segIdx_start = segIdx_end = -1;
 								}
 							}
 						}
@@ -549,6 +564,97 @@ void Genome::recallIndelsFromTRA(){
 
 // call TRA according to mate clip regions
 void Genome::genomeCallTra(){
+	Time time;
+	vector<blatAlnTra*> blat_aln_tra_vec;
+
+	cout << "[" << time.getTime() << "]: call genomic translocations ..." << endl;
+
+	mkdir(out_dir_tra.c_str(), S_IRWXU | S_IROTH);  // create the directory for TRA
+
+	generateAlatAlnFilenameTra();
+	blat_aln_tra_vec = loadBlatAlnDataTra();
+
+	if(paras->num_threads<=1){
+		cout << "Blat alignment using single thread ..." << endl;
+		blatAlnTra_st(&blat_aln_tra_vec);
+		cout << "Blat alignment using single thread finished." << endl;
+	}else{
+		// blat aln using multiple threads
+		cout << "Blat alignment using " << paras->num_threads << " threads ..." << endl;
+		blatAlnTra_mt(&blat_aln_tra_vec);
+		cout << "Blat alignment using multiple threads finished." << endl;
+	}
+	releaseBlatAlnDataTra(blat_aln_tra_vec);
+
+	// call translocations
+	cout << "calling TRAs ..." << endl;
+	genomeCallTraOp();
+}
+
+// call TRA according to mate clip regions
+void Genome::generateAlatAlnFilenameTra(){
+	size_t i, j, k, t, round_num;
+	Chrome *chr;
+	vector<mateClipReg_t*> mate_clipReg_vec;
+	mateClipReg_t *clip_reg;
+	varCand *var_cand, *var_cand_tmp;
+	blat_aln_t *item_blat;
+	vector<int32_t> tra_loc_vec;
+	ofstream aln_file_tra;
+	string aln_filename_tra;
+
+	aln_filename_tra = out_dir_tra + "/" + "aln_filename_tra";
+	aln_file_tra.open(aln_filename_tra);
+	if(!aln_file_tra.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << aln_filename_tra << endl;
+		exit(1);
+	}
+
+	for(i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		mate_clipReg_vec = chr->mateClipRegVector;
+		for(j=0; j<mate_clipReg_vec.size(); j++){
+			clip_reg = chr->mateClipRegVector.at(j);
+			clip_reg->call_success_flag = false;
+			if(clip_reg->valid_flag and clip_reg->sv_type==VAR_TRA){ // valid TRA
+				for(round_num=0; round_num<2; round_num++){
+					// construct var_cand
+					if(round_num==0){
+						var_cand = clip_reg->left_var_cand_tra;
+						var_cand_tmp = constructNewVarCand(clip_reg->left_var_cand_tra, clip_reg->right_var_cand_tra);
+					}else if(round_num==1){
+						var_cand = clip_reg->right_var_cand_tra;
+						var_cand_tmp = constructNewVarCand(clip_reg->right_var_cand_tra, clip_reg->left_var_cand_tra);
+					}
+
+					if(var_cand and var_cand_tmp){
+						// save to file
+						aln_file_tra << var_cand->alnfilename << "\t" << var_cand->ctgfilename << "\t" << var_cand->refseqfilename << endl;
+						aln_file_tra << var_cand_tmp->alnfilename << "\t" << var_cand_tmp->ctgfilename << "\t" << var_cand_tmp->refseqfilename << endl;
+
+						// release memory
+						for(k=0; k<var_cand_tmp->blat_aln_vec.size(); k++){ // free blat_aln_vec
+							item_blat = var_cand_tmp->blat_aln_vec.at(k);
+							for(t=0; t<item_blat->aln_segs.size(); t++) // free aln_segs
+								delete item_blat->aln_segs.at(t);
+							delete item_blat;
+						}
+						delete var_cand_tmp;
+					}else{
+						//cout << "hhhhhhhhhhhh" << endl;
+					}
+				}
+			}
+		}
+	}
+
+	cout << "File generated." << endl;
+
+	aln_file_tra.close();
+}
+
+// call TRA according to mate clip regions
+void Genome::genomeCallTraOp(){
 	size_t i, j, k, t, round_num, success_num, total;
 	Chrome *chr;
 	vector<mateClipReg_t*> mate_clipReg_vec;
@@ -556,10 +662,6 @@ void Genome::genomeCallTra(){
 	varCand *var_cand, *var_cand_tmp;
 	blat_aln_t *item_blat;
 	vector<int32_t> tra_loc_vec;
-	Time time;
-
-
-	cout << "[" << time.getTime() << "]: call TRAs ..." << endl;
 
 	total = 0;
 	for(i=0; i<chromeVector.size(); i++){
@@ -613,7 +715,6 @@ void Genome::genomeCallTra(){
 			}
 			if(clip_reg->call_success_flag){
 				//cout << "chr " << i << ", j=" << j << ", TRA success" << endl;
-
 				success_num ++;
 				total ++;
 			}
@@ -621,6 +722,72 @@ void Genome::genomeCallTra(){
 		//cout << "chr " << i << ": success_num=" << success_num << endl;
 	}
 	//cout << "Genome: total=" << total << endl;
+}
+
+vector<blatAlnTra*> Genome::loadBlatAlnDataTra(){
+	ifstream aln_file_tra;
+	string aln_filename_tra, line;
+	vector<blatAlnTra*> blat_aln_tra_vec;
+	blatAlnTra *blat_aln_tra;
+	vector<string> str_vec;
+
+
+	aln_filename_tra = out_dir_tra + "/" + "aln_filename_tra";
+	aln_file_tra.open(aln_filename_tra);
+	if(!aln_file_tra.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << aln_filename_tra << endl;
+		exit(1);
+	}
+
+	while(getline(aln_file_tra, line))
+	{
+		if(line.size()){
+			str_vec = split(line, "\t");
+			blat_aln_tra = new blatAlnTra(str_vec.at(0), str_vec.at(1), str_vec.at(2));
+			blat_aln_tra_vec.push_back(blat_aln_tra);
+		}
+	}
+	blat_aln_tra_vec.shrink_to_fit();
+	aln_file_tra.close();
+
+	return blat_aln_tra_vec;
+}
+
+void Genome::releaseBlatAlnDataTra(vector<blatAlnTra*> &blat_aln_tra_vec){
+	blatAlnTra *blat_aln_tra;
+	for(size_t i=0; i<blat_aln_tra_vec.size(); i++){
+		blat_aln_tra = blat_aln_tra_vec.at(i);
+		delete blat_aln_tra;
+	}
+	vector<blatAlnTra*>().swap(blat_aln_tra_vec);
+}
+
+void Genome::blatAlnTra_st(vector<blatAlnTra*> *blat_aln_tra_vec){
+	blatAlnTra *blat_aln_tra;
+	for (size_t i=0; i < blat_aln_tra_vec->size(); i++){
+		blat_aln_tra = blat_aln_tra_vec->at(i);
+		//cout << i << ": " << blat_aln_tra->alnfilename << endl;
+		blat_aln_tra->generateBlatResult();
+	}
+}
+
+void Genome::blatAlnTra_mt(vector<blatAlnTra*> *blat_aln_tra_vec){
+	MultiThread mt[paras->num_threads];
+	for(size_t i=0; i<paras->num_threads; i++){
+		mt[i].setNumThreads(paras->num_threads);
+		mt[i].setBlatAlnTraVec(blat_aln_tra_vec);
+		mt[i].setUserThreadID(i);
+		if(!mt[i].startBlatAlnTra()){
+			cerr << __func__ << ", line=" << __LINE__ << ": unable to create thread, error!" << endl;
+			exit(1);
+		}
+	}
+	for(size_t i=0; i<paras->num_threads; i++){
+		if(!mt[i].join()){
+			cerr << __func__ << ", line=" << __LINE__ << ": unable to join, error!" << endl;
+			exit(1);
+		}
+	}
 }
 
 varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
@@ -663,7 +830,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 // compute variant location
 vector<int32_t> Genome::computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, mateClipReg_t *clip_reg){
 	size_t i, j, aln_orient, missing_size_head, missing_size_inner, missing_size_tail;
-	size_t start_query_pos, end_query_pos, start_mate_query_pos, end_mate_query_pos;
+	int32_t start_query_pos, end_query_pos, start_mate_query_pos, end_mate_query_pos;
 	int32_t maxValue, maxIdx, secValue, query_dist, query_part_flag_maxValue, query_part_flag_secValue;  // query_part_flag: 0-head, 1-inner, 2-tail
 	int32_t tra_blat_aln_idx, start_tra_aln_seg_idx, end_tra_aln_seg_idx, value_tmp, query_part_flag;
 	blat_aln_t *blat_aln, *blat_aln_mate;
@@ -1033,8 +1200,8 @@ bool Genome::computeTraCallSuccessFlag(vector<int32_t> &tra_loc_vec, vector<int3
 				reg1_clipReg = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
 				reg2_clipReg = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
 				if(tra_loc1!=-1 and tra_loc2!=-1 and reg1_clipReg and reg2_clipReg){
-					if((tra_loc1>=(int32_t)reg1_clipReg->startRefPos and tra_loc1<=(int32_t)reg1_clipReg->endRefPos and tra_loc2>=(int32_t)reg2_clipReg->startRefPos and tra_loc2<=(int32_t)reg2_clipReg->endRefPos)
-						or (tra_loc1>=(int32_t)reg2_clipReg->startRefPos and tra_loc1<=(int32_t)reg2_clipReg->endRefPos and tra_loc2>=(int32_t)reg1_clipReg->startRefPos and tra_loc2<=(int32_t)reg1_clipReg->endRefPos)){
+					if((tra_loc1>=reg1_clipReg->startRefPos and tra_loc1<=reg1_clipReg->endRefPos and tra_loc2>=reg2_clipReg->startRefPos and tra_loc2<=reg2_clipReg->endRefPos)
+						or (tra_loc1>=reg2_clipReg->startRefPos and tra_loc1<=reg2_clipReg->endRefPos and tra_loc2>=reg1_clipReg->startRefPos and tra_loc2<=reg1_clipReg->endRefPos)){
 						flag = true;
 					}
 				}
@@ -1360,7 +1527,6 @@ void Genome::genomeFillVarseqTra(){
 	ofstream assembly_info_file;
 	string assembly_info_filename_tra;
 
-	mkdir(out_dir_tra.c_str(), S_IRWXU | S_IROTH);  // create the directory for TRA
 	assembly_info_filename_tra = out_dir_tra + "/" + "tra_assembly_info";
 	assembly_info_file.open(assembly_info_filename_tra);
 	if(!assembly_info_file.is_open()){
@@ -1414,6 +1580,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				reg->var_type = clip_reg->sv_type;
 				reg->call_success_status = false;
 				reg->short_sv_flag = false;
+				reg->zero_cov_flag = false;
 
 				var_cand_tmp->varVec.push_back(reg);
 
@@ -1494,6 +1661,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				reg->var_type = clip_reg->sv_type;
 				reg->call_success_status = false;
 				reg->short_sv_flag = false;
+				reg->zero_cov_flag = false;
 
 				var_cand_tmp->varVec.push_back(reg);
 
@@ -1611,7 +1779,7 @@ vector<size_t> Genome::computeQueryLocTra(varCand *var_cand, mateClipReg_t *clip
 	int32_t maxValue, maxIdx, query_dist, query_part_flag_maxValue;  // query_part_flag: 0-head, 1-inner, 2-tail
 	blat_aln_t *blat_aln;
 	aln_seg_t *aln_seg1, *aln_seg2;
-	size_t start_query_pos, end_query_pos, start_ref_pos, end_ref_pos, start_local_ref_pos, end_local_ref_pos, start_ref_pos_tra, end_ref_pos_tra;
+	int32_t start_query_pos, end_query_pos, start_ref_pos, end_ref_pos, start_local_ref_pos, end_local_ref_pos, start_ref_pos_tra, end_ref_pos_tra;
 	int32_t k, segIdx_start, segIdx_end;
 	bool valid_tra_flag = false;
 

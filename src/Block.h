@@ -26,7 +26,7 @@ class Block{
 	public:
 		Paras *paras;
 		string chrname;
-		size_t chrlen, startPos, endPos, winSize;      // 1-based position
+		int64_t chrlen, startPos, endPos, winSize;      // 1-based position
 		string workdir, outCovFile;
 
 		Base *baseArr;

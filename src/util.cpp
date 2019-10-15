@@ -172,7 +172,7 @@ size_t getCtgCount(string &contigfilename){
 }
 
 // find the vector item
-reg_t* findVarvecItem(size_t startRefPos, size_t endRefPos, vector<reg_t*> &varVec){
+reg_t* findVarvecItem(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &varVec){
 	reg_t *reg, *target_reg = NULL;
 	for(size_t i=0; i<varVec.size(); i++){
 		reg = varVec[i];
@@ -187,7 +187,7 @@ reg_t* findVarvecItem(size_t startRefPos, size_t endRefPos, vector<reg_t*> &varV
 }
 
 // find the vector item
-vector<reg_t*> findVarvecItemAll(size_t startRefPos, size_t endRefPos, vector<reg_t*> &varVec){
+vector<reg_t*> findVarvecItemAll(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &varVec){
 	reg_t *reg;
 	vector<reg_t*> reg_vec_ret;
 	for(size_t i=0; i<varVec.size(); i++){
@@ -202,7 +202,7 @@ vector<reg_t*> findVarvecItemAll(size_t startRefPos, size_t endRefPos, vector<re
 }
 
 // find the vector item according to extended margin size
-reg_t* findVarvecItemExtSize(size_t startRefPos, size_t endRefPos, vector<reg_t*> &varVec, int32_t leftExtSize, int32_t rightExtSize){
+reg_t* findVarvecItemExtSize(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &varVec, int32_t leftExtSize, int32_t rightExtSize){
 	reg_t *reg, *target_reg = NULL;
 	for(size_t i=0; i<varVec.size(); i++){
 		reg = varVec[i];
@@ -647,7 +647,7 @@ bam_hdr_t* loadSamHeader(string &inBamFile)
 }
 
 // determine whether a position in an region or not.
-bool isInReg(size_t pos, vector<reg_t*> &vec){
+bool isInReg(int32_t pos, vector<reg_t*> &vec){
 	bool flag = false;
 	reg_t* reg;
 	for(size_t i=0; i<vec.size(); i++){
@@ -676,7 +676,7 @@ void mergeOverlappedReg(vector<reg_t*> &regVector){
 		if(reg1->call_success_status){
 			for(j=i+1; j<regVector.size(); ){
 				reg2 = regVector.at(j);
-				if(reg2->call_success_status and isOverlappedReg(reg1, reg2)){
+				if(reg2->call_success_status and isOverlappedReg(reg1, reg2) and reg1->query_id!=-1 and reg1->query_id==reg2->query_id){ // same reference region and query
 					updateReg(reg1, reg2);
 					delete reg2;
 					regVector.erase(regVector.begin()+j);
@@ -849,8 +849,14 @@ int32_t getLineCount(string &filename){
 bool isBaseMatch(char ctgBase, char refBase){
 	bool match_flag = false;
 
+	// Upper case
+	if(ctgBase>='a' and ctgBase<='z') ctgBase -= 32;
+	if(refBase>='a' and refBase<='z') refBase -= 32;
+
 	if(ctgBase==refBase){
 		match_flag = true;
+	}else if(ctgBase=='-' or refBase=='-'){
+		match_flag = false;
 	}else{
 		switch(refBase){
 			case 'A':
@@ -911,6 +917,35 @@ bool isBaseMatch(char ctgBase, char refBase){
 
 	return match_flag;
 }
+
+bool isRegValid(reg_t *reg){
+	bool flag = false;
+	if(reg->startRefPos<=reg->endRefPos and reg->startLocalRefPos<=reg->endLocalRefPos and reg->startQueryPos<=reg->endQueryPos)
+		flag = true;
+	if(flag==false){
+		cout << "========= Invalid region: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", local_Loc: " << reg->startLocalRefPos << "-" << reg->endLocalRefPos << ", query_Loc: " << reg->startQueryPos << "-" << reg->endQueryPos << endl;
+	}
+
+	return flag;
+}
+
+// BLAT alignment, and the output is in sim4 format
+void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename){
+	string blat_cmd, out_opt;
+	int ret;
+
+	out_opt = "-out=sim4 " + alnfilename;
+	blat_cmd = "blat " + refseqfilename + " " + contigfilename + " " + out_opt + " > /dev/null 2>&1";
+
+	//cout << "blat_cmd: " + blat_cmd << endl;
+
+	ret = system(blat_cmd.c_str());
+	if(ret!=0){
+		cout << "Please run the correct blat command or check whether blat was correctly installed." << endl;
+		exit(1);
+	}
+}
+
 
 
 Time::Time() {

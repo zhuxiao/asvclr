@@ -57,21 +57,21 @@ void varCand::alnCtg2Refseq(){
 }
 
 // BLAT alignment, and the output is in sim4 format
-void varCand::blatAln(string &alnfilename, string &contigfilename, string &refseqfilename){
-	string blat_cmd, out_opt;
-	int ret;
-
-	out_opt = "-out=sim4 " + alnfilename;
-	blat_cmd = "blat " + refseqfilename + " " + contigfilename + " " + out_opt + " > /dev/null 2>&1";
-
-	//cout << "blat_cmd: " + blat_cmd << endl;
-
-	ret = system(blat_cmd.c_str());
-	if(ret!=0){
-		cout << "Please run the correct blat command or check whether blat was correctly installed." << endl;
-		exit(1);
-	}
-}
+//void varCand::blatAln(string &alnfilename, string &contigfilename, string &refseqfilename){
+//	string blat_cmd, out_opt;
+//	int ret;
+//
+//	out_opt = "-out=sim4 " + alnfilename;
+//	blat_cmd = "blat " + refseqfilename + " " + contigfilename + " " + out_opt + " > /dev/null 2>&1";
+//
+//	//cout << "blat_cmd: " + blat_cmd << endl;
+//
+//	ret = system(blat_cmd.c_str());
+//	if(ret!=0){
+//		cout << "Please run the correct blat command or check whether blat was correctly installed." << endl;
+//		exit(1);
+//	}
+//}
 
 // call variants according to BLAT alignment
 void varCand::callVariants(){
@@ -210,7 +210,11 @@ void varCand::blatParse(){
 				aln_seg->subject_start = stoi(str_vec[0].substr(1));  // subject start
 				aln_seg->subject_end = stoi(str_vec[1].substr(0, str_vec[1].size()-1));  // subject end
 
-				aln_seg->ident_percent = stof(ident_percent_str) / 100.0;  // identity percent
+				try{
+					aln_seg->ident_percent = stof(ident_percent_str) / 100.0;  // identity percent
+				}catch(const std::invalid_argument& ia){
+					std::cerr << "Invalid argument: " << ia.what() << '\n';
+				}
 
 				if(orient_str.compare("->")==0) aln_seg->aln_orient = ALN_PLUS_ORIENT;  // orientation
 				else aln_seg->aln_orient = ALN_MINUS_ORIENT;
@@ -398,7 +402,7 @@ void varCand::blatFilterByQueryCoverage(){
 					start_query_pos = blat_aln->query_len - aln_seg->query_end + 1;
 					end_query_pos = blat_aln->query_len - aln_seg->query_start + 1;
 				}
-				memset(query_cov_array[blat_aln->query_id]+start_query_pos-1, 1, sizeof(int8_t)*((int32_t)end_query_pos-start_query_pos+1));
+				memset(query_cov_array[blat_aln->query_id]+start_query_pos-1, 1, sizeof(int8_t)*(end_query_pos-start_query_pos+1));
 			}
 		}
 	}
@@ -443,7 +447,7 @@ void varCand::blatFilterByQueryCoverage(){
 //						start_query_pos = blat_aln->query_len - aln_seg->query_end + 1;
 //						end_query_pos = blat_aln->query_len - aln_seg->query_start + 1;
 //					}
-//					memset(query_cov_array[best_aln_num]+start_query_pos-1, 1, sizeof(int8_t)*((int32_t)end_query_pos-start_query_pos+1));
+//					memset(query_cov_array[best_aln_num]+start_query_pos-1, 1, sizeof(int8_t)*(end_query_pos-start_query_pos+1));
 //				}
 //				best_aln_num ++;
 //				if(best_aln_num>validNum){
@@ -508,7 +512,7 @@ void varCand::blatFilterByGenomeCoverage(){
 		// compute the genome coverage based on the largest blat alignment block
 		for(i=0; i<blat_aln->aln_segs.size(); i++){
 			aln_seg = blat_aln->aln_segs.at(i);
-			memset(subject_cov_array+aln_seg->subject_start-1, 1, sizeof(int8_t)*((int32_t)aln_seg->subject_end-aln_seg->subject_start+1));
+			memset(subject_cov_array+aln_seg->subject_start-1, 1, sizeof(int8_t)*(aln_seg->subject_end-aln_seg->subject_start+1));
 		}
 
 		// compute the coverage of other blat alignment blocks
@@ -591,8 +595,8 @@ void varCand::determineIndelType(){
 				seg1 = blat_aln->aln_segs[j];
 				seg2 = blat_aln->aln_segs[j+1];
 				if(seg1->query_end>CTG_END_SKIP_SIZE and seg2->query_start>CTG_END_SKIP_SIZE){  // skip contig ends
-					query_dist = (int32_t)seg2->query_start - (int32_t)seg1->query_end;
-					ref_dist = (int32_t)seg2->ref_start - (int32_t)seg1->ref_end;
+					query_dist = seg2->query_start - seg1->query_end;
+					ref_dist = seg2->ref_start - seg1->ref_end;
 					if(ref_dist<0 and query_dist>=0)
 						var_type = VAR_DUP;
 					else {
@@ -664,6 +668,7 @@ void varCand::determineIndelType(){
 								reg_tmp->blat_aln_id = i;
 								reg_tmp->call_success_status = true;
 								reg_tmp->short_sv_flag = false;
+								reg_tmp->zero_cov_flag = false;
 								reg_tmp->aln_orient = blat_aln->aln_orient;
 
 								candRegVec.push_back(reg_tmp);
@@ -686,6 +691,7 @@ void varCand::determineIndelType(){
 							reg->blat_aln_id = i;
 							reg->call_success_status = true;
 							reg->short_sv_flag = false;
+							reg->zero_cov_flag = false;
 							reg->aln_orient = blat_aln->aln_orient;
 							newVarVec.push_back(reg);
 							newFlag = true;
@@ -745,18 +751,11 @@ void varCand::callShortVariants(){
 
 						//cout << local_aln->refseq << endl;
 
-						//if(reg->aln_orient==ALN_MINUS_ORIENT) reverseComplement(local_aln->refseq);
-
 						FastaSeqLoader ctgseqloader(ctgfilename);
 						local_aln->ctgseq = ctgseqloader.getFastaSeqByPos(reg->query_id, local_aln->startQueryPos, local_aln->endQueryPos, reg->aln_orient);
 						//local_aln->ctgseq = ctgseqloader.getFastaSeqByPos(reg->query_id, local_aln->startQueryPos, local_aln->endQueryPos, ALN_PLUS_ORIENT);
 
 						//cout << local_aln->ctgseq << endl;
-
-						//if(reg->aln_orient==ALN_MINUS_ORIENT) reverseComplement(local_aln->ctgseq);
-
-						//cout << local_aln->ctgseq << endl;
-						//cout << local_aln->refseq << endl;
 
 						// pairwise alignment
 						upperSeq(local_aln->ctgseq);
@@ -768,6 +767,8 @@ void varCand::callShortVariants(){
 
 						// adjust the variant locations according to alignment
 						adjustVarLoc(local_aln);
+
+						//confirmVarLoc(local_aln);
 
 						// confirm short variation
 						confirmShortVar(local_aln);
@@ -917,74 +918,12 @@ void varCand::computeSeqAlignment(localAln_t *local_aln){
 	scoreArr = (int32_t*) calloc (arrSize, sizeof(int32_t));
 	pathArr = (int8_t*) calloc (arrSize, sizeof(int8_t));
 
-	//for(i=0; i<rowsNum; i++) scoreArr[i*colsNum] = 0;
-	//for(j=1; j<colsNum; j++) scoreArr[j] = 0;
-
 	for(i=0; i<rowsNum; i++) for(j=0; j<colsNum; j++) pathArr[i*colsNum+j] = -1;
 
 	// compute the scores of each element
 	for(i=1; i<rowsNum; i++){
 		for(j=1; j<colsNum; j++){
 			baseMatchFlag = isBaseMatch(local_aln->ctgseq[i-1], local_aln->refseq[j-1]);
-//			if(local_aln->ctgseq[i-1]==local_aln->refseq[j-1])
-//				scoreIJ = matchScore;
-//			else if(local_aln->refseq[j-1]!='A' and local_aln->refseq[j-1]!='C' and local_aln->refseq[j-1]!='G' and local_aln->refseq[j-1]!='T' and local_aln->refseq[j-1]!='N'){
-//				// check mixed bases
-//				switch(local_aln->refseq[j-1]){
-//					case 'M':
-//					case 'm':
-//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C') scoreIJ = matchScore;
-//						else scoreIJ = mismatchScore;
-//						break;
-//					case 'R':
-//					case 'r':
-//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='G') scoreIJ = matchScore;
-//						else scoreIJ = mismatchScore;
-//						break;
-//					case 'S':
-//					case 's':
-//						if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G') scoreIJ = matchScore;
-//						else scoreIJ = mismatchScore;
-//						break;
-//					case 'V':
-//					case 'v':
-//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G') scoreIJ = matchScore;
-//						else scoreIJ = mismatchScore;
-//						break;
-//					case 'W':
-//					case 'w':
-//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
-//						else scoreIJ = mismatchScore;
-//						break;
-//					case 'Y':
-//					case 'y':
-//						if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
-//						else scoreIJ = mismatchScore;
-//						break;
-//					case 'H':
-//					case 'h':
-//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
-//						else scoreIJ = mismatchScore;
-//						break;
-//					case 'K':
-//					case 'k':
-//						if(local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
-//						else scoreIJ = mismatchScore;
-//						break;
-//					case 'D':
-//					case 'd':
-//						if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
-//						else scoreIJ = mismatchScore;
-//						break;
-//					case 'B':
-//					case 'b':
-//						if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') scoreIJ = matchScore;
-//						else scoreIJ = mismatchScore;
-//						break;
-//					default: cerr << __func__ << ": unknown base: " << local_aln->refseq[j-1] << endl; exit(1);
-//				}
-//			}else scoreIJ = mismatchScore;
-
 			if(baseMatchFlag) scoreIJ = matchScore;
 			else scoreIJ = mismatchScore;
 
@@ -1049,65 +988,6 @@ void varCand::computeSeqAlignment(localAln_t *local_aln){
 		if(pathArr[i*colsNum+j]==0){ // from (i-1, j-1)
 			queryAlnResult += local_aln->ctgseq[i-1];
 			baseMatchFlag = isBaseMatch(local_aln->ctgseq[i-1], local_aln->refseq[j-1]);
-//			if(local_aln->ctgseq[i-1]!=local_aln->refseq[j-1]) {
-//				if(local_aln->refseq[j-1]!='A' and local_aln->refseq[j-1]!='C' and local_aln->refseq[j-1]!='G' and local_aln->refseq[j-1]!='T' and local_aln->refseq[j-1]!='N'){
-//					// check mixed bases
-//					baseMatchFlag = false;
-//					switch(local_aln->refseq[j-1]){
-//						case 'M':
-//						case 'm':
-//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C') match_flag = true;
-//							break;
-//						case 'R':
-//						case 'r':
-//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='G') match_flag = true;
-//							break;
-//						case 'S':
-//						case 's':
-//							if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G') match_flag = true;
-//							break;
-//						case 'V':
-//						case 'v':
-//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G') match_flag = true;
-//							break;
-//						case 'W':
-//						case 'w':
-//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='T') match_flag = true;
-//							break;
-//						case 'Y':
-//						case 'y':
-//							if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='T') match_flag = true;
-//							break;
-//						case 'H':
-//						case 'h':
-//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='T') match_flag = true;
-//							break;
-//						case 'K':
-//						case 'k':
-//							if(local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') match_flag = true;
-//							break;
-//						case 'D':
-//						case 'd':
-//							if(local_aln->ctgseq[i-1]=='A' or local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') match_flag = true;
-//							break;
-//						case 'B':
-//						case 'b':
-//							if(local_aln->ctgseq[i-1]=='C' or local_aln->ctgseq[i-1]=='G' or local_aln->ctgseq[i-1]=='T') match_flag = true;
-//							break;
-//						default: cerr << __func__ << ": unknown base: " << local_aln->refseq[j-1] << endl; exit(1);
-//					}
-//					if(match_flag)
-//						midAlnResult += '|';
-//					else
-//						mismatchNum ++;
-//						midAlnResult += ' ';
-//				}else{
-//					mismatchNum ++;
-//					midAlnResult += ' ';
-//				}
-//			}else
-//				midAlnResult += '|';
-
 			if(baseMatchFlag) midAlnResult += '|';
 			else{
 				mismatchNum ++;
@@ -1143,27 +1023,159 @@ void varCand::computeSeqAlignment(localAln_t *local_aln){
 	reverseSeq(midAlnResult);
 	reverseSeq(subjectAlnResult);
 
-#if ALIGN_DEBUG
-	cout << queryAlnResult << endl;
-	cout << midAlnResult << endl;
-	cout << subjectAlnResult << endl;
-#endif
-
 	local_aln->alignResultVec.push_back(queryAlnResult);
 	local_aln->alignResultVec.push_back(midAlnResult);
 	local_aln->alignResultVec.push_back(subjectAlnResult);
 
+#if ALIGN_DEBUG
+	cout << local_aln->alignResultVec[0] << endl;
+	cout << local_aln->alignResultVec[1] << endl;
+	cout << local_aln->alignResultVec[2] << endl;
+#endif
+
+	// adjust alignment
+	adjustAlnResult(local_aln);
+
+#if ALIGN_DEBUG
+	cout << local_aln->alignResultVec[0] << endl;
+	cout << local_aln->alignResultVec[1] << endl;
+	cout << local_aln->alignResultVec[2] << endl;
+#endif
+
 	free(scoreArr);
 	free(pathArr);
+}
+
+// adjust alignment
+void varCand::adjustAlnResult(localAln_t *local_aln){
+	int32_t i, j, gap_size;
+	string queryseq, refseq;
+	bool baseMatchFlag, baseMatchFlag2;
+	char ch_tmp;
+
+	string &query_aln_seq = local_aln->alignResultVec.at(0);
+	string &mid_aln_seq = local_aln->alignResultVec.at(1);
+	string &subject_aln_seq = local_aln->alignResultVec.at(2);
+
+	// right side
+	gap_size = 0;
+	for(i=(int32_t)mid_aln_seq.size()-1; i>=0; i--){
+		if(mid_aln_seq.at(i)!='|'){ // gap or mismatch
+			if(gap_size==0)
+				gap_size = 1;
+
+			if(subject_aln_seq.at(i)=='-'){ // gap in subject
+				for(j=i-gap_size; j>=0; j--){
+					if(subject_aln_seq.at(j)!='-'){
+						baseMatchFlag = isBaseMatch(query_aln_seq.at(i), subject_aln_seq.at(j));
+						if(baseMatchFlag){ // exchange subject_aln_seq[i] and subject_aln_seq[j]
+							ch_tmp = subject_aln_seq.at(i);
+							subject_aln_seq.at(i) = subject_aln_seq.at(j);
+							subject_aln_seq.at(j) = ch_tmp;
+
+							mid_aln_seq.at(i) = '|';
+							baseMatchFlag2 = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(j));
+							if(baseMatchFlag2) mid_aln_seq.at(j) = '|';
+							else mid_aln_seq.at(j) = ' ';
+						}else{ // gap end
+							i -= gap_size -1;
+							gap_size = 0;
+						}
+						break;
+					}else
+						gap_size ++;
+				}
+			}else if(query_aln_seq.at(i)=='-'){  // gap in query
+				for(j=i-gap_size; j>=0; j--){
+					if(query_aln_seq.at(j)!='-'){
+						baseMatchFlag = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(i));
+						if(baseMatchFlag){ // exchange query_aln_seq[i] and query_aln_seq[j]
+							ch_tmp = query_aln_seq.at(i);
+							query_aln_seq.at(i) = query_aln_seq.at(j);
+							query_aln_seq.at(j) = ch_tmp;
+
+							mid_aln_seq.at(i) = '|';
+							baseMatchFlag2 = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(j));
+							if(baseMatchFlag2) mid_aln_seq.at(j) = '|';
+							else mid_aln_seq.at(j) = ' ';
+						}else{ // gap end
+							i -= gap_size -1;
+							gap_size = 0;
+						}
+						break;
+					}else
+						gap_size ++;
+				}
+			}else{ // mismatch
+				gap_size = 0;
+			}
+		}
+	}
+
+	// left side
+	gap_size = 0;
+	for(i=0; i<(int32_t)mid_aln_seq.size(); i++){
+		if(mid_aln_seq.at(i)!='|'){ // gap or mismatch
+			if(gap_size==0)
+				gap_size = 1;
+
+			if(subject_aln_seq.at(i)=='-'){ // gap in subject
+				for(j=i+gap_size; j<(int32_t)subject_aln_seq.size(); j++){
+					if(subject_aln_seq.at(j)!='-'){
+						baseMatchFlag = isBaseMatch(query_aln_seq.at(i), subject_aln_seq.at(j));
+						if(baseMatchFlag){ // exchange subject_aln_seq[i] and subject_aln_seq[j]
+							ch_tmp = subject_aln_seq.at(i);
+							subject_aln_seq.at(i) = subject_aln_seq.at(j);
+							subject_aln_seq.at(j) = ch_tmp;
+
+							mid_aln_seq.at(i) = '|';
+							baseMatchFlag2 = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(j));
+							if(baseMatchFlag2) mid_aln_seq.at(j) = '|';
+							else mid_aln_seq.at(j) = ' ';
+						}else{ // gap end
+							i += gap_size -1;
+							gap_size = 0;
+						}
+						break;
+					}else
+						gap_size ++;
+				}
+			}else if(query_aln_seq.at(i)=='-'){  // gap in query
+				for(j=i+gap_size; j<(int32_t)query_aln_seq.size(); j++){
+					if(query_aln_seq.at(j)!='-'){
+						baseMatchFlag = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(i));
+						if(baseMatchFlag){ // exchange query_aln_seq[i] and query_aln_seq[j]
+							ch_tmp = query_aln_seq.at(i);
+							query_aln_seq.at(i) = query_aln_seq.at(j);
+							query_aln_seq.at(j) = ch_tmp;
+
+							mid_aln_seq.at(i) = '|';
+							baseMatchFlag2 = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(j));
+							if(baseMatchFlag2) mid_aln_seq.at(j) = '|';
+							else mid_aln_seq.at(j) = ' ';
+						}else{ // gap end
+							i += gap_size -1;
+							gap_size = 0;
+						}
+						break;
+					}else
+						gap_size ++;
+				}
+			}else{ // mismatch
+				gap_size = 0;
+			}
+		}
+	}
 }
 
 // compute variant location
 void varCand::computeVarLoc(localAln_t *local_aln){
 	vector<string> var_loc_vec;
 	string ctgseq_aln, midseq_aln, refseq_aln;
-	int32_t queryPos, refPos, localRefPos, start_aln_idx_var, end_aln_idx_var;
+	int32_t queryPos, refPos, localRefPos, start_aln_idx_var, end_aln_idx_var, start_aln_idx_var_new, end_aln_idx_var_new;
 	int32_t i, start_var_pos, end_var_pos, tmp_len;
 	int32_t startRefPos_aln, endRefPos_aln, startLocalRefPos_aln, endLocalRefPos_aln, startQueryPos_aln, endQueryPos_aln;
+	int32_t startRefPos_aln_new, endRefPos_aln_new, startLocalRefPos_aln_new, endLocalRefPos_aln_new, startQueryPos_aln_new, endQueryPos_aln_new;
 
 	ctgseq_aln = local_aln->alignResultVec[0];
 	midseq_aln = local_aln->alignResultVec[1];
@@ -1215,6 +1227,57 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 		//cerr << "line=" << __LINE__ << ", start_aln_idx_var=" << start_aln_idx_var << ", end_aln_idx_var=" << end_aln_idx_var << endl;
 		//exit(1);
 	}else {
+		// compute the extended gap size on both sides of the region
+		// left side
+		start_aln_idx_var_new = -1;
+		startRefPos_aln_new = startRefPos_aln;
+		startLocalRefPos_aln_new = startLocalRefPos_aln;
+		startQueryPos_aln_new = startQueryPos_aln;
+		for(i=start_aln_idx_var-1; i>=0; i--){
+			if(refseq_aln[i]=='-'){ // gap in reference
+				start_aln_idx_var_new = i;
+				startQueryPos_aln_new --;
+			}else if(ctgseq_aln[i]=='-'){ // gap in query
+				start_aln_idx_var_new = i;
+				startRefPos_aln_new --;
+				startLocalRefPos_aln_new --;
+			}else
+				break;
+		}
+		// right side
+		end_aln_idx_var_new = -1;
+		endRefPos_aln_new = endRefPos_aln;
+		endLocalRefPos_aln_new = endLocalRefPos_aln;
+		endQueryPos_aln_new = endQueryPos_aln;
+		for(i=end_aln_idx_var+1; i<(int32_t)midseq_aln.size(); i++){
+			if(refseq_aln[i]=='-'){ // gap in reference
+				end_aln_idx_var_new = i;
+				endQueryPos_aln_new ++;
+			}else if(ctgseq_aln[i]=='-'){ // gap in query
+				end_aln_idx_var_new = i;
+				endRefPos_aln_new ++;
+				endLocalRefPos_aln_new ++;
+			}else
+				break;
+		}
+
+		// update information
+		if(start_aln_idx_var_new!=-1){
+			cout << "'start_aln_idx_var' is changed from " << start_aln_idx_var << " to " << start_aln_idx_var_new << endl;
+			start_aln_idx_var = start_aln_idx_var_new;
+			startRefPos_aln = startRefPos_aln_new;
+			startLocalRefPos_aln = startLocalRefPos_aln_new;
+			startQueryPos_aln = startQueryPos_aln_new;
+		}
+		if(end_aln_idx_var_new!=-1)
+		{
+			cout << "'end_aln_idx_var' is changed from " << end_aln_idx_var << " to " << end_aln_idx_var_new << endl;
+			end_aln_idx_var = end_aln_idx_var_new;
+			endRefPos_aln = endRefPos_aln_new;
+			endLocalRefPos_aln = endLocalRefPos_aln_new;
+			endQueryPos_aln = endQueryPos_aln_new;
+		}
+
 #if ALIGN_DEBUG
 		int32_t len = end_aln_idx_var - start_aln_idx_var + 1;
 		if(len>0){
@@ -1235,6 +1298,8 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 	local_aln->end_aln_idx_var = end_aln_idx_var;
 
 	if(start_aln_idx_var!=-1 and end_aln_idx_var!=-1){
+		local_aln->reg->startRefPos = startRefPos_aln;
+		local_aln->reg->endRefPos = endRefPos_aln;
 		local_aln->reg->startLocalRefPos = startLocalRefPos_aln;
 		local_aln->reg->endLocalRefPos = endLocalRefPos_aln;
 		local_aln->reg->startQueryPos = startQueryPos_aln;
@@ -1246,6 +1311,74 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 		local_aln->reg->endQueryPos = 0;
 	}
 }
+
+// confirm the variant locations, i.e. there are no mismatches on both sides of the region
+//void varCand::confirmVarLoc(localAln_t *local_aln){
+//	int32_t i, beg_check_idx, end_check_idx, mismatchNum1, mismatchNum2;
+//	int32_t refPos_tmp, startRefPos1, endRefPos1, startRefPos2, endRefPos2;
+//	string midseq_aln, refseq_aln;
+//	reg_t *reg_tmp1, *reg_tmp2;
+//	bool valid_flag;
+//
+//	midseq_aln = local_aln->alignResultVec.at(1);
+//	refseq_aln = local_aln->alignResultVec.at(2);
+//
+//	beg_check_idx = local_aln->start_aln_idx_var - EXT_SIZE_CHK_VAR_LOC;
+//	if(beg_check_idx<0) beg_check_idx = 0;
+//
+//	if(local_aln->alignResultVec[1].size()>0){
+//		end_check_idx = local_aln->end_aln_idx_var + EXT_SIZE_CHK_VAR_LOC;
+//		if(end_check_idx>local_aln->alignResultVec[1].size()-1) end_check_idx = local_aln->alignResultVec[1].size() - 1;
+//	}else
+//		end_check_idx = -1;
+//
+//	valid_flag = true;
+//	if(beg_check_idx!=-1 and end_check_idx!=-1){
+//		// left side
+//		mismatchNum1 = 0;
+//		refPos_tmp = local_aln->reg->startRefPos - 1;
+//		for(i=local_aln->start_aln_idx_var-1; i>=beg_check_idx; i--){
+//			if(midseq_aln.at(i)=='|'){
+//				refPos_tmp --;
+//			}else {
+//				mismatchNum1 ++;
+//				if(refseq_aln.at(i)!='-') refPos_tmp --;
+//			}
+//		}
+//		startRefPos1 = refPos_tmp;
+//		endRefPos1 = local_aln->reg->startRefPos - 1;
+//		reg_tmp1 = findVarvecItem(startRefPos1, endRefPos1, varVec);
+//
+//		// right side
+//		mismatchNum2 = 0;
+//		refPos_tmp = local_aln->reg->endRefPos + 1;
+//		for(i=local_aln->start_aln_idx_var+1; i<=end_check_idx; i++){
+//			if(midseq_aln.at(i)=='|'){
+//				refPos_tmp ++;
+//			}else{
+//				mismatchNum2 ++;
+//				if(refseq_aln.at(i)!='-') refPos_tmp ++;
+//			}
+//		}
+//		startRefPos2 = local_aln->reg->endRefPos + 1;
+//		endRefPos2 = refPos_tmp;
+//		reg_tmp2 = findVarvecItem(startRefPos2, endRefPos2, varVec);
+//
+//		if((mismatchNum1>0 and reg_tmp1==NULL) or (mismatchNum2>0 and reg_tmp2==NULL))
+//			valid_flag = false;
+//	}else valid_flag = false;
+//
+//	if(valid_flag==false){
+//		local_aln->start_aln_idx_var = -1;
+//		local_aln->end_aln_idx_var = -1;
+//
+//		local_aln->reg->startLocalRefPos = 0;
+//		local_aln->reg->endLocalRefPos = 0;
+//		local_aln->reg->startQueryPos = 0;
+//		local_aln->reg->endQueryPos = 0;
+//		local_aln->reg->query_id = -1;
+//	}
+//}
 
 // confirm short variation
 void varCand::confirmShortVar(localAln_t *local_aln){
@@ -1497,7 +1630,7 @@ void varCand::mergeNeighboringVariants(vector<reg_t*> &foundRegVec, vector<reg_t
 				startRefPos = candRegVec[i-1]->endRefPos + 1;
 				endRefPos = candRegVec[i]->startRefPos - 1;
 				tmp_len = endRefPos - startRefPos + 2;
-				if(tmp_len>=8){
+				if(tmp_len>=SV_MIN_DIST){
 					numVec = computeDisagreeNumAndHighIndelBaseNum(candRegVec[i-1]->chrname, startRefPos, endRefPos, inBamFile, fai);
 					if(numVec[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec[1]>0) // found variant features, merge; otherwise, keep unchanged
 						mergeFlag = true;
@@ -1505,8 +1638,8 @@ void varCand::mergeNeighboringVariants(vector<reg_t*> &foundRegVec, vector<reg_t
 			}
 
 			if(mergeFlag){ // merge
-				query_dist = (int32_t)candRegVec[i]->endQueryPos - (int32_t)candRegVec[i-1]->startQueryPos;
-				ref_dist = (int32_t)candRegVec[i]->endRefPos - (int32_t)candRegVec[i-1]->startRefPos;
+				query_dist = candRegVec[i]->endQueryPos - candRegVec[i-1]->startQueryPos;
+				ref_dist = candRegVec[i]->endRefPos - candRegVec[i-1]->startRefPos;
 
 				if(query_dist>=ref_dist) var_type = VAR_INS;  // insertion
 				else var_type = VAR_DEL;  // deletion
@@ -1531,7 +1664,9 @@ void varCand::mergeNeighboringVariants(vector<reg_t*> &foundRegVec, vector<reg_t
 // deal with the two variant sets
 vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRegVec, vector<reg_t*> &candRegVec){
 	reg_t *reg, *reg_tmp, *reg_new_1, *reg_new_2, *reg_new_3, *reg_new_4, *reg_new_tmp;
-	int32_t i, j, idx, same_count, startRefPos, endRefPos, startQueryPos, endQueryPos, opID1, opID2;
+	int32_t i, j, idx, same_count, opID1, opID2, startShiftLen, endShiftLen;
+	int32_t startRefPos1, endRefPos1, startQueryPos1, endQueryPos1, startRefPos2, endRefPos2, startQueryPos2, endQueryPos2;
+	int32_t new_startRefPos, new_endRefPos, new_startLocalRefPos, new_endLocalRefPos, new_startQueryPos, new_endQueryPos;
 	vector<int32_t> numVec1, numVec2;
 	vector<reg_t*> updatedRegVec[foundRegVec.size()], regVec_tmp;
 	vector< vector<reg_t*> > regVec;
@@ -1558,6 +1693,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 				reg->query_id = reg_tmp->query_id;
 				reg->blat_aln_id = reg_tmp->blat_aln_id;
 				reg->aln_orient = reg_tmp->aln_orient;
+				reg->zero_cov_flag = false;
 
 				updatedRegVec[i].push_back(reg);
 			}
@@ -1579,22 +1715,23 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 				opID1 = -1;
 				if(reg->startRefPos==reg_tmp->startRefPos){
 					opID1 = 0;
-					numVec1.insert(numVec1.begin(), 4, 0);
+					numVec1.insert(numVec1.begin(), 6, 0);
 				}else if(reg->startRefPos<reg_tmp->startRefPos){
-					startRefPos = reg->startRefPos;
-					endRefPos = reg_tmp->startRefPos - 1;
-					startQueryPos = reg->startQueryPos;
-					endQueryPos = reg_tmp->startQueryPos - 1;
+					startRefPos1 = reg->startRefPos;
+					endRefPos1 = reg_tmp->startRefPos - 1;
+					startQueryPos1 = reg->startQueryPos;
+					endQueryPos1 = reg_tmp->startQueryPos - 1;
 				}else{
-					startRefPos = reg_tmp->startRefPos;
-					endRefPos = reg->startRefPos - 1;
-					startQueryPos = reg_tmp->startQueryPos;
-					endQueryPos = reg->startQueryPos - 1;
+					startRefPos1 = reg_tmp->startRefPos;
+					endRefPos1 = reg->startRefPos - 1;
+					startQueryPos1 = reg_tmp->startQueryPos;
+					endQueryPos1 = reg->startQueryPos - 1;
 				}
-				if(opID1!=0){
-					numVec1 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos, endRefPos, reg_tmp->query_id, startQueryPos, endQueryPos, reg->aln_orient, inBamFile, fai);
+				if(opID1!=0 and startRefPos1<endRefPos1 and startQueryPos1<endQueryPos1){
+					numVec1 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos1, endRefPos1, reg_tmp->query_id, startQueryPos1, endQueryPos1, reg->aln_orient, inBamFile, fai);
 					if(numVec1[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec1[1]>0){ // found variant features
-						if(numVec1[3]>=8 and numVec1[3]<endRefPos-startRefPos+1)
+						//if(numVec1[3]>=SV_MIN_DIST and numVec1[3]<endRefPos1-startRefPos1+1)
+						if(numVec1[3]>=SV_MIN_DIST and numVec1[4]==0)
 							opID1 = 2;
 						else
 							opID1 = 1;
@@ -1606,23 +1743,24 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 				opID2 = -1;
 				if(reg_tmp->endRefPos==reg->endRefPos){
 					opID2 = 0;
-					numVec2.insert(numVec2.begin(), 4, 0);
+					numVec2.insert(numVec2.begin(), 6, 0);
 				}else if(reg_tmp->endRefPos<reg->endRefPos){
-					startRefPos = reg_tmp->endRefPos + 1;
-					endRefPos = reg->endRefPos;
-					startQueryPos = reg_tmp->endQueryPos + 1;
-					endQueryPos = reg->endQueryPos;
+					startRefPos2 = reg_tmp->endRefPos + 1;
+					endRefPos2 = reg->endRefPos;
+					startQueryPos2 = reg_tmp->endQueryPos + 1;
+					endQueryPos2 = reg->endQueryPos;
 				}else{
-					startRefPos = reg->endRefPos + 1;
-					endRefPos = reg_tmp->endRefPos;
-					startQueryPos = reg->endQueryPos + 1;
-					endQueryPos = reg_tmp->endQueryPos;
+					startRefPos2 = reg->endRefPos + 1;
+					endRefPos2 = reg_tmp->endRefPos;
+					startQueryPos2 = reg->endQueryPos + 1;
+					endQueryPos2 = reg_tmp->endQueryPos;
 				}
 
-				if(opID2!=0){
-					numVec2 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos, endRefPos, reg_tmp->query_id, startQueryPos, endQueryPos, reg->aln_orient, inBamFile, fai);
+				if(opID2!=0 and startRefPos2<endRefPos2 and startQueryPos2<endQueryPos2){
+					numVec2 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos2, endRefPos2, reg_tmp->query_id, startQueryPos2, endQueryPos2, reg->aln_orient, inBamFile, fai);
 					if(numVec2[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec2[1]>0){ // found variant features
-						if(numVec2[2]>=8 and numVec2[2]<endRefPos-startRefPos+1)
+						//if(numVec2[2]>=SV_MIN_DIST and numVec2[2]<endRefPos2-startRefPos2+1)
+						if(numVec2[2]>=SV_MIN_DIST and numVec2[4]==0)
 							opID2 = 2;
 						else
 							opID2 = 1;
@@ -1632,39 +1770,77 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 
 				// update their information at the same time
 				if(opID1!=2 and opID2!=2){
+					new_startRefPos = reg->startRefPos;
+					new_startLocalRefPos = reg->startLocalRefPos;
+					new_startQueryPos = reg->startQueryPos;
+					new_endRefPos = reg->startRefPos;
+					new_endLocalRefPos = reg->startLocalRefPos;
+					new_endQueryPos = reg->startQueryPos;
+
 					if(opID1==0){
-						reg->startRefPos = reg_tmp->startRefPos;
-						reg->startLocalRefPos = reg_tmp->startLocalRefPos;
-						reg->startQueryPos = reg_tmp->startQueryPos;
+						new_startRefPos = reg_tmp->startRefPos;
+						new_startLocalRefPos = reg_tmp->startLocalRefPos;
+						new_startQueryPos = reg_tmp->startQueryPos;
+						//reg->startRefPos = reg_tmp->startRefPos;
+						//reg->startLocalRefPos = reg_tmp->startLocalRefPos;
+						//reg->startQueryPos = reg_tmp->startQueryPos;
 					}else if(opID1==1){ // update information
+						startShiftLen = getEndShiftLenFromNumVec(numVec1, 1);
 						if(reg->startRefPos<reg_tmp->startRefPos){
-							reg->startRefPos += numVec1[2];
-							reg->startLocalRefPos += numVec1[2];
-							reg->startQueryPos += numVec1[2];
+							new_startRefPos = reg->startRefPos + startShiftLen;
+							new_startLocalRefPos = reg->startLocalRefPos + startShiftLen;
+							new_startQueryPos = reg->startQueryPos + startShiftLen;
+							//reg->startRefPos += numVec1[2];
+							//reg->startLocalRefPos += numVec1[2];
+							//reg->startQueryPos += numVec1[2];
 						}else{
-							reg->startRefPos = reg_tmp->startRefPos + numVec1[2];
-							reg->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
-							reg->startQueryPos = reg_tmp->startQueryPos + numVec1[2];
+							new_startRefPos = reg_tmp->startRefPos + startShiftLen;
+							new_startLocalRefPos = reg_tmp->startLocalRefPos + startShiftLen;
+							new_startQueryPos = reg_tmp->startQueryPos + startShiftLen;
+							//reg->startRefPos = reg_tmp->startRefPos + numVec1[2];
+							//reg->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
+							//reg->startQueryPos = reg_tmp->startQueryPos + numVec1[2];
 						}
 					}
 
 					if(opID2==0){
-						reg->endRefPos = reg_tmp->endRefPos;
-						reg->endLocalRefPos = reg_tmp->endLocalRefPos;
-						reg->endQueryPos = reg_tmp->endQueryPos;
+						new_endRefPos = reg_tmp->endRefPos;
+						new_endLocalRefPos = reg_tmp->endLocalRefPos;
+						new_endQueryPos = reg_tmp->endQueryPos;
+						//reg->endRefPos = reg_tmp->endRefPos;
+						//reg->endLocalRefPos = reg_tmp->endLocalRefPos;
+						//reg->endQueryPos = reg_tmp->endQueryPos;
 					}else if(opID2==1){
+						endShiftLen = getEndShiftLenFromNumVec(numVec2, 2);
 						if(reg_tmp->endRefPos<reg->endRefPos){
-							reg->endRefPos -= numVec2[3];
-							reg->endLocalRefPos -= numVec2[3];
-							reg->endQueryPos -= numVec2[3];
+							new_endRefPos = reg->endRefPos - endShiftLen;
+							new_endLocalRefPos = reg->endLocalRefPos - endShiftLen;
+							new_endQueryPos = reg->endQueryPos - endShiftLen;
+							//reg->endRefPos -= numVec2[3];
+							//reg->endLocalRefPos -= numVec2[3];
+							//reg->endQueryPos -= numVec2[3];
 						}else{
-							reg->endRefPos = reg_tmp->endRefPos - numVec2[3];
-							reg->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
-							reg->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
+							new_endRefPos = reg_tmp->endRefPos - endShiftLen;
+							new_endLocalRefPos = reg_tmp->endLocalRefPos - endShiftLen;
+							new_endQueryPos = reg_tmp->endQueryPos - endShiftLen;
+							//reg->endRefPos = reg_tmp->endRefPos - numVec2[3];
+							//reg->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
+							//reg->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
 						}
 					}
 					reg->query_id = reg_tmp->query_id;
-					updatedRegVec[i].push_back(reg);
+
+					if(new_startRefPos<=new_endRefPos and new_startQueryPos<=new_endQueryPos){
+						reg->startRefPos = new_startRefPos;
+						reg->startLocalRefPos = new_startLocalRefPos;
+						reg->startQueryPos = new_startQueryPos;
+						reg->endRefPos = new_endRefPos;
+						reg->endLocalRefPos = new_endLocalRefPos;
+						reg->endQueryPos = new_endQueryPos;
+					}
+
+					if(isRegValid(reg))
+						updatedRegVec[i].push_back(reg);
 
 				}else if((opID1==1 or opID1==0) and opID2==2){ // check and split the region
 					reg_new_3 = new reg_t();
@@ -1684,6 +1860,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 					reg_new_3->query_id = reg_tmp->query_id;
 					reg_new_3->blat_aln_id = reg_tmp->blat_aln_id;
 					reg_new_3->aln_orient = reg_tmp->aln_orient;
+					reg_new_3->zero_cov_flag = false;
 
 					reg_new_4 = new reg_t();
 					if(reg_tmp->endRefPos<reg->endRefPos){
@@ -1707,8 +1884,10 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 					reg_new_4->query_id = reg_tmp->query_id;
 					reg_new_4->blat_aln_id = reg_tmp->blat_aln_id;
 					reg_new_4->aln_orient = reg_tmp->aln_orient;
+					reg_new_4->zero_cov_flag = false;
 
 					// update information according to opID1==1
+					startShiftLen = getEndShiftLenFromNumVec(numVec1, 1);
 					if(reg_tmp->startRefPos<reg->startRefPos){
 						reg_new_3->startRefPos = reg_tmp->startRefPos + numVec1[2];
 						reg_new_3->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
@@ -1719,8 +1898,12 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						reg_new_3->startQueryPos = reg->startQueryPos + numVec1[2];
 					}
 
-					updatedRegVec[i].push_back(reg_new_3);
-					updatedRegVec[i].push_back(reg_new_4);
+					if(isRegValid(reg_new_3))
+						updatedRegVec[i].push_back(reg_new_3);
+					else delete reg_new_3;
+					if(isRegValid(reg_new_4))
+						updatedRegVec[i].push_back(reg_new_4);
+					else delete reg_new_4;
 
 				}else if(opID1==2 and (opID2==1 or opID2==0)){ // check and split the region
 					reg_new_1 = new reg_t();
@@ -1745,6 +1928,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 					reg_new_1->query_id = reg_tmp->query_id;
 					reg_new_1->blat_aln_id = reg->blat_aln_id;
 					reg_new_1->aln_orient = reg->aln_orient;
+					reg_new_1->zero_cov_flag = false;
 
 					reg_new_2 = new reg_t();
 					if(reg->startRefPos<reg_tmp->startRefPos){
@@ -1763,8 +1947,10 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 					reg_new_2->query_id = reg_tmp->query_id;
 					reg_new_2->blat_aln_id = reg_tmp->blat_aln_id;
 					reg_new_2->aln_orient = reg_tmp->aln_orient;
+					reg_new_2->zero_cov_flag = false;
 
 					// update information according to opID2==1
+					endShiftLen = getEndShiftLenFromNumVec(numVec2, 2);
 					if(reg_tmp->endRefPos<reg->endRefPos){
 						reg_new_2->endRefPos = reg->endRefPos - numVec2[3];
 						reg_new_2->endLocalRefPos = reg->endLocalRefPos - numVec2[3];
@@ -1775,8 +1961,12 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						reg_new_2->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
 					}
 
-					updatedRegVec[i].push_back(reg_new_1);
-					updatedRegVec[i].push_back(reg_new_2);
+					if(isRegValid(reg_new_1))
+						updatedRegVec[i].push_back(reg_new_1);
+					else delete reg_new_1;
+					if(isRegValid(reg_new_2))
+						updatedRegVec[i].push_back(reg_new_2);
+					else delete reg_new_2;
 
 				}else if(opID1==2 and opID2==2){ // check and split the region
 					reg_new_1 = new reg_t();
@@ -1797,11 +1987,11 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						reg_new_1->endLocalRefPos = reg->startLocalRefPos - 1 - numVec1[3];
 						reg_new_1->endQueryPos = reg->startQueryPos - 1 - numVec1[3];
 					}
-
 					reg_new_1->chrname = reg->chrname;
 					reg_new_1->query_id = reg_tmp->query_id;
 					reg_new_1->blat_aln_id = reg->blat_aln_id;
 					reg_new_1->aln_orient = reg->aln_orient;
+					reg_new_1->zero_cov_flag = false;
 
 					reg_new_2 = new reg_t();
 					if(reg->startRefPos<reg_tmp->startRefPos){
@@ -1826,6 +2016,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 					reg_new_2->query_id = reg_tmp->query_id;
 					reg_new_2->blat_aln_id = reg_tmp->blat_aln_id;
 					reg_new_2->aln_orient = reg_tmp->aln_orient;
+					reg_new_2->zero_cov_flag = false;
 
 					reg_new_4 = new reg_t();
 					if(reg_tmp->endRefPos<reg->endRefPos){
@@ -1845,30 +2036,39 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						reg_new_4->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
 						reg_new_4->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
 					}
-
 					reg_new_4->chrname = reg_tmp->chrname;
 					reg_new_4->query_id = reg_tmp->query_id;
 					reg_new_4->blat_aln_id = reg_tmp->blat_aln_id;
 					reg_new_4->aln_orient = reg_tmp->aln_orient;
+					reg_new_4->zero_cov_flag = false;
 
-					updatedRegVec[i].push_back(reg_new_1);
-					updatedRegVec[i].push_back(reg_new_2);
-					updatedRegVec[i].push_back(reg_new_4);
+					if(isRegValid(reg_new_1))
+						updatedRegVec[i].push_back(reg_new_1);
+					else delete reg_new_1;
+					if(isRegValid(reg_new_2))
+						updatedRegVec[i].push_back(reg_new_2);
+					else delete reg_new_2;
+					if(isRegValid(reg_new_4))
+						updatedRegVec[i].push_back(reg_new_4);
+					else delete reg_new_4;
 				}
 			}else{
-				reg_new_tmp = new reg_t();
-				reg_new_tmp->chrname = reg_tmp->chrname;
-				reg_new_tmp->startRefPos = reg_tmp->startRefPos - 1;
-				reg_new_tmp->endRefPos = reg_tmp->endRefPos + 1;
-				reg_new_tmp->startLocalRefPos = reg_tmp->startLocalRefPos - 1;
-				reg_new_tmp->endLocalRefPos = reg_tmp->endLocalRefPos + 1;
-				reg_new_tmp->startQueryPos = reg_tmp->startQueryPos - 1;
-				reg_new_tmp->endQueryPos = reg_tmp->endQueryPos + 1;
-				reg_new_tmp->query_id = reg_tmp->query_id;
-				reg_new_tmp->blat_aln_id = reg_tmp->blat_aln_id;
-				reg_new_tmp->aln_orient = reg_tmp->aln_orient;
+//				reg_new_tmp = new reg_t();
+//				reg_new_tmp->chrname = reg_tmp->chrname;
+//				reg_new_tmp->startRefPos = reg_tmp->startRefPos - 1;
+//				reg_new_tmp->endRefPos = reg_tmp->endRefPos + 1;
+//				reg_new_tmp->startLocalRefPos = reg_tmp->startLocalRefPos - 1;
+//				reg_new_tmp->endLocalRefPos = reg_tmp->endLocalRefPos + 1;
+//				reg_new_tmp->startQueryPos = reg_tmp->startQueryPos - 1;
+//				reg_new_tmp->endQueryPos = reg_tmp->endQueryPos + 1;
+//				reg_new_tmp->query_id = reg_tmp->query_id;
+//				reg_new_tmp->blat_aln_id = reg_tmp->blat_aln_id;
+//				reg_new_tmp->aln_orient = reg_tmp->aln_orient;
+//				reg_new_tmp->zero_cov_flag = false;
+//
+//				updatedRegVec[i].push_back(reg_new_tmp);
 
-				updatedRegVec[i].push_back(reg_new_tmp);
+				cout << "******** line=" << __LINE__ << ", new variant region: " << reg_tmp->chrname << ":" << reg_tmp->startRefPos << "-" << reg_tmp->endRefPos << endl;
 			}
 		}
 		i++;
@@ -1893,9 +2093,9 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 
 // compute variant type
 void varCand::computeVarType(reg_t *reg){
-	int32_t query_dist, ref_dist, var_type, decrease_size;
-	query_dist = (int32_t)reg->endQueryPos - (int32_t)reg->startQueryPos;
-	ref_dist = (int32_t)reg->endRefPos - (int32_t)reg->startRefPos;
+	int64_t query_dist, ref_dist, var_type, decrease_size;
+	query_dist = reg->endQueryPos - reg->startQueryPos;
+	ref_dist = reg->endRefPos - reg->startRefPos;
 
 	if(query_dist>=ref_dist) var_type = VAR_INS;  // insertion
 	else var_type = VAR_DEL;  // deletion
@@ -1929,7 +2129,7 @@ void varCand::updateVarVec(vector<vector<reg_t*>> &regVec, vector<reg_t*> &found
 		for(i=0; i<foundRegVec.size(); i++){
 			reg = foundRegVec[i];
 			reg_vec_item = regVec[i];
-			if(reg_vec_item.size()>1 or reg_vec_item[0]!=reg){
+			if(reg_vec_item.size()>1 or (reg_vec_item.size()>0 and reg_vec_item.at(0)!=reg)){
 				reg_idx = getVectorIdx(reg, varVec);
 				if(reg_idx!=-1){
 					for(j=0; j<reg_vec_item.size(); j++)
@@ -1965,6 +2165,9 @@ vector<int32_t> varCand::computeDisagreeNumAndHighIndelBaseNumAndMarginDist(stri
 	distVec = confirmVarMargins(numVec[2], numVec[3], chrname, startRefPos, endRefPos, query_id, startQueryPos, endQueryPos, aln_orient, fai);
 	numVec[2] = distVec[0];
 	numVec[3] = distVec[1];
+	numVec.push_back(distVec[2]);
+	numVec.push_back(distVec[3]);
+
 	return numVec;
 }
 
@@ -2030,19 +2233,23 @@ void varCand::computeVarRegLoc(reg_t *reg, reg_t *cand_reg){
 	// compute locations
 	computeVarLoc(local_aln);
 
+	// confirm the variant locations, i.e. there are no mismatches on both sides of the region
+	//confirmVarLoc(local_aln);
+
 	delete local_aln;
 }
 
 // compute margins of variations
 vector<int32_t> varCand::computeVarMargins(Base *baseArray, int32_t arr_size, float threshold){
 	vector<int32_t> distVec;
-	int32_t i, leftDist, rightDist, discorNum;
+	int32_t i, j, leftDist, rightDist, discorNum;
 
 	// compute left distance
 	leftDist = 0;
 	discorNum = 0;
 	for(i=0; i<arr_size; i++){
-		if(!baseArray[i].isDisagreeBase() and !baseArray[i].isHighIndelBase(threshold))
+		//if(!baseArray[i].isDisagreeBase() and !baseArray[i].isHighIndelBase(threshold))
+		if((!baseArray[i].isDisagreeBase() and !baseArray[i].isHighIndelBase(threshold)) or baseArray[i].isMatchToRef())
 			leftDist ++;
 		else{
 			discorNum ++;
@@ -2054,8 +2261,8 @@ vector<int32_t> varCand::computeVarMargins(Base *baseArray, int32_t arr_size, fl
 	// compute right distance
 	rightDist = 0;
 	discorNum = 0;
-	for(i=arr_size-1; i>=0; i--){
-		if(!baseArray[i].isDisagreeBase() and !baseArray[i].isHighIndelBase(threshold))
+	for(j=arr_size-1; j>i; j--){
+		if((!baseArray[j].isDisagreeBase() and !baseArray[j].isHighIndelBase(threshold)) or baseArray[j].isMatchToRef())
 			rightDist ++;
 		else{
 			discorNum ++;
@@ -2072,7 +2279,8 @@ vector<int32_t> varCand::computeVarMargins(Base *baseArray, int32_t arr_size, fl
 // confirm variant margins
 vector<int32_t> varCand::confirmVarMargins(int32_t left_dist, int32_t right_dist, string &chrname, size_t startRefPos, size_t endRefPos, int32_t query_id, size_t startQueryPos, size_t endQueryPos, size_t aln_orient, faidx_t *fai){
 	vector<int32_t> distVec;
-	int32_t i, leftDist, rightDist, tmp_len, ref_len, ctg_len, misNum;
+	int32_t i, j, leftDist, rightDist, tmp_len, ref_len, ctg_len, misNum, all_match_flag, all_match_end;
+	int32_t left_max, right_max, leftDist_new, rightDist_new;
 	string refseq, ctgseq, reg_str;
 	bool baseMatchFlag;
 
@@ -2099,7 +2307,6 @@ vector<int32_t> varCand::confirmVarMargins(int32_t left_dist, int32_t right_dist
 	misNum = 0;
 	for(i=0; i<tmp_len; i++){
 		baseMatchFlag = isBaseMatch(ctgseq[i], refseq[i]);
-		//if(refseq[i]==ctgseq[i])
 		if(baseMatchFlag)
 			leftDist ++;
 		else{
@@ -2110,9 +2317,8 @@ vector<int32_t> varCand::confirmVarMargins(int32_t left_dist, int32_t right_dist
 	}
 	rightDist = 0;
 	misNum = 0;
-	for(i=0; i<tmp_len; i++){
-		baseMatchFlag = isBaseMatch(ctgseq[ctg_len-1-i], refseq[ref_len-1-i]);
-		//if(refseq[ref_len-1-i]==ctgseq[ctg_len-1-i])
+	for(j=0; j<tmp_len-i; j++){
+		baseMatchFlag = isBaseMatch(ctgseq[ctg_len-1-j], refseq[ref_len-1-j]);
 		if(baseMatchFlag)
 			rightDist ++;
 		else{
@@ -2122,31 +2328,100 @@ vector<int32_t> varCand::confirmVarMargins(int32_t left_dist, int32_t right_dist
 		}
 	}
 
-//	if(leftDist>left_dist)
+	// set the all_base_match flag
+	if(leftDist==tmp_len or rightDist==tmp_len){
+		all_match_flag = 1;
+		if(leftDist==tmp_len)
+			all_match_end = 1;
+		else if(rightDist==tmp_len)
+			all_match_end = 2;
+		else{
+			cerr << "line=" << __LINE__ << ", tmp_len=" << tmp_len << ", leftDist=" << leftDist << ", rightDist=" << rightDist << ", error!" << endl;
+			exit(1);
+		}
+	}else{
+		all_match_flag = 0;
+		all_match_end = 0;
+	}
+
+	if(leftDist<left_dist) left_max = left_dist;
+	else left_max = leftDist;
+	if(rightDist<right_dist) right_max = right_dist;
+	else right_max = rightDist;
+
+	if(tmp_len<left_max+right_max){
+		leftDist_new = leftDist;
+		rightDist_new = rightDist;
+		if(leftDist>left_dist)
+			rightDist_new = tmp_len - leftDist;
+		if(rightDist>right_dist)
+			leftDist_new = tmp_len - rightDist;
+
+		leftDist = leftDist_new;
+		rightDist = rightDist_new;
+	}
+
+////	if(leftDist>left_dist)
+////		leftDist = left_dist;
+////	if(rightDist>right_dist)
+////		rightDist = right_dist;
+//	if(leftDist<left_dist)
 //		leftDist = left_dist;
-//	if(rightDist>right_dist)
+//	if(rightDist<right_dist)
 //		rightDist = right_dist;
-	if(leftDist<left_dist)
-		leftDist = left_dist;
-	if(rightDist<right_dist)
-		rightDist = right_dist;
+
+	leftDist--; rightDist--;
+	if(leftDist<0) leftDist = 0;
+	if(rightDist<0) rightDist = 0;
+
 	distVec.push_back(leftDist);
 	distVec.push_back(rightDist);
+	distVec.push_back(all_match_flag);
+	distVec.push_back(all_match_end);
+
 	return distVec;
+}
+
+// get the end shift length
+int32_t varCand::getEndShiftLenFromNumVec(vector<int32_t> &numVec, size_t end_flag){
+	int32_t endShiftLen = 0;
+
+	if(numVec[4]==1){
+		if(numVec[5]==1)
+			endShiftLen = numVec[2];
+		else if(numVec[5]==2)
+			endShiftLen = numVec[3];
+		else{
+			cerr << "line=" << __LINE__ << ", all_match_flag=" << numVec[4] << ", all_match_flag=" << numVec[5] << endl;
+			exit(1);
+		}
+	}else{
+		if(end_flag==1)
+			endShiftLen = numVec[2];
+		else if(end_flag==2){
+			endShiftLen = numVec[3];
+		}else{
+			cerr << "line=" << __LINE__ << ", end_flag=" << end_flag << ", error!" << endl;
+			exit(1);
+		}
+	}
+	if(endShiftLen>0) endShiftLen --;
+
+	return endShiftLen;
 }
 
 // compute local locations
 void varCand::computeLocalLocsAln(localAln_t *local_aln){
 	reg_t *reg = local_aln->reg, *cand_reg = local_aln->cand_reg;
-	int32_t dist0, dist1, dist2, dif_cand_reg;
-	size_t querylen, subject_len;
+	int64_t dist0, dist1, dist2, dif_cand_reg;
+	int64_t querylen, subject_len;
 	blat_aln_t *blat_aln;
 
 	// get the maximal difference size
-	if(cand_reg->endRefPos-cand_reg->startRefPos>cand_reg->endQueryPos-cand_reg->startQueryPos){
-		dif_cand_reg = cand_reg->endRefPos-cand_reg->startRefPos;
-	}else
-		dif_cand_reg = cand_reg->endQueryPos-cand_reg->startQueryPos;
+	if(cand_reg->endRefPos-cand_reg->startRefPos>cand_reg->endQueryPos-cand_reg->startQueryPos)
+		dif_cand_reg = cand_reg->endRefPos - cand_reg->startRefPos;
+	else
+		dif_cand_reg = cand_reg->endQueryPos - cand_reg->startQueryPos;
 
 	if(reg->endRefPos-reg->startRefPos>cand_reg->endRefPos-cand_reg->startRefPos)
 		dist0 = ((reg->endRefPos - reg->startRefPos) / VAR_ALN_EXTEND_SIZE + 1) * VAR_ALN_EXTEND_SIZE;
@@ -2160,9 +2435,9 @@ void varCand::computeLocalLocsAln(localAln_t *local_aln){
 
 	dist1 += dif_cand_reg;
 	if(cand_reg->startLocalRefPos<cand_reg->startQueryPos){
-		if((int32_t)cand_reg->startLocalRefPos<dist1) dist1 = cand_reg->startLocalRefPos - 1;
+		if(cand_reg->startLocalRefPos<dist1) dist1 = cand_reg->startLocalRefPos - 1;
 	}else{
-		if((int32_t)cand_reg->startQueryPos<dist1) dist1 = cand_reg->startQueryPos - 1;
+		if(cand_reg->startQueryPos<dist1) dist1 = cand_reg->startQueryPos - 1;
 	}
 
 	if(cand_reg->endRefPos<reg->endRefPos)
@@ -2449,7 +2724,7 @@ void varCand::determineClipRegDupType(){
 				ref_dist = seg2->ref_start - seg1->ref_end;
 				query_dist = seg2->query_start - seg1->query_end;
 				sv_len_tmp = query_dist - ref_dist;
-				if((ref_dist<MIN_SHORT_DUP_SIZE and sv_len_tmp>=MIN_SHORT_DUP_SIZE) and (seg1->ref_end>=(size_t)startClipPos and seg1->ref_end<=(size_t)endClipPos) and (seg2->ref_start>=(size_t)startClipPos and seg2->ref_start<=(size_t)endClipPos)){
+				if((ref_dist<MIN_SHORT_DUP_SIZE and sv_len_tmp>=MIN_SHORT_DUP_SIZE) and (seg1->ref_end>=startClipPos and seg1->ref_end<=endClipPos) and (seg2->ref_start>=startClipPos and seg2->ref_start<=endClipPos)){
 					segIdx = j - 1;
 					break;
 				}
@@ -2501,7 +2776,7 @@ void varCand::determineClipRegInvType(){
 			for(j=1; j<blat_aln->aln_segs.size(); j++){
 				seg1 = blat_aln->aln_segs[j-1];
 				seg2 = blat_aln->aln_segs[j];
-				if((seg1->ref_end>=(size_t)startClipPos-CLIP_END_EXTEND_SIZE and seg1->ref_end<=(size_t)endClipPos+CLIP_END_EXTEND_SIZE) and (seg2->ref_start>=(size_t)startClipPos-CLIP_END_EXTEND_SIZE and seg2->ref_start<=(size_t)endClipPos+CLIP_END_EXTEND_SIZE)){
+				if((seg1->ref_end>=startClipPos-CLIP_END_EXTEND_SIZE and seg1->ref_end<=endClipPos+CLIP_END_EXTEND_SIZE) and (seg2->ref_start>=startClipPos-CLIP_END_EXTEND_SIZE and seg2->ref_start<=endClipPos+CLIP_END_EXTEND_SIZE)){
 					segIdx_start = j - 1;
 
 					// compute segIdx_end
@@ -2538,6 +2813,7 @@ void varCand::determineClipRegInvType(){
 					clip_reg->blat_aln_id = i;
 					clip_reg->call_success_status = true;
 					clip_reg->short_sv_flag = false;
+					clip_reg->zero_cov_flag = false;
 
 					ref_dist = clip_reg->endLocalRefPos - clip_reg->startLocalRefPos + 1;
 					query_dist = clip_reg->endQueryPos - clip_reg->startQueryPos + 1;
@@ -2641,9 +2917,9 @@ vector<int32_t> varCand::getInvBlatAlnItemIdx(reg_t *reg, vector<blat_aln_t*> &b
 
 // compute left and right clipping positions
 reg_t* varCand::computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq, size_t var_type){
-	size_t leftRefShiftSize, leftQueryShiftSize, rightRefShiftSize, rightQueryShiftSize;
-	size_t leftClipRefPos, leftClipLocalRefPos, leftClipQueryPos, rightClipRefPos, rightClipLocalRefPos, rightClipQueryPos;
-	int32_t dup_num_int, ref_dist, query_dist, minLeftClipPos, maxLeftClipPos, minRightClipPos, maxRightClipPos;
+	int64_t leftRefShiftSize, leftQueryShiftSize, rightRefShiftSize, rightQueryShiftSize;
+	int64_t leftClipRefPos, leftClipLocalRefPos, leftClipQueryPos, rightClipRefPos, rightClipLocalRefPos, rightClipQueryPos;
+	int64_t dup_num_int, ref_dist, query_dist, minLeftClipPos, maxLeftClipPos, minRightClipPos, maxRightClipPos;
 	double dup_num_tmp;
 	vector<size_t> left_shift_size_vec, right_shift_size_vec;
 	vector<clipPos_t> clip_pos_vec;
@@ -2689,7 +2965,7 @@ reg_t* varCand::computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t 
 		if(minRightClipPos<1) minRightClipPos = 1;
 
 		margin_adjusted_flag = false;
-		if((int32_t)leftClipRefPos>minLeftClipPos and (int32_t)leftClipRefPos<maxLeftClipPos){
+		if(leftClipRefPos>minLeftClipPos and (int32_t)leftClipRefPos<maxLeftClipPos){
 			clip_pos.chrname = varVec.at(0)->chrname;
 			clip_pos.clipRefPos = leftClipRefPos;
 			clip_pos.clipLocalRefPos = leftClipLocalRefPos;
@@ -2715,7 +2991,7 @@ reg_t* varCand::computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t 
 		}
 		clip_pos_vec.push_back(clip_pos);
 
-		if((int32_t)rightClipRefPos>minRightClipPos and (int32_t)rightClipRefPos<maxRightClipPos){
+		if(rightClipRefPos>minRightClipPos and rightClipRefPos<maxRightClipPos){
 			clip_pos.chrname = varVec.at(varVec.size()-1)->chrname;
 			clip_pos.clipRefPos = rightClipRefPos;
 			clip_pos.clipLocalRefPos = rightClipLocalRefPos;
@@ -2757,6 +3033,7 @@ reg_t* varCand::computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t 
 			clip_reg_ret->blat_aln_id = blat_aln->blat_aln_id;
 			clip_reg_ret->call_success_status = true;
 			clip_reg_ret->short_sv_flag = false;
+			clip_reg_ret->zero_cov_flag = false;
 
 			ref_dist = clip_reg_ret->endLocalRefPos - clip_reg_ret->startLocalRefPos + 1;
 			query_dist = clip_reg_ret->endQueryPos - clip_reg_ret->startQueryPos + 1;
@@ -2783,9 +3060,8 @@ reg_t* varCand::computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t 
 }
 
 vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq){
-	size_t startCheckLocalRefPos, startCheckRefPos, startCheckQueryPos, localRefPos, refPos, queryPos, misNum, refShiftSize, queryShiftSize, subseq_len;
-	size_t i, localRefPos_start, queryPos_start, tmp_len;
-	int32_t minCheckRefPos;
+	int64_t startCheckLocalRefPos, startCheckRefPos, startCheckQueryPos, localRefPos, refPos, queryPos, misNum, refShiftSize, queryShiftSize, subseq_len;
+	int64_t i, localRefPos_start, queryPos_start, tmp_len, minCheckRefPos;
 	localAln_t *local_aln;
 	string refseq_aln, midseq_aln, queryseq_aln;
 	vector<size_t> shift_size_vec;
@@ -2874,7 +3150,7 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 			}
 		}
 
-		if((int32_t)refPos<minCheckRefPos) break;
+		if(refPos<minCheckRefPos) break;
 	}
 
 	refShiftSize = startCheckLocalRefPos - localRefPos;
@@ -2888,9 +3164,8 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 }
 
 vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq){
-	size_t startCheckLocalRefPos, startCheckRefPos, startCheckQueryPos, localRefPos, refPos, queryPos, misNum, refShiftSize, queryShiftSize, subseq_len;
-	size_t i, localRefPos_start, queryPos_start, tmp_len;
-	int32_t maxCheckRefPos;
+	int64_t startCheckLocalRefPos, startCheckRefPos, startCheckQueryPos, localRefPos, refPos, queryPos, misNum, refShiftSize, queryShiftSize, subseq_len;
+	int64_t i, localRefPos_start, queryPos_start, tmp_len, maxCheckRefPos;
 	localAln_t *local_aln;
 	string midseq_aln;
 	vector<size_t> shift_size_vec;
@@ -2913,7 +3188,7 @@ vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, al
 	localRefPos = startCheckLocalRefPos;
 	refPos = startCheckRefPos;
 	queryPos = startCheckQueryPos;
-	while(queryPos<=queryseq.size() and localRefPos<=refseq.size()){
+	while(queryPos<=(int64_t)queryseq.size() and localRefPos<=(int64_t)refseq.size()){
 		baseMatchFlag = isBaseMatch(queryseq.at(queryPos-1), refseq.at(localRefPos-1));
 
 		//if(queryseq.at(queryPos-1)==refseq.at(localRefPos-1)){
@@ -2963,7 +3238,7 @@ vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, al
 					// compute the number of shift bases
 					tmp_len = 0;
 					midseq_aln = local_aln->alignResultVec.at(1);
-					for(i=0; i<midseq_aln.size(); i++){
+					for(i=0; i<(int64_t)midseq_aln.size(); i++){
 						if(midseq_aln.at(i)=='|') tmp_len ++; // match
 						else break; // mismatch
 					}
@@ -2977,7 +3252,7 @@ vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, al
 			}
 		}
 
-		if((int32_t)refPos>maxCheckRefPos) break;
+		if(refPos>maxCheckRefPos) break;
 	}
 
 	refShiftSize = localRefPos - startCheckLocalRefPos;
@@ -3000,9 +3275,10 @@ size_t varCand::computeMismatchNumLocalAln(localAln_t *local_aln){
 }
 
 // compute query position
-vector<size_t> varCand::computeQueryClipPosDup(blat_aln_t *blat_aln, size_t clipRefPos, string &refseq, string &queryseq){
+vector<size_t> varCand::computeQueryClipPosDup(blat_aln_t *blat_aln, int32_t clipRefPos, string &refseq, string &queryseq){
+	size_t i;
 	int32_t localRefPos_start, refPos_start, queryPos_start;
-	size_t i, subseq_len, dist, queryPos, refPos, localRefPos;
+	int32_t subseq_len, dist, queryPos, refPos, localRefPos;
 	localAln_t *local_aln;
 	aln_seg_t *aln_seg;
 	string query_aln_seq, mid_aln_seq, ref_aln_seq;

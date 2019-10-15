@@ -33,6 +33,7 @@ class Base
 		bool isDisagreeBase();
 		bool isZeroCovBase();
 		bool isHighIndelBase(float threshold);
+		bool isMatchToRef();
 		size_t getLargeIndelNum(size_t thres);
 		size_t getTotalIndelNum();
 		size_t getTotalClipNum();

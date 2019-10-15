@@ -263,10 +263,10 @@ int Chrome::chrDetect(){
 int Chrome::chrDetect_st(){
 	Block* bloc;
 	for(size_t i=0; i<blockVector.size(); i++){
-		//if(i>=60)
+		//if(i>=48)
 		{
 			bloc = blockVector.at(i);
-			//cout << "detect files:" << bloc->out_dir_detect << "/" << bloc->snvFilenameDetect << ", " << bloc->indelFilenameDetect << endl;
+			//cout << "[" << i << "]: detect files:" << bloc->out_dir_detect << "/" << bloc->snvFilenameDetect << ", " << bloc->indelFilenameDetect << endl;
 			bloc->blockDetect();
 		}
 	}
@@ -471,6 +471,7 @@ void Chrome::processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, 
 		reg->blat_aln_id = -1;
 		reg->call_success_status = false;
 		reg->short_sv_flag = false;
+		reg->zero_cov_flag = false;
 
 		// get position
 		idx_tmp = -1;
@@ -708,7 +709,7 @@ void Chrome::removeFPClipRegsDupInv(){
 				reg = mate_clip_reg->leftClipReg ? mate_clip_reg->leftClipReg : mate_clip_reg->leftClipReg2;
 				reg2 = mate_clip_reg->rightClipReg ? mate_clip_reg->rightClipReg : mate_clip_reg->rightClipReg2;
 				if(reg->chrname.compare(reg2->chrname)==0){  // same chrome
-					dist = (int32_t)reg2->startRefPos - (int32_t)reg->startRefPos;
+					dist = reg2->startRefPos - reg->startRefPos;
 					if(dist<0) dist = -dist;
 					if(dist>(int32_t)paras->maxClipRegSize) mate_clip_reg->valid_flag = false;
 					if(reg->startRefPos>reg2->endRefPos) mate_clip_reg->valid_flag = false;
@@ -1197,6 +1198,7 @@ void Chrome::chrLoadIndelDataAssemble(){
 			reg->blat_aln_id = -1;
 			reg->call_success_status = false;
 			reg->short_sv_flag = false;
+			reg->zero_cov_flag = false;
 			//cout << "blocID=" << computeBlocID(begPos) << ", reg:" << begPos << "-" << endPos << endl;
 
 			tmp_bloc->indelVector.push_back(reg);  // add the variation
@@ -1232,13 +1234,13 @@ void Chrome::chrLoadMateClipRegData(){
 			reg1 = reg2 = reg3 = reg4 = NULL;
 			str_vec = split(line, "\t");
 			chrname1 = str_vec.at(0);
-			if(chrname1.compare("-")!=0) { reg1 = new reg_t(); reg1->chrname = chrname1; reg1->startRefPos = stoi(str_vec.at(1)); reg1->endRefPos = stoi(str_vec.at(2)); }
+			if(chrname1.compare("-")!=0) { reg1 = new reg_t(); reg1->chrname = chrname1; reg1->startRefPos = stoi(str_vec.at(1)); reg1->endRefPos = stoi(str_vec.at(2)); reg1->zero_cov_flag = false; }
 			chrname2 = str_vec.at(3);
-			if(chrname2.compare("-")!=0) { reg2 = new reg_t(); reg2->chrname = chrname2; reg2->startRefPos = stoi(str_vec.at(4)); reg2->endRefPos = stoi(str_vec.at(5)); }
+			if(chrname2.compare("-")!=0) { reg2 = new reg_t(); reg2->chrname = chrname2; reg2->startRefPos = stoi(str_vec.at(4)); reg2->endRefPos = stoi(str_vec.at(5)); reg2->zero_cov_flag = false; }
 			chrname3 = str_vec.at(6);
-			if(chrname3.compare("-")!=0) { reg3 = new reg_t(); reg3->chrname = chrname3; reg3->startRefPos = stoi(str_vec.at(7)); reg3->endRefPos = stoi(str_vec.at(8)); }
+			if(chrname3.compare("-")!=0) { reg3 = new reg_t(); reg3->chrname = chrname3; reg3->startRefPos = stoi(str_vec.at(7)); reg3->endRefPos = stoi(str_vec.at(8)); reg3->zero_cov_flag = false; }
 			chrname4 = str_vec.at(9);
-			if(chrname4.compare("-")!=0) { reg4 = new reg_t(); reg4->chrname = chrname4; reg4->startRefPos = stoi(str_vec.at(10)); reg4->endRefPos = stoi(str_vec.at(11)); }
+			if(chrname4.compare("-")!=0) { reg4 = new reg_t(); reg4->chrname = chrname4; reg4->startRefPos = stoi(str_vec.at(10)); reg4->endRefPos = stoi(str_vec.at(11)); reg4->zero_cov_flag = false; }
 
 			if(str_vec.at(12).compare("0")==0) mate_flag = false;
 			else mate_flag = true;
@@ -1419,9 +1421,11 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->ctgfilename.compare("2_assemble/chr1/contig_chr1_181290401-181290500.fa")==0)
+		//if(var_cand->alnfilename.compare("3_call/hs37d5/blat_hs37d5_18509901-18518297.sim4")==0)
+		//if(var_cand->alnfilename.compare("3_call/chr1/blat_chr1_122962081-122965894.sim4")==0)
+		if(var_cand->alnfilename.compare("3_call/chr2/blat_chr2_48941501-48941600.sim4")==0)
 		{
-			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << endl;
+			cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << endl;
 			var_cand->callVariants();
 		}
 	}
@@ -1526,6 +1530,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				reg->blat_aln_id = -1;
 				reg->call_success_status = false;
 				reg->short_sv_flag = false;
+				reg->zero_cov_flag = false;
 				var_cand_tmp->varVec.push_back(reg);  // variation vector
 			}
 			var_cand_tmp->varVec.shrink_to_fit();
@@ -1730,6 +1735,7 @@ void Chrome::loadMisAlnRegData(){
 			reg->blat_aln_id = -1;
 			reg->call_success_status = false;
 			reg->short_sv_flag = false;
+			reg->zero_cov_flag = false;
 			mis_aln_vec.push_back(reg);
 		}
 	}

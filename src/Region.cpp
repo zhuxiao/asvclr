@@ -4,12 +4,14 @@
 #include "util.h"
 
 //Constructor
-Region::Region(string& chrname, size_t startRpos, size_t endRPos, size_t chrlen, Base *regBaseArr, size_t regFlag, Paras *paras) {
+Region::Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrlen, int64_t minRPos, int64_t maxRPos, Base *regBaseArr, size_t regFlag, Paras *paras) {
 	this->paras = paras;
 	this->chrname = chrname;
 	this->startRPos = startRpos;
 	this->endRPos = endRPos;
 	this->chrlen = chrlen;
+	this->minRPos = minRPos;
+	this->maxRPos = maxRPos;
 	this->regBaseArr = regBaseArr;
 	this->regFlag = regFlag;
 	fai = fai_load(paras->refFile.c_str());
@@ -77,7 +79,7 @@ void Region::setOutputDir(string& out_dir_assemble_prefix){
 // determine if all the base in the region are 'N' bases in reference
 bool Region::IsWholeRefGap(){
 	bool flag = true;
-	for(size_t i=startMidPartPos; i<=endMidPartPos; i++)
+	for(int64_t i=startMidPartPos; i<=endMidPartPos; i++)
 		if(regBaseArr[i-startRPos].coverage.idx_RefBase!=4){ // excluding 'N'
 			flag = false;
 			break;
@@ -106,7 +108,7 @@ int Region::computeRegAbSigs(){
 
 // compute disagreements, only check the middle part sub-region
 int Region::computeDisagreements(){
-	size_t pos, regIdx;
+	int64_t pos, regIdx;
 	for(pos=startMidPartPos; pos<endMidPartPos; pos++){
 		regIdx = pos - startRPos;
 		if(regBaseArr[regIdx].coverage.idx_RefBase!=4){ // A, C, G, T, but N
@@ -120,23 +122,23 @@ int Region::computeDisagreements(){
 }
 
 // add base position having disagreement to vector
-void Region::addDisagrePos(size_t pos){
+void Region::addDisagrePos(int64_t  pos){
 	disagrePosVector.push_back(pos);
 }
 
 // add base position having zero coverage to vector
-void Region::addZeroCovPos(size_t pos){
+void Region::addZeroCovPos(int64_t pos){
 	zeroCovPosVector.push_back(pos);
 }
 
 // destroy the disagreements vector
 void Region::destroyDisagrePosVector(){
-	vector<size_t>().swap(disagrePosVector);
+	vector<int64_t>().swap(disagrePosVector);
 }
 
 // destroy the zero coverage vector
 void Region::destroyZeroCovPosVector(){
-	vector<size_t>().swap(zeroCovPosVector);
+	vector<int64_t>().swap(zeroCovPosVector);
 }
 
 // destroy the abnormal coverage vector
@@ -149,7 +151,7 @@ void Region::destroyAbCovRegVector(){
 
 // destroy the SNV vector
 void Region::destroySnvVector(){
-	vector<size_t>().swap(snvVector);
+	vector<int64_t>().swap(snvVector);
 }
 
 // destroy the indel vector
@@ -164,7 +166,7 @@ void Region::destroyClipRegVector(){
 
 // output abnormal signatures in region
 void Region::printRegAbSigs(){
-	vector<size_t>::iterator it;
+	vector<int64_t>::iterator it;
 
 	// output SNVs
 	cout << "region: " << startMidPartPos << "-" << endMidPartPos << endl;
@@ -199,7 +201,7 @@ void Region::printRegAbSigs(){
 
 // compute the abnormal coverage region
 int Region::computeAbCovReg(){
-	size_t pos, startPosSubReg, endPosSubReg;
+	int64_t pos, startPosSubReg, endPosSubReg;
 	double tmp_cov, covRatio2block, covRatio2local;
 	reg_t *reg;
 
@@ -221,7 +223,7 @@ int Region::computeAbCovReg(){
 }
 
 // allocate reg
-reg_t* Region::allocateReg(string &chrname, size_t startPosReg, size_t endPosReg){
+reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosReg){
 	reg_t *reg = new reg_t();
 	if(!reg){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot allocate memory" << endl;
@@ -238,12 +240,13 @@ reg_t* Region::allocateReg(string &chrname, size_t startPosReg, size_t endPosReg
 	reg->blat_aln_id = -1;
 	reg->call_success_status = false;
 	reg->short_sv_flag = false;
+	reg->zero_cov_flag = false;
 	return reg;
 }
 
 // compute the mean coverage of the sub-region, excluding the gap region
-double Region::computeMeanCovReg(size_t startPosReg, size_t endPosReg){
-	uint64_t i, totalReadBeseNum = 0, totalRefBaseNum = 0;
+double Region::computeMeanCovReg(int64_t startPosReg, int64_t endPosReg){
+	int64_t i, totalReadBeseNum = 0, totalRefBaseNum = 0;
 	double mean_cov;
 	for(i=startPosReg; i<=endPosReg; i++)
 		if(regBaseArr[i-startRPos].coverage.idx_RefBase!=4){ // excluding 'N'
@@ -257,7 +260,7 @@ double Region::computeMeanCovReg(size_t startPosReg, size_t endPosReg){
 
 // compute the number of high indel events sub-regions
 int Region::computeHighIndelEventRegNum(){
-	size_t pos, startPosSubReg, endPosSubReg;
+	int64_t pos, startPosSubReg, endPosSubReg;
 	highIndelSubRegNum = 0;
 	for(pos=startMidPartPos; pos<=endMidPartPos; pos+=subRegSize){
 		startPosSubReg = pos;
@@ -270,8 +273,8 @@ int Region::computeHighIndelEventRegNum(){
 
 // compute the total indel number in reads, including insertions, deletions and clippings
 // return: the total number of the above indel events
-size_t Region::computeReadIndelEventNumReg(size_t startPosReg, size_t endPosReg){
-	size_t i, total = 0;
+int32_t Region::computeReadIndelEventNumReg(int64_t startPosReg, int64_t endPosReg){
+	int64_t i, total = 0;
 	Base *base;
 	for(i=startPosReg; i<=endPosReg; i++){
 		base = regBaseArr + i - startRPos;
@@ -282,9 +285,9 @@ size_t Region::computeReadIndelEventNumReg(size_t startPosReg, size_t endPosReg)
 
 // detect SNVs for the region
 void Region::detectSNV(){
-	size_t startCheckPos, endCheckPos;
+	int64_t startCheckPos, endCheckPos;
 	bool SNV_flag;
-	vector<size_t>::iterator disagr;
+	vector<int64_t>::iterator disagr;
 	for(disagr=disagrePosVector.begin(); disagr!=disagrePosVector.end();){
 		startCheckPos = (*disagr) - subRegSize;
 		endCheckPos = (*disagr) + subRegSize;
@@ -308,7 +311,7 @@ void Region::detectSNV(){
 }
 
 // compute the SNV flag for a base position
-bool Region::computeSNVFlag(size_t pos, size_t startCheckPos, size_t endCheckPos){
+bool Region::computeSNVFlag(int64_t pos, int64_t startCheckPos, int64_t endCheckPos){
 	bool SNV_flag = true;
 	double cov_tmp;
 
@@ -374,11 +377,11 @@ bool Region::computeSNVFlag(size_t pos, size_t startCheckPos, size_t endCheckPos
 }
 
 // determine whether there are much short indel events around
-bool Region::haveMuchShortIndelsAround(size_t startCheckPos, size_t endCheckPos){
+bool Region::haveMuchShortIndelsAround(int64_t startCheckPos, int64_t endCheckPos){
 	bool flag = false;
 	Base *base;
 
-	for(size_t i=startCheckPos; i<=endCheckPos; i++){
+	for(int64_t i=startCheckPos; i<=endCheckPos; i++){
 		base = regBaseArr + i - startRPos;
 		if(base->insVector.size()>=paras->min_ins_num_filt or base->delVector.size()>=paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
 			or base->num_shortIns>=paras->min_ins_num_filt or base->num_shortdel>=paras->min_del_num_filt or base->num_shortClip>=paras->min_clip_num_filt
@@ -409,14 +412,15 @@ size_t Region::getIndelNum(){
 // detect the indel regions
 void Region::detectIndelReg(){
 	reg_t *reg = NULL;
-	int32_t i = startMidPartPos - subRegSize;
-	if(i<1) i = 1;
-	while(i<(int32_t)endMidPartPos){
-		//if(i>24935500)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
+	int64_t i = startMidPartPos - subRegSize;
+	if(i<minRPos) i = minRPos;
+	while(i<endMidPartPos){
+		//if(i>48939000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
 		//	cout << i << endl;
 
 		reg = getIndelReg(i);
 		if(reg){
+			//cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", localRef: " << reg->startLocalRefPos << "-" << reg->endLocalRefPos << ", Query :" << reg->startQueryPos << "-" << reg->endQueryPos << endl;
 			indelVector.push_back(reg);
 			i = reg->endRefPos + subRegSize;
 		} else break;
@@ -425,13 +429,13 @@ void Region::detectIndelReg(){
 }
 
 // get the indel region given the start checking chromosome position
-reg_t* Region::getIndelReg(size_t startCheckPos){
+reg_t* Region::getIndelReg(int64_t startCheckPos){
 	reg_t *reg = NULL;
-	size_t i, checkPos, reg_size1, reg_size2, num1, num3, num4, extendSize;
+	int64_t i, checkPos, reg_size1, reg_size2, num1, num3, num4, extendSize;
 	vector<double> num_vec;
 	double high_indel_clip_ratio;
-	int32_t startPos1, endPos1, startPos2;
-	int32_t startPos_indel = -1, endPos_indel = -1;
+	int64_t startPos1, endPos1, startPos2;
+	int64_t startPos_indel = -1, endPos_indel = -1;
 	bool indel_beg_flag, indel_end_flag;
 
 	checkPos = startCheckPos;
@@ -455,7 +459,7 @@ reg_t* Region::getIndelReg(size_t startCheckPos){
 				if(startPos1==-1) startPos1 = i;
 				reg_size1 ++;
 			}else{
-				if(reg_size1>=subRegSize) {
+				if(reg_size1>=(int64_t)subRegSize) {
 					indel_beg_flag = true;
 					break;
 				}else{
@@ -484,7 +488,7 @@ reg_t* Region::getIndelReg(size_t startCheckPos){
 					if(startPos2==-1)
 						startPos2 = i;
 					++reg_size2;
-					if(reg_size2>=2*subRegSize){
+					if(reg_size2>=2*(int64_t)subRegSize){
 						num3 = getLargeIndelNum(startPos2, i);
 						if(num3<3){
 							indel_end_flag = true;
@@ -499,17 +503,24 @@ reg_t* Region::getIndelReg(size_t startCheckPos){
 					reg_size2 = 0;
 				}
 
-				if(i==endRPos and indel_end_flag==false)
+				if(i==endRPos and indel_end_flag==false){
 					extendSize = paras->slideSize * 2;
+					if(extendSize+endRPos>maxRPos)
+						extendSize = maxRPos - endRPos;
+				}
 			}
 
 			if(indel_end_flag){
 				startPos_indel = endPos1 + 1;
 				endPos_indel = startPos2 - 1;
+			}else if(extendSize>0){
+				indel_end_flag = true;
+				startPos_indel = endPos1 + 1;
+				endPos_indel = endRPos + extendSize - 1;
 			}
 		}
 		// allocate the indel region
-		if(indel_beg_flag and indel_end_flag)
+		if(indel_beg_flag and indel_end_flag){
 			if(endPos_indel-startPos_indel+1>=(int32_t)paras->min_sv_size_usr){
 				num1 = getDisZeroCovNum(startPos_indel, endPos_indel);
 				//num2 = getMismatchBasesAround(startPos_indel, endPos_indel);
@@ -523,14 +534,14 @@ reg_t* Region::getIndelReg(size_t startCheckPos){
 					break;
 				}else checkPos = endPos_indel + 1;
 			}else checkPos = endPos_indel + 1;
-		else break;
+		}else break;
 	}
 
 	return reg;
 }
 
 // determine whether the base have no abnormal signatures
-bool Region::haveNoAbSigs(Base *base, size_t pos){
+bool Region::haveNoAbSigs(Base *base, int64_t pos){
 	if(base->isDisagreeBase())
 		if(find(snvVector.begin(), snvVector.end(), pos)==snvVector.end()) return false;
 	if(base->isZeroCovBase() or base->insVector.size()>=paras->min_ins_num_filt or base->delVector.size()>=paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
@@ -545,14 +556,14 @@ bool Region::haveNoAbSigs(Base *base, size_t pos){
 }
 
 // check [-2, 2] region around
-size_t Region::getMismatchBasesAround(size_t pos1, size_t pos2){
-	int32_t i, num, startPos, endPos;
+int32_t Region::getMismatchBasesAround(int64_t pos1, int64_t pos2){
+	int64_t i, num, startPos, endPos;
 	Base *base;
 
 	startPos = pos1;
-	if(startPos<(int32_t)startMidPartPos) startPos = startMidPartPos;
+	if(startPos<startMidPartPos) startPos = startMidPartPos;
 	endPos = pos2;
-	if(endPos>(int32_t)endMidPartPos) endPos = endMidPartPos;
+	if(endPos>endMidPartPos) endPos = endMidPartPos;
 
 	for(num=0, i=startPos; i<=endPos; i++){
 		base = regBaseArr + i - startRPos;
@@ -562,8 +573,8 @@ size_t Region::getMismatchBasesAround(size_t pos1, size_t pos2){
 	return num;
 }
 
-size_t Region::getDisZeroCovNum(size_t startPos, size_t endPos){
-	size_t i, total = 0;
+int32_t Region::getDisZeroCovNum(int64_t startPos, int64_t endPos){
+	int64_t i, total = 0;
 	for(i=startPos; i<=endPos; i++)
 		if(regBaseArr[i-startRPos].isDisagreeBase() or regBaseArr[i-startRPos].isZeroCovBase())
 			total ++;
@@ -571,8 +582,8 @@ size_t Region::getDisZeroCovNum(size_t startPos, size_t endPos){
 }
 
 // get the number of bases with long indels
-size_t Region::getLargeIndelBaseNum(size_t startPos, size_t endPos){
-	size_t i, large_indel_num, total;
+int32_t Region::getLargeIndelBaseNum(int64_t startPos, int64_t endPos){
+	int64_t i, large_indel_num, total;
 	double ratio;
 
 	total = 0;
@@ -587,8 +598,8 @@ size_t Region::getLargeIndelBaseNum(size_t startPos, size_t endPos){
 }
 
 // get the number of bases with long indels
-size_t Region::getLargeIndelNum(size_t startPos, size_t endPos){
-	size_t i, large_indel_num;
+int32_t Region::getLargeIndelNum(int64_t startPos, int64_t endPos){
+	int64_t i, large_indel_num;
 	large_indel_num = 0;
 	for(i=startPos; i<=endPos; i++){
 		large_indel_num += regBaseArr[i-startRPos].getLargeIndelNum(paras->large_indel_size_thres);
@@ -597,8 +608,8 @@ size_t Region::getLargeIndelNum(size_t startPos, size_t endPos){
 }
 
 // get the number of high ratio indel bases
-vector<double> Region::getTotalHighIndelClipRatioBaseNum(size_t startPos, size_t endPos){
-	size_t i, indel_num, clip_num, total_cov, len;
+vector<double> Region::getTotalHighIndelClipRatioBaseNum(int64_t startPos, int64_t endPos){
+	int64_t i, indel_num, clip_num, total_cov, len;
 	double ratio, total, total2;
 	Base *base;
 	vector<double> base_num_vec;
@@ -630,7 +641,7 @@ void Region::determineDifType(){
 }
 
 // get SNV vector
-vector<size_t> Region::getSnvVector(){
+vector<int64_t> Region::getSnvVector(){
 	return snvVector;
 }
 
@@ -645,15 +656,15 @@ vector<reg_t*> Region::getClipRegVector(){
 }
 
 // get indel vector
-vector<size_t> Region::getZeroCovPosVector(){
+vector<int64_t> Region::getZeroCovPosVector(){
 	return zeroCovPosVector;
 }
 
 //
 void Region::detectHighClipReg(){
-	int32_t i = startMidPartPos - SUB_CLIP_REG_SIZE;
+	int64_t i = startMidPartPos - SUB_CLIP_REG_SIZE;
 	if(i<1) i = 1;
-	while(i<(int32_t)endMidPartPos){
+	while(i<endMidPartPos){
 //		if(i>253000)
 //			cout << i << endl;
 		reg_t *reg = getClipReg(i);
@@ -666,10 +677,10 @@ void Region::detectHighClipReg(){
 }
 
 // get the clip region
-reg_t* Region::getClipReg(size_t startCheckPos){
+reg_t* Region::getClipReg(int64_t startCheckPos){
 	reg_t *reg = NULL;
-	size_t checkPos, subclipreg_size, startPos_tmp, endPos_tmp;
-	int32_t startPos_clip, endPos_clip;
+	int64_t checkPos, subclipreg_size, startPos_tmp, endPos_tmp;
+	int64_t startPos_clip, endPos_clip;
 	bool normal_reg_flag, clip_reg_flag;
 
 	//cout << chrname << ":" << to_string(startRPos) << "-" << to_string(endRPos) << ", localRegCov=" << localRegCov << endl;
@@ -852,9 +863,10 @@ reg_t* Region::getClipReg(size_t startCheckPos){
 }
 
 
-bool Region::haveNoClipSig(size_t startPos, size_t endPos, double clip_ratio_thres){
+bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_thres){
 	bool flag = true;
-	size_t i, j, clip_num;
+	int64_t i;
+	size_t j, clip_num;
 	vector<clipEvent_t*> clip_vec;
 	double ratio;
 

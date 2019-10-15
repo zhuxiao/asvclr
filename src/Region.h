@@ -32,11 +32,12 @@ using namespace std;
 
 typedef struct{
 	string chrname;
-	size_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
-	size_t var_type, aln_orient, dup_num;
+	int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
+	int32_t var_type, aln_orient, dup_num;
 	int32_t query_id, sv_len, blat_aln_id;
+	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
 	string refseq, altseq;
-	bool call_success_status, short_sv_flag;
+	bool call_success_status, short_sv_flag, zero_cov_flag;
 }reg_t;
 
 
@@ -45,7 +46,7 @@ class Region {
 		Paras *paras;
 		faidx_t *fai;
 		string chrname;
-		size_t startRPos, endRPos, startMidPartPos, endMidPartPos, chrlen;
+		int64_t startRPos, endRPos, startMidPartPos, endMidPartPos, chrlen, minRPos, maxRPos;
 		Base *regBaseArr;  // the local region base array
 		size_t regFlag, subRegSize;
 		bool wholeRefGapFlag; // true -- if all the bases in the region of reference are 'N'; false -- otherwise
@@ -61,17 +62,17 @@ class Region {
 		string out_dir_assemble;
 
 	private:
-		vector<size_t> disagrePosVector;  // element: the reference position with disagreement
-		vector<size_t> zeroCovPosVector;  // element: the reference position with zero coverage
+		vector<int64_t> disagrePosVector;  // element: the reference position with disagreement
+		vector<int64_t> zeroCovPosVector;  // element: the reference position with zero coverage
 		vector<reg_t*> abCovRegVector;    // element: the reference region with abnormal coverage, format: pos1-pos2
 
 		// SNV and indel
-		vector<size_t> snvVector;
+		vector<int64_t> snvVector;
 		vector<reg_t*> indelVector;
 		vector<reg_t*> clipRegVector;  // only for duplication and inversion
 
 	public:
-		Region(string& chrname, size_t startRpos, size_t endRPos, size_t chrlen, Base *regBaseArr, size_t regFlag, Paras *paras);
+		Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrlen, int64_t minRPos, int64_t maxRPos, Base *regBaseArr, size_t regFlag, Paras *paras);
 		virtual ~Region();
 		void setOutputDir(string& out_dir_assemble_prefix);
 
@@ -87,15 +88,15 @@ class Region {
 		size_t getSNVNum();
 		size_t getIndelNum();
 		void determineDifType();
-		vector<size_t> getSnvVector();
+		vector<int64_t> getSnvVector();
 		vector<reg_t*> getIndelVector();
 		vector<reg_t*> getClipRegVector();
-		vector<size_t> getZeroCovPosVector();
+		vector<int64_t> getZeroCovPosVector();
 
 	private:
 		bool IsWholeRefGap();
-		void addDisagrePos(size_t pos);
-		void addZeroCovPos(size_t pos);
+		void addDisagrePos(int64_t pos);
+		void addZeroCovPos(int64_t pos);
 		void destroyDisagrePosVector();
 		void destroyZeroCovPosVector();
 		void destroyAbCovRegVector();
@@ -103,23 +104,23 @@ class Region {
 		void destroyIndelVector();
 		void destroyClipRegVector();
 		int computeAbCovReg();
-		reg_t* allocateReg(string &chrname, size_t startPosReg, size_t endPosReg);
-		double computeMeanCovReg(size_t startPosReg, size_t endPosReg);
+		reg_t* allocateReg(string &chrname, int64_t startPosReg, int64_t endPosReg);
+		double computeMeanCovReg(int64_t startPosReg, int64_t endPosReg);
 		int computeHighIndelEventRegNum();
-		size_t computeReadIndelEventNumReg(size_t startPosReg, size_t endPosReg);
-		bool computeSNVFlag(size_t pos, size_t startCheckPos, size_t endCheckPos);
-		bool haveMuchShortIndelsAround(size_t startCheckPos, size_t endCheckPos);
-		reg_t* getIndelReg(size_t startCheckPos);
-		bool haveNoAbSigs(Base *base, size_t pos);
-		size_t getMismatchBasesAround(size_t pos1, size_t pos2);
-		size_t getDisZeroCovNum(size_t startPos, size_t endPos);
-		size_t getLargeIndelBaseNum(size_t startPos, size_t endPos);
-		size_t getLargeIndelNum(size_t startPos, size_t endPos);
-		vector<double> getTotalHighIndelClipRatioBaseNum(size_t startPos, size_t endPos);
+		int32_t computeReadIndelEventNumReg(int64_t startPosReg, int64_t endPosReg);
+		bool computeSNVFlag(int64_t pos, int64_t startCheckPos, int64_t endCheckPos);
+		bool haveMuchShortIndelsAround(int64_t startCheckPos, int64_t endCheckPos);
+		reg_t* getIndelReg(int64_t startCheckPos);
+		bool haveNoAbSigs(Base *base, int64_t pos);
+		int32_t getMismatchBasesAround(int64_t pos1, int64_t pos2);
+		int32_t getDisZeroCovNum(int64_t startPos, int64_t endPos);
+		int32_t getLargeIndelBaseNum(int64_t startPos, int64_t endPos);
+		int32_t getLargeIndelNum(int64_t startPos, int64_t endPos);
+		vector<double> getTotalHighIndelClipRatioBaseNum(int64_t startPos, int64_t endPos);
 
 		// duplication and inversion
-		reg_t* getClipReg(size_t startCheckPos);
-		bool haveNoClipSig(size_t startPos, size_t endPos, double clip_ratio_thres);
+		reg_t* getClipReg(int64_t startCheckPos);
+		bool haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_thres);
 };
 
 #endif /* SRC_REGION_H_ */

@@ -25,7 +25,7 @@ using namespace std;
 
 class misAlnReg {
 	public:
-		size_t startPos, endPos, chrlen;
+		int64_t startPos, endPos, chrlen;
 		Base *misAlnRegBaseArr;
 		uint16_t disagrNum;
 		uint16_t misAlnSubregNum, subRegNum, highClipBaseNum, zeroCovBaseNum;		// 10-bp sub-region

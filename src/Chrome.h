@@ -11,7 +11,6 @@
 #include "Block.h"
 #include "varCand.h"
 #include "clipReg.h"
-#include "util.h"
 
 using namespace std;
 

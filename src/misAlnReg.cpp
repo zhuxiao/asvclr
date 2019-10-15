@@ -26,7 +26,7 @@ misAlnReg::misAlnReg(size_t startPos, size_t endPos, size_t chrlen, Base *misAln
 
 // compute the disagreements of sub regions in single misAln region
 void misAlnReg::computeDisagrSubreg(){
-	size_t pos, posIdx, regIdx;
+	int64_t pos, posIdx, regIdx;
 
 	// divide into sub-regions
 	subRegNum = (endPos - startPos) / SUB_MIS_ALN_REG_SIZE + 1;
@@ -55,7 +55,7 @@ void misAlnReg::computeDisagrSubreg(){
 
 // compute the number of bases which having much clipped events
 void misAlnReg::computeHighClipBaseNum(){
-	size_t pos, posIdx;
+	int64_t pos, posIdx;
 	highClipBaseNum = 0;
 	for(pos=startPos; pos<=endPos; pos++){
 		posIdx = pos - startPos;
@@ -65,7 +65,7 @@ void misAlnReg::computeHighClipBaseNum(){
 
 // compute the number of bases which having much clipped events
 void misAlnReg::computeZeroCovBaseNum(){
-	size_t pos, posIdx;
+	int64_t pos, posIdx;
 	if(startPos>=REF_END_SKIP_SIZE and endPos+REF_END_SKIP_SIZE<=chrlen){
 		zeroCovBaseNum = 0;
 		for(pos=startPos; pos<=endPos; pos++){

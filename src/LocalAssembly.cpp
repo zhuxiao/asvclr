@@ -47,7 +47,7 @@ void LocalAssembly::extractRefseq(){
 	if(startRefPos<1) startRefPos = 1;
 	left_shift_size = varVec[0]->startRefPos - startRefPos;  // left shift size
 	endRefPos = varVec[varVec.size()-1]->endRefPos + REFSEQ_SIDE_LEN;
-	if(endRefPos>(int32_t)chrlen) endRefPos = chrlen;
+	if(endRefPos>chrlen) endRefPos = chrlen;
 	right_shift_size = endRefPos - varVec[varVec.size()-1]->endRefPos;  // right shift size
 
 	// get the region sequence
@@ -75,12 +75,12 @@ void LocalAssembly::extractReadsDataFromBAM(){
 	ofstream outfile;
 	vector<clipAlnData_t*> query_aln_segs;
 	vector<string> query_seq_qual_vec;
-	int32_t noHardClipIdx, start_pos_assembly, end_pos_assembly;
+	int64_t noHardClipIdx, start_pos_assembly, end_pos_assembly;
 
-	start_pos_assembly = (int32_t)varVec[0]->startRefPos - assembly_extend_size;
+	start_pos_assembly = varVec[0]->startRefPos - assembly_extend_size;
 	if(start_pos_assembly<1) start_pos_assembly = 1;
 	end_pos_assembly = varVec[varVec.size()-1]->endRefPos + assembly_extend_size;
-	if(end_pos_assembly>(int32_t)chrlen) end_pos_assembly = chrlen;
+	if(end_pos_assembly>chrlen) end_pos_assembly = chrlen;
 
 	// load the aligned reads data
 	clipAlnDataLoader data_loader(varVec[0]->chrname, start_pos_assembly, end_pos_assembly, inBamFile);

@@ -9,15 +9,15 @@
 #include <unistd.h>
 
 #include <htslib/sam.h>
-//#include <htslib/hts.h>
-//#include <htslib/faidx.h>
 
 using namespace std;
+
+extern vector<string> split(const string& s, const string& delim);
 
 // program variables
 #define PROG_NAME		"ASVCLR"
 #define PROG_DESC		"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION	"0.2.0"
+#define PROG_VERSION	"0.3.0"
 
 #define SIZE_EST_OP		0
 #define NUM_EST_OP		1
@@ -75,8 +75,6 @@ class Paras
 		size_t insSizeEstArr[AUX_ARR_SIZE], delSizeEstArr[AUX_ARR_SIZE], clipSizeEstArr[AUX_ARR_SIZE];
 		size_t insNumEstArr[AUX_ARR_SIZE], delNumEstArr[AUX_ARR_SIZE], clipNumEstArr[AUX_ARR_SIZE];
 
-
-
 	public:
 		Paras();
 		Paras(int argc, char **argv);
@@ -100,7 +98,6 @@ class Paras
 		void showCallUsage();
 		void showAllUsage();
 		size_t estimateSinglePara(size_t *arr, size_t n, double threshold, size_t min_val);
-		vector<string> split(const  string& s, const string& delim);
 };
 
 #endif /* SRC_PARAS_H_ */

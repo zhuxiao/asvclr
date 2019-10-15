@@ -9,10 +9,17 @@
 #include "Paras.h"
 #include "Chrome.h"
 #include "util.h"
+#include "blatAlnTra.h"
 
 using namespace std;
 
 #define MIN_VALID_TRA_RATIO			(0.95f)
+
+typedef struct {
+	string refseqfilename, ctgfilename, alnfilename;
+}blat_aln_filename_t;
+
+//class blatAlnTra;
 
 class Genome{
 	private:
@@ -61,6 +68,12 @@ class Genome{
 		void loadCallData();
 		void recallIndelsFromTRA();
 		void genomeCallTra();
+		void generateAlatAlnFilenameTra();
+		void genomeCallTraOp();
+		vector<blatAlnTra*> loadBlatAlnDataTra();
+		void releaseBlatAlnDataTra(vector<blatAlnTra*> &blat_aln_tra_vec);
+		void blatAlnTra_st(vector<blatAlnTra*> *blat_aln_tra_vec);
+		void blatAlnTra_mt(vector<blatAlnTra*> *blat_aln_tra_vec);
 		varCand* constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp);
 		vector<int32_t> computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, mateClipReg_t *clip_reg);
 		vector<int32_t> getMateTraReg(size_t query_id, size_t start_query_pos, size_t end_query_pos, varCand *var_cand_tmp);

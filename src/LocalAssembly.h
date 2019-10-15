@@ -28,7 +28,7 @@ using namespace std;
 class LocalAssembly {
 	public:
 		string chrname, readsfilename, contigfilename, refseqfilename, tmpdir, inBamFile; // , canu_version;
-		size_t chrlen, assembly_extend_size;
+		int64_t chrlen, assembly_extend_size;
 		vector<reg_t*> varVec;
 		faidx_t *fai;
 

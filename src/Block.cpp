@@ -131,7 +131,8 @@ void Block::blockFillDataEst(size_t op_est){
 
 // fill the estimation data
 void Block::fillDataEst(size_t op_est){
-	size_t i, j, len;
+	int64_t i;
+	size_t j, len;
 	Base *base;
 	//vector<insEvent_t*>::iterator ins;
 	//vector<delEvent_t*>::iterator del;
@@ -208,7 +209,11 @@ void Block::blockDetect(){
 	// compute abnormal signatures
 	computeAbSigs();
 
+	//printRegVec(indelVector, "indelVector");
+
 	removeFalseIndel();
+
+	//printRegVec(indelVector, "indelVector");
 
 	// remove false SNV
 	removeFalseSNV();
@@ -289,7 +294,7 @@ void Block::maskMisAlnRegs(){
 
 // compute disagreements for each misAln region
 int Block::computeMisAlnDisagrReg(){
-	size_t startPosWin, endPosWin, pos, tmp_endPos;
+	int64_t startPosWin, endPosWin, pos, tmp_endPos;
 
 	// process the head region
 	if(!headIgnFlag){
@@ -300,7 +305,7 @@ int Block::computeMisAlnDisagrReg(){
 	}
 
 	// process the inner regions
-	if(endPos>=2*paras->slideSize){
+	if(endPos>=2*(int64_t)paras->slideSize){
 		tmp_endPos = endPos - 2 * paras->slideSize;
 		for(pos=startPos; pos<=tmp_endPos; pos+=paras->slideSize){
 			startPosWin = pos;
@@ -397,7 +402,7 @@ void Block::saveMisAlnRegToFile(){
 // compute the disagree count for given region
 void Block::computeDisagrNumSingleRegion(size_t startRpos, size_t endRPos, size_t regFlag){
 	// construct a region
-	Region tmp_reg(chrname, startRpos, endRPos, chrlen, baseArr+startRpos-startPos, regFlag, paras);
+	Region tmp_reg(chrname, startRpos, endRPos, chrlen, startPos, endPos, baseArr+startRpos-startPos, regFlag, paras);
 
 	// compute the abnormal signatures in a region
 	if(tmp_reg.wholeRefGapFlag==false){
@@ -424,8 +429,7 @@ bool Block::isMisAlnReg(Region &reg){
 
 // update the coverage information for each base in this block
 void Block::computeBlockMeanCov(){
-	size_t pos;
-	int64_t totalReadBeseNum = 0, totalRefBaseNum = 0;
+	int64_t pos, totalReadBeseNum = 0, totalRefBaseNum = 0;
 	for(pos=startPos; pos<=endPos; pos++){
 		// compute the meanCov excluding the gap regions
 		if(baseArr[pos-startPos].coverage.idx_RefBase!=4){ // excluding 'N'
@@ -439,7 +443,7 @@ void Block::computeBlockMeanCov(){
 
 // extract abnormal signatures
 int Block::computeAbSigs(){
-	size_t startPosWin, endPosWin, pos, tmp_endPos;
+	int64_t startPosWin, endPosWin, pos, tmp_endPos;
 
 	// process the head region
 	if(!headIgnFlag){
@@ -450,7 +454,7 @@ int Block::computeAbSigs(){
 	}
 
 	// process the inner regions
-	if(endPos>=2*paras->slideSize){
+	if(endPos>=2*(int64_t)paras->slideSize){
 		tmp_endPos = endPos - 2 * paras->slideSize;
 		for(pos=startPos; pos<=tmp_endPos; pos+=paras->slideSize){
 			startPosWin = pos;
@@ -490,7 +494,7 @@ int Block::processSingleRegion(size_t startRpos, size_t endRPos, size_t regFlag)
 //		cout << "\t" << chrname << ":" << startRpos << "-" << endRPos << endl;
 
 	// construct a region
-	Region tmp_reg(chrname, startRpos, endRPos, chrlen, baseArr+startRpos-startPos, regFlag, paras);
+	Region tmp_reg(chrname, startRpos, endRPos, chrlen, startPos, endPos, baseArr+startRpos-startPos, regFlag, paras);
 	tmp_reg.setMeanBlockCov(meanCov);  // set the mean coverage
 
 	// compute the abnormal signatures in a region
@@ -520,8 +524,8 @@ void Block::copySVEvents(Region &reg){
 	size_t i;
 	vector<reg_t*> regVec;
 	reg_t *reg_tmp;
-	vector<size_t> posVec;
-	size_t pos_tmp;
+	vector<int64_t> posVec;
+	int64_t pos_tmp;
 
 	// copy clip region
 	regVec = reg.getClipRegVector();
@@ -551,9 +555,9 @@ void Block::copySVEvents(Region &reg){
 void Block::computeZeroCovReg(Region &reg){
 	size_t i, j;
 	reg_t *reg_tmp;
-	vector<size_t> posVec;
-	size_t pos1, pos2;
-	int32_t start_vec_idx, end_vec_idx;
+	vector<int64_t> posVec;
+	int64_t pos1, pos2;
+	int64_t start_vec_idx, end_vec_idx;
 
 	posVec = reg.getZeroCovPosVector();
 	i = 0;
@@ -581,6 +585,7 @@ void Block::computeZeroCovReg(Region &reg){
 			reg_tmp->blat_aln_id = -1;
 			reg_tmp->call_success_status = false;
 			reg_tmp->short_sv_flag = false;
+			reg_tmp->zero_cov_flag = false;
 
 			zeroCovRegVector.push_back(reg_tmp);
 			i = end_vec_idx + 1;
@@ -589,7 +594,8 @@ void Block::computeZeroCovReg(Region &reg){
 }
 
 void Block::updateZeroCovRegUsingIndelReg(vector<reg_t*> &zeroCovRegVec, vector<reg_t*> &indelVec){
-	size_t i, j, minValue, maxValue;
+	size_t i, j;
+	int32_t minValue, maxValue;
 	reg_t *zero_cov_reg, *reg_tmp;
 	int32_t regIdx;
 	vector<int32_t> regIdx_vec;
@@ -676,6 +682,7 @@ void Block::updateIndelRegUsingLongZeroCov(vector<reg_t*> &regVec, vector<reg_t*
 	}
 	for(i=0; i<zero_cov_vec.size(); i++){
 		zero_cov_reg = zero_cov_vec.at(i);
+		zero_cov_reg->zero_cov_flag = true;
 		regVec.push_back(zero_cov_reg);
 	}
 	zero_cov_vec.clear();
@@ -686,8 +693,10 @@ void Block::removeFalseIndel(){
 	bool flag = false;
 	reg_t *reg, *foundReg;
 	for(size_t i=0; i<indelVector.size(); ){
+		foundReg = NULL;
 		reg = indelVector.at(i);
-		foundReg = findVarvecItemExtSize(reg->startRefPos, reg->endRefPos, clipRegVector, CLIP_END_EXTEND_SIZE, CLIP_END_EXTEND_SIZE);
+		if(reg->zero_cov_flag==false)
+			foundReg = findVarvecItemExtSize(reg->startRefPos, reg->endRefPos, clipRegVector, CLIP_END_EXTEND_SIZE, CLIP_END_EXTEND_SIZE);
 		if(foundReg) { flag = true; delete reg; indelVector.erase(indelVector.begin()+i); }
 		else i++;
 	}

@@ -1,4 +1,5 @@
 #include "Base.h"
+#include "util.h"
 
 // Constructor
 Base::Base(){
@@ -167,6 +168,32 @@ bool Base::isHighIndelBase(float threshold){
 	indelNum = insVector.size() + delVector.size();
 	if(coverage.num_bases[5]>0 and (double)indelNum/coverage.num_bases[5]>=threshold)
 		flag = true;
+	return flag;
+}
+
+bool Base::isMatchToRef(){
+	bool flag = false, matchFlag;
+	char ch_maxBase, ref_base;
+
+	if(coverage.num_bases[5]>0){
+		if(coverage.idx_max==coverage.idx_RefBase){
+			flag = true;
+		}else{
+			switch(coverage.idx_max){
+				case 0: ch_maxBase = 'A'; break;
+				case 1: ch_maxBase = 'C'; break;
+				case 2: ch_maxBase = 'G'; break;
+				case 3: ch_maxBase = 'T'; break;
+				case 4: ch_maxBase = 'N'; break;
+				default: cerr << __func__ << ": unknown base idx_max: " << coverage.idx_max << endl; exit(1);
+			}
+
+			ref_base = coverage.refBase;
+			matchFlag = isBaseMatch(ch_maxBase, ref_base);
+			if(matchFlag)
+				flag = true;
+		}
+	}
 	return flag;
 }
 

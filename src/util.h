@@ -22,9 +22,9 @@ void reverseSeq(string &seq);
 void reverseComplement(string &seq);
 void upperSeq(string &seq);
 size_t getCtgCount(string &contigfilename);
-reg_t* findVarvecItem(size_t startPos, size_t endPos, vector<reg_t*> &varVec);
-vector<reg_t*> findVarvecItemAll(size_t startPos, size_t endPos, vector<reg_t*> &varVec);
-reg_t* findVarvecItemExtSize(size_t startRefPos, size_t endRefPos, vector<reg_t*> &varVec, int32_t leftExtSize, int32_t rightExtSize);
+reg_t* findVarvecItem(int32_t startPos, int32_t endPos, vector<reg_t*> &varVec);
+vector<reg_t*> findVarvecItemAll(int32_t startPos, int32_t endPos, vector<reg_t*> &varVec);
+reg_t* findVarvecItemExtSize(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &varVec, int32_t leftExtSize, int32_t rightExtSize);
 int32_t getVectorIdx(reg_t *reg, vector<reg_t*> &varVec);
 reg_t* getOverlappedReg(reg_t *reg, vector<reg_t*> &varVec);
 int32_t getOverlappedRegIdx(reg_t *reg, vector<reg_t*> &varVec);
@@ -35,7 +35,7 @@ bool isAdjacent(size_t startPos1, size_t endPos1, size_t startPos2, size_t endPo
 bool isOverlappedMateClipReg(mateClipReg_t *mate_clip_reg1, mateClipReg_t *mate_clip_reg2);
 mateClipReg_t* getOverlappedMateClipReg(mateClipReg_t *mate_clip_reg_given, vector<mateClipReg_t*> &mateClipRegVec);
 bam_hdr_t* loadSamHeader(string &inBamFile);
-bool isInReg(size_t pos, vector<reg_t*> &vec);
+bool isInReg(int32_t pos, vector<reg_t*> &vec);
 int32_t computeDisagreeNum(Base *baseArray, int32_t arr_size);
 void mergeOverlappedReg(vector<reg_t*> &regVector);
 void updateReg(reg_t* reg1, reg_t* reg2);
@@ -47,6 +47,8 @@ bool isFileExist(string &filename);
 void removeRedundantItems(vector<reg_t*> &reg_vec);
 int32_t getLineCount(string &filename);
 bool isBaseMatch(char ctgBase, char refBase);
+bool isRegValid(reg_t *reg);
+void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename);
 
 class Time{
 	private:
