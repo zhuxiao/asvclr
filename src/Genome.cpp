@@ -382,7 +382,7 @@ int Genome::genomeCall(){
 	// call variants
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->chrname.compare("chr2")==0)  // if(i==2)
+		//if(chr->chrname.compare("chr2")==0)  // if(i==2)
 			chr->chrCall();
 	}
 

@@ -1263,7 +1263,7 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 
 		// update information
 		if(start_aln_idx_var_new!=-1){
-			cout << "'start_aln_idx_var' is changed from " << start_aln_idx_var << " to " << start_aln_idx_var_new << endl;
+			//cout << "'start_aln_idx_var' is changed from " << start_aln_idx_var << " to " << start_aln_idx_var_new << endl;
 			start_aln_idx_var = start_aln_idx_var_new;
 			startRefPos_aln = startRefPos_aln_new;
 			startLocalRefPos_aln = startLocalRefPos_aln_new;
@@ -1271,7 +1271,7 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 		}
 		if(end_aln_idx_var_new!=-1)
 		{
-			cout << "'end_aln_idx_var' is changed from " << end_aln_idx_var << " to " << end_aln_idx_var_new << endl;
+			//cout << "'end_aln_idx_var' is changed from " << end_aln_idx_var << " to " << end_aln_idx_var_new << endl;
 			end_aln_idx_var = end_aln_idx_var_new;
 			endRefPos_aln = endRefPos_aln_new;
 			endLocalRefPos_aln = endLocalRefPos_aln_new;

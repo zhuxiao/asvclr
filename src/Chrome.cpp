@@ -1423,7 +1423,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 		var_cand = var_cand_vec.at(i);
 		//if(var_cand->alnfilename.compare("3_call/hs37d5/blat_hs37d5_18509901-18518297.sim4")==0)
 		//if(var_cand->alnfilename.compare("3_call/chr1/blat_chr1_122962081-122965894.sim4")==0)
-		if(var_cand->alnfilename.compare("3_call/chr2/blat_chr2_48941501-48941600.sim4")==0)
+		//if(var_cand->alnfilename.compare("3_call/chr2/blat_chr2_48941501-48941600.sim4")==0)
 		{
 			cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << endl;
 			var_cand->callVariants();
