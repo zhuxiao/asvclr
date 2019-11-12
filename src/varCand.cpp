@@ -146,12 +146,17 @@ void varCand::assignBlatAlnStatus(){
 void varCand::blatParse(){
 	string line, q_reg_str, s_reg_str, ident_percent_str, orient_str, query_name;
 	vector<string> line_vec, line_vec1, len_vec, str_vec, query_name_vec;
+	vector<int32_t> query_len_vec;
 	ifstream infile;
 	int32_t ref_start_all, query_loc, blat_aln_id;
 	blat_aln_t *blat_aln_item;
 	aln_seg_t *aln_seg;
 
 	if(blat_aln_vec.size()>0) return;
+
+	// load query names
+	FastaSeqLoader fa_loader(ctgfilename);
+	query_name_vec = fa_loader.getFastaSeqNames();
 
 	infile.open(alnfilename);
 	if(!infile.is_open()){
@@ -173,10 +178,12 @@ void varCand::blatParse(){
 				len_vec = split(line_vec1[line_vec1.size()-1].substr(1), " ");
 				if(line_vec[0][3]=='1') {
 					// get the query name
-					query_loc = getQueryNameLoc(line_vec1[0], query_name_vec);
+					query_loc = getQueryNameLoc(line_vec1.at(0), query_name_vec);
 					if(query_loc==-1){
-						query_name_vec.push_back(line_vec1[0]);
-						query_loc = query_name_vec.size() - 1;
+						//query_name_vec.push_back(line_vec1[0]);
+						//query_loc = query_name_vec.size() - 1;
+						cerr << __func__ << "(), line=" << __LINE__ << ": cannot get queryloc by query_name: " << line_vec1.at(0) << endl;
+						exit(1);
 					}
 
 					blat_aln_item = new blat_aln_t;
@@ -244,9 +251,13 @@ void varCand::blatParse(){
 
 // get query name location
 int32_t varCand::getQueryNameLoc(string query_name, vector<string> query_name_vec){
-	int32_t i, loc = -1;
-	for(i=query_name_vec.size()-1; i>=0; i--)
-		if(query_name_vec[i].compare(query_name)==0) { loc = i; break; }
+	int32_t i, loc = -1, query_name_len;
+	string query_name_tmp;
+	query_name_len = query_name.size();
+	for(i=query_name_vec.size()-1; i>=0; i--){
+		query_name_tmp = query_name_vec.at(i).substr(0,query_name_len);
+		if(query_name_tmp.compare(query_name)==0) { loc = i; break; }
+	}
 	return loc;
 }
 

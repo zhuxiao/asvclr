@@ -21,16 +21,18 @@ void FastaSeqLoader::initFastaSeq(){
 	fastaSeq = "";
 	while(getline(infile, line))
 		if(line.size()>0){
-			if(line[0]=='>'){ // header
+			if(line[0]=='>'){ // header line
+				fastaSeqNameVec.push_back(line.substr(1)); // save header name
+
 				if(fastaSeq.size()>0){
-					fastaSeqVec.push_back(fastaSeq);
+					fastaSeqVec.push_back(fastaSeq); // save sequence
 					fastaSeq = "";
 				}
 			}else { // seq
 				fastaSeq += line;
 			}
 		}
-	if(fastaSeq.size()>0) fastaSeqVec.push_back(fastaSeq);
+	if(fastaSeq.size()>0) fastaSeqVec.push_back(fastaSeq); // save sequence
 
 	infile.close();
 }
@@ -83,4 +85,20 @@ string FastaSeqLoader::getFastaSeqByPos(size_t fa_id, size_t startPos, size_t en
 
 size_t FastaSeqLoader::getFastaSeqLen(size_t fa_id){
 	return fastaSeqVec[fa_id].size();
+}
+
+size_t FastaSeqLoader::getFastaSeqCount(){
+	return fastaSeqNameVec.size();
+}
+
+vector<string> FastaSeqLoader::getFastaSeqNames(){
+	return fastaSeqNameVec;
+}
+
+string FastaSeqLoader::getFastaSeqNameByID(int32_t fa_id){
+	if(fa_id<0 or fa_id+1>(int32_t)fastaSeqNameVec.size()){
+		cerr << "FastaSeqLoader: invalid fa_id=" << fa_id << endl;
+		exit(1);
+	}
+	return fastaSeqNameVec.at(fa_id);
 }
