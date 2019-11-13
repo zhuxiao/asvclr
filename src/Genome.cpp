@@ -371,6 +371,7 @@ int Genome::genomeLocalAssemble(){
 int Genome::genomeCall(){
 	size_t i;
 	Chrome *chr;
+	Time time;
 
 	mkdir(out_dir_call.c_str(), S_IRWXU | S_IROTH);  // create directory for call command
 
@@ -390,28 +391,35 @@ int Genome::genomeCall(){
 	genomeCallTra();
 
 	cout << "1111111111111" << endl;
+	cout << "[" << time.getTime() << "]: remove redundant TRAs... " << endl;
 	removeRedundantTra();
 
 	cout << "2222222222222" << endl;
+	cout << "[" << time.getTime() << "]: merge close range TRAs... " << endl;
 	mergeCloseRangeTra();
 
 	// find indels back for mate clip regions
 	cout << "3333333333333" << endl;
+	cout << "[" << time.getTime() << "]: recall indels from TRAs... " << endl;
 	recallIndelsFromTRA();
 
 	// fill variation sequence
 	cout << "4444444444444" << endl;
+	cout << "[" << time.getTime() << "]: fill variant sequences... " << endl;
 	genomeFillVarseq();
 
 	// save SV to file
 	cout << "5555555555555" << endl;
+	cout << "[" << time.getTime() << "]: save call result to file... " << endl;
 	genomeSaveCallSV2File();
 
 	// merge call results into single file
 	cout << "6666666666666" << endl;
+	cout << "[" << time.getTime() << "]: merge call result... " << endl;
 	mergeCallResult();
 
 	// compute statistics for call command
+	cout << "[" << time.getTime() << "]: compute variant NUMBER statistics... " << endl;
 	computeVarNumStatCall();
 
 	return 0;

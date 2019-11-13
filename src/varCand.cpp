@@ -146,7 +146,6 @@ void varCand::assignBlatAlnStatus(){
 void varCand::blatParse(){
 	string line, q_reg_str, s_reg_str, ident_percent_str, orient_str, query_name;
 	vector<string> line_vec, line_vec1, len_vec, str_vec, query_name_vec;
-	vector<int32_t> query_len_vec;
 	ifstream infile;
 	int32_t ref_start_all, query_loc, blat_aln_id;
 	blat_aln_t *blat_aln_item;
@@ -381,23 +380,27 @@ void varCand::blatFilterByShortAlnSegs(){
 // filter by query coverage
 void varCand::blatFilterByQueryCoverage(){
 	size_t i, j;
-	int32_t ctg_id_tmp, start_query_pos, end_query_pos;
+	int32_t start_query_pos, end_query_pos;
+	vector<string> query_seq_vec;
 	int8_t **query_cov_array;
 	blat_aln_t *blat_aln;
 	aln_seg_t *aln_seg;
 	float covRatio;
 
+	// allocate array
 	query_cov_array = new int8_t *[ctg_num]();
+	FastaSeqLoader fa_loader(ctgfilename);
+	for(i=0; i<ctg_num; i++) query_cov_array[i] = new int8_t[fa_loader.getFastaSeq(i, ALN_PLUS_ORIENT).size()+1]();
 
-	ctg_id_tmp = -1;
-	for(i=0; i<blat_aln_vec.size(); i++){
-		blat_aln = blat_aln_vec.at(i);
-		if((int32_t)blat_aln->query_id!=ctg_id_tmp) query_cov_array[++ctg_id_tmp] = new int8_t[blat_aln->query_len+1]();
-		if(ctg_id_tmp>=ctg_num){
-			cerr << "line=" << __LINE__ << ", ctg_id_tmp=" << ctg_id_tmp << ", ctg_num=" << ctg_num << ", error!" << endl;
-			exit(1);
-		}
-	}
+//	ctg_id_tmp = -1;
+//	for(i=0; i<blat_aln_vec.size(); i++){
+//		blat_aln = blat_aln_vec.at(i);
+//		//if((int32_t)blat_aln->query_id!=ctg_id_tmp) query_cov_array[++ctg_id_tmp] = new int8_t[blat_aln->query_len+1]();
+//		if(ctg_id_tmp>=ctg_num){
+//			cerr << "line=" << __LINE__ << ", ctg_id_tmp=" << ctg_id_tmp << ", ctg_num=" << ctg_num << ", error!" << endl;
+//			exit(1);
+//		}
+//	}
 
 	// fill coverage array according to the best blat alignments
 	for(i=0; i<blat_aln_vec.size(); i++){
