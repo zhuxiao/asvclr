@@ -1400,11 +1400,11 @@ int Chrome::chrCall(){
 	else chrCall_mt();  // multiple threads
 
 	// remove redundant new called variants
-	//cout << "11111111111" << endl;
+	cout << "--[" << time.getTime() << "]: aaaaaaaaaaaaa: removeRedundantVar..." << endl;
 	removeRedundantVar();
 
 	// remove FPs of new called variants
-	//cout << "2222222222222" << endl;
+	cout << "--[" << time.getTime() << "]: bbbbbbbbbbbbb: removeFPNewVarVec..." << endl;
 	removeFPNewVarVec();
 
 	return 0;
@@ -1421,9 +1421,9 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("3_call/hs37d5/blat_hs37d5_30151001-30160200.sim4")==0)
+		//if(var_cand->alnfilename.compare("3_call/12/blat_contig_12_75008933-75010047.sim4")==0)
 		//if(var_cand->alnfilename.compare("3_call/chr1/blat_chr1_122962081-122965894.sim4")==0)
-		//if(var_cand->alnfilename.compare("3_call/chr2/blat_chr2_48941501-48941600.sim4")==0)
+		//if(var_cand->alnfilename.compare("3_call/chr14/blat_14_101495035-101505100.sim4")==0)
 		{
 			cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << endl;
 			var_cand->callVariants();
@@ -1793,6 +1793,7 @@ void Chrome::chrFillVarseqSingleVec(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec[i];
+		//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 		var_cand->fillVarseq();
 	}
 }

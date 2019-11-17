@@ -925,8 +925,26 @@ bool isRegValid(reg_t *reg){
 	if(flag==false){
 		cout << "========= Invalid region: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", local_Loc: " << reg->startLocalRefPos << "-" << reg->endLocalRefPos << ", query_Loc: " << reg->startQueryPos << "-" << reg->endQueryPos << endl;
 	}
-
 	return flag;
+}
+
+void exchangeRegLoc(reg_t *reg){
+	int64_t tmp;
+	if(reg->startRefPos>reg->endRefPos){
+		//cout << "startRefPos<-->endRefPos and startLocalRefPos<-->endLocalRefPos has been exchanged." << endl;
+		tmp = reg->startRefPos;
+		reg->startRefPos = reg->endRefPos;
+		reg->endRefPos = tmp;
+		tmp = reg->startLocalRefPos;
+		reg->startLocalRefPos = reg->endLocalRefPos;
+		reg->endLocalRefPos = tmp;
+	}
+
+	if(reg->startQueryPos>reg->endQueryPos){
+		tmp = reg->startQueryPos;
+		reg->startQueryPos = reg->endQueryPos;
+		reg->endQueryPos = tmp;
+	}
 }
 
 // BLAT alignment, and the output is in sim4 format

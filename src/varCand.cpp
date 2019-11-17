@@ -26,7 +26,7 @@ void varCand::init(){
 	ref_left_shift_size = ref_right_shift_size = ctg_num = 0;
 	assem_success = align_success = call_success = clip_reg_flag = false;
 	clip_reg = NULL;
-	leftClipRefPos = rightClipRefPos = 9;
+	leftClipRefPos = rightClipRefPos = 0;
 	sv_type = VAR_UNC;
 	dup_num = 0;
 	margin_adjusted_flag = false;
@@ -1853,8 +1853,10 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						reg->endQueryPos = new_endQueryPos;
 					}
 
-					if(isRegValid(reg))
+					if(isRegValid(reg)){
+						exchangeRegLoc(reg);
 						updatedRegVec[i].push_back(reg);
+					}
 
 				}else if((opID1==1 or opID1==0) and opID2==2){ // check and split the region
 					reg_new_3 = new reg_t();
@@ -1912,12 +1914,14 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						reg_new_3->startQueryPos = reg->startQueryPos + numVec1[2];
 					}
 
-					if(isRegValid(reg_new_3))
+					if(isRegValid(reg_new_3)){
+						exchangeRegLoc(reg_new_3);
 						updatedRegVec[i].push_back(reg_new_3);
-					else delete reg_new_3;
-					if(isRegValid(reg_new_4))
+					}else delete reg_new_3;
+					if(isRegValid(reg_new_4)){
+						exchangeRegLoc(reg_new_4);
 						updatedRegVec[i].push_back(reg_new_4);
-					else delete reg_new_4;
+					}else delete reg_new_4;
 
 				}else if(opID1==2 and (opID2==1 or opID2==0)){ // check and split the region
 					reg_new_1 = new reg_t();
@@ -1975,12 +1979,14 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						reg_new_2->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
 					}
 
-					if(isRegValid(reg_new_1))
+					if(isRegValid(reg_new_1)){
+						exchangeRegLoc(reg_new_1);
 						updatedRegVec[i].push_back(reg_new_1);
-					else delete reg_new_1;
-					if(isRegValid(reg_new_2))
+					}else delete reg_new_1;
+					if(isRegValid(reg_new_2)){
+						exchangeRegLoc(reg_new_2);
 						updatedRegVec[i].push_back(reg_new_2);
-					else delete reg_new_2;
+					}else delete reg_new_2;
 
 				}else if(opID1==2 and opID2==2){ // check and split the region
 					reg_new_1 = new reg_t();
@@ -2056,15 +2062,18 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 					reg_new_4->aln_orient = reg_tmp->aln_orient;
 					reg_new_4->zero_cov_flag = false;
 
-					if(isRegValid(reg_new_1))
+					if(isRegValid(reg_new_1)){
+						exchangeRegLoc(reg_new_1);
 						updatedRegVec[i].push_back(reg_new_1);
-					else delete reg_new_1;
-					if(isRegValid(reg_new_2))
+					}else delete reg_new_1;
+					if(isRegValid(reg_new_2)){
+						exchangeRegLoc(reg_new_2);
 						updatedRegVec[i].push_back(reg_new_2);
-					else delete reg_new_2;
-					if(isRegValid(reg_new_4))
+					}else delete reg_new_2;
+					if(isRegValid(reg_new_4)){
+						exchangeRegLoc(reg_new_4);
 						updatedRegVec[i].push_back(reg_new_4);
-					else delete reg_new_4;
+					}else delete reg_new_4;
 				}
 			}else{
 //				reg_new_tmp = new reg_t();
@@ -3342,14 +3351,17 @@ vector<size_t> varCand::computeQueryClipPosDup(blat_aln_t *blat_aln, int32_t cli
 			if(mid_aln_seq.at(i)=='|'){ // match
 				queryPos ++; refPos ++; localRefPos ++;
 			}else{
-				if(query_aln_seq.at(i)!='-'){
+				if(query_aln_seq.at(i)=='-'){
 					refPos ++; localRefPos ++;
-				}else{
+				}else if(ref_aln_seq.at(i)=='-'){
 					queryPos ++;
+				}else{
+					queryPos ++; refPos ++; localRefPos ++;
 				}
 			}
 			if(refPos==clipRefPos) break;
 		}
+		refPos--; localRefPos--; queryPos--; // back 1 base
 		pos_vec.push_back(refPos);
 		pos_vec.push_back(localRefPos);
 		pos_vec.push_back(queryPos);

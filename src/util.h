@@ -48,6 +48,7 @@ void removeRedundantItems(vector<reg_t*> &reg_vec);
 int32_t getLineCount(string &filename);
 bool isBaseMatch(char ctgBase, char refBase);
 bool isRegValid(reg_t *reg);
+void exchangeRegLoc(reg_t *reg);
 void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename);
 
 class Time{

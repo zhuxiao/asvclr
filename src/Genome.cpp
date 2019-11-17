@@ -383,7 +383,7 @@ int Genome::genomeCall(){
 	// call variants
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("hs37d5")==0)  // if(i==2)
+		//if(chr->chrname.compare("12")==0)  // if(i==2)
 			chr->chrCall();
 	}
 
@@ -1521,7 +1521,8 @@ void Genome::genomeFillVarseq(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->chrFillVarseq();
+		if(chr->chrname.compare("12")==0)
+			chr->chrFillVarseq();
 	}
 
 	// fill sequences for TRA

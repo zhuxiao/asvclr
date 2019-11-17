@@ -15,7 +15,6 @@
 #include "RefSeqLoader.h"
 #include "alnDataLoader.h"
 #include "covLoader.h"
-//#include "clipReg.h"
 
 using namespace std;
 
