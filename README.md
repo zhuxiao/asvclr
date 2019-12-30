@@ -158,6 +158,8 @@ Options:
      -h           show this help message and exit
 ```
 
+Note that: the assembly step can be re-run from last stop to avoid redundant computation.
+
 ### `Call` Step
 
 Align the assembly result (contigs) to its local reference using BLAT to generate the sim4 formated alignments, and call each type variations using the BLAT alignments.
