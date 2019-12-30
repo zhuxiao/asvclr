@@ -158,7 +158,7 @@ Options:
      -h           show this help message and exit
 ```
 
-Note that: the assembly step can be re-run from last stop to avoid redundant computation.
+Note that: the `assemble` step can be re-run from last stop to avoid unnecessary computation.
 
 ### `Call` Step
 
