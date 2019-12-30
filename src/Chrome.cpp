@@ -34,6 +34,7 @@ Chrome::~Chrome(){
 	if(!clipRegVector.empty()) destroyClipRegVector();
 	if(!mateClipRegVector.empty()) destroyMateClipRegVector();
 	if(!var_cand_clipReg_vec.empty()) destroyVarCandVector(var_cand_clipReg_vec);
+	if(!assembled_chr_clipReg_vec.empty()) destroyVarCandVector(assembled_chr_clipReg_vec);
 }
 
 // initialization
@@ -110,6 +111,7 @@ Block *Chrome::allocateBlock(string& chrname, size_t chrlen, int startPos, int e
 		exit(1);
 	}
 	block_tmp->setRegIngFlag(headIgnFlag, tailIgnFlag);
+	block_tmp->setAssembledChrClipRegVec(&assembled_chr_clipReg_vec);
 	return block_tmp;
 }
 
@@ -1094,15 +1096,82 @@ void Chrome::chrMergeDetectResultToFile(){
 
 // set assembly information file for local assembly
 void Chrome::chrSetVarCandFiles(){
-	var_cand_indel_file.open(var_cand_indel_filename);
-	if(!var_cand_indel_file.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << var_cand_indel_filename << endl;
-		exit(1);
+	string line, tmp_filename;
+	vector<string> str_vec;
+	ifstream infile;
+
+	// indel
+	if(isFileExist(var_cand_indel_filename)){
+		tmp_filename = var_cand_indel_filename + "_tmp";
+		rename(var_cand_indel_filename.c_str(), tmp_filename.c_str());
+
+		infile.open(tmp_filename);
+		if(!infile.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << tmp_filename << endl;
+			exit(1);
+		}
+
+		var_cand_indel_file.open(var_cand_indel_filename);
+		if(!var_cand_indel_file.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << var_cand_indel_filename << endl;
+			exit(1);
+		}
+
+		while(getline(infile, line)){
+			if(line.size()){
+				str_vec = split(line, "\t");
+				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
+					var_cand_indel_file << line << endl;
+				else
+					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
+			}
+		}
+
+		infile.close();
+		remove(tmp_filename.c_str());
+	}else{
+		var_cand_indel_file.open(var_cand_indel_filename);
+		if(!var_cand_indel_file.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << var_cand_indel_filename << endl;
+			exit(1);
+		}
 	}
-	var_cand_clipReg_file.open(var_cand_clipReg_filename);
-	if(!var_cand_clipReg_file.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << var_cand_clipReg_filename << endl;
-		exit(1);
+
+	// clipReg
+	if(isFileExist(var_cand_clipReg_filename)){
+		tmp_filename = var_cand_clipReg_filename + "_tmp";
+		rename(var_cand_clipReg_filename.c_str(), tmp_filename.c_str());
+
+		infile.open(tmp_filename);
+		if(!infile.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << tmp_filename << endl;
+			exit(1);
+		}
+
+		var_cand_clipReg_file.open(var_cand_clipReg_filename);
+		if(!var_cand_clipReg_file.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << var_cand_clipReg_filename << endl;
+			exit(1);
+		}
+
+		while(getline(infile, line)){
+			if(line.size()){
+				str_vec = split(line, "\t");
+				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
+					var_cand_clipReg_file << line << endl;
+				else
+					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
+			}
+		}
+
+		infile.close();
+		remove(tmp_filename.c_str());
+	}else{
+		var_cand_clipReg_file.open(var_cand_clipReg_filename);
+		if(!var_cand_clipReg_file.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << var_cand_clipReg_filename << endl;
+			exit(1);
+		}
 	}
 
 	vector<Block*>::iterator bloc;
@@ -1113,6 +1182,7 @@ void Chrome::chrSetVarCandFiles(){
 // reset assembly information file for local assembly
 void Chrome::chrResetVarCandFiles(){
 	var_cand_indel_file.close();
+	var_cand_clipReg_file.close();
 
 	vector<Block*>::iterator bloc;
 	for(bloc=blockVector.begin(); bloc!=blockVector.end(); bloc++)
@@ -1161,6 +1231,10 @@ void Chrome::chrLoadDataAssemble(){
 		else if(mate_clip_reg->rightClipReg2 and mate_clip_reg->rightClipReg2->chrname.compare(chrname)==0) tmp_bloc = blockVector.at(computeBlocID(mate_clip_reg->rightClipReg2->startRefPos));  // get the block
 		tmp_bloc->mateClipRegVector.push_back(mate_clip_reg);
 	}
+
+	// load previous assembly information
+	loadPrevAssembledInfo(false);
+	loadPrevAssembledInfo(true);
 }
 
 // load detected indel data for local assembly
@@ -1178,8 +1252,7 @@ void Chrome::chrLoadIndelDataAssemble(){
 		exit(1);
 	}
 
-	while(getline(infile, line))
-	{
+	while(getline(infile, line)){
 		if(line.size()){
 			str_vec = split(line, "\t");
 			begPos = stoi(str_vec[1]);
@@ -1228,8 +1301,7 @@ void Chrome::chrLoadMateClipRegData(){
 		exit(1);
 	}
 
-	while(getline(infile, line))
-	{
+	while(getline(infile, line)){
 		if(line.size()){
 			reg1 = reg2 = reg3 = reg4 = NULL;
 			str_vec = split(line, "\t");
@@ -1300,6 +1372,92 @@ int32_t Chrome::computeBlocID(size_t begPos){
 	if(bloc_ID>=blockNum) bloc_ID = blockNum - 1;
 
 	return bloc_ID;
+}
+
+// load previously assembled information
+void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
+	ifstream infile;
+	string infilename, line, done_str;
+	varCand *var_cand_tmp;
+	vector<string> line_vec, var_str, var_str1, var_str2;
+	vector<string> str_vec, str_vec2, str_vec3;
+	size_t i;
+	reg_t *reg;
+	Block *tmp_bloc;
+	int64_t begPos;
+
+	if(clipReg_flag) infilename = var_cand_clipReg_filename;
+	else infilename = var_cand_indel_filename;
+
+	if(isFileExist(infilename)==false) return;
+
+	infile.open(infilename);
+	if(!infile.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << infilename << endl;
+		exit(1);
+	}
+
+	while(getline(infile, line)){
+		if(line.size()){
+			// allocate memory
+			var_cand_tmp = new varCand();
+
+			var_cand_tmp->chrname = "";
+			var_cand_tmp->var_cand_filename = "";
+			var_cand_tmp->out_dir_call = "";
+			var_cand_tmp->misAln_filename = "";
+			var_cand_tmp->inBamFile = "";
+			var_cand_tmp->fai = NULL;
+
+			line_vec = split(line, "\t");
+			var_cand_tmp->refseqfilename = line_vec.at(0);  // refseq file name
+			var_cand_tmp->ctgfilename = line_vec.at(1);  // contig file name
+			var_cand_tmp->readsfilename = line_vec.at(2);  // reads file name
+			var_cand_tmp->ref_left_shift_size = stoi(line_vec.at(3));  // ref_left_shift_size
+			var_cand_tmp->ref_right_shift_size = stoi(line_vec.at(4));  // ref_right_shift_size
+
+			if(line_vec[5].compare(ASSEMBLY_SUCCESS)==0) var_cand_tmp->assem_success = true;
+			else var_cand_tmp->assem_success = false;
+
+			var_cand_tmp->ctg_num = 0;
+
+			// load variations
+			var_str = split(line_vec.at(6), ";");
+			for(i=0; i<var_str.size(); i++){
+				var_str1 = split(var_str.at(i), ":");
+				var_str2 = split(var_str1.at(1), "-");
+				reg = new reg_t();
+				reg->chrname = var_str1.at(0);
+				reg->startRefPos = stoi(var_str2.at(0));
+				reg->endRefPos = stoi(var_str2.at(1));
+				reg->startLocalRefPos = reg->endLocalRefPos = 0;
+				reg->startQueryPos = reg->endQueryPos = 0;
+				reg->sv_len = 0;
+				reg->dup_num = 0;
+				reg->var_type = VAR_UNC;
+				reg->query_id = -1;
+				reg->blat_aln_id = -1;
+				reg->call_success_status = false;
+				reg->short_sv_flag = false;
+				reg->zero_cov_flag = false;
+				var_cand_tmp->varVec.push_back(reg);  // variation vector
+			}
+			var_cand_tmp->varVec.shrink_to_fit();
+
+			// deal with 'DONE' string
+			done_str = line_vec.at(7);
+			if(done_str.compare(DONE_STR)==0 and var_cand_tmp->varVec.size()>0){
+				if(clipReg_flag) assembled_chr_clipReg_vec.push_back(var_cand_tmp);
+				else{
+					begPos = var_cand_tmp->varVec.at(0)->startRefPos;
+					tmp_bloc = blockVector.at(computeBlocID(begPos));  // get the block
+					tmp_bloc->assembled_indel_vec.push_back(var_cand_tmp);
+				}
+			}
+		}
+	}
+
+	infile.close();
 }
 
 // local assembly for chrome

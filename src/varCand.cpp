@@ -390,7 +390,7 @@ void varCand::blatFilterByQueryCoverage(){
 	// allocate array
 	query_cov_array = new int8_t *[ctg_num]();
 	FastaSeqLoader fa_loader(ctgfilename);
-	for(i=0; i<ctg_num; i++) query_cov_array[i] = new int8_t[fa_loader.getFastaSeq(i, ALN_PLUS_ORIENT).size()+1]();
+	for(i=0; i<(size_t)ctg_num; i++) query_cov_array[i] = new int8_t[fa_loader.getFastaSeq(i, ALN_PLUS_ORIENT).size()+1]();
 
 //	ctg_id_tmp = -1;
 //	for(i=0; i<blat_aln_vec.size(); i++){
@@ -1677,7 +1677,7 @@ void varCand::mergeNeighboringVariants(vector<reg_t*> &foundRegVec, vector<reg_t
 
 // deal with the two variant sets
 vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRegVec, vector<reg_t*> &candRegVec){
-	reg_t *reg, *reg_tmp, *reg_new_1, *reg_new_2, *reg_new_3, *reg_new_4, *reg_new_tmp;
+	reg_t *reg, *reg_tmp, *reg_new_1, *reg_new_2, *reg_new_3, *reg_new_4;
 	int32_t i, j, idx, same_count, opID1, opID2, startShiftLen, endShiftLen;
 	int32_t startRefPos1, endRefPos1, startQueryPos1, endQueryPos1, startRefPos2, endRefPos2, startQueryPos2, endQueryPos2;
 	int32_t new_startRefPos, new_endRefPos, new_startLocalRefPos, new_endLocalRefPos, new_startQueryPos, new_endQueryPos;

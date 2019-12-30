@@ -34,6 +34,8 @@ class Chrome{
 		vector<varCand*> var_cand_vec;
 		vector<varCand*> var_cand_clipReg_vec;
 
+		vector<varCand*> assembled_chr_clipReg_vec;
+
 		vector<Block*> blockVector;
 
 	private:
@@ -97,6 +99,7 @@ class Chrome{
 		int chrLocalAssemble_mt();
 		void outputAssemDataToFile(string &filename);
 		void removeVarCandNode(varCand *var_cand, vector<varCand*> &var_cand_vec);
+		void loadPrevAssembledInfo(bool clipReg_flag);
 
 		void chrCall_st();
 		void chrCall_mt();

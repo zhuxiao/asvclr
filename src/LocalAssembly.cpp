@@ -19,6 +19,7 @@ LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, stri
 }
 
 LocalAssembly::~LocalAssembly() {
+	remove(readsfilename.c_str());	// delete the reads file to save disk space
 }
 
 void LocalAssembly::destoryAlnData(){
@@ -533,7 +534,7 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 
 // record assembly information
 void LocalAssembly::recordAssemblyInfo(ofstream &assembly_info_file){
-	string line, assembly_status, header, left_shift_size_str, right_shift_size_str;
+	string line, assembly_status, header, left_shift_size_str, right_shift_size_str, reg_str;
 	reg_t *reg;
 	ifstream infile;
 	vector<string> str_vec;
@@ -561,9 +562,17 @@ void LocalAssembly::recordAssemblyInfo(ofstream &assembly_info_file){
 
 	line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename + "\t" + left_shift_size_str + "\t" + right_shift_size_str + "\t" + assembly_status;
 
-	for(int32_t i=0; i<(int32_t)varVec.size(); i++){
-		reg = varVec[i];
-		line += "\t" + reg->chrname + ":" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
+	reg_str = "";
+	if(varVec.size()>0){
+		reg = varVec.at(0);
+		reg_str = reg->chrname + ":" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
+		for(size_t i=1; i<varVec.size(); i++){
+			reg = varVec.at(i);
+			reg_str += ";" + reg->chrname + ":" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
+		}
+		line += "\t" + reg_str + "\t" + DONE_STR;
+	}else{
+		line += "\t" + reg_str + DONE_STR;
 	}
 
 	pthread_mutex_lock(&mutex_write);

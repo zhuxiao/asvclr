@@ -17,7 +17,7 @@ extern vector<string> split(const string& s, const string& delim);
 // program variables
 #define PROG_NAME		"ASVCLR"
 #define PROG_DESC		"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION	"0.3.2"
+#define PROG_VERSION	"0.4.0"
 
 #define SIZE_EST_OP		0
 #define NUM_EST_OP		1
@@ -51,6 +51,9 @@ extern vector<string> split(const string& s, const string& delim);
 #define ALIGN_FAILURE				"ALN_FAILURE"
 #define CALL_SUCCESS				"CALL_SUCCESS"
 #define CALL_FAILURE				"CALL_FAILURE"
+
+#define DONE_STR					"DONE"
+
 
 // program parameters
 class Paras

@@ -43,6 +43,10 @@ class Block{
 		vector<reg_t*> clipRegVector;
 		vector<mateClipReg_t*> mateClipRegVector;
 
+		// assembly information
+		vector<varCand*> assembled_indel_vec;
+		vector<varCand*> *assembled_chr_clipReg_vec;
+
 		// detect abnormal signatures
 		bool headIgnFlag, tailIgnFlag;
 
@@ -67,6 +71,7 @@ class Block{
 		void resetVarCandFiles();
 		void setMisAlnRegFile(ofstream *misAln_reg_file);
 		void resetMisAlnRegFile();
+		void setAssembledChrClipRegVec(vector<varCand*> *assembled_chr_clipReg_vec);
 
 	private:
 		void destroyBaseArray();
@@ -75,6 +80,7 @@ class Block{
 		void destroyIndelVector();
 		void destroyClipRegVector();
 		void destroyMisAlnRegVector();
+		void destroyAssembledVarcandVector(vector<varCand*> &assembled_varcand_vec);
 		Base *initBaseArray();
 		int loadAlnData();
 		int computeBlockBaseInfo();
@@ -102,6 +108,7 @@ class Block{
 		void blockLocalAssembleClipReg();
 		void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file);
 		void saveSV2File();
+		bool getPrevAssembledDoneFlag(string &contigfilename, vector<varCand*> *assembled_varcand_vec);
 
 		// duplication and inversion
 		void mergeOverlappedClipReg();
