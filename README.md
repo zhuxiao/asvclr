@@ -2,7 +2,7 @@
 Accurate Structural Variation Caller for Long Reads
 
 -------------------
-ASVCLR is an accurate Structural Variation Caller for Long Reads, such as PacBio sequencing and Oxford Nanopore sequencing. ASVCLR can detect both short indels (e.g. <50 bp) and long structural varitions (e.g. >=50 bp), such as duplications, inversions and translocations, and producing fewer false positives with high precise variant margins.  
+ASVCLR is an accurate Structural Variation Caller for Long Reads, such as PacBio sequencing and Oxford Nanopore sequencing. ASVCLR can detect both short indels (e.g. <50 bp) and long structural varitions (e.g. >=50 bp), such as tandem duplications, inversions and translocations, and producing fewer false positives with high precise variant margins.  
 
 ## Prerequisites
 ASVCLR depends on the following libraries and tools:
