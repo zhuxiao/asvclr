@@ -51,7 +51,7 @@ bool isBaseMatch(char ctgBase, char refBase);
 bool isRegValid(reg_t *reg);
 void exchangeRegLoc(reg_t *reg);
 void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename);
-void cleanPrevAssembledTmpDir(string &assem_dir_str, string &dir_prefix);
+void cleanPrevAssembledTmpDir(const string &assem_dir_str, const string &dir_prefix);
 
 class Time{
 	private:

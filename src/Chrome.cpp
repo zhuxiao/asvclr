@@ -1216,7 +1216,6 @@ void Chrome::chrLoadDataAssemble(){
 	size_t i;
 	mateClipReg_t* mate_clip_reg;
 	Block* tmp_bloc;
-	string dir_prefix;
 
 	if(paras->load_from_file_flag){ // load data from file
 		chrLoadIndelDataAssemble();
@@ -1236,10 +1235,6 @@ void Chrome::chrLoadDataAssemble(){
 	// load previous assembly information
 	loadPrevAssembledInfo(false);
 	loadPrevAssembledInfo(true);
-
-	// clean previously assembled temporary folders
-	dir_prefix = "tmp_";
-	cleanPrevAssembledTmpDir(out_dir_assemble, dir_prefix);
 }
 
 // load detected indel data for local assembly
@@ -1472,6 +1467,10 @@ int Chrome::chrLocalAssemble(){
 	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IROTH);  // create the directory for assemble command
 
 	cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
+
+	// clean previously assembled temporary folders
+	string dir_prefix = "tmp_";
+	cleanPrevAssembledTmpDir(out_dir_assemble, dir_prefix);
 
 	// open the assembly information file
 	chrSetVarCandFiles();
