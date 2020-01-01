@@ -1588,7 +1588,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 		//if(var_cand->alnfilename.compare("3_call/chr1/blat_chr1_122962081-122965894.sim4")==0)
 		//if(var_cand->alnfilename.compare("3_call/chr14/blat_14_101495035-101505100.sim4")==0)
 		{
-			cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << endl;
+			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << endl;
 			var_cand->callVariants();
 		}
 	}
@@ -1635,7 +1635,7 @@ void Chrome::loadVarCandData(){
 
 void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var_cand_filename, bool clipReg_flag){
 	string line, ctg_assembly_str, alnfilename, str_tmp, chrname_str;
-	vector<string> line_vec, var_str, var_str2;
+	vector<string> line_vec, var_str, var_str1, var_str2;
 	vector<string> str_vec, str_vec2, str_vec3;
 	ifstream infile;
 	size_t i, lineNum;
@@ -1664,11 +1664,11 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			var_cand_tmp->fai = fai;
 
 			line_vec = split(line, "\t");
-			var_cand_tmp->refseqfilename = line_vec[0];  // refseq file name
-			var_cand_tmp->ctgfilename = line_vec[1];  // contig file name
-			var_cand_tmp->readsfilename = line_vec[2];  // reads file name
-			var_cand_tmp->ref_left_shift_size = stoi(line_vec[3]);  // ref_left_shift_size
-			var_cand_tmp->ref_right_shift_size = stoi(line_vec[4]);  // ref_right_shift_size
+			var_cand_tmp->refseqfilename = line_vec[0];	// refseq file name
+			var_cand_tmp->ctgfilename = line_vec[1];	// contig file name
+			var_cand_tmp->readsfilename = line_vec[2];	// reads file name
+			var_cand_tmp->ref_left_shift_size = stoi(line_vec[3]);	// ref_left_shift_size
+			var_cand_tmp->ref_right_shift_size = stoi(line_vec[4]);	// ref_right_shift_size
 
 			if(line_vec[5].compare(ASSEMBLY_SUCCESS)==0) var_cand_tmp->assem_success = true;
 			else var_cand_tmp->assem_success = false;
@@ -1677,13 +1677,14 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			var_cand_tmp->ctg_num = getCtgCount(var_cand_tmp->ctgfilename);
 
 			// load variations
-			for(i=6; i<line_vec.size(); i++){
-				var_str = split(line_vec[i], ":");
-				var_str2 = split(var_str[1], "-");
+			var_str = split(line_vec.at(6), ";");
+			for(i=0; i<var_str.size(); i++){
+				var_str1 = split(var_str.at(i), ":");
+				var_str2 = split(var_str1.at(1), "-");
 				reg = new reg_t();
-				reg->chrname = var_str[0];
-				reg->startRefPos = stoi(var_str2[0]);
-				reg->endRefPos = stoi(var_str2[1]);
+				reg->chrname = var_str1.at(0);
+				reg->startRefPos = stoi(var_str2.at(0));
+				reg->endRefPos = stoi(var_str2.at(1));
 				reg->startLocalRefPos = reg->endLocalRefPos = 0;
 				reg->startQueryPos = reg->endQueryPos = 0;
 				reg->sv_len = 0;
