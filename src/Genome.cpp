@@ -1521,7 +1521,7 @@ void Genome::genomeFillVarseq(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->chrname.compare("12")==0)
+		//if(chr->chrname.compare("12")==0)
 			chr->chrFillVarseq();
 	}
 
