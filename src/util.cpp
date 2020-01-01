@@ -964,6 +964,45 @@ void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename
 	}
 }
 
+// clean assemble temporary folders
+void cleanPrevAssembledTmpDir(string &assem_dir_str, string &dir_prefix)
+{
+	DIR *dp;
+	struct dirent *entry;
+	struct stat statbuf;
+	string cmd_str, dir_str;
+    char buf[256];
+
+    // get current work directory
+    memset(buf, 0x00, sizeof(buf));
+    getcwd(buf, sizeof(buf)-1);
+
+	if((dp=opendir(assem_dir_str.c_str()))==NULL){
+		cerr << "cannot open directory: " << assem_dir_str << endl;
+		exit(1);
+	}
+	chdir(assem_dir_str.c_str());
+	while((entry = readdir(dp)) != NULL){
+		lstat(entry->d_name, &statbuf);
+		if(S_ISDIR(statbuf.st_mode)){
+			if(strcmp(".", entry->d_name) == 0 || strcmp("..", entry->d_name) == 0){
+				continue;
+			}
+
+			if(strlen(entry->d_name)>4){
+				dir_str = entry->d_name;
+				if(dir_str.substr(0, 4).compare(dir_prefix)==0){
+					cmd_str = "rm -rf ";
+					cmd_str += entry->d_name;
+					system(cmd_str.c_str());
+				}
+			}
+		}
+	}
+	chdir(buf);
+	closedir(dp);
+}
+
 
 
 Time::Time() {
