@@ -101,10 +101,15 @@ class varCand {
 		//mateClipReg_t *mate_clip_reg;
 		//int32_t clip_end_flag;  // -1: unassigned; 0: both ends; 1: left end; 2: right end
 
+		// blat aligned information
+		ofstream *blat_var_cand_file;
+
 	public:
 		varCand();
 		virtual ~varCand();
 		void callVariants();
+		void setBlatVarcandFile(ofstream *blat_var_cand_file);
+		void resetBlatVarcandFile();
 		vector<int32_t> computeDisagreeNumAndHighIndelBaseNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 		void fillVarseq();
 		void loadBlatAlnData();
@@ -112,8 +117,8 @@ class varCand {
 
 	private:
 		void init();
-		void alnCtg2Refseq();;
-		//void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename);
+		void alnCtg2Refseq();
+		void recordBlatAlnInfo();
 		void assignBlatAlnStatus();
 		void callIndelVariants();
 		void callClipRegVariants();

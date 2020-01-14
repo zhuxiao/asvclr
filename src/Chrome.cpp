@@ -34,7 +34,6 @@ Chrome::~Chrome(){
 	if(!clipRegVector.empty()) destroyClipRegVector();
 	if(!mateClipRegVector.empty()) destroyMateClipRegVector();
 	if(!var_cand_clipReg_vec.empty()) destroyVarCandVector(var_cand_clipReg_vec);
-	if(!assembled_chr_clipReg_vec.empty()) destroyVarCandVector(assembled_chr_clipReg_vec);
 }
 
 // initialization
@@ -62,6 +61,9 @@ void Chrome::setOutputDir(string& out_dir_detect_prefix, string& out_dir_assembl
 
 	var_cand_indel_filename = out_dir_assemble + "_var_cand_indel";
 	var_cand_clipReg_filename = out_dir_assemble + "_var_cand_clipReg";
+
+	blat_var_cand_indel_filename = out_dir_call + "_indel_blat_aln_info";
+	blat_var_cand_clipReg_filename = out_dir_call + "_clipReg_blat_aln_info";
 }
 
 string Chrome::getVarcandIndelFilename(){
@@ -1482,6 +1484,10 @@ int Chrome::chrLocalAssemble(){
 	// close and reset the assembly information file
 	chrResetVarCandFiles();
 
+	// release assembled chrome clipReg information
+	if(!assembled_chr_clipReg_vec.empty())
+		destroyVarCandVector(assembled_chr_clipReg_vec);
+
 	return 0;
 }
 
@@ -1557,9 +1563,15 @@ int Chrome::chrCall(){
 
 	cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
 
+	// set blat var_cand files
+	setBlatVarcandFiles();
+
 	// call variants
 	if(paras->num_threads<=1) chrCall_st();  // single thread
 	else chrCall_mt();  // multiple threads
+
+	// reset blat var_cand files
+	resetBlatVarcandFiles();
 
 	// remove redundant new called variants
 	cout << "--[" << time.getTime() << "]: aaaaaaaaaaaaa: removeRedundantVar..." << endl;
@@ -1583,8 +1595,6 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("3_call/12/blat_contig_12_75008933-75010047.sim4")==0)
-		//if(var_cand->alnfilename.compare("3_call/chr1/blat_chr1_122962081-122965894.sim4")==0)
 		//if(var_cand->alnfilename.compare("3_call/chr14/blat_14_101495035-101505100.sim4")==0)
 		{
 			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << endl;
@@ -1630,6 +1640,9 @@ void Chrome::loadVarCandData(){
 	if(mateClipRegVector.size()==0) chrLoadMateClipRegData();
 	loadVarCandDataFromFile(var_cand_vec, var_cand_indel_filename, false);
 	loadVarCandDataFromFile(var_cand_clipReg_vec, var_cand_clipReg_filename, true);
+
+	// load previously blat aligned information
+	loadPrevBlatAlnItems();
 }
 
 void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var_cand_filename, bool clipReg_flag){
@@ -1921,6 +1934,118 @@ void Chrome::sortMisAlnRegData(){
 			mis_aln_vec[i] = mis_aln_vec[minIdx];
 			mis_aln_vec[minIdx] = item;
 		}
+	}
+}
+
+// load previously blat aligned information
+void Chrome::loadPrevBlatAlnItems(){
+
+}
+
+// set blat var_cand files
+void Chrome::setBlatVarcandFiles(){
+	ifstream infile;
+	string line, tmp_filename;
+	vector<string> str_vec;
+	varCand *var_cand;
+	size_t i;
+
+	// indel
+	if(isFileExist(blat_var_cand_indel_filename)){
+		tmp_filename = blat_var_cand_indel_filename + "_tmp";
+		rename(blat_var_cand_indel_filename.c_str(), tmp_filename.c_str());
+
+		infile.open(tmp_filename);
+		if(!infile.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << tmp_filename << endl;
+			exit(1);
+		}
+
+		blat_var_cand_indel_file.open(blat_var_cand_indel_filename);
+		if(!blat_var_cand_indel_file.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << blat_var_cand_indel_filename << endl;
+			exit(1);
+		}
+
+		while(getline(infile, line)){
+			if(line.size()){
+				str_vec = split(line, "\t");
+				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
+					blat_var_cand_indel_file << line << endl;
+				else
+					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
+			}
+		}
+
+		infile.close();
+		remove(tmp_filename.c_str());
+	}else{
+		blat_var_cand_indel_file.open(blat_var_cand_indel_filename);
+		if(!blat_var_cand_indel_file.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << blat_var_cand_indel_filename << endl;
+			exit(1);
+		}
+	}
+
+	for(i=0; i<blat_aligned_chr_varCand_vec.size(); i++){
+		var_cand = blat_aligned_chr_varCand_vec.at(i);
+		var_cand->setBlatVarcandFile(&blat_var_cand_indel_file);
+	}
+
+	// clipReg
+	if(isFileExist(blat_var_cand_clipReg_filename)){
+		tmp_filename = blat_var_cand_clipReg_filename + "_tmp";
+		rename(blat_var_cand_clipReg_filename.c_str(), tmp_filename.c_str());
+
+		infile.open(tmp_filename);
+		if(!infile.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << tmp_filename << endl;
+			exit(1);
+		}
+
+		blat_var_cand_clipReg_file.open(blat_var_cand_clipReg_filename);
+		if(!blat_var_cand_clipReg_file.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << blat_var_cand_clipReg_filename << endl;
+			exit(1);
+		}
+
+		while(getline(infile, line)){
+			if(line.size()){
+				str_vec = split(line, "\t");
+				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
+					blat_var_cand_clipReg_file << line << endl;
+				else
+					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
+			}
+		}
+
+		infile.close();
+		remove(tmp_filename.c_str());
+	}else{
+		blat_var_cand_clipReg_file.open(blat_var_cand_clipReg_filename);
+		if(!blat_var_cand_clipReg_file.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << blat_var_cand_clipReg_filename << endl;
+			exit(1);
+		}
+	}
+
+	for(i=0; i<blat_aligned_chr_clipReg_varCand_vec.size(); i++){
+		var_cand = blat_aligned_chr_clipReg_varCand_vec.at(i);
+		var_cand->setBlatVarcandFile(&blat_var_cand_clipReg_file);
+	}
+}
+
+// reset blat var_cand files
+void Chrome::resetBlatVarcandFiles(){
+	size_t i;
+	varCand *var_cand;
+	for(i=0; i<blat_aligned_chr_varCand_vec.size(); i++){
+		var_cand = blat_aligned_chr_varCand_vec.at(i);
+		var_cand->resetBlatVarcandFile();
+	}
+	for(i=0; i<blat_aligned_chr_clipReg_varCand_vec.size(); i++){
+		var_cand = blat_aligned_chr_clipReg_varCand_vec.at(i);
+		var_cand->resetBlatVarcandFile();
 	}
 }
 

@@ -34,9 +34,12 @@ class Chrome{
 		vector<varCand*> var_cand_vec;
 		vector<varCand*> var_cand_clipReg_vec;
 
-		vector<varCand*> assembled_chr_clipReg_vec;
-
 		vector<Block*> blockVector;
+
+		vector<varCand*> assembled_chr_clipReg_vec;		// previously assembled information
+		vector<varCand*> blat_aligned_chr_varCand_vec;	// previously blat aligned information
+		vector<varCand*> blat_aligned_chr_clipReg_varCand_vec;	// previously blat aligned information
+
 
 	private:
 		int32_t blockNum;
@@ -52,6 +55,11 @@ class Chrome{
 		// assembly info and misAln region
 		string var_cand_indel_filename, misAln_reg_filename, var_cand_clipReg_filename;
 		ofstream var_cand_indel_file, misAln_reg_file, var_cand_clipReg_file;
+
+		// blat align information
+		string blat_var_cand_indel_filename, blat_var_cand_clipReg_filename;
+		ofstream blat_var_cand_indel_file, blat_var_cand_clipReg_file;
+
 
 	public:
 		Chrome(string& chrname, int chrlen, faidx_t *fai, Paras *paras);
@@ -111,6 +119,9 @@ class Chrome{
 		bool isVarCandDataSorted(vector<varCand*> &var_cand_vec);
 		void loadMisAlnRegData();
 		void sortMisAlnRegData();
+		void loadPrevBlatAlnItems();
+		void setBlatVarcandFiles();
+		void resetBlatVarcandFiles();
 		void chrFillVarseqSingleVec(vector<varCand*> &var_cand_vec);
 		void removeRedundantVar();
 		void removeRedundantIndel(vector<varCand*> &var_cand_vec);

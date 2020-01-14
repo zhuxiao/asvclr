@@ -3,6 +3,7 @@
 #include "util.h"
 
 //pthread_mutex_t mutex_print_var_cand = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_write_blat_aln = PTHREAD_MUTEX_INITIALIZER;
 
 varCand::varCand(){
 	this->chrname = "";
@@ -30,6 +31,7 @@ void varCand::init(){
 	sv_type = VAR_UNC;
 	dup_num = 0;
 	margin_adjusted_flag = false;
+	blat_var_cand_file = NULL;
 }
 
 void varCand::destroyVarCand(){
@@ -49,29 +51,38 @@ void varCand::destroyVarCand(){
 	}
 }
 
+void varCand::setBlatVarcandFile(ofstream *blat_var_cand_file){
+	this->blat_var_cand_file = blat_var_cand_file;
+}
+
+void varCand::resetBlatVarcandFile(){
+	blat_var_cand_file = NULL;
+}
+
 // align contig to refseq
 void varCand::alnCtg2Refseq(){
 	//cout << "BLAT align: " << ctgfilename << endl;
-	if(assem_success and !isFileExist(alnfilename))
+	if(assem_success and !isFileExist(alnfilename)){
 		blatAln(alnfilename, ctgfilename, refseqfilename); // BLAT alignment
+
+		// record blat aligned information
+		recordBlatAlnInfo();
+	}
 }
 
-// BLAT alignment, and the output is in sim4 format
-//void varCand::blatAln(string &alnfilename, string &contigfilename, string &refseqfilename){
-//	string blat_cmd, out_opt;
-//	int ret;
-//
-//	out_opt = "-out=sim4 " + alnfilename;
-//	blat_cmd = "blat " + refseqfilename + " " + contigfilename + " " + out_opt + " > /dev/null 2>&1";
-//
-//	//cout << "blat_cmd: " + blat_cmd << endl;
-//
-//	ret = system(blat_cmd.c_str());
-//	if(ret!=0){
-//		cout << "Please run the correct blat command or check whether blat was correctly installed." << endl;
-//		exit(1);
-//	}
-//}
+// record blat aligned information
+void varCand::recordBlatAlnInfo(){
+	string line, aln_flag_str;
+	bool aln_flag;
+
+	aln_flag = isFileExist(alnfilename);
+	if(aln_flag) aln_flag_str = ALIGN_SUCCESS;
+	else aln_flag_str = ALIGN_FAILURE;
+
+	line = alnfilename + "\t" + ctgfilename + "\t" + refseqfilename + "\t" + aln_flag_str + "\t" + DONE_STR;
+
+	*blat_var_cand_file << line << endl;
+}
 
 // call variants according to BLAT alignment
 void varCand::callVariants(){

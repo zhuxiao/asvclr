@@ -40,6 +40,9 @@ class Genome{
 
 		//vector<varCand*> var_cand_vec;
 
+		string blat_aln_info_filename_tra;
+		vector<varCand*> blat_aligned_tra_varCand_vec;
+
 	public:
 		Genome(Paras *paras);
 		virtual ~Genome();
@@ -65,7 +68,6 @@ class Genome{
 		mateClipReg_t* getSameClipRegTRA(mateClipReg_t *clip_reg_given, vector<Chrome*> &chrome_vec);
 		void saveDetectResultToFile();
 		void mergeDetectResult();
-		void loadCallData();
 		void recallIndelsFromTRA();
 		void genomeCallTra();
 		void generateAlatAlnFilenameTra();

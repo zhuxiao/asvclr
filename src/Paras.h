@@ -12,8 +12,6 @@
 
 using namespace std;
 
-extern vector<string> split(const string& s, const string& delim);
-
 // program variables
 #define PROG_NAME		"ASVCLR"
 #define PROG_DESC		"Accurate Structural Variation Caller for Long Reads"

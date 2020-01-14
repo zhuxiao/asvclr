@@ -36,6 +36,7 @@ void Genome::init(){
 	out_filename_call_clipReg = out_dir_call + "/" + "genome_clipReg.bed";
 	out_filename_call_tra = out_dir_call + "/" + "genome_TRA.bedpe";
 	out_filename_call_vars = out_dir_call + "/" + "genome_variants.bed";
+	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
 	// load the fai
 	fai = fai_load(paras->refFile.c_str());
@@ -377,14 +378,11 @@ int Genome::genomeCall(){
 
 	cout << "Begin calling variants ..." << endl;
 
-	// load data for call command
-	loadCallData();
-
 	// call variants
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("12")==0)  // if(i==2)
-			chr->chrCall();
+		chr->chrLoadDataCall();
+		chr->chrCall();
 	}
 
 	// call TRA according to mate clip regions
@@ -423,15 +421,6 @@ int Genome::genomeCall(){
 	computeVarNumStatCall();
 
 	return 0;
-}
-
-// load data for call command
-void Genome::loadCallData(){
-	Chrome *chr;
-	for(size_t i=0; i<chromeVector.size(); i++){
-		chr = chromeVector.at(i);
-		chr->chrLoadDataCall();
-	}
 }
 
 // find indels back from mate clip regions
