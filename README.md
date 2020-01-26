@@ -166,7 +166,7 @@ Options:
      -h           show this help message and exit
 ```
 
-Note that: the `assemble` step can be re-run from last stop to avoid unnecessary recomputation, and the `-x` and `-e` options can be used to sampling high local coverage to relative lower coverage to accelerate assemble process if the expected sampling coverage is specified as a positive value.
+Note that: the `assemble` step can be re-run from last stop to avoid unnecessary recomputation, and the `-x` and `-e` options can be used to sampling high local coverage to a relative lower coverage to accelerate assemble process if the expected sampling coverage is specified as a positive value.
 
 ### `Call` Step
 
