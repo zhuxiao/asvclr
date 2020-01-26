@@ -37,7 +37,7 @@ $ asvclr all -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
 Program: ASVCLR (Accurate Structural Variation Caller for Long Reads)
-Version: 0.1.0 (using htslib 1.9)
+Version: 0.5.0 (using htslib 1.9)
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [region ...]?
 
@@ -52,6 +52,10 @@ Options:
      -m INT       minimal SV size to detect [2]
      -n INT       minimal clipping reads supporting a SV [7]
      -c INT       maximal clipping region size [10000]
+     -x FLOAT     expected sampling coverage for local assemble [50.0], 
+                  0 for no coverage sampling
+     -e FLOAT     compensation coefficient for local assemble sampling
+                  coverage [3.0]
      -o FILE      prefix of the output file [stdout]
      -t INT       number of threads [0]
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
@@ -64,7 +68,7 @@ Besides, the overall help information can be shown as below:
 ```sh
 $ asvclr
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.1.0 (using htslib 1.9)
+Version: 0.5.0 (using htslib 1.9)
 
 Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [region ...]?
 
@@ -107,7 +111,7 @@ And the help information are shown below:
 ```sh
 $ asvclr detect
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.1.0 (using htslib 1.9)
+Version: 0.5.0 (using htslib 1.9)
 
 Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [region ...]?
 
@@ -140,7 +144,7 @@ And the help information are shown below:
 ```sh
 $ asvclr assemble
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.1.0 (using htslib 1.9)
+Version: 0.5.0 (using htslib 1.9)
 
 Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE> [region ...]?
 
@@ -152,13 +156,17 @@ Options:
      -b INT       block size [1000000]
      -S INT       assemble slide size [10000]
      -c INT       maximal clipping region size [10000]
+     -x FLOAT     expected sampling coverage for local assemble [50.0], 
+                  0 for no coverage sampling
+     -e FLOAT     compensation coefficient for local assemble sampling
+                  coverage [3.0]
      -o FILE      prefix of the output file [stdout]
      -t INT       number of threads [0]
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
      -h           show this help message and exit
 ```
 
-Note that: the `assemble` step can be re-run from last stop to avoid unnecessary recomputation.
+Note that: the `assemble` step can be re-run from last stop to avoid unnecessary recomputation, and `-x` and `-e` options can be used to sampling high local coverage to relative lower coverage to accelerate assemble process if the expected sampling coverage is specified as a positive value.
 
 ### `Call` Step
 
@@ -173,7 +181,9 @@ And the help information are shown below:
 ```sh
 $ asvclr call
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.1.0 (using htslib 1.9)
+Version: 0.5.0 (using htslib 1.9)
+
+Usage: asvclr call [options] <REF_FILE> <BAM_FILE> [region ...]?
 
 Description:
      REF_FILE     Reference file
