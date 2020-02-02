@@ -220,7 +220,7 @@ For translocations, the file format should be BEDPE, and the first 13 columns ca
 Note that: In ASVCLR, all variant types, including translocations, can be stored together in the same BED file, for example:
 
 ```sh
-#Chr    Start   End     SVType SVLen  DupNum   Ref     Alt
+#Chr    Start   End     SVType  SVLen  DupNum   Ref     Alt
 #Chr1   Start1  End1    Chr2    Start2  End2    SVType  SVLen1  SVLen2  Ref1    Alt1    Ref2    Alt2
 chr1	3033733	3033733	INS	41	-	C	CTTGCCTCTTGGATTTCATTCCTTGGTTAGTTTCTCTCAAAA
 chr1	1185621	1185630	DEL	-9	-	AGTCCTATTG	A
