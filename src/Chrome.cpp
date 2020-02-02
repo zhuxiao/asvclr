@@ -62,8 +62,8 @@ void Chrome::setOutputDir(string& out_dir_detect_prefix, string& out_dir_assembl
 	var_cand_indel_filename = out_dir_assemble + "_var_cand_indel";
 	var_cand_clipReg_filename = out_dir_assemble + "_var_cand_clipReg";
 
-	blat_var_cand_indel_filename = out_dir_call + "_indel_blat_aln_info";
-	blat_var_cand_clipReg_filename = out_dir_call + "_clipReg_blat_aln_info";
+	blat_var_cand_indel_filename = out_dir_call_prefix + "/" + "blat_aln_info_" + chrname + "_indel";
+	blat_var_cand_clipReg_filename = out_dir_call_prefix + "/" + "blat_aln_info_" + chrname + "_clipReg";
 }
 
 string Chrome::getVarcandIndelFilename(){
@@ -1098,7 +1098,7 @@ void Chrome::chrMergeDetectResultToFile(){
 
 // set assembly information file for local assembly
 void Chrome::chrSetVarCandFiles(){
-	string line, tmp_filename;
+	string line, tmp_filename, header_line;
 	vector<string> str_vec;
 	ifstream infile;
 
@@ -1119,8 +1119,11 @@ void Chrome::chrSetVarCandFiles(){
 			exit(1);
 		}
 
+		header_line = getAssembleFileHeaderLine();
+		var_cand_indel_file << header_line << endl;
+
 		while(getline(infile, line)){
-			if(line.size()){
+			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
 				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
 					var_cand_indel_file << line << endl;
@@ -1137,6 +1140,9 @@ void Chrome::chrSetVarCandFiles(){
 			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << var_cand_indel_filename << endl;
 			exit(1);
 		}
+
+		header_line = getAssembleFileHeaderLine();
+		var_cand_indel_file << header_line << endl;
 	}
 
 	// clipReg
@@ -1156,8 +1162,11 @@ void Chrome::chrSetVarCandFiles(){
 			exit(1);
 		}
 
+		header_line = getAssembleFileHeaderLine();
+		var_cand_clipReg_file << header_line << endl;
+
 		while(getline(infile, line)){
-			if(line.size()){
+			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
 				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
 					var_cand_clipReg_file << line << endl;
@@ -1174,6 +1183,9 @@ void Chrome::chrSetVarCandFiles(){
 			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << var_cand_clipReg_filename << endl;
 			exit(1);
 		}
+
+		header_line = getAssembleFileHeaderLine();
+		var_cand_clipReg_file << header_line << endl;
 	}
 
 	vector<Block*>::iterator bloc;
@@ -1255,7 +1267,7 @@ void Chrome::chrLoadIndelDataAssemble(){
 	}
 
 	while(getline(infile, line)){
-		if(line.size()){
+		if(line.size()>0 and line.at(0)!='#'){
 			str_vec = split(line, "\t");
 			begPos = stoi(str_vec[1]);
 			endPos = stoi(str_vec[2]);
@@ -1304,7 +1316,7 @@ void Chrome::chrLoadMateClipRegData(){
 	}
 
 	while(getline(infile, line)){
-		if(line.size()){
+		if(line.size()>0 and line.at(0)!='#'){
 			reg1 = reg2 = reg3 = reg4 = NULL;
 			str_vec = split(line, "\t");
 			chrname1 = str_vec.at(0);
@@ -1400,7 +1412,7 @@ void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
 	}
 
 	while(getline(infile, line)){
-		if(line.size()){
+		if(line.size()>0 and line.at(0)!='#'){
 			// allocate memory
 			var_cand_tmp = new varCand();
 
@@ -1418,36 +1430,41 @@ void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
 			var_cand_tmp->ref_left_shift_size = stoi(line_vec.at(3));  // ref_left_shift_size
 			var_cand_tmp->ref_right_shift_size = stoi(line_vec.at(4));  // ref_right_shift_size
 
+			var_cand_tmp->blat_aligned_info_vec = NULL;
+			var_cand_tmp->blat_var_cand_file = NULL;
+
 			if(line_vec[5].compare(ASSEMBLY_SUCCESS)==0) var_cand_tmp->assem_success = true;
 			else var_cand_tmp->assem_success = false;
 
 			var_cand_tmp->ctg_num = 0;
 
 			// load variations
-			var_str = split(line_vec.at(6), ";");
-			for(i=0; i<var_str.size(); i++){
-				var_str1 = split(var_str.at(i), ":");
-				var_str2 = split(var_str1.at(1), "-");
-				reg = new reg_t();
-				reg->chrname = var_str1.at(0);
-				reg->startRefPos = stoi(var_str2.at(0));
-				reg->endRefPos = stoi(var_str2.at(1));
-				reg->startLocalRefPos = reg->endLocalRefPos = 0;
-				reg->startQueryPos = reg->endQueryPos = 0;
-				reg->sv_len = 0;
-				reg->dup_num = 0;
-				reg->var_type = VAR_UNC;
-				reg->query_id = -1;
-				reg->blat_aln_id = -1;
-				reg->call_success_status = false;
-				reg->short_sv_flag = false;
-				reg->zero_cov_flag = false;
-				var_cand_tmp->varVec.push_back(reg);  // variation vector
+			if(line_vec.at(6).compare("-")!=0){
+				var_str = split(line_vec.at(6), ";");
+				for(i=0; i<var_str.size(); i++){
+					var_str1 = split(var_str.at(i), ":");
+					var_str2 = split(var_str1.at(1), "-");
+					reg = new reg_t();
+					reg->chrname = var_str1.at(0);
+					reg->startRefPos = stoi(var_str2.at(0));
+					reg->endRefPos = stoi(var_str2.at(1));
+					reg->startLocalRefPos = reg->endLocalRefPos = 0;
+					reg->startQueryPos = reg->endQueryPos = 0;
+					reg->sv_len = 0;
+					reg->dup_num = 0;
+					reg->var_type = VAR_UNC;
+					reg->query_id = -1;
+					reg->blat_aln_id = -1;
+					reg->call_success_status = false;
+					reg->short_sv_flag = false;
+					reg->zero_cov_flag = false;
+					var_cand_tmp->varVec.push_back(reg);  // variation vector
+				}
+				var_cand_tmp->varVec.shrink_to_fit();
 			}
-			var_cand_tmp->varVec.shrink_to_fit();
 
 			// deal with 'DONE' string
-			done_str = line_vec.at(7);
+			done_str = line_vec.at(line_vec.size()-1);
 			if(done_str.compare(DONE_STR)==0 and var_cand_tmp->varVec.size()>0){
 				if(clipReg_flag) assembled_chr_clipReg_vec.push_back(var_cand_tmp);
 				else{
@@ -1455,11 +1472,17 @@ void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
 					tmp_bloc = blockVector.at(computeBlocID(begPos));  // get the block
 					tmp_bloc->assembled_indel_vec.push_back(var_cand_tmp);
 				}
-			}
+			}else delete var_cand_tmp;
 		}
 	}
 
 	infile.close();
+}
+
+// get the assembly file header line which starts with '#'
+string Chrome::getAssembleFileHeaderLine(){
+	string header_line = "#RefFile\tContigFile\tReadsFile\tLeftShiftSize\tRightShiftSize\tStatus\tVarRegs\tCovSamplingInfo\tDoneFlag";
+	return header_line;
 }
 
 // local assembly for chrome
@@ -1573,6 +1596,10 @@ int Chrome::chrCall(){
 	// reset blat var_cand files
 	resetBlatVarcandFiles();
 
+	// release blat align information
+	if(!blat_aligned_chr_varCand_vec.empty()) destroyVarCandVector(blat_aligned_chr_varCand_vec);
+	if(!blat_aligned_chr_clipReg_varCand_vec.empty()) destroyVarCandVector(blat_aligned_chr_clipReg_varCand_vec);
+
 	// remove redundant new called variants
 	cout << "--[" << time.getTime() << "]: aaaaaaaaaaaaa: removeRedundantVar..." << endl;
 	removeRedundantVar();
@@ -1595,7 +1622,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("3_call/chr14/blat_14_101495035-101505100.sim4")==0)
+		//if(var_cand->alnfilename.compare("3_call/chr1/blat_chr1_91021-100574.sim4")==0)
 		{
 			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << endl;
 			var_cand->callVariants();
@@ -1642,7 +1669,8 @@ void Chrome::loadVarCandData(){
 	loadVarCandDataFromFile(var_cand_clipReg_vec, var_cand_clipReg_filename, true);
 
 	// load previously blat aligned information
-	loadPrevBlatAlnItems();
+	loadPrevBlatAlnItems(false);
+	loadPrevBlatAlnItems(true);
 }
 
 void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var_cand_filename, bool clipReg_flag){
@@ -1664,7 +1692,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 
 	lineNum = 0;
 	while(getline(infile, line)){
-		if(line.size()){
+		if(line.size()>0 and line.at(0)!='#'){
 			// allocate memory
 			var_cand_tmp = new varCand();
 
@@ -1682,6 +1710,9 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			var_cand_tmp->ref_left_shift_size = stoi(line_vec[3]);	// ref_left_shift_size
 			var_cand_tmp->ref_right_shift_size = stoi(line_vec[4]);	// ref_right_shift_size
 
+			var_cand_tmp->blat_aligned_info_vec = NULL;
+			var_cand_tmp->blat_var_cand_file = NULL;
+
 			if(line_vec[5].compare(ASSEMBLY_SUCCESS)==0) var_cand_tmp->assem_success = true;
 			else var_cand_tmp->assem_success = false;
 
@@ -1689,27 +1720,29 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			var_cand_tmp->ctg_num = getCtgCount(var_cand_tmp->ctgfilename);
 
 			// load variations
-			var_str = split(line_vec.at(6), ";");
-			for(i=0; i<var_str.size(); i++){
-				var_str1 = split(var_str.at(i), ":");
-				var_str2 = split(var_str1.at(1), "-");
-				reg = new reg_t();
-				reg->chrname = var_str1.at(0);
-				reg->startRefPos = stoi(var_str2.at(0));
-				reg->endRefPos = stoi(var_str2.at(1));
-				reg->startLocalRefPos = reg->endLocalRefPos = 0;
-				reg->startQueryPos = reg->endQueryPos = 0;
-				reg->sv_len = 0;
-				reg->dup_num = 0;
-				reg->var_type = VAR_UNC;
-				reg->query_id = -1;
-				reg->blat_aln_id = -1;
-				reg->call_success_status = false;
-				reg->short_sv_flag = false;
-				reg->zero_cov_flag = false;
-				var_cand_tmp->varVec.push_back(reg);  // variation vector
+			if(line_vec.at(6).compare("-")!=0){
+				var_str = split(line_vec.at(6), ";");
+				for(i=0; i<var_str.size(); i++){
+					var_str1 = split(var_str.at(i), ":");
+					var_str2 = split(var_str1.at(1), "-");
+					reg = new reg_t();
+					reg->chrname = var_str1.at(0);
+					reg->startRefPos = stoi(var_str2.at(0));
+					reg->endRefPos = stoi(var_str2.at(1));
+					reg->startLocalRefPos = reg->endLocalRefPos = 0;
+					reg->startQueryPos = reg->endQueryPos = 0;
+					reg->sv_len = 0;
+					reg->dup_num = 0;
+					reg->var_type = VAR_UNC;
+					reg->query_id = -1;
+					reg->blat_aln_id = -1;
+					reg->call_success_status = false;
+					reg->short_sv_flag = false;
+					reg->zero_cov_flag = false;
+					var_cand_tmp->varVec.push_back(reg);  // variation vector
+				}
+				var_cand_tmp->varVec.shrink_to_fit();
 			}
-			var_cand_tmp->varVec.shrink_to_fit();
 
 			// generate alignment file names
 			str_vec = split(line_vec[1], "/");
@@ -1788,6 +1821,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			lineNum ++;
 		}
 	}
+	var_cand_vec.shrink_to_fit();
 	infile.close();
 
 	//cout << var_cand_filename << "\tlineNum=" << lineNum << endl;
@@ -1938,14 +1972,66 @@ void Chrome::sortMisAlnRegData(){
 }
 
 // load previously blat aligned information
-void Chrome::loadPrevBlatAlnItems(){
+void Chrome::loadPrevBlatAlnItems(bool clipReg_flag){
+	ifstream infile;
+	string infilename, line, done_str;
+	vector<string> line_vec;
+	varCand *var_cand_tmp;
 
+	if(clipReg_flag) infilename = blat_var_cand_clipReg_filename;
+	else infilename = blat_var_cand_indel_filename;
+
+	if(isFileExist(infilename)==false) return;
+
+	infile.open(infilename);
+	if(!infile.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << infilename << endl;
+		exit(1);
+	}
+
+	while(getline(infile, line)){
+		if(line.size()>0 and line.at(0)!='#'){
+			// allocate memory
+			var_cand_tmp = new varCand();
+
+			var_cand_tmp->chrname = "";
+			var_cand_tmp->var_cand_filename = "";
+			var_cand_tmp->out_dir_call = "";
+			var_cand_tmp->misAln_filename = "";
+			var_cand_tmp->inBamFile = "";
+			var_cand_tmp->fai = NULL;
+
+			line_vec = split(line, "\t");
+			var_cand_tmp->alnfilename = line_vec.at(0);  // align file name
+			var_cand_tmp->ctgfilename = line_vec.at(1);  // contig file name
+			var_cand_tmp->refseqfilename = line_vec.at(2);  // refseq file name
+			var_cand_tmp->ref_left_shift_size = 0;  // ref_left_shift_size
+			var_cand_tmp->ref_right_shift_size = 0;  // ref_right_shift_size
+
+			var_cand_tmp->blat_aligned_info_vec = NULL;
+			var_cand_tmp->blat_var_cand_file = NULL;
+
+			if(line_vec[3].compare(ALIGN_SUCCESS)==0) var_cand_tmp->align_success = true;
+			else var_cand_tmp->align_success = false;
+
+			var_cand_tmp->ctg_num = 0;
+
+			// deal with 'DONE' string
+			done_str = line_vec.at(line_vec.size()-1);
+			if(done_str.compare(DONE_STR)==0){
+				if(clipReg_flag) blat_aligned_chr_clipReg_varCand_vec.push_back(var_cand_tmp);
+				else blat_aligned_chr_varCand_vec.push_back(var_cand_tmp);
+			}else delete var_cand_tmp;
+		}
+	}
+
+	infile.close();
 }
 
 // set blat var_cand files
 void Chrome::setBlatVarcandFiles(){
 	ifstream infile;
-	string line, tmp_filename;
+	string line, tmp_filename, header_line;
 	vector<string> str_vec;
 	varCand *var_cand;
 	size_t i;
@@ -1967,8 +2053,11 @@ void Chrome::setBlatVarcandFiles(){
 			exit(1);
 		}
 
+		header_line = getBlatVarcandFileHeaderLine();
+		blat_var_cand_indel_file << header_line << endl;
+
 		while(getline(infile, line)){
-			if(line.size()){
+			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
 				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
 					blat_var_cand_indel_file << line << endl;
@@ -1985,11 +2074,13 @@ void Chrome::setBlatVarcandFiles(){
 			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << blat_var_cand_indel_filename << endl;
 			exit(1);
 		}
+		header_line = getBlatVarcandFileHeaderLine();
+		blat_var_cand_indel_file << header_line << endl;
 	}
 
-	for(i=0; i<blat_aligned_chr_varCand_vec.size(); i++){
-		var_cand = blat_aligned_chr_varCand_vec.at(i);
-		var_cand->setBlatVarcandFile(&blat_var_cand_indel_file);
+	for(i=0; i<var_cand_vec.size(); i++){
+		var_cand = var_cand_vec.at(i);
+		var_cand->setBlatVarcandFile(&blat_var_cand_indel_file, &blat_aligned_chr_varCand_vec);
 	}
 
 	// clipReg
@@ -2009,8 +2100,11 @@ void Chrome::setBlatVarcandFiles(){
 			exit(1);
 		}
 
+		header_line = getBlatVarcandFileHeaderLine();
+		blat_var_cand_clipReg_file << header_line << endl;
+
 		while(getline(infile, line)){
-			if(line.size()){
+			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
 				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
 					blat_var_cand_clipReg_file << line << endl;
@@ -2027,11 +2121,13 @@ void Chrome::setBlatVarcandFiles(){
 			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << blat_var_cand_clipReg_filename << endl;
 			exit(1);
 		}
+		header_line = getBlatVarcandFileHeaderLine();
+		blat_var_cand_clipReg_file << header_line << endl;
 	}
 
-	for(i=0; i<blat_aligned_chr_clipReg_varCand_vec.size(); i++){
-		var_cand = blat_aligned_chr_clipReg_varCand_vec.at(i);
-		var_cand->setBlatVarcandFile(&blat_var_cand_clipReg_file);
+	for(i=0; i<var_cand_clipReg_vec.size(); i++){
+		var_cand = var_cand_clipReg_vec.at(i);
+		var_cand->setBlatVarcandFile(&blat_var_cand_clipReg_file, &blat_aligned_chr_clipReg_varCand_vec);
 	}
 }
 
@@ -2039,14 +2135,20 @@ void Chrome::setBlatVarcandFiles(){
 void Chrome::resetBlatVarcandFiles(){
 	size_t i;
 	varCand *var_cand;
-	for(i=0; i<blat_aligned_chr_varCand_vec.size(); i++){
-		var_cand = blat_aligned_chr_varCand_vec.at(i);
+	for(i=0; i<var_cand_vec.size(); i++){
+		var_cand = var_cand_vec.at(i);
 		var_cand->resetBlatVarcandFile();
 	}
-	for(i=0; i<blat_aligned_chr_clipReg_varCand_vec.size(); i++){
-		var_cand = blat_aligned_chr_clipReg_varCand_vec.at(i);
+	for(i=0; i<var_cand_clipReg_vec.size(); i++){
+		var_cand = var_cand_clipReg_vec.at(i);
 		var_cand->resetBlatVarcandFile();
 	}
+}
+
+// get blat align file header line which starts with '#'
+string Chrome::getBlatVarcandFileHeaderLine(){
+	string header_line = "#BlatAlnFile\tContigFile\tRefFile\tStatus\tDoneFlag";
+	return header_line;
 }
 
 void Chrome::removeVarCandNodeIndel(varCand *var_cand){
@@ -2231,7 +2333,7 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 	ofstream outfile_indel, outfile_clipReg;
 	varCand *var_cand;
 	reg_t *reg;
-	string line, sv_type;
+	string line, sv_type, header_line_bed;;
 
 	outfile_indel.open(outfilename_indel);
 	if(!outfile_indel.is_open()){
@@ -2243,6 +2345,11 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << outfilename_clipReg << endl;
 		exit(1);
 	}
+
+	// header line
+	header_line_bed = getCallFileHeaderBed();
+	outfile_indel << header_line_bed << endl;
+	outfile_clipReg << header_line_bed << endl;
 
 	for(i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec[i];

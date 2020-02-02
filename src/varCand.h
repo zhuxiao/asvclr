@@ -102,13 +102,16 @@ class varCand {
 		//int32_t clip_end_flag;  // -1: unassigned; 0: both ends; 1: left end; 2: right end
 
 		// blat aligned information
+		vector<varCand*> *blat_aligned_info_vec;	// previously blat aligned information
+
+		// blat aligned information file
 		ofstream *blat_var_cand_file;
 
 	public:
 		varCand();
 		virtual ~varCand();
 		void callVariants();
-		void setBlatVarcandFile(ofstream *blat_var_cand_file);
+		void setBlatVarcandFile(ofstream *blat_var_cand_file, vector<varCand*> *blat_aligned_info_vec);
 		void resetBlatVarcandFile();
 		vector<int32_t> computeDisagreeNumAndHighIndelBaseNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 		void fillVarseq();
@@ -119,6 +122,7 @@ class varCand {
 		void init();
 		void alnCtg2Refseq();
 		void recordBlatAlnInfo();
+		bool getBlatAlnDoneFlag();
 		void assignBlatAlnStatus();
 		void callIndelVariants();
 		void callClipRegVariants();

@@ -52,6 +52,8 @@ bool isRegValid(reg_t *reg);
 void exchangeRegLoc(reg_t *reg);
 void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename);
 void cleanPrevAssembledTmpDir(const string &assem_dir_str, const string &dir_prefix);
+string getCallFileHeaderBed();
+string getCallFileHeaderBedpe();
 
 class Time{
 	private:

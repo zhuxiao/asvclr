@@ -1151,7 +1151,7 @@ void Block::blockLocalAssembleClipReg(){
 // perform local assembly
 void Block::performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, 0);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, 0, paras->expected_cov_assemble, paras->delete_reads_flag);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();

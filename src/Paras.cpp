@@ -36,6 +36,8 @@ void Paras::init()
 	reg_sum_size_est = 0;
 	max_reg_sum_size_est = MAX_REG_SUM_SIZE_EST;
 
+	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
+
 	//canu_version = getCanuVersion();
 }
 
@@ -212,7 +214,7 @@ int Paras::parseDetectParas(int argc, char **argv)
 // parse the parameters for assemble command
 int Paras::parseAssembleParas(int argc, char **argv)
 {
-	int opt, threadNum_tmp = 0, mask_val;
+	int opt, threadNum_tmp = 0, mask_val, delete_reads_val;
 	blockSize = BLOCKSIZE;
 	slideSize = ASSEM_SLIDE_SIZE;
 	assemSlideSize = ASSEM_SLIDE_SIZE;
@@ -220,8 +222,10 @@ int Paras::parseAssembleParas(int argc, char **argv)
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
 	mask_val = 1;
+	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
+	delete_reads_val = 1;
 
-	while( (opt = getopt(argc, argv, ":b:S:m:n:c:o:t:M:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:S:m:n:c:x:o:t:M:R:h")) != -1 ){
 		switch(opt){
 			//case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
@@ -229,9 +233,11 @@ int Paras::parseAssembleParas(int argc, char **argv)
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
 			case 'c': maxClipRegSize = stoi(optarg); break;
+			case 'x': expected_cov_assemble = stod(optarg); break;
 			case 'o': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
 			case 'M': mask_val = stoi(optarg); break;
+			case 'R': delete_reads_val = stoi(optarg); break;
 			case 'h': showAssembleUsage(); exit(0);
 			case '?': cout << "unknown option -" << (char)optopt << endl; exit(1);
 			case ':': cout << "the option -" << (char)optopt << " needs a value" << endl; exit(1);
@@ -246,6 +252,13 @@ int Paras::parseAssembleParas(int argc, char **argv)
 	else{
 		cout << "Error: Please specify the correct mask flag for mis-aligned regions using -M option." << endl << endl;
 		showAssembleUsage();
+		return 1;
+	}
+	if(delete_reads_val==1) delete_reads_flag = true;
+	else if(delete_reads_val==0) delete_reads_flag = false;
+	else{
+		cout << "Error: Please specify the correct reads delete flag for local assembly using -R option." << endl << endl;
+		showAllUsage();
 		return 1;
 	}
 
@@ -330,7 +343,7 @@ int Paras::parseCallParas(int argc, char **argv)
 // parse the parameters for 'all' command
 int Paras::parseAllParas(int argc, char **argv)
 {
-	int opt, threadNum_tmp = 0, mask_val;
+	int opt, threadNum_tmp = 0, mask_val, delete_reads_val;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
 	assemSlideSize = ASSEM_SLIDE_SIZE;
@@ -338,8 +351,10 @@ int Paras::parseAllParas(int argc, char **argv)
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
 	mask_val = 1;
+	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
+	delete_reads_val = 1;
 
-	while( (opt = getopt(argc, argv, ":b:s:S:m:n:c:o:t:M:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:s:S:m:n:c:x:o:t:M:R:h")) != -1 ){
 		switch(opt){
 			//case 'f': refFile = optarg; break;
 			case 'b': assemSlideSize = stoi(optarg); break;
@@ -348,9 +363,11 @@ int Paras::parseAllParas(int argc, char **argv)
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
 			case 'c': maxClipRegSize = stoi(optarg); break;
+			case 'x': expected_cov_assemble = stod(optarg); break;
 			case 'o': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
 			case 'M': mask_val = stoi(optarg); break;
+			case 'R': delete_reads_val = stoi(optarg); break;
 			case 'h': showUsage(); exit(0);
 			case '?': cout << "unknown option -" << (char)optopt << endl; exit(1);
 			case ':': cout << "the option -" << (char)optopt << " needs a value" << endl; exit(1);
@@ -364,7 +381,14 @@ int Paras::parseAllParas(int argc, char **argv)
 	else if(mask_val==0) maskMisAlnRegFlag = false;
 	else{
 		cout << "Error: Please specify the correct mask flag for mis-aligned regions using -M option." << endl << endl;
-		showCallUsage();
+		showAllUsage();
+		return 1;
+	}
+	if(delete_reads_val==1) delete_reads_flag = true;
+	else if(delete_reads_val==0) delete_reads_flag = false;
+	else{
+		cout << "Error: Please specify the correct reads delete flag for local assembly using -R option." << endl << endl;
+		showAllUsage();
 		return 1;
 	}
 
@@ -380,7 +404,7 @@ int Paras::parseAllParas(int argc, char **argv)
 
 	if(refFile.size()==0){
 		cout << "Error: Please specify the reference" << endl << endl;
-		showCallUsage();
+		showAllUsage();
 		return 1;
 	}
 
@@ -446,9 +470,13 @@ void Paras::showAssembleUsage()
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -S INT       assemble slide size [10000]" << endl;
 	cout << "     -c INT       maximal clipping region size [10000]" << endl;
+	cout << "     -x FLOAT     expected sampling coverage for local assemble [40.0], " << endl;
+	cout << "                  0 for no coverage sampling" << endl;
 	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
 	cout << "     -t INT       number of threads [0]" << endl;
 	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
+	cout << "     -R INT       Delete temporary reads during local assembly [1]:" << endl;
+	cout << "                  1 for yes, 0 for no" << endl;
 	cout << "     -h           show this help message and exit" << endl;
 }
 
@@ -493,9 +521,13 @@ void Paras::showAllUsage()
 	cout << "     -m INT       minimal SV size to detect [2]" << endl;
 	cout << "     -n INT       minimal clipping reads supporting a SV [7]" << endl;
 	cout << "     -c INT       maximal clipping region size [10000]" << endl;
+	cout << "     -x FLOAT     expected sampling coverage for local assemble [40.0], " << endl;
+	cout << "                  0 for no coverage sampling" << endl;
 	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
 	cout << "     -t INT       number of threads [0]" << endl;
 	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
+	cout << "     -R INT       Delete temporary reads during local assembly [1]:" << endl;
+	cout << "                  1 for yes, 0 for no" << endl;
 	cout << "     -h           show this help message and exit" << endl;
 }
 
@@ -513,9 +545,12 @@ void Paras::outputParas(){
 	cout << "Block size: " << blockSize << " bp" << endl;
 	cout << "Slide size: " << slideSize << " bp" << endl;
 	cout << "Maximal clipping region size: " << maxClipRegSize << " bp" << endl;
+	cout << "Expected sampling coverage: " << expected_cov_assemble << endl;
 	cout << "Num threads: " << num_threads << endl;
-	if(maskMisAlnRegFlag) cout << "Mask mis-aligned regions: yes" << endl << endl;
-	else cout << "Mask mis-aligned regions: no" << endl << endl;
+	if(maskMisAlnRegFlag) cout << "Mask mis-aligned regions: yes" << endl;
+	else cout << "Mask mis-aligned regions: no" << endl;
+	if(delete_reads_flag) cout << "Delete local temporary reads: yes" << endl << endl;
+	else cout << "Delete local temporary reads: no" << endl << endl;
 }
 
 // output the estimation parameters

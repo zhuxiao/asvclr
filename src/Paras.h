@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME		"ASVCLR"
 #define PROG_DESC		"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION	"0.4.1"
+#define PROG_VERSION	"0.5.0"
 
 #define SIZE_EST_OP		0
 #define NUM_EST_OP		1
@@ -52,6 +52,11 @@ using namespace std;
 
 #define DONE_STR					"DONE"
 
+#define SAMPLED_STR					"SAMPLED"
+#define UNSAMPLED_STR				"UNSAMPLED"
+
+#define EXPECTED_COV_ASSEMBLE		40.0f
+
 
 // program parameters
 class Paras
@@ -67,6 +72,10 @@ class Paras
 		size_t maxClipRegSize;
 
 		size_t reg_sum_size_est, max_reg_sum_size_est;
+
+		// reads sampling parameters
+		double expected_cov_assemble;
+		bool delete_reads_flag;
 
 		// estimated parameters
 		size_t min_ins_size_filt, min_del_size_filt, min_clip_size_filt;

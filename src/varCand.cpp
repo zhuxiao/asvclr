@@ -51,19 +51,25 @@ void varCand::destroyVarCand(){
 	}
 }
 
-void varCand::setBlatVarcandFile(ofstream *blat_var_cand_file){
+void varCand::setBlatVarcandFile(ofstream *blat_var_cand_file, vector<varCand*> *blat_aligned_info_vec){
 	this->blat_var_cand_file = blat_var_cand_file;
+	this->blat_aligned_info_vec = blat_aligned_info_vec;
 }
 
 void varCand::resetBlatVarcandFile(){
 	blat_var_cand_file = NULL;
+	blat_aligned_info_vec = NULL;
 }
 
 // align contig to refseq
 void varCand::alnCtg2Refseq(){
-	//cout << "BLAT align: " << ctgfilename << endl;
-	if(assem_success and !isFileExist(alnfilename)){
-		blatAln(alnfilename, ctgfilename, refseqfilename); // BLAT alignment
+	//cout << "BLAT align: " << alnfilename << endl;
+
+	bool blat_aln_done_flag = getBlatAlnDoneFlag();
+
+	//if(assem_success and !isFileExist(alnfilename)){
+	if(assem_success and blat_aln_done_flag==false){
+		if(!isFileExist(alnfilename)) blatAln(alnfilename, ctgfilename, refseqfilename); // BLAT alignment
 
 		// record blat aligned information
 		recordBlatAlnInfo();
@@ -75,14 +81,39 @@ void varCand::recordBlatAlnInfo(){
 	string line, aln_flag_str;
 	bool aln_flag;
 
-	aln_flag = isFileExist(alnfilename);
-	if(aln_flag) aln_flag_str = ALIGN_SUCCESS;
-	else aln_flag_str = ALIGN_FAILURE;
+	if(blat_var_cand_file){
+		aln_flag = isFileExist(alnfilename);
+		if(aln_flag) aln_flag_str = ALIGN_SUCCESS;
+		else aln_flag_str = ALIGN_FAILURE;
 
-	line = alnfilename + "\t" + ctgfilename + "\t" + refseqfilename + "\t" + aln_flag_str + "\t" + DONE_STR;
+		line = alnfilename + "\t" + ctgfilename + "\t" + refseqfilename + "\t" + aln_flag_str + "\t" + DONE_STR;
 
-	*blat_var_cand_file << line << endl;
+		pthread_mutex_lock(&mutex_write_blat_aln);
+		*blat_var_cand_file << line << endl;
+		pthread_mutex_unlock(&mutex_write_blat_aln);
+	}
 }
+
+// get blat align done flag
+bool varCand::getBlatAlnDoneFlag(){
+	bool blat_aln_done_flag;
+	varCand *blat_aligned_info_node;
+
+	blat_aln_done_flag = false;
+	if(blat_aligned_info_vec){
+		for(size_t i=0; i<blat_aligned_info_vec->size(); i++){
+			blat_aligned_info_node = blat_aligned_info_vec->at(i);
+			if(blat_aligned_info_node->alnfilename.compare(alnfilename)==0){
+				blat_aln_done_flag = true;
+				break;
+			}
+		}
+	}
+
+	return blat_aln_done_flag;
+}
+
+
 
 // call variants according to BLAT alignment
 void varCand::callVariants(){

@@ -45,7 +45,7 @@ int copySingleFile(string &infilename, ofstream &outfile){
 	}
 	// read each line and save to the output file
 	while(getline(infile, line))
-		if(line.size()>0){
+		if(line.size()>0 and line.at(0)!='#'){
 			outfile << line << endl;
 		}
 	infile.close();
@@ -999,6 +999,20 @@ void cleanPrevAssembledTmpDir(const string &assem_dir_str, const string &dir_pre
 	closedir(dp);
 	chdir(path);
 	free(path);
+}
+
+// get call file header line for INDEL which starts with '#'
+string getCallFileHeaderBed(){
+	string header_line;
+	header_line = "#Chr\tStart\tEnd\tSVType\tSVLen\tDupNum\tRef\tAlt";
+	return header_line;
+}
+
+// get call file header line for INDEL which starts with '#'
+string getCallFileHeaderBedpe(){
+	string header_line;
+	header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tSVType\tSVLen1\tSVLen2\tRef\tAlt1\tRef2\tAlt2";
+	return header_line;
 }
 
 

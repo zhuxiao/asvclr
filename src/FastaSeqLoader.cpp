@@ -14,7 +14,7 @@ void FastaSeqLoader::initFastaSeq(){
 	string fastaSeq, line;
 	ifstream infile(fastafilename);
 	if(!infile.is_open()) {
-		cerr << "ctgSeqLoader: Cannot open file " << fastafilename << endl;
+		cerr << "FastaSeqLoader: Cannot open file " << fastafilename << endl;
 		exit(1);
 	}
 

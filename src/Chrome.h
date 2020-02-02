@@ -108,6 +108,7 @@ class Chrome{
 		void outputAssemDataToFile(string &filename);
 		void removeVarCandNode(varCand *var_cand, vector<varCand*> &var_cand_vec);
 		void loadPrevAssembledInfo(bool clipReg_flag);
+		string getAssembleFileHeaderLine();
 
 		void chrCall_st();
 		void chrCall_mt();
@@ -119,8 +120,9 @@ class Chrome{
 		bool isVarCandDataSorted(vector<varCand*> &var_cand_vec);
 		void loadMisAlnRegData();
 		void sortMisAlnRegData();
-		void loadPrevBlatAlnItems();
+		void loadPrevBlatAlnItems(bool clipReg_flag);
 		void setBlatVarcandFiles();
+		string getBlatVarcandFileHeaderLine();
 		void resetBlatVarcandFiles();
 		void chrFillVarseqSingleVec(vector<varCand*> &var_cand_vec);
 		void removeRedundantVar();

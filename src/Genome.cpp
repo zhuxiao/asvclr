@@ -804,6 +804,9 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->ref_left_shift_size = var_cand_tmp->ref_left_shift_size;  // ref_left_shift_size
 		var_cand_new->ref_right_shift_size = var_cand_tmp->ref_right_shift_size;  // ref_right_shift_size
 
+		var_cand_new->blat_aligned_info_vec = NULL;
+		var_cand_new->blat_var_cand_file = NULL;
+
 		var_cand_new->assem_success = var_cand->assem_success;
 		var_cand_new->ctg_num = var_cand->ctg_num;
 
@@ -1568,6 +1571,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				var_cand_tmp->fai = fai;
 				var_cand_tmp->call_success = false;
 
+				var_cand_tmp->blat_aligned_info_vec = NULL;
+				var_cand_tmp->blat_var_cand_file = NULL;
+
 				var_cand_tmp->leftClipRefPos = clip_reg->leftClipPosTra1;
 				var_cand_tmp->rightClipRefPos = clip_reg->rightClipPosTra1;
 
@@ -1649,6 +1655,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				var_cand_tmp->fai = fai;
 				var_cand_tmp->align_success = false;
 
+				var_cand_tmp->blat_aligned_info_vec = NULL;
+				var_cand_tmp->blat_var_cand_file = NULL;
+
 				var_cand_tmp->leftClipRefPos = clip_reg->leftClipPosTra2;
 				var_cand_tmp->rightClipRefPos = clip_reg->rightClipPosTra2;
 
@@ -1725,7 +1734,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 // perform local assembly
 void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, assembly_extend_size);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->delete_reads_flag);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();
@@ -1929,7 +1938,7 @@ void Genome::saveTraCall2File(){
 	ofstream outfile_tra;
 	vector<mateClipReg_t*> mate_clipReg_vec;
 	mateClipReg_t *clip_reg;
-	string line;
+	string line, header_line_bedpe;;
 	int32_t sv_len;
 
 	outfile_tra.open(out_filename_call_tra);
@@ -1937,6 +1946,9 @@ void Genome::saveTraCall2File(){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_call_tra << endl;
 		exit(1);
 	}
+
+	header_line_bedpe = getCallFileHeaderBedpe();
+	outfile_tra << header_line_bedpe << endl;
 
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
@@ -1986,6 +1998,7 @@ void Genome::saveTraCall2File(){
 // merge call results into single file
 void Genome::mergeCallResult(){
 	ofstream out_file_indel, out_file_clipReg, out_file_vars;
+	string header_line_bed, header_line_bedpe;
 
 	out_file_indel.open(out_filename_call_indel);
 	if(!out_file_indel.is_open()){
@@ -2003,6 +2016,10 @@ void Genome::mergeCallResult(){
 		exit(1);
 	}
 
+	// header line
+	header_line_bed = getCallFileHeaderBed();
+	out_file_indel << header_line_bed << endl;
+	out_file_clipReg << header_line_bed << endl;
 
 	for(size_t i=0; i<chromeVector.size(); i++){
 		copySingleFile(chromeVector.at(i)->out_filename_call_indel, out_file_indel); // indel
@@ -2012,6 +2029,9 @@ void Genome::mergeCallResult(){
 	out_file_clipReg.close();
 
 	// merge indels, clipping variants, translocations to single file
+	header_line_bedpe = getCallFileHeaderBedpe();
+	out_file_vars << header_line_bed << endl;
+	out_file_vars << header_line_bedpe << endl;
 	copySingleFile(out_filename_call_indel, out_file_vars); // indels
 	copySingleFile(out_filename_call_clipReg, out_file_vars); // INV, DUP
 	copySingleFile(out_filename_call_tra, out_file_vars); // TRA
