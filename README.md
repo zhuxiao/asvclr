@@ -10,7 +10,7 @@ ASVCLR depends on the following libraries and tools:
 * Canu v1.7 (https://github.com/marbl/canu/releases/tag/v1.7.1)
 * Canu v1.8 (https://github.com/marbl/canu/releases/tag/v1.8)
 * BLAT (http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/blat/)
-* g++.
+* g++ (-std=c++11).
 
 The above library and tools should be installed before compiling ASVCLR. Canu v1.7, v1.8 and BLAT should be globally accessible in the computer system, these executable files `canu1.7`, `canu1.8` and `blat` or their soft links should be included in the `$PATH` directory.
 
@@ -54,11 +54,11 @@ Options:
      -c INT       maximal clipping region size [10000]
      -x FLOAT     expected sampling coverage for local assemble [50.0], 
                   0 for no coverage sampling
-     -e FLOAT     compensation coefficient for local assemble sampling
-                  coverage [3.0]
      -o FILE      prefix of the output file [stdout]
      -t INT       number of threads [0]
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
+     -R INT       Delete temporary reads during local assembly [1]:
+                  1 for yes, 0 for no
      -h           show this help message and exit
 ```
 where, the htslib version is the version of HTSlib installed on the machine.
@@ -158,15 +158,15 @@ Options:
      -c INT       maximal clipping region size [10000]
      -x FLOAT     expected sampling coverage for local assemble [50.0], 
                   0 for no coverage sampling
-     -e FLOAT     compensation coefficient for local assemble sampling
-                  coverage [3.0]
      -o FILE      prefix of the output file [stdout]
      -t INT       number of threads [0]
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
+     -R INT       Delete temporary reads during local assembly [1]:
+                  1 for yes, 0 for no
      -h           show this help message and exit
 ```
 
-Note that: the `assemble` step can be re-run from last stop to avoid unnecessary recomputation, and the `-x` and `-e` options can be used to sampling high local coverage to a relative lower coverage to accelerate assemble process if the expected sampling coverage option `-x` is specified as a positive value.
+Note that: the `assemble` step can be re-run from last stop to avoid unnecessary recomputation, and the `-x` option can be used to sampling high local coverage to a relative lower coverage to accelerate assemble process if the expected sampling coverage option `-x` is specified as a positive value.
 
 ### `Call` Step
 
@@ -207,19 +207,21 @@ There are two kinds of output files: BED file and BEDPE file. Insertions, deleti
 There are 8 columns in the generated BED format file for insertions, deletions, inversions and duplications, and these columns can be described as below:
 
 ```sh
-chromosome	start_ref_pos	end_ref_pos	SV_type	SV_len	Dup_num	Ref_seq	Alt_seq
+#Chr	Start	End	SVType	SVLen	DupNum	Ref	Alt
 ```
-Dup_num is the number of copies for the tandem duplications, Ref_seq is the reference sequence in variant regions, and the Alt_seq is the sample sequence in the variant regions.
+DupNum is the number of copies for the tandem duplications, Ref is the reference sequence in variant regions, and the Alt is the sample sequence in the variant regions.
 
 For translocations, the file format should be BEDPE, and the first 13 columns can be described as below:
 
 ```sh
-chromosome1	start_ref_pos1	end_ref_pos1	chromosome2	start_ref_pos2	end_ref_pos2	SV_type	SV_len1	SV_len2	Ref_seq1	Alt_seq1	Ref_seq2	Alt_seq2
+#Chr1	Start1	End1	Chr2	Start2	End2	SVType	SVLen1	SVLen2	Ref	Alt1	Ref2	Alt2
 ```
 
 Note that: In ASVCLR, all variant types, including translocations, can be stored together in the same BED file, for example:
 
 ```sh
+#Chr    Start   End     SVType SVLen  DupNum   Ref     Alt
+#Chr1   Start1  End1    Chr2    Start2  End2    SVType  SVLen1  SVLen2  Ref1    Alt1    Ref2    Alt2
 chr1	3033733	3033733	INS	41	-	C	CTTGCCTCTTGGATTTCATTCCTTGGTTAGTTTCTCTCAAAA
 chr1	1185621	1185630	DEL	-9	-	AGTCCTATTG	A
 chr2	3270134	3270184	INV	0	-	TTCCTTAAGAAACATTGTTGTTTTTAAAGTGAATTGATTGTCGCGGTTTCT	AGAAACCGCGACAATCAATTCACTTTAAAAACAACAATGTTTCTTAAGGAA
@@ -228,7 +230,7 @@ chr3	1079105	1079633	DUP	1055	2	AGTTAATTCATTAATACTAATACTATCG...	AGTTAATTCATTAATA
 chr1	1000002	2005000	chr2	2000002	2005000	TRA	4999	4999	TATGAATGCCGCAGCTGGAAACTC...	AAAACGAGTTTTAGTTCAGTAGG...	AAAACGAGTTTTAGTTCAGTAGG...	TATGAATGCCGCAGCTGGAAACTC...
 chr1	-	3000000	chr2	-	4000001	TRA	-	-	-	-	-	-
 ```
-The last variant item is a translocation breakpoint whose locations are 3000000 of chr1 and 4000001 of chr2.
+The last two variant items are translocations: the first item is a translocation which locates between chr1:1000002-2005000 and chr2:2000002-2005000, and the second item is a translocation breakpoint whose locations are 3000000 of chr1 and 4000001 of chr2.
 
 ------------------
 
