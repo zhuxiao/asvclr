@@ -223,12 +223,13 @@ void LocalAssembly::extractReadsDataFromBAM(){
 }
 
 double LocalAssembly::computeCompensationCoefficient(size_t startRefPos_assembly, size_t endRefPos_assembly, double mean_read_len){
-	size_t total_reg_size, reg_size_assemble;
+	size_t total_reg_size, refined_reg_size, reg_size_assemble;
 	double comp_coefficient;
 
 	reg_size_assemble = endRefPos_assembly - startRefPos_assembly + 1;
-	total_reg_size = reg_size_assemble + mean_read_len;  // flanking_area = (2 * mean_read_len) / 2
-	comp_coefficient = (double)total_reg_size / reg_size_assemble;
+	total_reg_size = reg_size_assemble + 2 * mean_read_len;
+	refined_reg_size = reg_size_assemble + mean_read_len;  // flanking_area = (2 * mean_read_len) / 2
+	comp_coefficient = (double)total_reg_size / refined_reg_size;
 
 	return comp_coefficient;
 }
@@ -236,16 +237,16 @@ double LocalAssembly::computeCompensationCoefficient(size_t startRefPos_assembly
 double LocalAssembly::computeLocalCov(vector<struct fqSeqNode*> &fq_seq_full_vec, double compensation_coefficient){
 	double cov = 0, total;
 	struct fqSeqNode* fq_node;
-	size_t ref_size;
+	size_t refined_reg_size;
 
-	ref_size = endRefPos_assembly - startRefPos_assembly + 1;
-	if(ref_size>0){
+	refined_reg_size = endRefPos_assembly - startRefPos_assembly + 1 + 2 * mean_read_len;
+	if(refined_reg_size>0){
 		total = 0;
 		for(size_t i=0; i<fq_seq_full_vec.size(); i++){
 			fq_node = fq_seq_full_vec.at(i);
 			total += fq_node->seq.size();
 		}
-		cov = total / (ref_size * compensation_coefficient);
+		cov = total / refined_reg_size * compensation_coefficient;
 		//cout << "total bases: " << total << " bp, local coverage: " << cov << endl;
 	}else{
 		cov = -1;
@@ -258,14 +259,14 @@ void LocalAssembly::samplingReads(vector<struct fqSeqNode*> &fq_seq_vec, double 
 	local_cov_original = computeLocalCov(fq_seq_vec, compensation_coefficient);
 
 	if(local_cov_original>expect_cov_val){ // sampling
-		//cout << "sampling for " << readsfilename << ", original coverage: " << local_cov_original << ", expected coverage: " << expect_cov_val << ", compensation_coefficient: " << compensation_coefficient << endl;
+		cout << "sampling for " << readsfilename << ", original coverage: " << local_cov_original << ", expected coverage: " << expect_cov_val << ", compensation_coefficient: " << compensation_coefficient << endl;
 		samplingReadsOp(fq_seq_vec, expect_cov_val, compensation_coefficient);
 	}
 }
 
 void LocalAssembly::samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val, double compensation_coefficient){
-	double expected_total_bases;
-	size_t index, max_reads_num, total_bases, ref_size;
+	double expected_total_bases, total_bases;
+	size_t index, max_reads_num, reg_size;
 	struct fqSeqNode* fq_node;
 
 	// reverse the select flag
@@ -274,8 +275,8 @@ void LocalAssembly::samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, doubl
 		fq_node->selected_flag = false;
 	}
 
-	ref_size = endRefPos_assembly - startRefPos_assembly + 1;
-	expected_total_bases = ref_size * expect_cov_val * compensation_coefficient;
+	reg_size = endRefPos_assembly - startRefPos_assembly + 1;
+	expected_total_bases = reg_size * expect_cov_val * compensation_coefficient;
 	max_reads_num = fq_seq_vec.size();
 
 	reads_count = 0;
@@ -295,7 +296,7 @@ void LocalAssembly::samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, doubl
 			reads_count ++;
 		}
 	}
-	sampled_cov = (double)total_bases / (ref_size * compensation_coefficient);
+	sampled_cov = total_bases / (reg_size * compensation_coefficient);
 	sampling_flag = true;
 
 //	/cout << "After sampling, reads count: " << reads_count << ", total bases: " << total_bases << endl;
@@ -325,7 +326,7 @@ void LocalAssembly::saveSampledReads(string &readsfilename, vector<struct fqSeqN
 	}
 	outfile.close();
 
-	//cout <<"\t" << readsfilename << ": clip_aln_data_size=" << clipAlnDataVector.size() << ", reads_num=" << fq_seq_vec.size() << ", selected_num=" << selected_num << "; ref_size=" << endRefPos_assembly-startRefPos_assembly+1 << ", total_bases_original=" << total_bases_original << ", local_cov_original=" << local_cov_original << ", sampled_cov=" << sampled_cov << endl;
+	cout <<"\t" << readsfilename << ": clip_aln_data_size=" << clipAlnDataVector.size() << ", reads_num=" << fq_seq_vec.size() << ", selected_num=" << selected_num << "; ref_size=" << endRefPos_assembly-startRefPos_assembly+1 << ", total_bases_original=" << total_bases_original << ", local_cov_original=" << local_cov_original << ", sampled_cov=" << sampled_cov << endl;
 }
 
 // get query clip align segments
@@ -719,7 +720,7 @@ void LocalAssembly::recordAssemblyInfo(ofstream &assembly_info_file){
 		line += "\t-";
 	}
 
-	// sampling status
+	// coverage sampling information
 	sampling_str = to_string(local_cov_original);
 	if(sampling_flag){
 		sampling_str = sampling_str + ";" + to_string(sampled_cov) + ";" + to_string(compensation_coefficient) + ";" + SAMPLED_STR;

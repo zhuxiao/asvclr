@@ -358,7 +358,7 @@ int Genome::genomeLocalAssemble(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("chrM")==0)
+		//if(chr->chrname.compare("1")==0)
 		{
 			chr->chrLoadDataAssemble();  // load the variation data
 			chr->chrLocalAssemble();     // local assembly
@@ -2249,25 +2249,30 @@ vector<int32_t> Genome::getSuccFailNumAssemble(string &filename){
 	vector<int32_t> succ_fail_vec;
 	int32_t num_succ, num_fail;
 
-	infile.open(filename);
-	if(!infile.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << filename << endl;
-		exit(1);
-	}
-
-	// read each line and check the success and failed flag
-	num_succ = num_fail = 0;
-	while(getline(infile, line))
-		if(line.size()>0 and line.at(0)!='#'){
-			str_vec = split(line, "\t");
-			if(str_vec.at(5).compare(ASSEMBLY_SUCCESS)==0) num_succ ++;
-			else num_fail ++;
+	if(isFileExist(filename)){
+		infile.open(filename);
+		if(!infile.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << filename << endl;
+			exit(1);
 		}
 
-	succ_fail_vec.push_back(num_succ);
-	succ_fail_vec.push_back(num_fail);
+		// read each line and check the success and failed flag
+		num_succ = num_fail = 0;
+		while(getline(infile, line))
+			if(line.size()>0 and line.at(0)!='#'){
+				str_vec = split(line, "\t");
+				if(str_vec.at(5).compare(ASSEMBLY_SUCCESS)==0) num_succ ++;
+				else num_fail ++;
+			}
 
-	infile.close();
+		succ_fail_vec.push_back(num_succ);
+		succ_fail_vec.push_back(num_fail);
+
+		infile.close();
+	}else{
+		succ_fail_vec.push_back(0);
+		succ_fail_vec.push_back(0);
+	}
 
 	return succ_fail_vec;
 }
