@@ -182,44 +182,6 @@ void LocalAssembly::extractReadsDataFromBAM(){
 
 	// release memory
 	if(!fq_seq_vec.empty()) destoryFqSeqs(fq_seq_vec);
-
-//	size_t i, j;
-//	string qname, qseq, qual;
-//	uint8_t *qual_int;
-//	ofstream outfile;
-//	bam1_t *b;
-//
-//	// load the aligned reads data
-//	alnDataLoader data_loader(varVec[0]->chrname, varVec[0]->startRefPos, varVec[varVec.size()-1]->endRefPos, inBamFile);
-//	data_loader.loadAlnData(alnDataVector);
-//
-//	// save to file
-//	outfile.open(readsfilename);
-//	if(!outfile.is_open()){
-//		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << readsfilename << endl;
-//		exit(1);
-//	}
-//
-//	// convert to fastq and save to file
-//	for(i=0; i<(int32_t)alnDataVector.size(); i++){
-//		b = alnDataVector[i];
-//		qname = bam_get_qname(b);   // qname
-//		qual_int = bam_get_qual(b);
-//
-//		qseq = qual = "";
-//		for(j=0; j<b->core.l_qseq; j++) qseq += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), j)];  // seq
-//		for(j=0; j<b->core.l_qseq; j++) qual += qual_int[j] + 33;  // qual
-//
-//		// save the read to file
-//		outfile << "@" + qname << endl;
-//		outfile << qseq << endl;
-//		outfile << "+" << endl;
-//		outfile << qual << endl;
-//	}
-//	outfile.close();
-//
-//	if(!alnDataVector.empty()) destoryAlnData();
-
 }
 
 double LocalAssembly::computeCompensationCoefficient(size_t startRefPos_assembly, size_t endRefPos_assembly, double mean_read_len){
@@ -259,7 +221,7 @@ void LocalAssembly::samplingReads(vector<struct fqSeqNode*> &fq_seq_vec, double 
 	local_cov_original = computeLocalCov(fq_seq_vec, compensation_coefficient);
 
 	if(local_cov_original>expect_cov_val){ // sampling
-		cout << "sampling for " << readsfilename << ", original coverage: " << local_cov_original << ", expected coverage: " << expect_cov_val << ", compensation_coefficient: " << compensation_coefficient << endl;
+		//cout << "sampling for " << readsfilename << ", original coverage: " << local_cov_original << ", expected coverage: " << expect_cov_val << ", compensation_coefficient: " << compensation_coefficient << endl;
 		samplingReadsOp(fq_seq_vec, expect_cov_val, compensation_coefficient);
 	}
 }
@@ -275,8 +237,8 @@ void LocalAssembly::samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, doubl
 		fq_node->selected_flag = false;
 	}
 
-	reg_size = endRefPos_assembly - startRefPos_assembly + 1;
-	expected_total_bases = reg_size * expect_cov_val * compensation_coefficient;
+	reg_size = endRefPos_assembly - startRefPos_assembly + 1 + mean_read_len;
+	expected_total_bases = reg_size * expect_cov_val;
 	max_reads_num = fq_seq_vec.size();
 
 	reads_count = 0;
@@ -296,7 +258,7 @@ void LocalAssembly::samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, doubl
 			reads_count ++;
 		}
 	}
-	sampled_cov = total_bases / (reg_size * compensation_coefficient);
+	sampled_cov = total_bases / reg_size;
 	sampling_flag = true;
 
 //	/cout << "After sampling, reads count: " << reads_count << ", total bases: " << total_bases << endl;
@@ -326,7 +288,7 @@ void LocalAssembly::saveSampledReads(string &readsfilename, vector<struct fqSeqN
 	}
 	outfile.close();
 
-	cout <<"\t" << readsfilename << ": clip_aln_data_size=" << clipAlnDataVector.size() << ", reads_num=" << fq_seq_vec.size() << ", selected_num=" << selected_num << "; ref_size=" << endRefPos_assembly-startRefPos_assembly+1 << ", total_bases_original=" << total_bases_original << ", local_cov_original=" << local_cov_original << ", sampled_cov=" << sampled_cov << endl;
+	//cout <<"\t" << readsfilename << ": clip_aln_data_size=" << clipAlnDataVector.size() << ", reads_num=" << fq_seq_vec.size() << ", selected_num=" << selected_num << "; ref_size=" << endRefPos_assembly-startRefPos_assembly+1 << ", total_bases_original=" << total_bases_original << ", local_cov_original=" << local_cov_original << ", sampled_cov=" << sampled_cov << endl;
 }
 
 // get query clip align segments
