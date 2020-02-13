@@ -139,12 +139,16 @@ void Block::blockFillDataEst(size_t op_est){
 	initBaseArray();
 	loadAlnData();
 
-	// compute the block base information,
-	// including coverage, insertions, deletions and clippings
+	// compute the block base information, including coverage, insertions, deletions and clippings
 	computeBlockBaseInfo();
 
 	// fill the data for estimation
 	fillDataEst(op_est);
+
+	// compute mean read length
+	if(op_est==SIZE_EST_OP){
+		AddReadLenEstInfo();
+	}
 }
 
 // fill the estimation data
@@ -204,6 +208,23 @@ void Block::fillDataEst(size_t op_est){
 				exit(1);
 			}
 		}
+	}
+}
+
+// add read length estimation information
+void Block::AddReadLenEstInfo(){
+	bam1_t *b;
+	size_t total, num;
+
+	if(!alnDataVector.empty()){
+		total = num = 0;
+		for(size_t i=0; i<alnDataVector.size(); i++){
+			b = alnDataVector.at(i);
+			total += b->core.l_qseq;
+			num ++;
+		}
+		paras->mean_read_len += total;
+		paras->total_read_num_est += num;
 	}
 }
 

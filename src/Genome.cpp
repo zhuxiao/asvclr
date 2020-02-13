@@ -124,7 +124,7 @@ void Genome::estimateSVSizeNum(){
 		chr->chrFillDataEst(NUM_EST_OP);
 		if(paras->reg_sum_size_est>=paras->max_reg_sum_size_est) break;
 	}
-	// size estimate
+	// num estimate
 	paras->estimate(NUM_EST_OP);
 }
 

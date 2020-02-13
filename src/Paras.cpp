@@ -1,6 +1,7 @@
 #include <string.h>
 #include <vector>
 #include <htslib/hts.h>
+#include <cmath>
 #include "Paras.h"
 
 // Constructor with parameters
@@ -32,6 +33,8 @@ void Paras::init()
 	min_ins_num_filt = 0;
 	min_del_num_filt = 0;
 	min_clip_num_filt = 0;
+
+	mean_read_len = total_read_num_est = 0;
 
 	reg_sum_size_est = 0;
 	max_reg_sum_size_est = MAX_REG_SUM_SIZE_EST;
@@ -556,6 +559,7 @@ void Paras::outputParas(){
 // output the estimation parameters
 void Paras::outputEstParas(string info){
 	cout << info << endl;
+	cout << "Mean read length: " << mean_read_len << " bp" << endl;
 	cout << "min_ins_size_filt: " << min_ins_size_filt << " bp" << endl;
 	cout << "min_del_size_filt: " << min_del_size_filt << " bp" << endl;
 //	cout << "min_clip_size_filt: " << min_clip_size_filt << " bp" << endl;
@@ -592,6 +596,10 @@ void Paras::estimate(size_t op_est){
 
 		if(min_ins_size_filt>min_del_size_filt) large_indel_size_thres = min_ins_size_filt * LARGE_INDEL_SIZE_FACTOR;
 		else large_indel_size_thres = min_del_size_filt * LARGE_INDEL_SIZE_FACTOR;
+
+		// compute mean read length
+		if(total_read_num_est>0) mean_read_len = round((double)mean_read_len / total_read_num_est);
+		else mean_read_len = total_read_num_est = 0;
 
 	}else if(op_est==NUM_EST_OP){
 		// min_ins_num_filt
