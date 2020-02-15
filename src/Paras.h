@@ -13,35 +13,35 @@
 using namespace std;
 
 // program variables
-#define PROG_NAME		"ASVCLR"
-#define PROG_DESC		"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION	"0.5.3"
+#define PROG_NAME					"ASVCLR"
+#define PROG_DESC					"Accurate Structural Variation Caller for Long Reads"
+#define PROG_VERSION				"0.5.4"
 
-#define SIZE_EST_OP		0
-#define NUM_EST_OP		1
-#define SNV_EST_OP		2
+#define SIZE_EST_OP					0
+#define NUM_EST_OP					1
+#define SNV_EST_OP					2
 
 #define LARGE_INDEL_SIZE_FACTOR		3
 
 
 // default parameter values
-#define BLOCKSIZE  						1000000
-#define SLIDESIZE  						500
-#define ASSEM_SLIDE_SIZE				5000
+#define BLOCKSIZE  					1000000
+#define SLIDESIZE  					500
+#define ASSEM_SLIDE_SIZE			5000
 
-#define MIN_INDEL_EVENT_SIZE			2
-#define MIN_INDEL_EVENT_NUM				5
-#define MIN_SV_SIZE_USR					2
+#define MIN_INDEL_EVENT_SIZE		2
+#define MIN_INDEL_EVENT_NUM			5
+#define MIN_SV_SIZE_USR				2
 
-#define MIN_CLIP_READS_NUM_THRES		7	// to be parameterized
+#define MIN_CLIP_READS_NUM_THRES	7	// to be parameterized
 
-#define MAX_CLIP_REG_SIZE				10000  // to be parameterized
+#define MAX_CLIP_REG_SIZE			10000  // to be parameterized
 
-#define SIZE_PERCENTILE_EST				0.95
-#define NUM_PERCENTILE_EST				0.99995
-#define AUX_ARR_SIZE					1001
+#define SIZE_PERCENTILE_EST			0.95
+#define NUM_PERCENTILE_EST			0.99995
+#define AUX_ARR_SIZE				1001
 
-#define MAX_REG_SUM_SIZE_EST			500000
+#define MAX_REG_SUM_SIZE_EST		500000
 
 #define ASSEMBLY_SUCCESS			"ASS_SUCCESS"
 #define ASSEMBLY_FAILURE			"ASS_FAILURE"

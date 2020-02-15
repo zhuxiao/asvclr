@@ -1600,13 +1600,13 @@ int Chrome::chrCall(){
 	if(!blat_aligned_chr_varCand_vec.empty()) destroyVarCandVector(blat_aligned_chr_varCand_vec);
 	if(!blat_aligned_chr_clipReg_varCand_vec.empty()) destroyVarCandVector(blat_aligned_chr_clipReg_varCand_vec);
 
-	// remove redundant new called variants
-	cout << "--[" << time.getTime() << "]: aaaaaaaaaaaaa: removeRedundantVar..." << endl;
-	removeRedundantVar();
-
-	// remove FPs of new called variants
-	cout << "--[" << time.getTime() << "]: bbbbbbbbbbbbb: removeFPNewVarVec..." << endl;
-	removeFPNewVarVec();
+//	// remove redundant new called variants
+//	cout << "--[" << time.getTime() << "]: aaaaaaaaaaaaa: removeRedundantVar..." << endl;
+//	removeRedundantVar();
+//
+//	// remove FPs of new called variants
+//	cout << "--[" << time.getTime() << "]: bbbbbbbbbbbbb: removeFPNewVarVec..." << endl;
+//	removeFPNewVarVec();
 
 	return 0;
 }
