@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "util.h"
 
 // string split function
@@ -950,17 +951,25 @@ void exchangeRegLoc(reg_t *reg){
 // BLAT alignment, and the output is in sim4 format
 void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename){
 	string blat_cmd, out_opt;
-	int ret;
+	int i, ret, sleep_sec;
 
 	out_opt = "-out=sim4 " + alnfilename;
 	blat_cmd = "blat " + refseqfilename + " " + contigfilename + " " + out_opt + " > /dev/null 2>&1";
 
 	//cout << "blat_cmd: " + blat_cmd << endl;
 
-	ret = system(blat_cmd.c_str());
-	if(ret!=0){
-		cout << "Please run the correct blat command or check whether blat was correctly installed." << endl;
-		exit(1);
+	for(i=0; i<3; i++){
+		ret = system(blat_cmd.c_str());
+		if(ret!=0){
+			if(i<2){
+				sleep_sec = (i + 1) * (i + 1) * 10;
+				sleep(sleep_sec);
+				cout << __func__ << ": retry aligning " << contigfilename << endl;
+			}else{
+				cerr << "Please run the correct blat command or check whether blat was correctly installed when aligning " << contigfilename <<"." << endl;
+				exit(1);
+			}
+		}else break;
 	}
 }
 

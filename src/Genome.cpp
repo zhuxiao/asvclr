@@ -381,8 +381,11 @@ int Genome::genomeCall(){
 	// call variants
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->chrLoadDataCall();
-		chr->chrCall();
+		//if(chr->chrname.compare("8")==0)
+		{
+			chr->chrLoadDataCall();
+			chr->chrCall();
+		}
 	}
 
 	// call TRA according to mate clip regions
