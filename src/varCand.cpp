@@ -2500,9 +2500,9 @@ void varCand::computeLocalLocsAln(localAln_t *local_aln){
 
 	dist1 += dif_cand_reg;
 	if(cand_reg->startLocalRefPos<cand_reg->startQueryPos){
-		if(cand_reg->startLocalRefPos<dist1) dist1 = cand_reg->startLocalRefPos - 1;
+		if(cand_reg->startLocalRefPos<=dist1) dist1 = cand_reg->startLocalRefPos - 1;
 	}else{
-		if(cand_reg->startQueryPos<dist1) dist1 = cand_reg->startQueryPos - 1;
+		if(cand_reg->startQueryPos<=dist1) dist1 = cand_reg->startQueryPos - 1;
 	}
 
 	if(cand_reg->endRefPos<reg->endRefPos)
@@ -2513,9 +2513,9 @@ void varCand::computeLocalLocsAln(localAln_t *local_aln){
 	dist2 += dif_cand_reg;
 	blat_aln = blat_aln_vec.at(cand_reg->blat_aln_id);
 	querylen = blat_aln->query_len;
-	if(cand_reg->endQueryPos+dist2>querylen) dist2 = querylen - cand_reg->endQueryPos;
+	if(cand_reg->endQueryPos+dist2>=querylen) dist2 = querylen - cand_reg->endQueryPos;
 	subject_len = blat_aln->subject_len;
-	if(cand_reg->endLocalRefPos+dist2>subject_len) dist2 = subject_len - cand_reg->endLocalRefPos;
+	if(cand_reg->endLocalRefPos+dist2>=subject_len) dist2 = subject_len - cand_reg->endLocalRefPos;
 
 	local_aln->startRefPos = cand_reg->startRefPos - dist1;
 	local_aln->startLocalRefPos = cand_reg->startLocalRefPos - dist1;
