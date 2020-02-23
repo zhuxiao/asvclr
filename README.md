@@ -52,7 +52,7 @@ Options:
      -m INT       minimal SV size to detect [2]
      -n INT       minimal clipping reads supporting a SV [7]
      -c INT       maximal clipping region size [10000]
-     -x FLOAT     expected sampling coverage for local assemble [40.0], 
+     -x FLOAT     expected sampling coverage for local assemble [30.0], 
                   0 for no coverage sampling
      -o FILE      prefix of the output file [stdout]
      -t INT       number of threads [0]
@@ -156,7 +156,7 @@ Options:
      -b INT       block size [1000000]
      -S INT       assemble slide size [10000]
      -c INT       maximal clipping region size [10000]
-     -x FLOAT     expected sampling coverage for local assemble [40.0], 
+     -x FLOAT     expected sampling coverage for local assemble [30.0], 
                   0 for no coverage sampling
      -o FILE      prefix of the output file [stdout]
      -t INT       number of threads [0]

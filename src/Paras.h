@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION				"0.5.5"
+#define PROG_VERSION				"0.5.6"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -55,7 +55,7 @@ using namespace std;
 #define SAMPLED_STR					"SAMPLED"
 #define UNSAMPLED_STR				"UNSAMPLED"
 
-#define EXPECTED_COV_ASSEMBLE		40.0f
+#define EXPECTED_COV_ASSEMBLE		30.0f
 
 
 // program parameters
