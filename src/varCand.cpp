@@ -119,7 +119,7 @@ bool varCand::getBlatAlnDoneFlag(){
 void varCand::callVariants(){
 	if(sv_type!=VAR_TRA){
 //		pthread_mutex_lock(&mutex_print_var_cand);
-//		cout << "process: " << ctgfilename << endl;
+//		cout << "process: " << alnfilename << endl;
 //		pthread_mutex_unlock(&mutex_print_var_cand);
 
 		loadBlatAlnData(); // load align data
@@ -3165,8 +3165,6 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 			localRefPos_start = localRefPos - subseq_len + 1;
 			queryPos_start = queryPos - subseq_len + 1;
 
-
-
 			// compute local locations
 			local_aln = new localAln_t;
 			local_aln->reg = NULL;
@@ -3343,26 +3341,34 @@ size_t varCand::computeMismatchNumLocalAln(localAln_t *local_aln){
 vector<size_t> varCand::computeQueryClipPosDup(blat_aln_t *blat_aln, int32_t clipRefPos, string &refseq, string &queryseq){
 	size_t i;
 	int32_t localRefPos_start, refPos_start, queryPos_start;
-	int32_t subseq_len, dist, queryPos, refPos, localRefPos;
+	int32_t dist, queryPos, refPos, localRefPos, sub_refseq_len, sub_queryseq_len;
 	localAln_t *local_aln;
 	aln_seg_t *aln_seg;
 	string query_aln_seq, mid_aln_seq, ref_aln_seq;
 	vector<size_t> pos_vec;
 
 	// get aln_seg
-	aln_seg = NULL;
 	for(i=0; i<blat_aln->aln_segs.size(); i++){
 		aln_seg = blat_aln->aln_segs[i];
 		if(aln_seg->ref_start<=clipRefPos and aln_seg->ref_end>=clipRefPos) break;
 	}
 
-	if(aln_seg){
+	if(i<blat_aln->aln_segs.size()){
 		dist = clipRefPos - aln_seg->ref_start;
 		refPos_start = clipRefPos - 200;
 		queryPos_start = aln_seg->query_start + dist - 200;
 		localRefPos_start = aln_seg->subject_start + dist - 200;
 		if(queryPos_start<1) queryPos_start = 1;
 		if(localRefPos_start<1) localRefPos_start = 1;
+
+		if(queryPos_start<1 or queryPos_start>(int32_t)queryseq.size()){
+			cerr << "queryPos_start=" << queryPos_start << ", queryseq_len=" << queryseq.size() << ", error!" << endl;
+			exit(1);
+		}
+		if(localRefPos_start<1 or localRefPos_start>(int32_t)refseq.size()){
+			cerr << "localRefPos_start=" << localRefPos_start << ", refseq_len=" << refseq.size() << ", error!" << endl;
+			exit(1);
+		}
 
 		// compute local locations
 		local_aln = new localAln_t;
@@ -3372,9 +3378,11 @@ vector<size_t> varCand::computeQueryClipPosDup(blat_aln_t *blat_aln, int32_t cli
 		local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
 		local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
 
-		subseq_len = 400;
-		local_aln->refseq = refseq.substr(localRefPos_start-1, subseq_len);
-		local_aln->ctgseq = queryseq.substr(queryPos_start-1, subseq_len);
+		sub_refseq_len = sub_queryseq_len = 400; // MIN_AVER_SIZE_ALN_SEG;
+		if(localRefPos_start-1+sub_refseq_len>(int32_t)refseq.size()) sub_refseq_len = refseq.size() - (localRefPos_start - 1);
+		if(queryPos_start-1+sub_queryseq_len>(int32_t)queryseq.size()) sub_queryseq_len = queryseq.size() - (queryPos_start - 1);
+		local_aln->refseq = refseq.substr(localRefPos_start-1, sub_refseq_len);
+		local_aln->ctgseq = queryseq.substr(queryPos_start-1, sub_queryseq_len);
 
 		// pairwise alignment
 		upperSeq(local_aln->ctgseq);
