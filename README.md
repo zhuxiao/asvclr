@@ -10,7 +10,7 @@ ASVCLR depends on the following libraries and tools:
 * Canu v1.7 (https://github.com/marbl/canu/releases/tag/v1.7.1)
 * Canu v1.8 (https://github.com/marbl/canu/releases/tag/v1.8)
 * BLAT (http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/blat/)
-* g++ (-std=c++11).
+* g++ (v4.7 or later which supports c++11).
 
 The above library and tools should be installed before compiling ASVCLR. Canu v1.7, v1.8 and BLAT should be globally accessible in the computer system, these executable files `canu1.7`, `canu1.8` and `blat` or their soft links should be included in the `$PATH` directory.
 
