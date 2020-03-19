@@ -473,7 +473,7 @@ void Paras::showAssembleUsage()
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -S INT       assemble slide size [10000]" << endl;
 	cout << "     -c INT       maximal clipping region size [10000]" << endl;
-	cout << "     -x FLOAT     expected sampling coverage for local assemble [40.0], " << endl;
+	cout << "     -x FLOAT     expected sampling coverage for local assemble [30.0], " << endl;
 	cout << "                  0 for no coverage sampling" << endl;
 	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
 	cout << "     -t INT       number of threads [0]" << endl;
@@ -524,7 +524,7 @@ void Paras::showAllUsage()
 	cout << "     -m INT       minimal SV size to detect [2]" << endl;
 	cout << "     -n INT       minimal clipping reads supporting a SV [7]" << endl;
 	cout << "     -c INT       maximal clipping region size [10000]" << endl;
-	cout << "     -x FLOAT     expected sampling coverage for local assemble [40.0], " << endl;
+	cout << "     -x FLOAT     expected sampling coverage for local assemble [30.0], " << endl;
 	cout << "                  0 for no coverage sampling" << endl;
 	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
 	cout << "     -t INT       number of threads [0]" << endl;
