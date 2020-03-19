@@ -371,7 +371,7 @@ int Paras::parseAllParas(int argc, char **argv)
 			case 't': threadNum_tmp = stoi(optarg); break;
 			case 'M': mask_val = stoi(optarg); break;
 			case 'R': delete_reads_val = stoi(optarg); break;
-			case 'h': showUsage(); exit(0);
+			case 'h': showAllUsage(); exit(0);
 			case '?': cout << "unknown option -" << (char)optopt << endl; exit(1);
 			case ':': cout << "the option -" << (char)optopt << " needs a value" << endl; exit(1);
 		}
