@@ -41,7 +41,7 @@ class Chrome{
 		vector<varCand*> blat_aligned_chr_clipReg_varCand_vec;	// previously blat aligned information
 
 
-	private:
+	//private:
 		int32_t blockNum;
 		string blocks_out_file;
 		faidx_t *fai;
@@ -74,7 +74,8 @@ class Chrome{
 		void removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec);;
 		void chrMergeDetectResultToFile();
 		void chrLoadDataAssemble();
-		int chrLocalAssemble();
+		int chrGenerateLocalAssembleWorkOpt();
+		void chrResetAssembleData();
 		void chrLoadDataCall();
 		int chrCall();
 		void mergeSameRegTRA();
@@ -103,8 +104,8 @@ class Chrome{
 		void chrSetMisAlnRegFile();
 		void chrResetMisAlnRegFile();
 		int32_t computeBlocID(size_t begPos);
-		int chrLocalAssemble_st();
-		int chrLocalAssemble_mt();
+		int chrGenerateLocalAssembleWorkOpt_st();
+		int chrGenerateLocalAssembleWorkOpt_mt();
 		void outputAssemDataToFile(string &filename);
 		void removeVarCandNode(varCand *var_cand, vector<varCand*> &var_cand_vec);
 		void loadPrevAssembledInfo(bool clipReg_flag);

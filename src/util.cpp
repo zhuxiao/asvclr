@@ -1,4 +1,10 @@
+#include <iostream>
+#include <cstring>
 #include <unistd.h>
+#include <pthread.h>
+#include <htslib/thread_pool.h>
+
+#include "LocalAssembly.h"
 #include "util.h"
 
 // string split function
@@ -1024,6 +1030,151 @@ string getCallFileHeaderBedpe(){
 	return header_line;
 }
 
+assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec){
+	assembleWork_opt *assem_work_opt;
+	assem_work_opt = new assembleWork_opt();
+	assem_work_opt->chrname = chrname;
+	assem_work_opt->readsfilename = readsfilename;
+	assem_work_opt->contigfilename = contigfilename;
+	assem_work_opt->refseqfilename = refseqfilename;
+	assem_work_opt->tmpdir = tmpdir;
+	assem_work_opt->clip_reg_flag = false;
+
+	// sub-regions
+	assem_work_opt->var_array = (reg_t**)malloc(varVec.size()*sizeof(reg_t*));
+	assem_work_opt->arr_size = varVec.size();
+	for(size_t i=0; i<varVec.size(); i++) assem_work_opt->var_array[i] = varVec.at(i);
+
+	return assem_work_opt;
+}
+
+void releaseAssemWorkOpt(assembleWork_opt *assem_work_opt){
+	free(assem_work_opt->var_array);
+	delete assem_work_opt;
+}
+
+void destroyAssembleWorkOptVec(vector<assembleWork_opt*> &assem_work_vec){
+	assembleWork_opt *assem_work_opt;
+	for(size_t i=0; i<assem_work_vec.size(); i++){
+		assem_work_opt = assem_work_vec.at(i);
+		releaseAssemWorkOpt(assem_work_opt);
+	}
+	vector<assembleWork_opt*>().swap(assem_work_vec);
+}
+
+//time canu1.8 -p assembly -d out_1.8 genomeSize=30000 -pacbio-raw clipReg_reads_hs37d5_21480275-21480297.fq
+void *doit_canu(void *arg) {
+    char *cmd_job = (char *)arg;
+
+    //usleep(random() % 100000); // to coerce job completion out of order
+
+
+    cout << cmd_job << endl;
+    system(cmd_job);
+
+    free(arg);
+    return NULL;
+}
+
+int test_canu(int n, vector<string> &cmd_vec){
+
+    hts_tpool *p = hts_tpool_init(n);
+    hts_tpool_process *q = hts_tpool_process_init(p, n*2, 1);
+    //string *ip;
+    string str;
+
+    // Dispatch jobs
+    for (size_t i = 0; i < cmd_vec.size(); i++) {
+        //int *ip = (int*)malloc(sizeof(*ip));
+    	//int *ip = (int*)malloc(sizeof(int));
+        //*ip = i;
+    	str = cmd_vec.at(i);
+    	char *ip = (char*)malloc((str.size()+1) * sizeof(*ip));
+        strcpy(ip, str.c_str());
+        hts_tpool_dispatch(p, q, doit_canu, ip);
+    }
+
+    hts_tpool_process_flush(q);
+    hts_tpool_process_destroy(q);
+    hts_tpool_destroy(p);
+
+    return 0;
+}
+
+// process single assemble work
+void* processSingleAssembleWork(void *arg){
+	assembleWork *assem_work = (assembleWork *)arg;
+	assembleWork_opt *assem_work_opt = assem_work->assem_work_opt;
+	vector<reg_t*> varVec;
+	size_t num_done, num_work, num_work_per_ten_percent;
+	double percentage;
+	Time time;
+
+	for(size_t i=0; i<assem_work_opt->arr_size; i++) varVec.push_back(assem_work_opt->var_array[i]);
+
+	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->delete_reads_flag);
+
+	// output progress information
+	pthread_mutex_lock(assem_work->p_mtx_assemble_reg_workDone_num);
+	(*assem_work->p_assemble_reg_workDone_num) ++;
+	num_done = *assem_work->p_assemble_reg_workDone_num;
+	pthread_mutex_unlock(assem_work->p_mtx_assemble_reg_workDone_num);
+
+	num_work = assem_work->num_work;
+	num_work_per_ten_percent = assem_work->num_work_per_ten_percent;
+	if(num_done==1 and num_done!=num_work){
+		num_done = 0;
+		percentage = (double)num_done / num_work * 100;
+		pthread_mutex_lock(assem_work->p_mtx_assemble_reg_workDone_num);
+		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
+		pthread_mutex_unlock(assem_work->p_mtx_assemble_reg_workDone_num);
+
+	}else if(num_done%num_work_per_ten_percent==0 or num_done==num_work){
+		percentage = (double)num_done / num_work * 100;
+
+		pthread_mutex_lock(assem_work->p_mtx_assemble_reg_workDone_num);
+		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
+		pthread_mutex_unlock(assem_work->p_mtx_assemble_reg_workDone_num);
+	}
+
+	delete (assembleWork *)arg;
+
+	return NULL;
+}
+
+
+void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag){
+
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, 0, expected_cov_assemble, delete_reads_flag);
+
+	// extract the corresponding refseq from reference
+	local_assembly.extractRefseq();
+
+	// extract the reads data from BAM file
+	local_assembly.extractReadsDataFromBAM();
+
+	// local assembly using Canu
+	local_assembly.localAssembleCanu();
+
+	// record assembly information
+	local_assembly.recordAssemblyInfo(assembly_info_file);
+
+	// empty the varVec
+	varVec.clear();
+}
+
+void outputAssemWorkOptToFile(vector<assembleWork_opt*> &assem_work_opt_vec){
+	assembleWork_opt *assem_work_opt;
+	reg_t *reg;
+	for(size_t i=0; i<assem_work_opt_vec.size(); i++){
+		assem_work_opt = assem_work_opt_vec.at(i);
+		cout << "assemble region [" << i << "]: " << assem_work_opt->readsfilename << endl;
+		for(size_t j=0; j<assem_work_opt->arr_size; j++){
+			reg = assem_work_opt->var_array[j];
+			cout << "\t[" << j << "]" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+		}
+	}
+}
 
 
 Time::Time() {

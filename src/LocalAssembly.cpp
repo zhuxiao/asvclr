@@ -1,14 +1,16 @@
 #include "LocalAssembly.h"
+#include "clipAlnDataLoader.h"
 
 pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 
-LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag){
+LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag){
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
 	this->readsfilename = preprocessPipeChar(readsfilename);
 	this->contigfilename = preprocessPipeChar(contigfilename);
 	this->refseqfilename = preprocessPipeChar(refseqfilename);
 	this->tmpdir = preprocessPipeChar(tmpdir);
+	this->num_threads_per_assem_work = num_threads_per_assem_work;
 	this->varVec = varVec;
 	this->fai = fai;
 	this->inBamFile = inBamFile;
@@ -501,6 +503,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 	int i, genomeSize_Canu, step_size;
 	bool flag;
 	struct stat fileStat;
+	string cmd_limited_threads_str, limited_threads_str;
 
 //	gnuplotTested_str = "";
 //	if(canu_version.compare("1.7.1")==0 or canu_version.compare("1.7")==0 or canu_version.compare("1.6")==0)
@@ -522,6 +525,13 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 	cmd2 = "mv " + tmp_ctg_filename + " " + contigfilename;   // move and rename file
 	cmd4 = "rm -rf " + tmpdir;  // delete files
 
+	// limited number threads
+	cmd_limited_threads_str = "";
+	if(num_threads_per_assem_work>0){
+		limited_threads_str = to_string(num_threads_per_assem_work);
+		cmd_limited_threads_str = " maxThreads=" + limited_threads_str + " obtovlThreads=" + limited_threads_str + " corThreads=" + limited_threads_str + " utgovlThreads=" + limited_threads_str + " redThreads=" + limited_threads_str + " batThreads=" + limited_threads_str + " ";
+	}
+
 	// increase the genome size
 	genomeSize_Canu = ASSEMBLY_GENOME_SIZE_INITIAL;
 	step_size = ASSEMBLY_STEP_SIZE;
@@ -531,7 +541,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 		////canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 		//canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 		////canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + fast_option + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
-		canu_cmd = "canu1.7 -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+		canu_cmd = "canu1.7 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 		system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
 		// save assembly result and remove temporary files if successfully assembled
@@ -546,7 +556,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 			system(cmd4.c_str());  // remove temporary files
 
 			// try canu1.8
-			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
@@ -573,6 +583,7 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 	int i, genomeSize_Canu, step_size;
 	bool flag;
 	struct stat fileStat;
+	string cmd_limited_threads_str, limited_threads_str;
 
 //	gnuplotTested_str = "";
 //	if(canu_version.compare("1.7.1")==0 or canu_version.compare("1.7")==0 or canu_version.compare("1.6")==0)
@@ -594,6 +605,13 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 	cmd2 = "mv " + tmp_ctg_filename + " " + contigfilename;   // move and rename file
 	cmd4 = "rm -rf " + tmpdir;  // delete files
 
+	// limited number threads
+	cmd_limited_threads_str = "";
+	if(num_threads_per_assem_work>0){
+		limited_threads_str = to_string(num_threads_per_assem_work);
+		cmd_limited_threads_str = " maxThreads=" + limited_threads_str + " obtovlThreads=" + limited_threads_str + " corThreads=" + limited_threads_str + " utgovlThreads=" + limited_threads_str + " redThreads=" + limited_threads_str + " batThreads=" + limited_threads_str + " ";
+	}
+
 	// decrease the genome size
 	step_size = ASSEMBLY_STEP_SIZE;
 	genomeSize_Canu = ASSEMBLY_GENOME_SIZE_INITIAL - step_size;
@@ -603,7 +621,7 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 		////canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 		//canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 		////canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + fast_option + gnuplotTested_str + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
-		canu_cmd = "canu1.7 -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+		canu_cmd = "canu1.7 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " gnuplotTested=true -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 		system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
 		// save assembly result and remove temporary files if successfully assembled
@@ -618,7 +636,7 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 			system(cmd4.c_str());  // remove temporary files
 
 			// try canu1.8
-			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 

@@ -3,9 +3,8 @@
 
 #include <iostream>
 #include <string>
-#include <htslib/sam.h>
-#include <htslib/faidx.h>
 
+#include "structures.h"
 #include "Paras.h"
 #include "Chrome.h"
 #include "util.h"
@@ -15,11 +14,6 @@ using namespace std;
 
 #define MIN_VALID_TRA_RATIO			(0.95f)
 
-typedef struct {
-	string refseqfilename, ctgfilename, alnfilename;
-}blat_aln_filename_t;
-
-//class blatAlnTra;
 
 class Genome{
 	private:
@@ -29,7 +23,8 @@ class Genome{
 		bam_hdr_t *header;
 		int genomeSize;
 
-		// output files
+		// output directory and files
+		string out_dir;
 		string out_dir_detect = "1_candidates";    // "1_candidates"
 		string out_dir_assemble = "2_assemble";  // "2_assemble"
 		string out_dir_call = "3_call";      // "3_call"
@@ -68,6 +63,10 @@ class Genome{
 		mateClipReg_t* getSameClipRegTRA(mateClipReg_t *clip_reg_given, vector<Chrome*> &chrome_vec);
 		void saveDetectResultToFile();
 		void mergeDetectResult();
+		int processAssembleWork();
+		//void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag);
+		ofstream* getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, bool clip_reg_flag);
+
 		void recallIndelsFromTRA();
 		void genomeCallTra();
 		void generateAlatAlnFilenameTra();
@@ -89,7 +88,7 @@ class Genome{
 		void genomeFillVarseq();
 		void genomeFillVarseqTra();
 		void fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &assembly_info_file);
-		void performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file);
+		void performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file);
 		vector<int32_t> getRefShiftSize(string &refseqfilename);
 		vector<size_t> computeQueryLocTra(varCand *var_cand, mateClipReg_t *clip_reg, size_t end_flag);
 		void genomeSaveCallSV2File();

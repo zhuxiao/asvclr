@@ -7,10 +7,8 @@
 #include <limits.h>
 #include <htslib/sam.h>
 
-#include "Region.h"
+#include "structures.h"
 #include "alnDataLoader.h"
-#include "clipAlnDataLoader.h"
-#include "covLoader.h"
 #include "varCand.h"
 
 using namespace std;
@@ -37,12 +35,6 @@ using namespace std;
 
 #define MAX_DIST_SAME_CLIP_END				100000
 
-
-typedef struct{
-	string chrname;
-	size_t clipRefPos, clipLocalRefPos, clipQueryPos, aln_orient;
-	bool same_orient_flag;  // true: ++, --; false: -+, +-
-}clipPos_t;
 
 //typedef struct{
 //	reg_t *leftClipReg, *rightClipReg;

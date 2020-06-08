@@ -7,16 +7,16 @@
 #include <vector>
 #include <limits.h>
 #include <stdexcept>
-
 #include <htslib/faidx.h>
 
+#include "structures.h"
 #include "FastaSeqLoader.h"
 #include "Region.h"
 #include "RefSeqLoader.h"
 #include "alnDataLoader.h"
-#include "covLoader.h"
 
 using namespace std;
+
 
 #define BLAT_ALN							1
 #define ALIGN_DEBUG							0
@@ -54,30 +54,6 @@ using namespace std;
 
 //#define MAX_SV_SIZE							5000
 
-
-typedef struct{
-	int64_t query_start, query_end, subject_start, subject_end;
-	float ident_percent;
-	int32_t aln_orient;
-	int64_t ref_start, ref_end;  // reference positions
-}aln_seg_t;
-
-typedef struct{
-	//string query_name, subject_name;
-	size_t blat_aln_id, query_len, subject_len, query_id, aln_orient;
-	bool head_hanging, tail_hanging, best_aln, valid_aln;  // default: false
-	vector<aln_seg_t*> aln_segs;
-} blat_aln_t;
-
-typedef struct{
-	reg_t *reg, *cand_reg;
-	aln_seg_t *aln_seg;
-	int32_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
-	string ctgseq, refseq;
-	vector<string> alignResultVec;		// [0]: aligned ctgseq, [1]: match character, [2]: aligned refseq
-	int32_t overlapLen, queryLeftShiftLen, queryRightShiftLen, localRefLeftShiftLen, localRefRightShiftLen;
-	int32_t start_aln_idx_var, end_aln_idx_var;
-}localAln_t;
 
 
 class varCand {

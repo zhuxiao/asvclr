@@ -3,6 +3,7 @@
 #include <htslib/hts.h>
 #include <cmath>
 #include "Paras.h"
+#include "util.h"
 
 // Constructor with parameters
 Paras::Paras(){
@@ -25,6 +26,7 @@ void Paras::init()
 	command = "";
 	inBamFile = "";
 	outFilePrefix = "";
+	outDir = OUT_DIR;
 	num_threads = 0;
 
 	min_ins_size_filt = 0;
@@ -40,6 +42,10 @@ void Paras::init()
 	max_reg_sum_size_est = MAX_REG_SUM_SIZE_EST;
 
 	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
+
+	assemble_reg_preDone_num = assemble_reg_work_total = assemble_reg_workDone_num = 0;
+	num_parts_progress = NUM_PARTS_PROGRESS;
+	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
 
 	//canu_version = getCanuVersion();
 }
@@ -165,9 +171,10 @@ int Paras::parseDetectParas(int argc, char **argv)
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
-	mask_val = 1;
+	mask_val = MASK_VAL_DEFAULT;
+	outDir = OUT_DIR;
 
-	while( (opt = getopt(argc, argv, ":b:s:c:o:t:M:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:s:c:o:p:t:M:h")) != -1 ){
 		switch(opt){
 			//case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
@@ -175,7 +182,8 @@ int Paras::parseDetectParas(int argc, char **argv)
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
 			case 'c': maxClipRegSize = stoi(optarg); break;
-			case 'o': outFilePrefix = optarg; break;
+			case 'o': outDir = optarg; break;
+			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
 			case 'M': mask_val = stoi(optarg); break;
 			case 'h': showDetectUsage(); exit(0);
@@ -186,6 +194,8 @@ int Paras::parseDetectParas(int argc, char **argv)
 
 	load_from_file_flag = true;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+
+	outDir = preprocessPipeChar(outDir);
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
 	else if(mask_val==0) maskMisAlnRegFlag = false;
@@ -224,11 +234,13 @@ int Paras::parseAssembleParas(int argc, char **argv)
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
-	mask_val = 1;
+	mask_val = MASK_VAL_DEFAULT;
 	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
 	delete_reads_val = 1;
+	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
+	outDir = OUT_DIR;
 
-	while( (opt = getopt(argc, argv, ":b:S:m:n:c:x:o:t:M:R:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:S:m:n:c:x:o:p:t:T:M:R:h")) != -1 ){
 		switch(opt){
 			//case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
@@ -237,8 +249,10 @@ int Paras::parseAssembleParas(int argc, char **argv)
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
 			case 'c': maxClipRegSize = stoi(optarg); break;
 			case 'x': expected_cov_assemble = stod(optarg); break;
-			case 'o': outFilePrefix = optarg; break;
+			case 'o': outDir = optarg; break;
+			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
+			case 'T': num_threads_per_assem_work = stoi(optarg); break;
 			case 'M': mask_val = stoi(optarg); break;
 			case 'R': delete_reads_val = stoi(optarg); break;
 			case 'h': showAssembleUsage(); exit(0);
@@ -249,6 +263,12 @@ int Paras::parseAssembleParas(int argc, char **argv)
 
 	load_from_file_flag = true;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+
+	if(num_threads*num_threads_per_assem_work>(size_t)sysconf(_SC_NPROCESSORS_ONLN)){ // warning
+		cout << "Warning: the user-specified total number of concurrent assemble work is " << num_threads << ", and the user-specified number of threads for each assemble work is " << num_threads_per_assem_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
+	}
+
+	outDir = preprocessPipeChar(outDir);
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
 	else if(mask_val==0) maskMisAlnRegFlag = false;
@@ -294,9 +314,10 @@ int Paras::parseCallParas(int argc, char **argv)
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
-	mask_val = 1;
+	mask_val = MASK_VAL_DEFAULT;
+	outDir = OUT_DIR;
 
-	while( (opt = getopt(argc, argv, ":b:S:m:n:c:o:t:M:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:S:m:n:c:o:p:t:M:h")) != -1 ){
 		switch(opt){
 			//case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
@@ -304,7 +325,8 @@ int Paras::parseCallParas(int argc, char **argv)
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
 			case 'c': maxClipRegSize = stoi(optarg); break;
-			case 'o': outFilePrefix = optarg; break;
+			case 'o': outDir = optarg; break;
+			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
 			case 'M': mask_val = stoi(optarg); break;
 			case 'h': showCallUsage(); exit(0);
@@ -315,6 +337,8 @@ int Paras::parseCallParas(int argc, char **argv)
 
 	load_from_file_flag = true;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+
+	outDir = preprocessPipeChar(outDir);
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
 	else if(mask_val==0) maskMisAlnRegFlag = false;
@@ -353,11 +377,13 @@ int Paras::parseAllParas(int argc, char **argv)
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
-	mask_val = 1;
+	mask_val = MASK_VAL_DEFAULT;
 	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
 	delete_reads_val = 1;
+	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
+	outDir = OUT_DIR;
 
-	while( (opt = getopt(argc, argv, ":b:s:S:m:n:c:x:o:t:M:R:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:s:S:m:n:c:x:o:p:t:T:M:R:h")) != -1 ){
 		switch(opt){
 			//case 'f': refFile = optarg; break;
 			case 'b': assemSlideSize = stoi(optarg); break;
@@ -367,8 +393,10 @@ int Paras::parseAllParas(int argc, char **argv)
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
 			case 'c': maxClipRegSize = stoi(optarg); break;
 			case 'x': expected_cov_assemble = stod(optarg); break;
-			case 'o': outFilePrefix = optarg; break;
+			case 'o': outDir = optarg; break;
+			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
+			case 'T': num_threads_per_assem_work = stoi(optarg); break;
 			case 'M': mask_val = stoi(optarg); break;
 			case 'R': delete_reads_val = stoi(optarg); break;
 			case 'h': showAllUsage(); exit(0);
@@ -379,6 +407,12 @@ int Paras::parseAllParas(int argc, char **argv)
 
 	load_from_file_flag = false;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+
+	if(num_threads*num_threads_per_assem_work>(size_t)sysconf(_SC_NPROCESSORS_ONLN)){ // warning
+		cout << "Warning: the user-specified total number of concurrent assemble work is " << num_threads << ", and the user-specified number of threads for each assemble work is " << num_threads_per_assem_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
+	}
+
+	outDir = preprocessPipeChar(outDir);
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
 	else if(mask_val==0) maskMisAlnRegFlag = false;
@@ -423,12 +457,11 @@ void Paras::showUsage()
 
 	cout << "Description:" << endl;
 	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
+	cout << "     BAM_FILE     Coordinate sorted BAM file" << endl << endl;
 
 	cout << "Commands:" << endl;
 	cout << "     detect       detect indel signatures in aligned reads" << endl;
-	cout << "     assemble     assemble candidate regions and align assemblies" << endl;
-	cout << "                  back to reference" << endl;
+	cout << "     assemble     assemble candidate regions" << endl;
 	cout << "     call         call indels by alignments of local genome assemblies" << endl;
 	cout << "     all          run the above commands in turn" << endl;
 }
@@ -445,15 +478,15 @@ void Paras::showDetectUsage()
 	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
 
 	cout << "Options: " << endl;
-	//cout << "     -f FILE      reference file name (required)" << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -s INT       detect slide size [500]" << endl;
 	cout << "     -m INT       minimal SV size to detect [2]" << endl;
 	cout << "     -n INT       minimal clipping reads supporting a SV [7]" << endl;
 	cout << "     -c INT       maximal clipping region size to detect [10000]" << endl;
-	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
-	cout << "     -t INT       number of threads [0]" << endl;
-	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
+	cout << "     -o STR       output directory [output]" << endl;
+	cout << "     -p STR       prefix of output result files [null]" << endl;
+	cout << "     -t INT       number of concurrent work [1]" << endl;
+	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
 	cout << "     -h           show this help message and exit" << endl;
 }
 
@@ -469,15 +502,18 @@ void Paras::showAssembleUsage()
 	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
 
 	cout << "Options: " << endl;
-	//cout << "     -f FILE      reference file name (required)" << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -S INT       assemble slide size [10000]" << endl;
 	cout << "     -c INT       maximal clipping region size [10000]" << endl;
-	cout << "     -x FLOAT     expected sampling coverage for local assemble [30.0], " << endl;
+	cout << "     -x FLOAT     expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
 	cout << "                  0 for no coverage sampling" << endl;
-	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
-	cout << "     -t INT       number of threads [0]" << endl;
-	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
+	cout << "     -o STR       output directory [output]" << endl;
+	cout << "     -p STR       prefix of output result files [null]" << endl;
+	cout << "     -t INT       number of concurrent work [1]" << endl;
+	cout << "     -T INT       limited number of threads for each assemble work [0]:" << endl;
+	cout << "                  0 for unlimited, and positive INT for the limited" << endl;
+	cout << "                  number of threads for each assemble work" << endl;
+	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
 	cout << "     -R INT       Delete temporary reads during local assembly [1]:" << endl;
 	cout << "                  1 for yes, 0 for no" << endl;
 	cout << "     -h           show this help message and exit" << endl;
@@ -495,13 +531,13 @@ void Paras::showCallUsage()
 	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
 
 	cout << "Options: " << endl;
-	//cout << "     -f FILE      reference file name (required)" << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -S INT       assemble slide size used in 'assemble' command [10000]" << endl;
 	cout << "     -c INT       maximal clipping region size [10000]" << endl;
-	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
-	cout << "     -t INT       number of threads [0]" << endl;
-	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
+	cout << "     -o STR       output directory [output]" << endl;
+	cout << "     -p STR       prefix of output result files [null]" << endl;
+	cout << "     -t INT       number of concurrent work [1]" << endl;
+	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
 	cout << "     -h           show this help message and exit" << endl;
 }
 
@@ -517,18 +553,21 @@ void Paras::showAllUsage()
 	cout << "     BAM_FILE     Reference coordinate sorted file [To do: several files]" << endl << endl;
 
 	cout << "Options: " << endl;
-	//cout << "     -f FILE      reference file name (required)" << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -s INT       detect slide size [500]" << endl;
 	cout << "     -S INT       assemble slide size [10000]" << endl;
 	cout << "     -m INT       minimal SV size to detect [2]" << endl;
 	cout << "     -n INT       minimal clipping reads supporting a SV [7]" << endl;
 	cout << "     -c INT       maximal clipping region size [10000]" << endl;
-	cout << "     -x FLOAT     expected sampling coverage for local assemble [30.0], " << endl;
+	cout << "     -x FLOAT     expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
 	cout << "                  0 for no coverage sampling" << endl;
-	cout << "     -o FILE      prefix of the output file [stdout]" << endl;
-	cout << "     -t INT       number of threads [0]" << endl;
-	cout << "     -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no" << endl;
+	cout << "     -o STR       output directory [output]" << endl;
+	cout << "     -p STR       prefix of output result files [null]" << endl;
+	cout << "     -t INT       number of concurrent work [1]" << endl;
+	cout << "     -T INT       limited number of threads for each assemble work [0]:" << endl;
+	cout << "                  0 for unlimited, and positive INT for the limited" << endl;
+	cout << "                  number of threads for each assemble work" << endl;
+	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
 	cout << "     -R INT       Delete temporary reads during local assembly [1]:" << endl;
 	cout << "                  1 for yes, 0 for no" << endl;
 	cout << "     -h           show this help message and exit" << endl;
@@ -541,7 +580,8 @@ void Paras::outputParas(){
 
 	if(refFile.size()) cout << "Ref file: " << refFile << endl;
 	if(inBamFile.size()) cout << "Align file: " << inBamFile << endl;
-	if(outFilePrefix.size()) cout << "Out prefix: " << outFilePrefix << endl;
+	if(outDir.size()) cout << "Output directory: " << outDir << endl;
+	if(outFilePrefix.size()) cout << "Output result file prefix: " << outFilePrefix << endl;
 	//cout << "Canu version: " << canu_version << endl;
 
 	cout << "Clipping number supporting SV: " << minClipReadsNumSupportSV << endl;
@@ -549,7 +589,8 @@ void Paras::outputParas(){
 	cout << "Slide size: " << slideSize << " bp" << endl;
 	cout << "Maximal clipping region size: " << maxClipRegSize << " bp" << endl;
 	cout << "Expected sampling coverage: " << expected_cov_assemble << endl;
-	cout << "Num threads: " << num_threads << endl;
+	cout << "Number of concurrent works: " << num_threads << endl;
+	cout << "Limited number of threads for each assemble work: " << num_threads_per_assem_work << endl;
 	if(maskMisAlnRegFlag) cout << "Mask mis-aligned regions: yes" << endl;
 	else cout << "Mask mis-aligned regions: no" << endl;
 	if(delete_reads_flag) cout << "Delete local temporary reads: yes" << endl << endl;

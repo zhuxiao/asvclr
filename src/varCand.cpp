@@ -1,5 +1,6 @@
 #include <math.h>
 #include "varCand.h"
+#include "covLoader.h"
 #include "util.h"
 
 //pthread_mutex_t mutex_print_var_cand = PTHREAD_MUTEX_INITIALIZER;

@@ -3,11 +3,12 @@
 #include <algorithm>
 
 #include "Block.h"
-#include "Region.h"
+#include "covLoader.h"
 #include "util.h"
 
 //pthread_mutex_t mutex_print = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_write_misAln = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_assem_work = PTHREAD_MUTEX_INITIALIZER;
 
 // Constructor with parameters
 Block::Block(string chrname, size_t chrlen, size_t startPos, size_t endPos, faidx_t *fai,  Paras *paras){
@@ -840,23 +841,24 @@ void Block::resetMisAlnRegFile(){
 	misAln_reg_file = NULL;
 }
 
-// local assembly
-void Block::blockLocalAssemble(){
+// generate local assemble work
+void Block::blockGenerateLocalAssembleWorkOpt(){
 //	pthread_mutex_lock(&mutex_print);
 //	cout << chrname << ":" << startPos << "-" << endPos << endl;
 //	pthread_mutex_unlock(&mutex_print);
 
-	blockLocalAssembleIndel();
-	blockLocalAssembleClipReg();
+	blockGenerateLocalAssembleWorkOpt_Indel();
+	blockGenerateLocalAssembleWorkOpt_ClipReg();
 }
 
-// local assembly for indel regions
-void Block::blockLocalAssembleIndel(){
+// generate local assemble work for indel regions
+void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
 	int32_t i, j, k, beg_reg_id, end_reg_id, tmp_reg_id;
 	int32_t begPos, tmp_Pos;
 	vector<reg_t*> varVec;
 	string readsfilename, contigfilename, refseqfilename, tmpdir;
 	bool assem_done_flag;
+	assembleWork_opt *assem_work_opt;
 
 	i = 0;
 	while(i<(int32_t)indelVector.size()){
@@ -893,15 +895,31 @@ void Block::blockLocalAssembleIndel(){
 //			cout << "################### " << readsfilename << ", len=" << indelVector[end_reg_id]->endRefPos-indelVector[beg_reg_id]->startRefPos << endl;
 //			pthread_mutex_unlock(&mutex_print);
 
-			performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, paras->inBamFile, fai, *var_cand_indel_file);
+			assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+			if(assem_work_opt){
+				pthread_mutex_lock(&mutex_assem_work);
+				paras->assem_work_vec.push_back(assem_work_opt);
+				paras->assemble_reg_work_total ++;
+				pthread_mutex_unlock(&mutex_assem_work);
+			}else{
+				cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
+				exit(1);
+			}
+			varVec.clear();
+
+			//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, paras->inBamFile, fai, *var_cand_indel_file);
+		}else{
+			pthread_mutex_lock(&mutex_assem_work);
+			paras->assemble_reg_preDone_num ++;
+			pthread_mutex_unlock(&mutex_assem_work);
 		}
 
 		i = end_reg_id + 1;
 	}
 }
 
-// local assembly for clip regions
-void Block::blockLocalAssembleClipReg(){
+// generate local assemble work for clip regions
+void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 	int32_t i, reg_len;
 	vector<reg_t*> varVec;
 	string readsfilename, contigfilename, refseqfilename, tmpdir;
@@ -910,6 +928,7 @@ void Block::blockLocalAssembleClipReg(){
 	reg_t *reg1, *reg2, *reg3, *reg4;
 	string reg_str;
 	size_t start_pos, end_pos;
+	assembleWork_opt *assem_work_opt;
 
 	for(i=0; i<(int32_t)mateClipRegVector.size(); i++){
 		clip_reg = mateClipRegVector.at(i);
@@ -941,7 +960,23 @@ void Block::blockLocalAssembleClipReg(){
 //					cout << "=================== " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
 //					pthread_mutex_unlock(&mutex_print);
 
-					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+					assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+					if(assem_work_opt){
+						pthread_mutex_lock(&mutex_assem_work);
+						paras->assem_work_vec.push_back(assem_work_opt);
+						paras->assemble_reg_work_total ++;
+						pthread_mutex_unlock(&mutex_assem_work);
+					}else{
+						cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
+						exit(1);
+					}
+					varVec.clear();
+
+					//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+				}else{
+					pthread_mutex_lock(&mutex_assem_work);
+					paras->assemble_reg_preDone_num ++;
+					pthread_mutex_unlock(&mutex_assem_work);
 				}
 
 			}else{
@@ -962,7 +997,23 @@ void Block::blockLocalAssembleClipReg(){
 //						cout << "------------------- left region: " << readsfilename << ", len=" << reg1->endRefPos-reg1->startRefPos << endl;
 //						pthread_mutex_unlock(&mutex_print);
 
-						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+						assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+						if(assem_work_opt){
+							pthread_mutex_lock(&mutex_assem_work);
+							paras->assem_work_vec.push_back(assem_work_opt);
+							paras->assemble_reg_work_total ++;
+							pthread_mutex_unlock(&mutex_assem_work);
+						}else{
+							cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
+							exit(1);
+						}
+						varVec.clear();
+
+						//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+					}else{
+						pthread_mutex_lock(&mutex_assem_work);
+						paras->assemble_reg_preDone_num ++;
+						pthread_mutex_unlock(&mutex_assem_work);
 					}
 				}
 
@@ -983,7 +1034,23 @@ void Block::blockLocalAssembleClipReg(){
 //						cout << "------------------- right region: " << readsfilename << ", len=" << reg2->endRefPos-reg2->startRefPos << endl;
 //						pthread_mutex_unlock(&mutex_print);
 
-						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg2->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+						assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+						if(assem_work_opt){
+							pthread_mutex_lock(&mutex_assem_work);
+							paras->assem_work_vec.push_back(assem_work_opt);
+							paras->assemble_reg_work_total ++;
+							pthread_mutex_unlock(&mutex_assem_work);
+						}else{
+							cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
+							exit(1);
+						}
+						varVec.clear();
+
+						//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg2->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+					}else{
+						pthread_mutex_lock(&mutex_assem_work);
+						paras->assemble_reg_preDone_num ++;
+						pthread_mutex_unlock(&mutex_assem_work);
 					}
 				}
 			}
@@ -1023,7 +1090,23 @@ void Block::blockLocalAssembleClipReg(){
 //					cout << "=================== " << readsfilename << ", len=" << reg4->endRefPos-reg1->startRefPos << endl;
 //					pthread_mutex_unlock(&mutex_print);
 
-					performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+					assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+					if(assem_work_opt){
+						pthread_mutex_lock(&mutex_assem_work);
+						paras->assem_work_vec.push_back(assem_work_opt);
+						paras->assemble_reg_work_total ++;
+						pthread_mutex_unlock(&mutex_assem_work);
+					}else{
+						cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
+						exit(1);
+					}
+					varVec.clear();
+
+					//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+				}else{
+					pthread_mutex_lock(&mutex_assem_work);
+					paras->assemble_reg_preDone_num ++;
+					pthread_mutex_unlock(&mutex_assem_work);
 				}
 			}else{
 
@@ -1056,7 +1139,23 @@ void Block::blockLocalAssembleClipReg(){
 //						cout << "-=-=-=-=-=-=-=-=-=- left region: " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
 //						pthread_mutex_unlock(&mutex_print);
 
-						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+						assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+						if(assem_work_opt){
+							pthread_mutex_lock(&mutex_assem_work);
+							paras->assem_work_vec.push_back(assem_work_opt);
+							paras->assemble_reg_work_total ++;
+							pthread_mutex_unlock(&mutex_assem_work);
+						}else{
+							cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
+							exit(1);
+						}
+						varVec.clear();
+
+						//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+					}else{
+						pthread_mutex_lock(&mutex_assem_work);
+						paras->assemble_reg_preDone_num ++;
+						pthread_mutex_unlock(&mutex_assem_work);
 					}
 //				}else{
 //					// assemble reg1
@@ -1123,7 +1222,23 @@ void Block::blockLocalAssembleClipReg(){
 //						cout << "-=-=-=-=-=-=-=-=-=- right region: " << readsfilename << ", len=" << reg4->endRefPos-reg3->startRefPos << endl;
 //						pthread_mutex_unlock(&mutex_print);
 
-						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+						assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+						if(assem_work_opt){
+							pthread_mutex_lock(&mutex_assem_work);
+							paras->assem_work_vec.push_back(assem_work_opt);
+							paras->assemble_reg_work_total ++;
+							pthread_mutex_unlock(&mutex_assem_work);
+						}else{
+							cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
+							exit(1);
+						}
+						varVec.clear();
+
+						//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+					}else{
+						pthread_mutex_lock(&mutex_assem_work);
+						paras->assemble_reg_preDone_num ++;
+						pthread_mutex_unlock(&mutex_assem_work);
 					}
 //				}else{
 //					// assemble reg3
@@ -1169,26 +1284,6 @@ void Block::blockLocalAssembleClipReg(){
 	}
 }
 
-// perform local assembly
-void Block::performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file){
-
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, 0, paras->expected_cov_assemble, paras->delete_reads_flag);
-
-	// extract the corresponding refseq from reference
-	local_assembly.extractRefseq();
-
-	// extract the reads data from BAM file
-	local_assembly.extractReadsDataFromBAM();
-
-	// local assembly using Canu
-	local_assembly.localAssembleCanu();
-
-	// record assembly information
-	local_assembly.recordAssemblyInfo(assembly_info_file);
-
-	// empty the varVec
-	varVec.clear();
-}
 
 bool Block::getPrevAssembledDoneFlag(string &contigfilename, vector<varCand*> *assembled_varcand_vec){
 	bool flag = false;

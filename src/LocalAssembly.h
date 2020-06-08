@@ -12,8 +12,7 @@
 #include <htslib/hts.h>
 #include <htslib/faidx.h>
 
-#include "Region.h"
-#include "clipAlnDataLoader.h"
+#include "structures.h"
 #include "RefSeqLoader.h"
 #include "util.h"
 
@@ -35,6 +34,7 @@ class LocalAssembly {
 	public:
 		string chrname, readsfilename, contigfilename, refseqfilename, tmpdir, inBamFile; // canu_version;
 		int64_t chrlen, assembly_extend_size, startRefPos_assembly, endRefPos_assembly;
+		size_t num_threads_per_assem_work;
 
 		vector<reg_t*> varVec;
 		faidx_t *fai;
@@ -49,7 +49,7 @@ class LocalAssembly {
 		vector<clipAlnData_t*> clipAlnDataVector;
 
 	public:
-		LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag);
+		LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag);
 		virtual ~LocalAssembly();
 		void extractRefseq();
 		void extractReadsDataFromBAM();

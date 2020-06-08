@@ -8,14 +8,14 @@
 #include <getopt.h>
 #include <unistd.h>
 
-#include <htslib/sam.h>
+#include "structures.h"
 
 using namespace std;
 
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION				"0.5.6"
+#define PROG_VERSION				"0.6.0"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -56,6 +56,12 @@ using namespace std;
 #define UNSAMPLED_STR				"UNSAMPLED"
 
 #define EXPECTED_COV_ASSEMBLE		30.0f
+#define MASK_VAL_DEFAULT			0
+
+#define NUM_PARTS_PROGRESS			50
+#define NUM_THREADS_PER_ASSEM_WORK	0  // 0: unspecify the limited number of threads for each Canu work
+
+#define OUT_DIR						"output"
 
 
 // program parameters
@@ -63,7 +69,7 @@ class Paras
 {
 	public:
 		// user/system defined parameters
-		string command, refFile, inBamFile, outFilePrefix; //, canu_version;
+		string command, refFile, inBamFile, outFilePrefix, outDir; //, canu_version;
 		size_t blockSize, slideSize, assemSlideSize, min_sv_size_usr, num_threads, large_indel_size_thres;
 		bool maskMisAlnRegFlag, load_from_file_flag;
 		size_t misAlnRegLenSum = 0;
@@ -85,6 +91,12 @@ class Paras
 		// auxiliary data for estimation
 		size_t insSizeEstArr[AUX_ARR_SIZE], delSizeEstArr[AUX_ARR_SIZE], clipSizeEstArr[AUX_ARR_SIZE];
 		size_t insNumEstArr[AUX_ARR_SIZE], delNumEstArr[AUX_ARR_SIZE], clipNumEstArr[AUX_ARR_SIZE];
+
+		// assembly regions for thread pool
+		vector<assembleWork_opt*> assem_work_vec;
+		size_t assemble_reg_preDone_num, assemble_reg_work_total, assemble_reg_workDone_num, num_parts_progress;
+		pthread_mutex_t mtx_assemble_reg_workDone_num;
+		size_t num_threads_per_assem_work;
 
 	public:
 		Paras();

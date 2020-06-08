@@ -5,10 +5,10 @@
 #include <fstream>
 #include <htslib/faidx.h>
 
+#include "structures.h"
 #include "Paras.h"
 #include "Base.h"
 #include "misAlnReg.h"
-#include "clipAlnDataLoader.h"
 
 using namespace std;
 
@@ -29,16 +29,6 @@ using namespace std;
 #define HIGH_INDEL_CLIP_RATIO_THRES			(0.6f)
 #define SECOND_INDEL_CLIP_RATIO_THRES		(0.3f)
 #define HIGH_INDEL_CLIP_BASE_RATIO_THRES	(0.1f)
-
-typedef struct{
-	string chrname;
-	int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
-	int32_t var_type, aln_orient, dup_num;
-	int32_t query_id, sv_len, blat_aln_id;
-	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
-	string refseq, altseq;
-	bool call_success_status, short_sv_flag, zero_cov_flag;
-}reg_t;
 
 
 class Region {

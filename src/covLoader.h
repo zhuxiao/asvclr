@@ -6,20 +6,11 @@
 #include "Base.h"
 #include "RefSeqLoader.h"
 
+#include "structures.h"
+
 using namespace std;
 
 #define MD_MISMATCH   				10
-
-struct alnSeg{
-	size_t startRpos, startQpos;
-	size_t seglen: 26, opflag : 6;
-	string seg_MD;
-};
-
-struct MD_seg{
-	string seg;
-	size_t seglen: 26, opflag: 6;
-};
 
 class covLoader {
 	public:

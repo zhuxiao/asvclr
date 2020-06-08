@@ -1,21 +1,9 @@
 #ifndef SRC_CLIPALNDATALOADER_H_
 #define SRC_CLIPALNDATALOADER_H_
 
-#include <iostream>
-#include <string>
-#include <vector>
-#include <htslib/sam.h>
+#include "structures.h"
 
 using namespace std;
-
-
-typedef struct{
-	bam1_t *bam;
-	string queryname, chrname;
-	size_t querylen, aln_orient, startRefPos, endRefPos, startQueryPos, endQueryPos, leftClipSize, rightClipSize;
-	bool leftHardClippedFlag, rightHardClippedFlag;
-	bool left_clip_checked_flag, right_clip_checked_flag, query_checked_flag, SA_tag_flag;
-}clipAlnData_t;
 
 
 class clipAlnDataLoader {

@@ -1,5 +1,6 @@
 #include <math.h>
 #include "clipReg.h"
+#include "clipAlnDataLoader.h"
 #include "util.h"
 
 

@@ -9,8 +9,8 @@
 #include <dirent.h>
 #include <htslib/sam.h>
 
+#include "structures.h"
 #include "Base.h"
-#include "Region.h"
 #include "clipReg.h"
 
 using namespace std;
@@ -54,6 +54,15 @@ void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename
 void cleanPrevAssembledTmpDir(const string &assem_dir_str, const string &dir_prefix);
 string getCallFileHeaderBed();
 string getCallFileHeaderBedpe();
+assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec);
+void releaseAssemWorkOpt(assembleWork_opt *assem_work_opt);
+void destroyAssembleWorkOptVec(vector<assembleWork_opt*> &assem_work_vec);
+void *doit_canu(void *arg);
+int test_canu(int n, vector<string> &cmd_vec);
+void* processSingleAssembleWork(void *arg);
+void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag);
+void outputAssemWorkOptToFile(vector<assembleWork_opt*> &assem_work_opt_vec);
+
 
 class Time{
 	private:

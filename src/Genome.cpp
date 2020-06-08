@@ -2,6 +2,8 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <pthread.h>
+#include <htslib/thread_pool.h>
 
 #include "Genome.h"
 #include "Thread.h"
@@ -27,6 +29,16 @@ Genome::~Genome(){
 void Genome::init(){
 	Chrome *chr;
 	string chrname_tmp;
+
+	out_dir = paras->outDir;
+	if(out_dir.size()>0){
+		mkdir(out_dir.c_str(), S_IRWXU | S_IROTH);  // create the output directory
+
+		out_dir_detect = out_dir + "/" + out_dir_detect;
+		out_dir_assemble = out_dir + "/" + out_dir_assemble;
+		out_dir_call = out_dir + "/" + out_dir_call;
+		out_dir_tra = out_dir + "/" + out_dir_tra;
+	}
 
 	out_filename_detect_snv = out_dir_detect + "/" + "genome_SNV_candidates";
 	out_filename_detect_indel = out_dir_detect + "/" + "genome_INDEL_candidate";
@@ -356,16 +368,99 @@ void Genome::mergeDetectResult(){
 int Genome::genomeLocalAssemble(){
 	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IROTH);  // create directory for assemble command
 	Chrome *chr;
+	Time time;
+
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		//if(chr->chrname.compare("1")==0)
 		{
 			chr->chrLoadDataAssemble();  // load the variation data
-			chr->chrLocalAssemble();     // local assembly
+			chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
 		}
 	}
+
+	cout << "Number of previously assembled regions: " << paras->assemble_reg_preDone_num << endl;
+	cout << "Number of regions to be assembled: " << paras->assemble_reg_work_total << endl;
+
+	//outputAssemWorkOptToFile(paras->assem_work_vec);
+
+	// begin assemble
+	cout << "[" << time.getTime() << "]: start local assemble..." << endl;
+	processAssembleWork();
+
 	computeVarNumStatAssemble(); // compute statistics for assemble command
+
+	if(!paras->assem_work_vec.empty()) destroyAssembleWorkOptVec(paras->assem_work_vec);
+
+	// reset assemble data
+	for(size_t i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		chr->chrResetAssembleData();
+	}
 	return 0;
+}
+
+
+// process assemble work using thread pool
+int Genome::processAssembleWork(){
+	assembleWork_opt *assem_work_opt;
+	assembleWork *assem_work;
+	ofstream *var_cand_file;
+	size_t num_work, num_work_per_ten_percent;
+
+	hts_tpool *p = hts_tpool_init(paras->num_threads);
+	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
+
+	pthread_mutex_init(&paras->mtx_assemble_reg_workDone_num, NULL);
+
+	paras->assemble_reg_workDone_num = 0;
+	num_work = paras->assem_work_vec.size();
+	num_work_per_ten_percent = num_work / paras->num_parts_progress;
+	for(size_t i=0; i<num_work; i++){
+		assem_work_opt = paras->assem_work_vec.at(i);
+		var_cand_file = getVarcandFile(assem_work_opt->chrname, chromeVector, assem_work_opt->clip_reg_flag);
+		if(var_cand_file==NULL){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot get car_cand file for CHR: " << assem_work_opt->chrname << ", error!" << endl;
+			exit(1);
+		}
+
+		assem_work = new assembleWork();
+		assem_work->assem_work_opt = assem_work_opt;
+		assem_work->work_id = i;
+		assem_work->num_work = num_work;
+		assem_work->num_work_per_ten_percent = num_work_per_ten_percent;
+		assem_work->p_assemble_reg_workDone_num = &(paras->assemble_reg_workDone_num);
+		assem_work->p_mtx_assemble_reg_workDone_num = &(paras->mtx_assemble_reg_workDone_num);
+		assem_work->num_threads_per_assem_work = paras->num_threads_per_assem_work;
+		assem_work->inBamFile = paras->inBamFile;
+		assem_work->fai = fai;
+		assem_work->var_cand_file = var_cand_file;
+		assem_work->expected_cov_assemble = paras->expected_cov_assemble;
+		assem_work->delete_reads_flag = paras->delete_reads_flag;
+
+		hts_tpool_dispatch(p, q, processSingleAssembleWork, assem_work);
+	}
+
+    hts_tpool_process_flush(q);
+    hts_tpool_process_destroy(q);
+    hts_tpool_destroy(p);
+
+    return 0;
+}
+
+// get car_cand output file according to given 'chrname'
+ofstream* Genome::getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, bool clip_reg_flag){
+	ofstream *var_cand_file = NULL;
+	Chrome *chr;
+	for(size_t i=0; i<chrome_vec.size(); i++){
+		chr = chrome_vec.at(i);
+		if(chr->chrname.compare(chrname)==0){
+			if(clip_reg_flag) var_cand_file = &chr->var_cand_clipReg_file;
+			else var_cand_file = &chr->var_cand_indel_file;
+			break;
+		}
+	}
+	return var_cand_file;
 }
 
 // call variants for genome
@@ -1601,7 +1696,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				for(i=0; i<3; i++){
 					assembly_extend_size = ASSEMBLY_SIDE_LEN * i;
 					// local assembly
-					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
+					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->num_threads_per_assem_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -1685,7 +1780,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				for(i=0; i<3; i++){
 					assembly_extend_size = ASSEMBLY_SIDE_LEN * i;
 					// local assembly
-					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
+					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->num_threads_per_assem_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -1735,9 +1830,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 }
 
 // perform local assembly
-void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
+void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->delete_reads_flag);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->delete_reads_flag);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();

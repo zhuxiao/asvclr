@@ -1,10 +1,3 @@
-/*
- * misAlnReg.cpp
- *
- *  Created on: Mar 25, 2018
- *      Author: xzhu
- */
-
 #include "misAlnReg.h"
 
 misAlnReg::misAlnReg(size_t startPos, size_t endPos, size_t chrlen, Base *misAlnRegBaseArr) {

@@ -7,8 +7,6 @@
 #include <vector>
 #include <sys/stat.h>
 
-//#include "events.h"
-
 using namespace std;
 
 class FastaSeqLoader {

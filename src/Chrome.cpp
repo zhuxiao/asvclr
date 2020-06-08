@@ -2,7 +2,6 @@
 #include <pthread.h>
 #include "Chrome.h"
 #include "Thread.h"
-#include "varCand.h"
 #include "util.h"
 
 // Constructor with parameters
@@ -1485,13 +1484,13 @@ string Chrome::getAssembleFileHeaderLine(){
 	return header_line;
 }
 
-// local assembly for chrome
-int Chrome::chrLocalAssemble(){
+// generate local assembly work for chrome
+int Chrome::chrGenerateLocalAssembleWorkOpt(){
 	Time time;
 
 	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IROTH);  // create the directory for assemble command
 
-	cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
+	//cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
 
 	// clean previously assembled temporary folders
 	string dir_prefix = "tmp_";
@@ -1500,41 +1499,41 @@ int Chrome::chrLocalAssemble(){
 	// open the assembly information file
 	chrSetVarCandFiles();
 
-	// local assembly
-	if(paras->num_threads<=1) chrLocalAssemble_st();  // single thread
-	else chrLocalAssemble_mt();  // multiple threads
+	// generate local assemble work
+	if(paras->num_threads<=1) chrGenerateLocalAssembleWorkOpt_st();  // single thread
+	else chrGenerateLocalAssembleWorkOpt_mt();  // multiple threads
 
-	// close and reset the assembly information file
-	chrResetVarCandFiles();
-
-	// release assembled chrome clipReg information
-	if(!assembled_chr_clipReg_vec.empty())
-		destroyVarCandVector(assembled_chr_clipReg_vec);
+//	// close and reset the assembly information file
+//	chrResetVarCandFiles();
+//
+//	// release assembled chrome clipReg information
+//	if(!assembled_chr_clipReg_vec.empty())
+//		destroyVarCandVector(assembled_chr_clipReg_vec);
 
 	return 0;
 }
 
-// local assembly for chrome using single thread
-int Chrome::chrLocalAssemble_st(){
+// generate local assemble work for chrome using single thread
+int Chrome::chrGenerateLocalAssembleWorkOpt_st(){
 	Block *bloc;
 	for(size_t i=0; i<blockVector.size(); i++){
 //		if(i==1)
 		{
 			bloc = blockVector.at(i);
-			bloc->blockLocalAssemble();
+			bloc->blockGenerateLocalAssembleWorkOpt();
 		}
 	}
 	return 0;
 }
 
-// local assembly for chrome using multiple threads
-int Chrome::chrLocalAssemble_mt(){
+// generate local assembly work for chrome using multiple threads
+int Chrome::chrGenerateLocalAssembleWorkOpt_mt(){
 	MultiThread mt[paras->num_threads];
 	for(size_t i=0; i<paras->num_threads; i++){
 		mt[i].setNumThreads(paras->num_threads);
 		mt[i].setBlockVec(&blockVector);
 		mt[i].setUserThreadID(i);
-		if(!mt[i].startAssemble()){
+		if(!mt[i].startGenAssembleWorkOpt()){
 			cerr << __func__ << ", line=" << __LINE__ << ": unable to create thread, error!" << endl;
 			exit(1);
 		}
@@ -1546,6 +1545,16 @@ int Chrome::chrLocalAssemble_mt(){
 		}
 	}
 	return 0;
+}
+
+// reset chrome assemble data
+void Chrome::chrResetAssembleData(){
+	// close and reset the assembly information file
+	chrResetVarCandFiles();
+
+	// release assembled chrome clipReg information
+	if(!assembled_chr_clipReg_vec.empty())
+		destroyVarCandVector(assembled_chr_clipReg_vec);
 }
 
 // output assem data to file

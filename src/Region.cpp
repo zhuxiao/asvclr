@@ -1,7 +1,7 @@
 #include <algorithm>
 #include "Region.h"
-#include "clipReg.h"
 #include "util.h"
+#include "clipAlnDataLoader.h"
 
 //Constructor
 Region::Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrlen, int64_t minRPos, int64_t maxRPos, Base *regBaseArr, size_t regFlag, Paras *paras) {

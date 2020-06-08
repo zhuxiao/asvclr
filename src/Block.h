@@ -10,13 +10,11 @@
 #include <htslib/hts.h>
 #include <htslib/faidx.h>
 
-#include "Region.h"
+#include "structures.h"
 #include "Paras.h"
 #include "misAlnReg.h"
 #include "LocalAssembly.h"
 #include "alnDataLoader.h"
-#include "covLoader.h"
-#include "clipReg.h"
 
 #define MIN_ADJACENT_REG_DIST		50
 
@@ -66,7 +64,7 @@ class Block{
 		void setRegIngFlag(bool headIgnFlag, bool tailIgnFlag);
 		void blockFillDataEst(size_t op_est);
 		void blockDetect();
-		void blockLocalAssemble();
+		void blockGenerateLocalAssembleWorkOpt();
 		void setVarCandFiles(ofstream *var_cand_indel_file, ofstream *var_cand_clipReg_file);
 		void resetVarCandFiles();
 		void setMisAlnRegFile(ofstream *misAln_reg_file);
@@ -105,9 +103,8 @@ class Block{
 		void removeFalseIndel();
 		void removeFalseSNV();
 		void sortRegVec(vector<reg_t*> &regVector);
-		void blockLocalAssembleIndel();
-		void blockLocalAssembleClipReg();
-		void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file);
+		void blockGenerateLocalAssembleWorkOpt_Indel();
+		void blockGenerateLocalAssembleWorkOpt_ClipReg();
 		void saveSV2File();
 		bool getPrevAssembledDoneFlag(string &contigfilename, vector<varCand*> *assembled_varcand_vec);
 
