@@ -475,7 +475,7 @@ void Paras::showDetectUsage()
 
 	cout << "Description:" << endl;
 	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
+	cout << "     BAM_FILE     Coordinate sorted BAM file" << endl << endl;
 
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
@@ -499,7 +499,7 @@ void Paras::showAssembleUsage()
 
 	cout << "Description:" << endl;
 	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
+	cout << "     BAM_FILE     Coordinate sorted BAM file" << endl << endl;
 
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
@@ -528,7 +528,7 @@ void Paras::showCallUsage()
 
 	cout << "Description:" << endl;
 	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Coordinate sorted BAM file [To do: several files]" << endl << endl;
+	cout << "     BAM_FILE     Coordinate sorted BAM file" << endl << endl;
 
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
@@ -550,7 +550,7 @@ void Paras::showAllUsage()
 
 	cout << "Description:" << endl;
 	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Reference coordinate sorted file [To do: several files]" << endl << endl;
+	cout << "     BAM_FILE     Reference coordinate sorted file" << endl << endl;
 
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
