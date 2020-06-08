@@ -8,7 +8,7 @@ ASVCLR is an accurate Structural Variation Caller for Long Reads, such as PacBio
 ASVCLR depends on the following libraries and tools:
 * HTSlib (http://www.htslib.org/download/)
 * Canu v1.7 (https://github.com/marbl/canu/releases/tag/v1.7.1)
-* Canu v1.8 or above (https://github.com/marbl/canu/releases/tag/v1.8)
+* Canu v1.8 (or above) (https://github.com/marbl/canu/releases/tag/v1.8)
 * BLAT (http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/blat/)
 * g++ (v4.7 or later which supports c++11).
 
