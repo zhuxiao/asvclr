@@ -8,7 +8,7 @@ ASVCLR is an accurate Structural Variation Caller for Long Reads, such as PacBio
 ASVCLR depends on the following libraries and tools:
 * HTSlib (http://www.htslib.org/download/)
 * Canu v1.7 (https://github.com/marbl/canu/releases/tag/v1.7.1)
-* Canu v1.8 (https://github.com/marbl/canu/releases/tag/v1.8)
+* Canu v1.8 or above (https://github.com/marbl/canu/releases/tag/v1.8)
 * BLAT (http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/blat/)
 * g++ (v4.7 or later which supports c++11).
 
@@ -37,13 +37,13 @@ $ asvclr all -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
 Program: ASVCLR (Accurate Structural Variation Caller for Long Reads)
-Version: 0.5.5 (using htslib 1.9)
+Version: 0.6.0 (using htslib 1.9)
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [region ...]?
 
 Description:
      REF_FILE     Reference file
-     BAM_FILE     Reference coordinate sorted file [To do: several files]
+     BAM_FILE     Reference coordinate sorted file
 
 Options: 
      -b INT       block size [1000000]
@@ -54,8 +54,12 @@ Options:
      -c INT       maximal clipping region size [10000]
      -x FLOAT     expected sampling coverage for local assemble [30.0], 
                   0 for no coverage sampling
-     -o FILE      prefix of the output file [stdout]
-     -t INT       number of threads [0]
+     -o STR       output directory [output]
+     -p STR       prefix of output result files [null]
+     -t INT       number of concurrent work [1]
+     -T INT       limited number of threads for each assemble work [0]:
+                  0 for unlimited, and positive INT for the limited
+                  number of threads for each assemble work
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
      -R INT       Delete temporary reads during local assembly [1]:
                   1 for yes, 0 for no
@@ -68,18 +72,17 @@ Besides, the overall help information can be shown as below:
 ```sh
 $ asvclr
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.5.5 (using htslib 1.9)
+Version: 0.6.0 (using htslib 1.9)
 
 Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [region ...]?
 
 Description:
      REF_FILE     Reference file
-     BAM_FILE     Coordinate sorted BAM file [To do: several files]
+     BAM_FILE     Coordinate sorted BAM file
 
 Commands:
      detect       detect indel signatures in aligned reads
-     assemble     assemble candidate regions and align assemblies
-                  back to reference
+     assemble     assemble candidate regions
      call         call indels by alignments of local genome assemblies
      all          run the above commands in turn
 ```
@@ -111,13 +114,13 @@ And the help information are shown below:
 ```sh
 $ asvclr detect
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.5.5 (using htslib 1.9)
+Version: 0.6.0 (using htslib 1.9)
 
 Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [region ...]?
 
 Description:
      REF_FILE     Reference file
-     BAM_FILE     Coordinate sorted BAM file [To do: several files]
+     BAM_FILE     Coordinate sorted BAM file
 
 Options: 
      -b INT       block size [1000000]
@@ -125,8 +128,9 @@ Options:
      -m INT       minimal SV size to detect [2]
      -n INT       minimal clipping reads supporting a SV [7]
      -c INT       maximal clipping region size to detect [10000]
-     -o FILE      prefix of the output file [stdout]
-     -t INT       number of threads [0]
+     -o STR       output directory [output]
+     -p STR       prefix of output result files [null]
+     -t INT       number of concurrent work [1]
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
      -h           show this help message and exit
 ```
@@ -144,13 +148,13 @@ And the help information are shown below:
 ```sh
 $ asvclr assemble
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.5.5 (using htslib 1.9)
+Version: 0.6.0 (using htslib 1.9)
 
 Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE> [region ...]?
 
 Description:
      REF_FILE     Reference file
-     BAM_FILE     Coordinate sorted BAM file [To do: several files]
+     BAM_FILE     Coordinate sorted BAM file
 
 Options: 
      -b INT       block size [1000000]
@@ -158,15 +162,21 @@ Options:
      -c INT       maximal clipping region size [10000]
      -x FLOAT     expected sampling coverage for local assemble [30.0], 
                   0 for no coverage sampling
-     -o FILE      prefix of the output file [stdout]
-     -t INT       number of threads [0]
+    -o STR       output directory [output]
+     -p STR       prefix of output result files [null]
+     -t INT       number of concurrent work [1]
+     -T INT       limited number of threads for each assemble work [0]:
+                  0 for unlimited, and positive INT for the limited
+                  number of threads for each assemble work
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
      -R INT       Delete temporary reads during local assembly [1]:
                   1 for yes, 0 for no
      -h           show this help message and exit
 ```
 
-Note that: the `assemble` step can be re-run from last stop to avoid unnecessary recomputation, and the `-x` option can be used to sampling high local coverage to a relative lower coverage to accelerate assemble process if the expected sampling coverage option `-x` is specified as a positive value.
+Note that:
+ (1) the `assemble` step can be re-run from last stop to avoid unnecessary recomputation, and the `-x` option can be used to sampling high local coverage to a relative lower coverage to accelerate assemble process if the expected sampling coverage option `-x` is specified as a positive value.
+ (2) As each Canu assemble work uses multiple threads by default, the `-T` option can be used to specify the limited number of threads for each assemble work.
 
 ### `Call` Step
 
@@ -181,20 +191,21 @@ And the help information are shown below:
 ```sh
 $ asvclr call
 Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.5.5 (using htslib 1.9)
+Version: 0.6.0 (using htslib 1.9)
 
 Usage: asvclr call [options] <REF_FILE> <BAM_FILE> [region ...]?
 
 Description:
      REF_FILE     Reference file
-     BAM_FILE     Coordinate sorted BAM file [To do: several files]
+     BAM_FILE     Coordinate sorted BAM file
 
 Options: 
      -b INT       block size [1000000]
      -S INT       assemble slide size used in 'assemble' command [10000]
      -c INT       maximal clipping region size [10000]
-     -o FILE      prefix of the output file [stdout]
-     -t INT       number of threads [0]
+     -o STR       output directory [output]
+     -p STR       prefix of output result files [null]
+     -t INT       number of concurrent work [1]
      -M INT       Mask mis-aligned regions [1]: 1 for yes, 0 for no
      -h           show this help message and exit
 ```
