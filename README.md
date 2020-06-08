@@ -162,7 +162,7 @@ Options:
      -c INT       maximal clipping region size [10000]
      -x FLOAT     expected sampling coverage for local assemble [30.0], 
                   0 for no coverage sampling
-    -o STR       output directory [output]
+     -o STR       output directory [output]
      -p STR       prefix of output result files [null]
      -t INT       number of concurrent work [1]
      -T INT       limited number of threads for each assemble work [0]:
