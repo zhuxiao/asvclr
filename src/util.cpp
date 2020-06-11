@@ -1030,7 +1030,7 @@ string getCallFileHeaderBedpe(){
 	return header_line;
 }
 
-assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec){
+assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, bool clip_reg_flag){
 	assembleWork_opt *assem_work_opt;
 	assem_work_opt = new assembleWork_opt();
 	assem_work_opt->chrname = chrname;
@@ -1038,7 +1038,7 @@ assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, s
 	assem_work_opt->contigfilename = contigfilename;
 	assem_work_opt->refseqfilename = refseqfilename;
 	assem_work_opt->tmpdir = tmpdir;
-	assem_work_opt->clip_reg_flag = false;
+	assem_work_opt->clip_reg_flag = clip_reg_flag;
 
 	// sub-regions
 	assem_work_opt->var_array = (reg_t**)malloc(varVec.size()*sizeof(reg_t*));
@@ -1110,6 +1110,8 @@ void* processSingleAssembleWork(void *arg){
 	double percentage;
 	Time time;
 
+	//cout << "assemble region [" << assem_work->work_id << "]: " << assem_work_opt->readsfilename << endl;
+
 	for(size_t i=0; i<assem_work_opt->arr_size; i++) varVec.push_back(assem_work_opt->var_array[i]);
 
 	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->delete_reads_flag);
@@ -1168,11 +1170,59 @@ void outputAssemWorkOptToFile(vector<assembleWork_opt*> &assem_work_opt_vec){
 	reg_t *reg;
 	for(size_t i=0; i<assem_work_opt_vec.size(); i++){
 		assem_work_opt = assem_work_opt_vec.at(i);
-		cout << "assemble region [" << i << "]: " << assem_work_opt->readsfilename << endl;
-		for(size_t j=0; j<assem_work_opt->arr_size; j++){
-			reg = assem_work_opt->var_array[j];
-			cout << "\t[" << j << "]" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+		//cout << "assemble region [" << i << "]: " << assem_work_opt->readsfilename << endl;
+		if(assem_work_opt->chrname.compare("chr2")==0 and (assem_work_opt->var_array[0]->startRefPos==148051825 or assem_work_opt->var_array[assem_work_opt->arr_size-1]->endRefPos==145138636))
+		{
+			cout << "assemble region [" << i << "]: " << assem_work_opt->readsfilename << endl;
+			for(size_t j=0; j<assem_work_opt->arr_size; j++){
+				reg = assem_work_opt->var_array[j];
+				cout << "\t[" << j << "]" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+			}
 		}
+//		for(size_t j=0; j<assem_work_opt->arr_size; j++){
+//			reg = assem_work_opt->var_array[j];
+//			cout << "\t[" << j << "]" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+//		}
+	}
+}
+
+// get old output directory name
+string getOldOutDirname(string &filename, string &sub_work_dir){
+	string old_dir = "";
+	size_t pos = filename.find(sub_work_dir);
+	if(pos!=filename.npos){
+		if(pos==0) old_dir = "";
+		else{
+			old_dir = filename.substr(0, pos);
+			old_dir = deleteTailPathChar(old_dir);
+		}
+	}else{
+		cerr << __func__ << ", line=" << __LINE__ << ", filename=" << filename << ", cannot find old output directory for " << sub_work_dir << ", error!" << endl;
+		exit(1);
+	}
+	return old_dir;
+}
+
+// get updated item file name
+string getUpdatedItemFilename(string &filename, string &out_dir, string &old_out_dir){
+	string new_filename;
+
+	if(old_out_dir.size()==0)
+		new_filename = out_dir + "/" + filename;
+	else if(filename.at(old_out_dir.size())=='/')
+		new_filename = out_dir + filename.substr(old_out_dir.size());
+	else
+		new_filename = out_dir + "/" + filename.substr(old_out_dir.size());
+
+	return new_filename;
+}
+
+// delete the tail '/' path character
+string deleteTailPathChar(string &dirname){
+	if(dirname.size()>0 and dirname.at(dirname.size()-1)=='/'){
+		return dirname.substr(0, dirname.size()-1);
+	}else{
+		return dirname;
 	}
 }
 

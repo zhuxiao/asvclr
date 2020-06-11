@@ -1097,9 +1097,10 @@ void Chrome::chrMergeDetectResultToFile(){
 
 // set assembly information file for local assembly
 void Chrome::chrSetVarCandFiles(){
-	string line, tmp_filename, header_line;
+	string line, new_line, tmp_filename, header_line, old_out_dir, refseqfilename, contigfilename, readsfilename;
 	vector<string> str_vec;
 	ifstream infile;
+	size_t i;
 
 	// indel
 	if(isFileExist(var_cand_indel_filename)){
@@ -1121,13 +1122,24 @@ void Chrome::chrSetVarCandFiles(){
 		header_line = getAssembleFileHeaderLine();
 		var_cand_indel_file << header_line << endl;
 
+		old_out_dir = "";
 		while(getline(infile, line)){
 			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
-				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
-					var_cand_indel_file << line << endl;
-				else
-					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
+
+				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0){
+					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_assemble);
+
+					refseqfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
+					readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+
+					new_line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename;
+					for(i=3; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+
+					var_cand_indel_file << new_line << endl;
+				}else
+					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE', skipped!" << endl;
 			}
 		}
 
@@ -1164,12 +1176,23 @@ void Chrome::chrSetVarCandFiles(){
 		header_line = getAssembleFileHeaderLine();
 		var_cand_clipReg_file << header_line << endl;
 
+		old_out_dir = "";
 		while(getline(infile, line)){
 			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
-				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
-					var_cand_clipReg_file << line << endl;
-				else
+
+				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0){
+					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_assemble);
+
+					refseqfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
+					readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+
+					new_line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename;
+					for(i=3; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+
+					var_cand_clipReg_file << new_line << endl;
+				}else
 					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
 			}
 		}
@@ -1192,6 +1215,7 @@ void Chrome::chrSetVarCandFiles(){
 		(*bloc)->setVarCandFiles(&var_cand_indel_file, &var_cand_clipReg_file);
 	}
 }
+
 // reset assembly information file for local assembly
 void Chrome::chrResetVarCandFiles(){
 	var_cand_indel_file.close();
@@ -1390,7 +1414,7 @@ int32_t Chrome::computeBlocID(size_t begPos){
 // load previously assembled information
 void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
 	ifstream infile;
-	string infilename, line, done_str;
+	string infilename, line, done_str, old_out_dir, refseqfilename, contigfilename, readsfilename;
 	varCand *var_cand_tmp;
 	vector<string> line_vec, var_str, var_str1, var_str2;
 	vector<string> str_vec, str_vec2, str_vec3;
@@ -1410,6 +1434,7 @@ void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
 		exit(1);
 	}
 
+	old_out_dir = "";
 	while(getline(infile, line)){
 		if(line.size()>0 and line.at(0)!='#'){
 			// allocate memory
@@ -1423,9 +1448,16 @@ void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
 			var_cand_tmp->fai = NULL;
 
 			line_vec = split(line, "\t");
-			var_cand_tmp->refseqfilename = line_vec.at(0);  // refseq file name
-			var_cand_tmp->ctgfilename = line_vec.at(1);  // contig file name
-			var_cand_tmp->readsfilename = line_vec.at(2);  // reads file name
+
+			// update item file name
+			if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(line_vec.at(0), paras->out_dir_assemble);
+			refseqfilename = getUpdatedItemFilename(line_vec.at(0), paras->outDir, old_out_dir);
+			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
+			readsfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
+
+			var_cand_tmp->refseqfilename = refseqfilename;  // refseq file name
+			var_cand_tmp->ctgfilename = contigfilename;  // contig file name
+			var_cand_tmp->readsfilename = readsfilename;  // reads file name
 			var_cand_tmp->ref_left_shift_size = stoi(line_vec.at(3));  // ref_left_shift_size
 			var_cand_tmp->ref_right_shift_size = stoi(line_vec.at(4));  // ref_right_shift_size
 

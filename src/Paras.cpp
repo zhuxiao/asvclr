@@ -165,7 +165,7 @@ int Paras::parseParas(int argc, char **argv)
 // parse the parameters for detect command
 int Paras::parseDetectParas(int argc, char **argv)
 {
-	int opt, threadNum_tmp = 0, mask_val;
+	int opt, threadNum_tmp = 1, mask_val;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
@@ -195,7 +195,7 @@ int Paras::parseDetectParas(int argc, char **argv)
 	load_from_file_flag = true;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 
-	outDir = preprocessPipeChar(outDir);
+	outDir = deleteTailPathChar(outDir);
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
 	else if(mask_val==0) maskMisAlnRegFlag = false;
@@ -227,7 +227,7 @@ int Paras::parseDetectParas(int argc, char **argv)
 // parse the parameters for assemble command
 int Paras::parseAssembleParas(int argc, char **argv)
 {
-	int opt, threadNum_tmp = 0, mask_val, delete_reads_val;
+	int opt, threadNum_tmp = 1, mask_val, delete_reads_val;
 	blockSize = BLOCKSIZE;
 	slideSize = ASSEM_SLIDE_SIZE;
 	assemSlideSize = ASSEM_SLIDE_SIZE;
@@ -268,7 +268,7 @@ int Paras::parseAssembleParas(int argc, char **argv)
 		cout << "Warning: the user-specified total number of concurrent assemble work is " << num_threads << ", and the user-specified number of threads for each assemble work is " << num_threads_per_assem_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
 	}
 
-	outDir = preprocessPipeChar(outDir);
+	outDir = deleteTailPathChar(outDir);
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
 	else if(mask_val==0) maskMisAlnRegFlag = false;
@@ -307,7 +307,7 @@ int Paras::parseAssembleParas(int argc, char **argv)
 // parse the parameters for call command
 int Paras::parseCallParas(int argc, char **argv)
 {
-	int opt, threadNum_tmp = 0, mask_val;
+	int opt, threadNum_tmp = 1, mask_val;
 	blockSize = BLOCKSIZE;
 	slideSize = ASSEM_SLIDE_SIZE;
 	assemSlideSize = ASSEM_SLIDE_SIZE;
@@ -338,7 +338,7 @@ int Paras::parseCallParas(int argc, char **argv)
 	load_from_file_flag = true;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 
-	outDir = preprocessPipeChar(outDir);
+	outDir = deleteTailPathChar(outDir);
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
 	else if(mask_val==0) maskMisAlnRegFlag = false;
@@ -370,7 +370,7 @@ int Paras::parseCallParas(int argc, char **argv)
 // parse the parameters for 'all' command
 int Paras::parseAllParas(int argc, char **argv)
 {
-	int opt, threadNum_tmp = 0, mask_val, delete_reads_val;
+	int opt, threadNum_tmp = 1, mask_val, delete_reads_val;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
 	assemSlideSize = ASSEM_SLIDE_SIZE;
@@ -412,7 +412,7 @@ int Paras::parseAllParas(int argc, char **argv)
 		cout << "Warning: the user-specified total number of concurrent assemble work is " << num_threads << ", and the user-specified number of threads for each assemble work is " << num_threads_per_assem_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
 	}
 
-	outDir = preprocessPipeChar(outDir);
+	outDir = deleteTailPathChar(outDir);
 
 	if(mask_val==1) maskMisAlnRegFlag = true;
 	else if(mask_val==0) maskMisAlnRegFlag = false;

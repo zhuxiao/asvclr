@@ -69,7 +69,12 @@ class Paras
 {
 	public:
 		// user/system defined parameters
-		string command, refFile, inBamFile, outFilePrefix, outDir; //, canu_version;
+		string command, refFile, inBamFile, outFilePrefix; //, canu_version;
+		string outDir;
+		string out_dir_detect = "1_candidates";    // "1_candidates"
+		string out_dir_assemble = "2_assemble";  // "2_assemble"
+		string out_dir_call = "3_call";      // "3_call"
+		string out_dir_tra = out_dir_call + "/" + "tra";
 		size_t blockSize, slideSize, assemSlideSize, min_sv_size_usr, num_threads, large_indel_size_thres;
 		bool maskMisAlnRegFlag, load_from_file_flag;
 		size_t misAlnRegLenSum = 0;

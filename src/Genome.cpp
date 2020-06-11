@@ -34,10 +34,15 @@ void Genome::init(){
 	if(out_dir.size()>0){
 		mkdir(out_dir.c_str(), S_IRWXU | S_IROTH);  // create the output directory
 
-		out_dir_detect = out_dir + "/" + out_dir_detect;
-		out_dir_assemble = out_dir + "/" + out_dir_assemble;
-		out_dir_call = out_dir + "/" + out_dir_call;
-		out_dir_tra = out_dir + "/" + out_dir_tra;
+		out_dir_detect = out_dir + "/" + paras->out_dir_detect;
+		out_dir_assemble = out_dir + "/" + paras->out_dir_assemble;
+		out_dir_call = out_dir + "/" + paras->out_dir_call;
+		out_dir_tra = out_dir + "/" + paras->out_dir_tra;
+	}else{
+		out_dir_detect = paras->out_dir_detect;
+		out_dir_assemble = paras->out_dir_assemble;
+		out_dir_call = paras->out_dir_call;
+		out_dir_tra = paras->out_dir_tra;
 	}
 
 	out_filename_detect_snv = out_dir_detect + "/" + "genome_SNV_candidates";
@@ -666,7 +671,7 @@ void Genome::genomeCallTra(){
 
 	mkdir(out_dir_tra.c_str(), S_IRWXU | S_IROTH);  // create the directory for TRA
 
-	generateAlatAlnFilenameTra();
+	generateBlatAlnFilenameTra();
 	blat_aln_tra_vec = loadBlatAlnDataTra();
 
 	if(paras->num_threads<=1){
@@ -687,7 +692,7 @@ void Genome::genomeCallTra(){
 }
 
 // call TRA according to mate clip regions
-void Genome::generateAlatAlnFilenameTra(){
+void Genome::generateBlatAlnFilenameTra(){
 	size_t i, j, k, t, round_num;
 	Chrome *chr;
 	vector<mateClipReg_t*> mate_clipReg_vec;
@@ -2335,7 +2340,7 @@ void Genome::computeVarNumStatAssemble(){
 	total = total_indel + total_clipReg;
 
 	cout << "############## Brief statistics for local assembly ##############" << endl;
-	cout << "There are " << total << " local assembly regions in total:" << endl;
+	cout << "There are " << total << " local assembled regions in total:" << endl;
 	cout << "\t" << total_indel << " indel regions: " << total_succ_indel << " successful, " << total_fail_indel << " failed" << endl;
 	cout << "\t" << total_clipReg << " clipping regions: " << total_succ_clipReg << " successful, " << total_fail_clipReg << " failed" << endl;
 }

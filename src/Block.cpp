@@ -895,7 +895,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
 //			cout << "################### " << readsfilename << ", len=" << indelVector[end_reg_id]->endRefPos-indelVector[beg_reg_id]->startRefPos << endl;
 //			pthread_mutex_unlock(&mutex_print);
 
-			assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+			assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, false);
 			if(assem_work_opt){
 				pthread_mutex_lock(&mutex_assem_work);
 				paras->assem_work_vec.push_back(assem_work_opt);
@@ -960,7 +960,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 //					cout << "=================== " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
 //					pthread_mutex_unlock(&mutex_print);
 
-					assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+					assem_work_opt = allocateAssemWorkOpt(reg1->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true);
 					if(assem_work_opt){
 						pthread_mutex_lock(&mutex_assem_work);
 						paras->assem_work_vec.push_back(assem_work_opt);
@@ -997,7 +997,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 //						cout << "------------------- left region: " << readsfilename << ", len=" << reg1->endRefPos-reg1->startRefPos << endl;
 //						pthread_mutex_unlock(&mutex_print);
 
-						assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+						assem_work_opt = allocateAssemWorkOpt(reg1->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true);
 						if(assem_work_opt){
 							pthread_mutex_lock(&mutex_assem_work);
 							paras->assem_work_vec.push_back(assem_work_opt);
@@ -1034,7 +1034,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 //						cout << "------------------- right region: " << readsfilename << ", len=" << reg2->endRefPos-reg2->startRefPos << endl;
 //						pthread_mutex_unlock(&mutex_print);
 
-						assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+						assem_work_opt = allocateAssemWorkOpt(reg2->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true);
 						if(assem_work_opt){
 							pthread_mutex_lock(&mutex_assem_work);
 							paras->assem_work_vec.push_back(assem_work_opt);
@@ -1090,7 +1090,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 //					cout << "=================== " << readsfilename << ", len=" << reg4->endRefPos-reg1->startRefPos << endl;
 //					pthread_mutex_unlock(&mutex_print);
 
-					assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+					assem_work_opt = allocateAssemWorkOpt(reg1->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true);
 					if(assem_work_opt){
 						pthread_mutex_lock(&mutex_assem_work);
 						paras->assem_work_vec.push_back(assem_work_opt);
@@ -1139,7 +1139,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 //						cout << "-=-=-=-=-=-=-=-=-=- left region: " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
 //						pthread_mutex_unlock(&mutex_print);
 
-						assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+						assem_work_opt = allocateAssemWorkOpt(reg1->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true);
 						if(assem_work_opt){
 							pthread_mutex_lock(&mutex_assem_work);
 							paras->assem_work_vec.push_back(assem_work_opt);
@@ -1222,7 +1222,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 //						cout << "-=-=-=-=-=-=-=-=-=- right region: " << readsfilename << ", len=" << reg4->endRefPos-reg3->startRefPos << endl;
 //						pthread_mutex_unlock(&mutex_print);
 
-						assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec);
+						assem_work_opt = allocateAssemWorkOpt(reg3->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true);
 						if(assem_work_opt){
 							pthread_mutex_lock(&mutex_assem_work);
 							paras->assem_work_vec.push_back(assem_work_opt);

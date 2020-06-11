@@ -24,11 +24,7 @@ class Genome{
 		int genomeSize;
 
 		// output directory and files
-		string out_dir;
-		string out_dir_detect = "1_candidates";    // "1_candidates"
-		string out_dir_assemble = "2_assemble";  // "2_assemble"
-		string out_dir_call = "3_call";      // "3_call"
-		string out_dir_tra = out_dir_call + "/" + "tra";
+		string out_dir, out_dir_detect, out_dir_assemble, out_dir_call, out_dir_tra;
 
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
 		string out_filename_call_snv, out_filename_call_indel, out_filename_call_clipReg, out_filename_call_tra, out_filename_call_vars;
@@ -69,7 +65,7 @@ class Genome{
 
 		void recallIndelsFromTRA();
 		void genomeCallTra();
-		void generateAlatAlnFilenameTra();
+		void generateBlatAlnFilenameTra();
 		void genomeCallTraOp();
 		vector<blatAlnTra*> loadBlatAlnDataTra();
 		void releaseBlatAlnDataTra(vector<blatAlnTra*> &blat_aln_tra_vec);
