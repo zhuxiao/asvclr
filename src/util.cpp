@@ -1110,7 +1110,9 @@ void* processSingleAssembleWork(void *arg){
 	double percentage;
 	Time time;
 
+	//pthread_mutex_lock(assem_work->p_mtx_assemble_reg_workDone_num);
 	//cout << "assemble region [" << assem_work->work_id << "]: " << assem_work_opt->readsfilename << endl;
+	//pthread_mutex_unlock(assem_work->p_mtx_assemble_reg_workDone_num);
 
 	for(size_t i=0; i<assem_work_opt->arr_size; i++) varVec.push_back(assem_work_opt->var_array[i]);
 

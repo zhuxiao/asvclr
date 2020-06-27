@@ -1663,9 +1663,9 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("3_call/hs37d5/blat_contig_hs37d5_26654630-26660650.sim4")==0)
+		//if(var_cand->alnfilename.compare("output_v1.7_2.0_20200614/3_call/chr17/blat_chr17_26378479-26465466.sim4")==0)
 		{
-			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << endl;
+			cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();
 		}
 	}
@@ -1715,7 +1715,7 @@ void Chrome::loadVarCandData(){
 }
 
 void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var_cand_filename, bool clipReg_flag){
-	string line, ctg_assembly_str, alnfilename, str_tmp, chrname_str;
+	string line, ctg_assembly_str, alnfilename, str_tmp, chrname_str, old_out_dir, refseqfilename, contigfilename, readsfilename;
 	vector<string> line_vec, var_str, var_str1, var_str2;
 	vector<string> str_vec, str_vec2, str_vec3;
 	ifstream infile;
@@ -1727,7 +1727,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 
 	infile.open(var_cand_filename);
 	if(!infile.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << var_cand_filename << endl;
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file: " << var_cand_filename << endl;
 		exit(1);
 	}
 
@@ -1745,9 +1745,16 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			var_cand_tmp->fai = fai;
 
 			line_vec = split(line, "\t");
-			var_cand_tmp->refseqfilename = line_vec[0];	// refseq file name
-			var_cand_tmp->ctgfilename = line_vec[1];	// contig file name
-			var_cand_tmp->readsfilename = line_vec[2];	// reads file name
+
+			// update item file name
+			if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(line_vec.at(0), paras->out_dir_assemble);
+			refseqfilename = getUpdatedItemFilename(line_vec.at(0), paras->outDir, old_out_dir);
+			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
+			readsfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
+
+			var_cand_tmp->refseqfilename = refseqfilename;	// refseq file name
+			var_cand_tmp->ctgfilename = contigfilename;	// contig file name
+			var_cand_tmp->readsfilename = readsfilename;	// reads file name
 			var_cand_tmp->ref_left_shift_size = stoi(line_vec[3]);	// ref_left_shift_size
 			var_cand_tmp->ref_right_shift_size = stoi(line_vec[4]);	// ref_right_shift_size
 
@@ -1968,7 +1975,7 @@ void Chrome::loadMisAlnRegData(){
 
 	infile.open(misAln_reg_filename);
 	if(!infile.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file" << misAln_reg_filename << endl;
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << misAln_reg_filename << endl;
 		exit(1);
 	}
 
@@ -2015,7 +2022,7 @@ void Chrome::sortMisAlnRegData(){
 // load previously blat aligned information
 void Chrome::loadPrevBlatAlnItems(bool clipReg_flag){
 	ifstream infile;
-	string infilename, line, done_str;
+	string infilename, line, done_str, old_out_dir, alnfilename, refseqfilename, contigfilename;
 	vector<string> line_vec;
 	varCand *var_cand_tmp;
 
@@ -2030,6 +2037,7 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag){
 		exit(1);
 	}
 
+	old_out_dir = "";
 	while(getline(infile, line)){
 		if(line.size()>0 and line.at(0)!='#'){
 			// allocate memory
@@ -2043,9 +2051,16 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag){
 			var_cand_tmp->fai = NULL;
 
 			line_vec = split(line, "\t");
-			var_cand_tmp->alnfilename = line_vec.at(0);  // align file name
-			var_cand_tmp->ctgfilename = line_vec.at(1);  // contig file name
-			var_cand_tmp->refseqfilename = line_vec.at(2);  // refseq file name
+
+			// update item file name
+			if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(line_vec.at(0), paras->out_dir_call);
+			alnfilename = getUpdatedItemFilename(line_vec.at(0), paras->outDir, old_out_dir);
+			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
+			refseqfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
+
+			var_cand_tmp->alnfilename = alnfilename;  // align file name
+			var_cand_tmp->ctgfilename = contigfilename;  // contig file name
+			var_cand_tmp->refseqfilename = refseqfilename;  // refseq file name
 			var_cand_tmp->ref_left_shift_size = 0;  // ref_left_shift_size
 			var_cand_tmp->ref_right_shift_size = 0;  // ref_right_shift_size
 
@@ -2072,7 +2087,7 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag){
 // set blat var_cand files
 void Chrome::setBlatVarcandFiles(){
 	ifstream infile;
-	string line, tmp_filename, header_line;
+	string line, new_line, tmp_filename, header_line, old_out_dir, alnfilename, contigfilename, refseqfilename;
 	vector<string> str_vec;
 	varCand *var_cand;
 	size_t i;
@@ -2097,12 +2112,22 @@ void Chrome::setBlatVarcandFiles(){
 		header_line = getBlatVarcandFileHeaderLine();
 		blat_var_cand_indel_file << header_line << endl;
 
+		old_out_dir = "";
 		while(getline(infile, line)){
 			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
-				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
-					blat_var_cand_indel_file << line << endl;
-				else
+				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0){
+					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_call);
+
+					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
+					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+
+					new_line = alnfilename + "\t" + contigfilename + "\t" + refseqfilename;
+					for(i=3; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+
+					blat_var_cand_indel_file << new_line << endl;
+				}else
 					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
 			}
 		}
@@ -2144,12 +2169,22 @@ void Chrome::setBlatVarcandFiles(){
 		header_line = getBlatVarcandFileHeaderLine();
 		blat_var_cand_clipReg_file << header_line << endl;
 
+		old_out_dir = "";
 		while(getline(infile, line)){
 			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
-				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0)
-					blat_var_cand_clipReg_file << line << endl;
-				else
+				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0){
+					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_call);
+
+					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
+					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+
+					new_line = alnfilename + "\t" + contigfilename + "\t" + refseqfilename;
+					for(i=3; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+
+					blat_var_cand_clipReg_file << new_line << endl;
+				}else
 					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
 			}
 		}
@@ -2224,8 +2259,11 @@ void Chrome::chrFillVarseqSingleVec(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec[i];
-		//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
-		var_cand->fillVarseq();
+		//if(var_cand->ctgfilename.compare("output_v1.7_2.0_20200614/2_assemble/chr17/contig_chr17_26378479-26465466.fa")==0)
+		{
+			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
+			var_cand->fillVarseq();
+		}
 	}
 }
 

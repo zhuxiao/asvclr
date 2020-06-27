@@ -67,6 +67,7 @@ class Genome{
 		void genomeCallTra();
 		void generateBlatAlnFilenameTra();
 		void genomeCallTraOp();
+		void finalizeCallTra();
 		vector<blatAlnTra*> loadBlatAlnDataTra();
 		void releaseBlatAlnDataTra(vector<blatAlnTra*> &blat_aln_tra_vec);
 		void blatAlnTra_st(vector<blatAlnTra*> *blat_aln_tra_vec);

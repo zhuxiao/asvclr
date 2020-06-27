@@ -3127,7 +3127,7 @@ reg_t* varCand::computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t 
 
 vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq){
 	int64_t startCheckLocalRefPos, startCheckRefPos, startCheckQueryPos, localRefPos, refPos, queryPos, misNum, refShiftSize, queryShiftSize, subseq_len;
-	int64_t i, localRefPos_start, queryPos_start, tmp_len, minCheckRefPos;
+	int64_t i, localRefPos_start, queryPos_start, tmp_len, minCheckRefPos, maxShiftRefSize, maxShiftQuerySize, shiftRefSize, shiftQuerySize;
 	localAln_t *local_aln;
 	string refseq_aln, midseq_aln, queryseq_aln;
 	vector<size_t> shift_size_vec;
@@ -3141,22 +3141,27 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 		startCheckLocalRefPos = seg1->subject_end;
 		startCheckRefPos = seg1->ref_end;
 		startCheckQueryPos = seg2->query_start - 1;
+
+		maxShiftRefSize = seg1->subject_end - 1;
+		maxShiftQuerySize = seg1->query_end - 1;
 	}else{
 		startCheckLocalRefPos = reg->startLocalRefPos;
 		startCheckRefPos = reg->startRefPos;
 		startCheckQueryPos = reg->endQueryPos - 1;
+
+		maxShiftRefSize = reg->startLocalRefPos - 1;
+		maxShiftQuerySize = reg->startQueryPos - 1;
 	}
 
 	misNum = 0;
 	localRefPos = startCheckLocalRefPos;
 	refPos = startCheckRefPos;
 	queryPos = startCheckQueryPos;
+	shiftRefSize = shiftQuerySize = 0;
 	while(queryPos>=1 and localRefPos>=1){
 		baseMatchFlag = isBaseMatch(queryseq.at(queryPos-1), refseq.at(localRefPos-1));
-
-		//if(queryseq.at(queryPos-1)==refseq.at(localRefPos-1)){
 		if(baseMatchFlag){
-			queryPos --; localRefPos --; refPos --;
+			queryPos --; localRefPos --; refPos --; shiftRefSize++; shiftQuerySize++;
 		}else{
 			misNum = 0;
 
@@ -3194,6 +3199,8 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 				queryPos -=  subseq_len - local_aln->queryLeftShiftLen;
 				localRefPos -=  subseq_len - local_aln->localRefLeftShiftLen;
 				refPos -= subseq_len - local_aln->localRefLeftShiftLen;
+				shiftRefSize += subseq_len - local_aln->localRefLeftShiftLen;
+				shiftQuerySize += subseq_len - local_aln->queryLeftShiftLen;
 				delete local_aln;
 			}else {
 				if(local_aln->localRefRightShiftLen<=2 and local_aln->queryRightShiftLen<=2){
@@ -3207,14 +3214,15 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 					queryPos -= tmp_len + local_aln->queryRightShiftLen;
 					localRefPos -= tmp_len + local_aln->localRefRightShiftLen;
 					refPos -= tmp_len + local_aln->localRefRightShiftLen;
+					shiftRefSize += tmp_len + local_aln->localRefRightShiftLen;
+					shiftQuerySize += tmp_len + local_aln->queryRightShiftLen;
 				}
-
 				delete local_aln;
 				break;
 			}
 		}
 
-		if(refPos<minCheckRefPos) break;
+		if(refPos<=minCheckRefPos or shiftRefSize>=maxShiftRefSize or shiftQuerySize>=maxShiftQuerySize) break;
 	}
 
 	refShiftSize = startCheckLocalRefPos - localRefPos;
@@ -3229,35 +3237,42 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 
 vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq){
 	int64_t startCheckLocalRefPos, startCheckRefPos, startCheckQueryPos, localRefPos, refPos, queryPos, misNum, refShiftSize, queryShiftSize, subseq_len;
-	int64_t i, localRefPos_start, queryPos_start, tmp_len, maxCheckRefPos;
+	int64_t i, localRefPos_start, queryPos_start, tmp_len, maxCheckRefPos, chrlen_tmp, maxShiftRefSize, maxShiftQuerySize, shiftRefSize, shiftQuerySize;
 	localAln_t *local_aln;
 	string midseq_aln;
 	vector<size_t> shift_size_vec;
 	bool baseMatchFlag;
 
+	chrlen_tmp = faidx_seq_len(fai, reg->chrname.c_str()); // get the reference length
 	maxCheckRefPos = reg->endRefPos + 200;
+	if(maxCheckRefPos>chrlen_tmp) maxCheckRefPos = chrlen_tmp;
 
 	subseq_len = 50;
 	if(seg1 and seg2){
 		startCheckLocalRefPos = seg2->subject_start;
 		startCheckRefPos = seg2->ref_start;
 		startCheckQueryPos = seg1->query_end + 1;
+
+		maxShiftRefSize = refseq.size() - seg2->subject_start;
+		maxShiftQuerySize = queryseq.size() - seg2->query_start;
 	}else{
 		startCheckLocalRefPos = reg->endLocalRefPos;
 		startCheckRefPos = reg->endRefPos;
 		startCheckQueryPos = reg->startQueryPos + 1;
+
+		maxShiftRefSize = refseq.size() - reg->endLocalRefPos;
+		maxShiftQuerySize = queryseq.size() - reg->endQueryPos;
 	}
 
 	misNum = 0;
 	localRefPos = startCheckLocalRefPos;
 	refPos = startCheckRefPos;
 	queryPos = startCheckQueryPos;
+	shiftRefSize = shiftQuerySize = 0;
 	while(queryPos<=(int64_t)queryseq.size() and localRefPos<=(int64_t)refseq.size()){
 		baseMatchFlag = isBaseMatch(queryseq.at(queryPos-1), refseq.at(localRefPos-1));
-
-		//if(queryseq.at(queryPos-1)==refseq.at(localRefPos-1)){
 		if(baseMatchFlag){
-			queryPos ++; localRefPos ++; refPos ++;
+			queryPos ++; localRefPos ++; refPos ++; shiftRefSize++; shiftQuerySize++;
 		}else{
 			misNum = 0;
 
@@ -3296,6 +3311,8 @@ vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, al
 				queryPos +=  subseq_len - local_aln->queryRightShiftLen;
 				localRefPos +=  subseq_len - local_aln->localRefRightShiftLen;
 				refPos += subseq_len - local_aln->localRefRightShiftLen;
+				shiftRefSize += subseq_len - local_aln->localRefRightShiftLen;
+				shiftQuerySize += subseq_len - local_aln->queryRightShiftLen;
 				delete local_aln;
 			}else{
 				if(local_aln->localRefLeftShiftLen<=2 and local_aln->queryLeftShiftLen<=2){
@@ -3309,14 +3326,15 @@ vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, al
 					queryPos += tmp_len + local_aln->queryLeftShiftLen;
 					localRefPos += tmp_len + local_aln->localRefLeftShiftLen;
 					refPos += tmp_len + local_aln->localRefLeftShiftLen;
+					shiftRefSize += tmp_len + local_aln->localRefLeftShiftLen;
+					shiftQuerySize += tmp_len + local_aln->queryLeftShiftLen;
 				}
-
 				delete local_aln;
 				break;
 			}
 		}
 
-		if(refPos>maxCheckRefPos) break;
+		if(refPos>=maxCheckRefPos or shiftRefSize>=maxShiftRefSize or shiftQuerySize>=maxShiftQuerySize) break;
 	}
 
 	refShiftSize = localRefPos - startCheckLocalRefPos;

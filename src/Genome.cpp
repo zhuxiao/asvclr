@@ -481,7 +481,7 @@ int Genome::genomeCall(){
 	// call variants
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("hs37d5")==0)
+		//if(chr->chrname.compare("chr2")==0)
 		{
 			chr->chrLoadDataCall();
 			chr->chrCall();
@@ -490,19 +490,6 @@ int Genome::genomeCall(){
 
 	// call TRA according to mate clip regions
 	genomeCallTra();
-
-	cout << "1111111111111" << endl;
-	cout << "[" << time.getTime() << "]: remove redundant TRAs... " << endl;
-	removeRedundantTra();
-
-	cout << "2222222222222" << endl;
-	cout << "[" << time.getTime() << "]: merge close range TRAs... " << endl;
-	mergeCloseRangeTra();
-
-	// find indels back for mate clip regions
-	cout << "3333333333333" << endl;
-	cout << "[" << time.getTime() << "]: recall indels from TRAs... " << endl;
-	recallIndelsFromTRA();
 
 	// fill variation sequence
 	cout << "4444444444444" << endl;
@@ -689,6 +676,9 @@ void Genome::genomeCallTra(){
 	// call translocations
 	cout << "calling TRAs ..." << endl;
 	genomeCallTraOp();
+
+	// finalize TRA calling
+	finalizeCallTra();
 }
 
 // call TRA according to mate clip regions
@@ -822,6 +812,24 @@ void Genome::genomeCallTraOp(){
 		//cout << "chr " << i << ": success_num=" << success_num << endl;
 	}
 	//cout << "Genome: total=" << total << endl;
+}
+
+// finalize TRA calling
+void Genome::finalizeCallTra(){
+	Time time;
+
+	cout << "1111111111111" << endl;
+	cout << "[" << time.getTime() << "]: remove redundant TRAs... " << endl;
+	removeRedundantTra();
+
+	cout << "2222222222222" << endl;
+	cout << "[" << time.getTime() << "]: merge close range TRAs... " << endl;
+	mergeCloseRangeTra();
+
+	// find indels back for mate clip regions
+	cout << "3333333333333" << endl;
+	cout << "[" << time.getTime() << "]: recall indels from TRAs... " << endl;
+	recallIndelsFromTRA();
 }
 
 vector<blatAlnTra*> Genome::loadBlatAlnDataTra(){

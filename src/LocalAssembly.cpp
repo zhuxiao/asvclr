@@ -555,7 +555,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 		}else { // contig generated failed
 			system(cmd4.c_str());  // remove temporary files
 
-			// try canu1.8
+			// try canu1.8, or 2.0
 			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
@@ -635,7 +635,7 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 		}else { // contig generated failed
 			system(cmd4.c_str());  // remove temporary files
 
-			// try canu1.8
+			// try canu1.8, or 2.0
 			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
