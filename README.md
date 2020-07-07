@@ -213,7 +213,7 @@ Options:
 
 ## Output Result Description
 
-There are two kinds of output files: BED file and BEDPE file. Insertions, deletions, inversions and duplications are stored in the BED file format, and translocations are saved in the BEDPE file format.
+There are two kinds of output files: BED file and BEDPE file. Insertions, deletions, inversions and duplications are stored in the BED file format, and translocations are saved in the BEDPE file format. The final variant results are saved in the BED file and BEDPE file format and stored in the directory `4_results`.
 
 There are 8 columns in the generated BED format file for insertions, deletions, inversions and duplications, and these columns can be described as below:
 
