@@ -63,7 +63,7 @@ class LocalAssembly {
 		double computeCompensationCoefficient(size_t startRefPos_assembly, size_t endRefPos_assembly, double mean_read_len);
 		double computeLocalCov(vector<struct fqSeqNode*> &fq_seq_vec, double compensation_coefficient);
 		void samplingReads(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val, double compensation_coefficient);
-		void samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val, double compensation_coefficient);
+		void samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val);
 		void saveSampledReads(string &readsfilename, vector<struct fqSeqNode*> &fq_seq_vec);
 		vector<clipAlnData_t*> getQueryClipAlnSegs(string &queryname, vector<clipAlnData_t*> &clipAlnDataVector);
 		int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &clipAlnDataVector);

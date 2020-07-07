@@ -12,7 +12,12 @@ clipAlnDataLoader::clipAlnDataLoader(string &chrname, int32_t startRefPos, int32
 clipAlnDataLoader::~clipAlnDataLoader() {
 }
 
+// load clipping align data without down-sampling
 void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector){
+	loadClipAlnData(clipAlnDataVector, 0);
+}
+
+void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov){
 	size_t i;
 	vector<bam1_t*> alnDataVector;
 	clipAlnData_t *clip_aln;
@@ -21,6 +26,10 @@ void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVecto
 	// load the align data
 	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile);
 	data_loader.loadAlnData(alnDataVector);
+
+	if(max_ultra_high_cov>0){
+		samplingAlnData(alnDataVector, data_loader.mean_read_len, max_ultra_high_cov);
+	}
 
 	// load the sam/bam header
 	header = loadSamHeader(inBamFile);
@@ -41,6 +50,11 @@ void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVecto
 
 void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector){
 	loadClipAlnData(clipAlnDataVector);
+	fillClipAlnDataBySATag(clipAlnDataVector);
+}
+
+void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov){
+	loadClipAlnData(clipAlnDataVector, max_ultra_high_cov);
 	fillClipAlnDataBySATag(clipAlnDataVector);
 }
 
@@ -101,6 +115,98 @@ clipAlnData_t* clipAlnDataLoader::generateClipAlnData(bam1_t* b, bam_hdr_t *head
 	clip_aln->SA_tag_flag = false;
 
 	return clip_aln;
+}
+
+// align data sampling
+void clipAlnDataLoader::samplingAlnData(vector<bam1_t*> &alnDataVector, double mean_read_len, double max_ultra_high_cov){
+	double compensation_coefficient, local_cov_original;
+
+	compensation_coefficient = computeCompensationCoefficient(startRefPos, endRefPos, mean_read_len);
+	local_cov_original = computeLocalCov(alnDataVector, mean_read_len, compensation_coefficient);
+	if(local_cov_original>max_ultra_high_cov)  // sampling
+		samplingAlnDataOp(alnDataVector, mean_read_len, max_ultra_high_cov);
+}
+
+// align data sampling operation
+double clipAlnDataLoader::samplingAlnDataOp(vector<bam1_t*> &alnDataVector, double mean_read_len, double expect_cov_val){
+	double expected_total_bases, total_bases, sampled_cov;
+	size_t index, max_reads_num, reg_size, reads_count;
+	bam1_t *b;
+	int8_t *selected_flag_array;
+	int64_t i;
+
+	sampled_cov = 0;
+	selected_flag_array = (int8_t*) calloc(alnDataVector.size(), sizeof(int8_t));
+	if(selected_flag_array==NULL){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot allocate memory, error!" << endl;
+		exit(1);
+	}
+
+	reg_size = endRefPos - startRefPos + 1 + mean_read_len;
+	expected_total_bases = reg_size * expect_cov_val;
+	max_reads_num = alnDataVector.size();
+
+	reads_count = 0;
+	total_bases = 0;
+	while(total_bases<=expected_total_bases and reads_count<=max_reads_num){
+		index = rand() % max_reads_num;
+		if(selected_flag_array[index]==0){
+			selected_flag_array[index] = 1;
+
+			b = alnDataVector.at(index);
+			total_bases += b->core.l_qseq;
+			reads_count ++;
+		}
+	}
+	sampled_cov = total_bases / reg_size;
+
+	// remove unselected items
+	for(i=alnDataVector.size()-1; i>=0; i--){
+		if(selected_flag_array[i]==0){
+			b = alnDataVector.at(i);
+			bam_destroy1(b);
+			alnDataVector.erase(alnDataVector.begin()+i);
+		}
+	}
+
+	free(selected_flag_array);
+
+	//cout << "After sampling, reads count: " << reads_count << ", total bases: " << (int64_t)total_bases << ", alnDataVector.size: " << alnDataVector.size() << endl;
+
+	return sampled_cov;
+}
+
+double clipAlnDataLoader::computeLocalCov(vector<bam1_t*> &alnDataVector, double mean_read_len, double compensation_coefficient){
+	double cov = 0, total;
+	bam1_t *b;
+	size_t refined_reg_size;
+
+	refined_reg_size = endRefPos - startRefPos + 1 + 2 * mean_read_len;
+	if(refined_reg_size>0){
+		total = 0;
+		for(size_t i=0; i<alnDataVector.size(); i++){
+			b = alnDataVector.at(i);
+			total += b->core.l_qseq;
+		}
+		cov = total / refined_reg_size * compensation_coefficient;
+		//cout << "total bases: " << total << " bp, local coverage: " << cov << endl;
+	}else{
+		cov = -1;
+		//cerr << "ERR: ref_seq_size=" << ref_seq_size << endl;
+	}
+	return cov;
+}
+
+double clipAlnDataLoader::computeCompensationCoefficient(size_t startRefPos, size_t endRefPos, double mean_read_len){
+	size_t total_reg_size, refined_reg_size, reg_size_assemble;
+	double comp_coefficient;
+
+	reg_size_assemble = endRefPos - startRefPos + 1;
+	total_reg_size = reg_size_assemble + 2 * mean_read_len;
+	refined_reg_size = reg_size_assemble + mean_read_len;  // flanking_area = (2 * mean_read_len) / 2
+	comp_coefficient = (double)total_reg_size / refined_reg_size;
+
+	return comp_coefficient;
 }
 
 // fill data according to 'SA' tag

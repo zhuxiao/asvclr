@@ -153,7 +153,7 @@ int Genome::genomeDetect(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("chr2")==0)
+		//if(chr->chrname.compare("chr1")==0)
 		{
 			cout << "[" << time.getTime() << "]: processing Chr: " << chr->chrname << ", size: " << chr->chrlen << " bp" << endl;
 			chr->chrDetect();
@@ -737,10 +737,9 @@ void Genome::generateBlatAlnFilenameTra(){
 			}
 		}
 	}
-
-	cout << "File generated." << endl;
-
 	aln_file_tra.close();
+
+	//cout << "File generated." << endl;
 }
 
 // call TRA according to mate clip regions

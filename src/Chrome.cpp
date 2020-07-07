@@ -238,6 +238,8 @@ void Chrome::chrFillDataEst(size_t op_est){
 
 // detect indels for chrome
 int Chrome::chrDetect(){
+	Time time;
+
 	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IROTH);  // create the directory for detect command
 
 	chrSetMisAlnRegFile();
@@ -246,12 +248,15 @@ int Chrome::chrDetect(){
 	else chrDetect_mt();  // multiple threads
 
 	// detect mated clip regions
+	cout << "[" << time.getTime() << "]: compute mate clip region on chromosome ..." << endl;
 	chrComputeMateClipReg();
 
 	// remove FP indels and Snvs in clipping regions
+	cout << "[" << time.getTime() << "]: remove FP indels and SNVs in mate clip region on chromosome ..." << endl;
 	removeFPIndelSnvInClipReg(mateClipRegVector);
 
 	// remove redundant Indel for 'detect' command
+	cout << "[" << time.getTime() << "]: remove redundant indels on chromosome ..." << endl;
 	removeRedundantIndelDetect();
 
 	// merge the results to single file
@@ -264,12 +269,13 @@ int Chrome::chrDetect(){
 
 // single thread
 int Chrome::chrDetect_st(){
+	//Time time;
 	Block* bloc;
 	for(size_t i=0; i<blockVector.size(); i++){
 		//if(i>=48)
 		{
 			bloc = blockVector.at(i);
-			//cout << "[" << i << "]: detect files:" << bloc->out_dir_detect << "/" << bloc->snvFilenameDetect << ", " << bloc->indelFilenameDetect << endl;
+			//cout << "[" << time.getTime() << "]: [" << i << "]: detect files:" << bloc->out_dir_detect << "/" << bloc->snvFilenameDetect << ", " << bloc->indelFilenameDetect << endl;
 			bloc->blockDetect();
 		}
 	}
@@ -336,6 +342,7 @@ void Chrome::removeRedundantIndelItemDetect(reg_t *reg, size_t bloc_idx, size_t 
 
 // detect mated clip regions for duplications and inversions
 void Chrome::chrComputeMateClipReg(){
+	Time time;
 	size_t i;
 	Block *bloc;
 	reg_t *reg;
@@ -355,11 +362,12 @@ void Chrome::chrComputeMateClipReg(){
 
 	// compute the mate flag for duplications and inversions
 	for(i=0; i<clipRegVector.size(); i++){
-		//if(i>=63)
+		//if(i==3180)
 		{
 			reg = clipRegVector.at(i);
 			if(clip_processed_flag_vec.at(i)==false){
-				//cout << i << ": " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+
+				//cout << "[" << time.getTime() << "], [" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
 				clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, chrlen, paras->inBamFile, fai, paras);
 				clip_reg.computeMateClipReg();

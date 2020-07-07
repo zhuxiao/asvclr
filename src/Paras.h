@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION				"0.6.1"
+#define PROG_VERSION				"0.6.2"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -63,6 +63,8 @@ using namespace std;
 
 #define OUT_DIR						"output"
 
+#define MAX_ULTRA_HIGH_COV_THRES	300		// maximal coverage threshold for ultra-high coverage
+
 
 // program parameters
 class Paras
@@ -88,6 +90,9 @@ class Paras
 		// reads sampling parameters
 		double expected_cov_assemble;
 		bool delete_reads_flag;
+
+		// clipping reads sampling parameters
+		double max_ultra_high_cov;
 
 		// estimated parameters
 		size_t min_ins_size_filt, min_del_size_filt, min_clip_size_filt;

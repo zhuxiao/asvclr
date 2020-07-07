@@ -42,6 +42,7 @@ void Paras::init()
 	max_reg_sum_size_est = MAX_REG_SUM_SIZE_EST;
 
 	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
+	max_ultra_high_cov = MAX_ULTRA_HIGH_COV_THRES;
 
 	assemble_reg_preDone_num = assemble_reg_work_total = assemble_reg_workDone_num = 0;
 	num_parts_progress = NUM_PARTS_PROGRESS;
@@ -357,12 +358,6 @@ int Paras::parseCallParas(int argc, char **argv)
 		showCallUsage();
 		return 1;
 	}
-
-//	if(refFile.size()==0){
-//		cout << "Error: Please specify the reference" << endl << endl;
-//		showCallUsage();
-//		return 1;
-//	}
 
 	return 0;
 }

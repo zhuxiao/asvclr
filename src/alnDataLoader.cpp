@@ -1,16 +1,16 @@
 
 #include "alnDataLoader.h"
 
-alnDataLoader::alnDataLoader(){
-}
+//alnDataLoader::alnDataLoader(){
+//}
 
 alnDataLoader::alnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile) {
 	this->reg_str = chrname + ":" + to_string(startRefPos) + "-" + to_string(endRefPos);
 	this->inBamFile = inBamFile;
+	mean_read_len = 0;
 }
 
 alnDataLoader::~alnDataLoader() {
-	// TODO Auto-generated destructor stub
 }
 
 void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector){
@@ -55,14 +55,20 @@ void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector){
 // load align data from iteration
 void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg){
 	int result;
+	size_t sum, count;
 	bam1_t *b;
 
 	// fetch alignments
+	sum = count = 0;
 	b = bam_init1();
 	while ((result = sam_itr_next(in, iter, b)) >= 0) {
+		sum += b->core.l_qseq;
+		count++;
 		alnDataVector.push_back(b);
 		b = bam_init1();
 	}
+	mean_read_len = (double) sum / count;
+
 	alnDataVector.shrink_to_fit();
 	bam_destroy1(b);
 	if (result < -1) {
@@ -78,5 +84,6 @@ void alnDataLoader::freeAlnData(vector<bam1_t*> &alnDataVector){
 		for(aln=alnDataVector.begin(); aln!=alnDataVector.end(); aln++)
 			bam_destroy1(*aln);
 		vector<bam1_t*>().swap(alnDataVector);
+		mean_read_len = 0;
 	}
 }

@@ -36,12 +36,6 @@ using namespace std;
 #define MAX_DIST_SAME_CLIP_END				100000
 
 
-//typedef struct{
-//	reg_t *leftClipReg, *rightClipReg;
-//	size_t leftClipPosNum, rightClipPosNum;
-//	size_t leftMeanClipPos, rightMeanClipPos;
-//}clipRegItem_t;
-
 typedef struct{
 	reg_t *leftClipReg, *rightClipReg;
 	size_t leftClipPosNum, rightClipPosNum;
@@ -73,6 +67,9 @@ class clipReg {
 		vector<clipAlnData_t*> clipAlnDataVector;
 		vector<clipPos_t> leftClipPosVector, rightClipPosVector;
 		vector<clipPos_t> leftClipPosVector2, rightClipPosVector2;
+
+		// deal with ultra-high coverage region
+
 
 	public:
 		clipReg(string &chrname, size_t startRefPos, size_t endRefPos, size_t chrlen, string &inBamFile, faidx_t *fai, Paras *paras);

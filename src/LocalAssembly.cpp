@@ -224,11 +224,11 @@ void LocalAssembly::samplingReads(vector<struct fqSeqNode*> &fq_seq_vec, double 
 
 	if(local_cov_original>expect_cov_val){ // sampling
 		//cout << "sampling for " << readsfilename << ", original coverage: " << local_cov_original << ", expected coverage: " << expect_cov_val << ", compensation_coefficient: " << compensation_coefficient << endl;
-		samplingReadsOp(fq_seq_vec, expect_cov_val, compensation_coefficient);
+		samplingReadsOp(fq_seq_vec, expect_cov_val);
 	}
 }
 
-void LocalAssembly::samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val, double compensation_coefficient){
+void LocalAssembly::samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val){
 	double expected_total_bases, total_bases;
 	size_t index, max_reads_num, reg_size;
 	struct fqSeqNode* fq_node;
@@ -250,11 +250,6 @@ void LocalAssembly::samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, doubl
 		fq_node = fq_seq_vec.at(index);
 		if(fq_node->selected_flag==false){
 			fq_node->selected_flag = true;
-
-	//		outfile << "@" << fq_node->seq_name << endl;
-	//		outfile << fq_node->seq << endl;
-	//		outfile << "+" << endl;
-	//		outfile << fq_node->qual << endl;
 
 			total_bases += fq_node->seq.size();
 			reads_count ++;
@@ -556,7 +551,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 			system(cmd4.c_str());  // remove temporary files
 
 			// try canu1.8, or 2.0
-			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+			canu_cmd = "canu2.0 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
@@ -636,7 +631,7 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 			system(cmd4.c_str());  // remove temporary files
 
 			// try canu1.8, or 2.0
-			canu_cmd = "canu1.8 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+			canu_cmd = "canu2.0 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
 			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 

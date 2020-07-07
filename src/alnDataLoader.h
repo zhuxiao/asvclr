@@ -17,9 +17,10 @@ using namespace std;
 class alnDataLoader {
 	public:
 		string reg_str, inBamFile;
+		double mean_read_len;
 
 	public:
-		alnDataLoader();
+		//alnDataLoader();
 		alnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile);
 		virtual ~alnDataLoader();
 		void loadAlnData(vector<bam1_t*> &alnDataVector);

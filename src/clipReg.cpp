@@ -52,7 +52,7 @@ void clipReg::computeMateClipReg(){
 
 void clipReg::fillClipAlnDataVectorWithSATag(){
 	clipAlnDataLoader clip_aln_data_loader(chrname, startRefPos, endRefPos, inBamFile);
-	clip_aln_data_loader.loadClipAlnDataWithSATag(clipAlnDataVector);
+	clip_aln_data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, paras->max_ultra_high_cov);
 }
 
 // remove query having no clippings
