@@ -238,7 +238,7 @@ void Chrome::chrFillDataEst(size_t op_est){
 
 // detect indels for chrome
 int Chrome::chrDetect(){
-	Time time;
+	//Time time;
 
 	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IROTH);  // create the directory for detect command
 
@@ -248,15 +248,15 @@ int Chrome::chrDetect(){
 	else chrDetect_mt();  // multiple threads
 
 	// detect mated clip regions
-	cout << "[" << time.getTime() << "]: compute mate clip region on chromosome ..." << endl;
+	//cout << "[" << time.getTime() << "]: compute mate clip region on chromosome ..." << endl;
 	chrComputeMateClipReg();
 
 	// remove FP indels and Snvs in clipping regions
-	cout << "[" << time.getTime() << "]: remove FP indels and SNVs in mate clip region on chromosome ..." << endl;
+	//cout << "[" << time.getTime() << "]: remove FP indels and SNVs in mate clip region on chromosome ..." << endl;
 	removeFPIndelSnvInClipReg(mateClipRegVector);
 
 	// remove redundant Indel for 'detect' command
-	cout << "[" << time.getTime() << "]: remove redundant indels on chromosome ..." << endl;
+	//cout << "[" << time.getTime() << "]: remove redundant indels on chromosome ..." << endl;
 	removeRedundantIndelDetect();
 
 	// merge the results to single file
