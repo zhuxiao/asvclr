@@ -24,10 +24,10 @@ class Genome{
 		int genomeSize;
 
 		// output directory and files
-		string out_dir, out_dir_detect, out_dir_assemble, out_dir_call, out_dir_tra;
+		string out_dir, out_dir_detect, out_dir_assemble, out_dir_call, out_dir_tra, out_dir_result;
 
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
-		string out_filename_call_snv, out_filename_call_indel, out_filename_call_clipReg, out_filename_call_tra, out_filename_call_vars;
+		string out_filename_result_snv, out_filename_result_indel, out_filename_result_clipReg, out_filename_result_tra, out_filename_result_vars;
 
 		//vector<varCand*> var_cand_vec;
 

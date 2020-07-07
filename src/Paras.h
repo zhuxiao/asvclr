@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION				"0.6.2"
+#define PROG_VERSION				"0.6.3"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -77,6 +77,7 @@ class Paras
 		string out_dir_assemble = "2_assemble";  // "2_assemble"
 		string out_dir_call = "3_call";      // "3_call"
 		string out_dir_tra = out_dir_call + "/" + "tra";
+		string out_dir_result = "4_results";	// "4_results"
 		size_t blockSize, slideSize, assemSlideSize, min_sv_size_usr, num_threads, large_indel_size_thres;
 		bool maskMisAlnRegFlag, load_from_file_flag;
 		size_t misAlnRegLenSum = 0;

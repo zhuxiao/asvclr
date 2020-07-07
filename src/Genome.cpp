@@ -38,21 +38,23 @@ void Genome::init(){
 		out_dir_assemble = out_dir + "/" + paras->out_dir_assemble;
 		out_dir_call = out_dir + "/" + paras->out_dir_call;
 		out_dir_tra = out_dir + "/" + paras->out_dir_tra;
+		out_dir_result = out_dir + "/" + paras->out_dir_result;
 	}else{
 		out_dir_detect = paras->out_dir_detect;
 		out_dir_assemble = paras->out_dir_assemble;
 		out_dir_call = paras->out_dir_call;
 		out_dir_tra = paras->out_dir_tra;
+		out_dir_result = paras->out_dir_result;
 	}
 
 	out_filename_detect_snv = out_dir_detect + "/" + "genome_SNV_candidates";
 	out_filename_detect_indel = out_dir_detect + "/" + "genome_INDEL_candidate";
 	out_filename_detect_clipReg = out_dir_detect + "/" + "genome_clipReg_candidate";
-	out_filename_call_snv = out_dir_call + "/" + "genome_SNV";
-	out_filename_call_indel = out_dir_call + "/" + "genome_INDEL.bed";
-	out_filename_call_clipReg = out_dir_call + "/" + "genome_clipReg.bed";
-	out_filename_call_tra = out_dir_call + "/" + "genome_TRA.bedpe";
-	out_filename_call_vars = out_dir_call + "/" + "genome_variants.bed";
+	out_filename_result_snv = out_dir_result + "/" + "genome_SNV";
+	out_filename_result_indel = out_dir_result + "/" + "genome_INDEL.bed";
+	out_filename_result_clipReg = out_dir_result + "/" + "genome_clipReg.bed";
+	out_filename_result_tra = out_dir_result + "/" + "genome_TRA.bedpe";
+	out_filename_result_vars = out_dir_result + "/" + "genome_variants.bed";
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
 	// load the fai
@@ -2051,9 +2053,9 @@ void Genome::saveTraCall2File(){
 	string line, header_line_bedpe;;
 	int32_t sv_len;
 
-	outfile_tra.open(out_filename_call_tra);
+	outfile_tra.open(out_filename_result_tra);
 	if(!outfile_tra.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_call_tra << endl;
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_result_tra << endl;
 		exit(1);
 	}
 
@@ -2110,19 +2112,21 @@ void Genome::mergeCallResult(){
 	ofstream out_file_indel, out_file_clipReg, out_file_vars;
 	string header_line_bed, header_line_bedpe;
 
-	out_file_indel.open(out_filename_call_indel);
+	mkdir(out_dir_result.c_str(), S_IRWXU | S_IROTH);  // create the directory for final results
+
+	out_file_indel.open(out_filename_result_indel);
 	if(!out_file_indel.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_call_indel << endl;
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_result_indel << endl;
 		exit(1);
 	}
-	out_file_clipReg.open(out_filename_call_clipReg);
+	out_file_clipReg.open(out_filename_result_clipReg);
 	if(!out_file_indel.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_call_clipReg << endl;
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_result_clipReg << endl;
 		exit(1);
 	}
-	out_file_vars.open(out_filename_call_vars);
+	out_file_vars.open(out_filename_result_vars);
 	if(!out_file_vars.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_call_vars << endl;
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_result_vars << endl;
 		exit(1);
 	}
 
@@ -2142,9 +2146,9 @@ void Genome::mergeCallResult(){
 	header_line_bedpe = getCallFileHeaderBedpe();
 	out_file_vars << header_line_bed << endl;
 	out_file_vars << header_line_bedpe << endl;
-	copySingleFile(out_filename_call_indel, out_file_vars); // indels
-	copySingleFile(out_filename_call_clipReg, out_file_vars); // INV, DUP
-	copySingleFile(out_filename_call_tra, out_file_vars); // TRA
+	copySingleFile(out_filename_result_indel, out_file_vars); // indels
+	copySingleFile(out_filename_result_clipReg, out_file_vars); // INV, DUP
+	copySingleFile(out_filename_result_tra, out_file_vars); // TRA
 	out_file_vars.close();
 }
 
@@ -2396,9 +2400,9 @@ void Genome::computeVarNumStatCall(){
 	int32_t total, num_ins, num_del, num_inv, num_dup, num_tra, num_unc;
 	size_t sv_type;
 
-	infile.open(out_filename_call_vars);
+	infile.open(out_filename_result_vars);
 	if(!infile.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_call_vars << endl;
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_result_vars << endl;
 		exit(1);
 	}
 

@@ -177,7 +177,6 @@ int Paras::parseDetectParas(int argc, char **argv)
 
 	while( (opt = getopt(argc, argv, ":b:s:c:o:p:t:M:h")) != -1 ){
 		switch(opt){
-			//case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
