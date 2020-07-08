@@ -28,7 +28,7 @@ Genome::~Genome(){
 // initialization
 void Genome::init(){
 	Chrome *chr;
-	string chrname_tmp;
+	string chrname_tmp, result_prefix;
 
 	out_dir = paras->outDir;
 	if(out_dir.size()>0){
@@ -47,14 +47,16 @@ void Genome::init(){
 		out_dir_result = paras->out_dir_result;
 	}
 
-	out_filename_detect_snv = out_dir_detect + "/" + "genome_SNV_candidates";
-	out_filename_detect_indel = out_dir_detect + "/" + "genome_INDEL_candidate";
-	out_filename_detect_clipReg = out_dir_detect + "/" + "genome_clipReg_candidate";
-	out_filename_result_snv = out_dir_result + "/" + "genome_SNV";
-	out_filename_result_indel = out_dir_result + "/" + "genome_INDEL.bed";
-	out_filename_result_clipReg = out_dir_result + "/" + "genome_clipReg.bed";
-	out_filename_result_tra = out_dir_result + "/" + "genome_TRA.bedpe";
-	out_filename_result_vars = out_dir_result + "/" + "genome_variants.bed";
+	result_prefix = "";
+	if(paras->outFilePrefix.size()) result_prefix = paras->outFilePrefix + "_";
+	out_filename_detect_snv = out_dir_detect + "/" + result_prefix + "genome_SNV_candidates";
+	out_filename_detect_indel = out_dir_detect + "/" + result_prefix + "genome_INDEL_candidate";
+	out_filename_detect_clipReg = out_dir_detect + "/" + result_prefix + "genome_clipReg_candidate";
+	out_filename_result_snv = out_dir_result + "/" + result_prefix + "genome_SNV";
+	out_filename_result_indel = out_dir_result + "/" + result_prefix + "genome_INDEL.bed";
+	out_filename_result_clipReg = out_dir_result + "/" + result_prefix + "genome_clipReg.bed";
+	out_filename_result_tra = out_dir_result + "/" + result_prefix + "genome_TRA.bedpe";
+	out_filename_result_vars = out_dir_result + "/" + result_prefix + "genome_variants.bed";
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
 	// load the fai
@@ -2033,6 +2035,8 @@ vector<size_t> Genome::computeQueryLocTra(varCand *var_cand, mateClipReg_t *clip
 
 // save variants to file
 void Genome::genomeSaveCallSV2File(){
+	mkdir(out_dir_result.c_str(), S_IRWXU | S_IROTH);  // create the directory for final results
+
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
@@ -2111,8 +2115,6 @@ void Genome::saveTraCall2File(){
 void Genome::mergeCallResult(){
 	ofstream out_file_indel, out_file_clipReg, out_file_vars;
 	string header_line_bed, header_line_bedpe;
-
-	mkdir(out_dir_result.c_str(), S_IRWXU | S_IROTH);  // create the directory for final results
 
 	out_file_indel.open(out_filename_result_indel);
 	if(!out_file_indel.is_open()){
