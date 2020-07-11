@@ -1671,9 +1671,9 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("output_v1.7_2.0_20200614/3_call/chr17/blat_chr17_26378479-26465466.sim4")==0)
+		//if(var_cand->alnfilename.compare("output_hg19_v1.7_2.0_M1_20200630/3_call/chr7/blat_chr7_157958504-157967941.sim4")==0)
 		{
-			cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
+			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();
 		}
 	}
@@ -2267,9 +2267,9 @@ void Chrome::chrFillVarseqSingleVec(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec[i];
-		//if(var_cand->ctgfilename.compare("output_v1.7_2.0_20200614/2_assemble/chr17/contig_chr17_26378479-26465466.fa")==0)
+		if(var_cand->ctgfilename.compare("output_hg19_v1.7_2.0_M1_20200630/2_assemble/chr7/refseq_chr7_157958504-157967941.fa")==0)
 		{
-			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
+			cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->fillVarseq();
 		}
 	}
