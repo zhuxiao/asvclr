@@ -1766,7 +1766,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 			reg_tmp = candRegVec[i];
 
 			flag = false;
-			for(j=0; j<processed_reg_vec.size(); j++) if(processed_reg_vec.at(j)==reg){ flag = true; break; }
+			for(j=0; j<(int32_t)processed_reg_vec.size(); j++) if(processed_reg_vec.at(j)==reg){ flag = true; break; }
 
 			if(flag==false){
 				// compute the variant locations
