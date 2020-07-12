@@ -49,6 +49,7 @@ class Genome{
 	private:
 		void init();
 		Chrome* allocateChrome(string& chrname, int chrlen, faidx_t *fai);
+		void sortChromes(vector<Chrome*> &chr_vec, vector<Chrome*> &chr_vec_tmp);
 		int getGenomeSize();
 		void destroyChromeVector();
 		int computeCoverage();

@@ -28,6 +28,7 @@ Genome::~Genome(){
 // initialization
 void Genome::init(){
 	Chrome *chr;
+	vector<Chrome*> chr_vec_tmp;
 	string chrname_tmp, result_prefix;
 
 	out_dir = paras->outDir;
@@ -74,9 +75,12 @@ void Genome::init(){
 		chrname_tmp = header->target_name[i];
 		chr = allocateChrome(chrname_tmp, header->target_len[i], fai);
 		chr->setOutputDir(out_dir_detect, out_dir_assemble, out_dir_call);
-		chromeVector.push_back(chr);
+		chr_vec_tmp.push_back(chr);
 	}
-	chromeVector.shrink_to_fit();
+	chr_vec_tmp.shrink_to_fit();
+
+	// sort chromesomes
+	sortChromes(chromeVector, chr_vec_tmp);
 }
 
 // allocate the Chrome node
@@ -85,6 +89,80 @@ Chrome* Genome::allocateChrome(string& chrname, int chrlen, faidx_t *fai){
 	chr_tmp = new Chrome(chrname, chrlen, fai, paras);
 	if(!chr_tmp){ cerr << "Genome: cannot allocate memory" << endl; exit(1); }
 	return chr_tmp;
+}
+
+// sort chromosomes
+void Genome::sortChromes(vector<Chrome*> &chr_vec, vector<Chrome*> &chr_vec_tmp){
+	int8_t *selected_flag_array;
+	size_t i, j;
+	int32_t idx_chr;
+	Chrome *chr;
+	string chr_str1, chr_str2, head_str, head_str_chr;
+	vector<string> chr_str_vec;
+	bool have_chr_prefix_flag;
+
+	chr_str1 = "chr1_chr2_chr3_chr4_chr5_chr6_chr7_chr8_chr9_chr10_chr11_chr12_chr13_chr14_chr15_chr16_chr17_chr18_chr19_chr20_chr21_chr22_chrX_chrY_chrM";
+	chr_str2 = "1_2_3_4_5_6_7_8_9_10_11_12_13_14_15_16_17_18_19_20_21_22_X_Y_MT";
+
+	selected_flag_array = (int8_t*) calloc(chr_vec_tmp.size(), sizeof(int8_t));
+
+	// determine the have_chr_prefix_flag
+	have_chr_prefix_flag = false;
+	for(i=0; i<chr_vec_tmp.size(); i++){
+		chr = chr_vec_tmp.at(i);
+		if(chr->chrname.compare("chr1")==0){
+			have_chr_prefix_flag = true;
+			break;
+		}
+	}
+
+	if(have_chr_prefix_flag) chr_str_vec = split(chr_str1, "_");
+	else chr_str_vec = split(chr_str2, "_");
+
+	// select chromosomes by 'chr'
+	for(i=0; i<chr_str_vec.size(); i++){
+		idx_chr = -1;
+		for(j=0; j<chr_vec_tmp.size(); j++){
+			chr = chr_vec_tmp.at(j);
+			if(chr->chrname.compare(chr_str_vec.at(i))==0){
+				idx_chr = j;
+				break;
+			}
+		}
+		if(idx_chr!=-1){
+			chr = chr_vec_tmp.at(idx_chr);
+			chr_vec.push_back(chr);
+			selected_flag_array[idx_chr] = 1;
+		}
+	}
+
+	// select chromosomes by 'chrA_*_random'
+	for(i=0; i<chr_str_vec.size(); i++){
+		head_str = chr_str_vec.at(i) + "_";
+		for(j=0; j<chr_vec_tmp.size(); j++){
+			chr = chr_vec_tmp.at(j);
+			head_str_chr = chr->chrname.substr(0, head_str.size());
+			if(head_str_chr.compare(head_str)==0){
+				chr_vec.push_back(chr);
+				selected_flag_array[j] = 1;
+			}
+		}
+	}
+
+	// add unselected items
+	for(i=0; i<chr_vec_tmp.size(); i++){
+		if(selected_flag_array[i]==0){
+			chr = chr_vec_tmp.at(i);
+			chr_vec.push_back(chr);
+		}
+	}
+
+//	for(i=0; i<chr_vec.size(); i++){
+//		chr = chr_vec.at(i);
+//		cout << "[" << i << "]: " << chr->chrname << ", chrlen=" << chr->chrlen << endl;
+//	}
+
+	free(selected_flag_array);
 }
 
 // get genome size
