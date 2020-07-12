@@ -92,7 +92,7 @@ int Genome::getGenomeSize()
 {
     genomeSize = 0;
     for(int i=0; i<header->n_targets; i++) genomeSize += header->target_len[i];
-	return 0;
+	return genomeSize;
 }
 
 // release each chrome in chromeVector
