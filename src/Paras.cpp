@@ -230,8 +230,6 @@ int Paras::parseDetectParas(int argc, char **argv)
 		inBamFile = argv[optind+1];
 
 		for(int i=optind+2; i<argc; i++){
-			cout << "limit region [" << i-optind-2 << "]: " << argv[i] << endl;
-
 			simple_reg_str = argv[i];
 			simple_reg = allocateSimpleReg(simple_reg_str);
 			if(simple_reg) limit_reg_vec.push_back(simple_reg);
@@ -444,8 +442,6 @@ int Paras::parseAllParas(int argc, char **argv)
 		inBamFile = argv[optind+1];
 
 		for(int i=optind+2; i<argc; i++){
-			cout << "limit region [" << i-optind-2 << "]: " << argv[i] << endl;
-
 			simple_reg_str = argv[i];
 			simple_reg = allocateSimpleReg(simple_reg_str);
 			if(simple_reg) limit_reg_vec.push_back(simple_reg);
