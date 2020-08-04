@@ -14,8 +14,8 @@ using namespace std;
 
 // program variables
 #define PROG_NAME					"ASVCLR"
-#define PROG_DESC					"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION				"0.6.6"
+#define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
+#define PROG_VERSION				"0.6.7"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -83,6 +83,10 @@ class Paras
 		size_t misAlnRegLenSum = 0;
 		size_t minClipReadsNumSupportSV;
 
+		// limit SV regions, item format: CHR | CHR:START-END
+		vector<simpleReg_t*> limit_reg_vec;
+		bool limit_reg_process_flag = false;	// true for limit regions; default is false for disable limit regions (i.e. process all regions)
+
 		size_t maxClipRegSize;
 
 		size_t mean_read_len, total_read_num_est;
@@ -112,12 +116,14 @@ class Paras
 	public:
 		Paras();
 		Paras(int argc, char **argv);
+		virtual ~Paras();
 		void initEst();
 		void estimate(size_t op_est);
 		void outputParas();
 		void outputEstParas(string info);
 
 	private:
+		void destroyLimitRegVector();
 		void init();
 		//string getCanuVersion();
 		int checkBamFile();
@@ -132,6 +138,7 @@ class Paras
 		void showCallUsage();
 		void showAllUsage();
 		size_t estimateSinglePara(size_t *arr, size_t n, double threshold, size_t min_val);
+		simpleReg_t* allocateSimpleReg(string &simple_reg_str);
 };
 
 #endif /* SRC_PARAS_H_ */

@@ -136,7 +136,7 @@ void Genome::sortChromes(vector<Chrome*> &chr_vec, vector<Chrome*> &chr_vec_tmp)
 		}
 	}
 
-	// select chromosomes by 'chrA_*_random'
+	// select chromosomes by 'chrA_*'
 	for(i=0; i<chr_str_vec.size(); i++){
 		head_str = chr_str_vec.at(i) + "_";
 		for(j=0; j<chr_vec_tmp.size(); j++){
@@ -156,6 +156,8 @@ void Genome::sortChromes(vector<Chrome*> &chr_vec, vector<Chrome*> &chr_vec_tmp)
 			chr_vec.push_back(chr);
 		}
 	}
+
+	vector<Chrome*>().swap(chr_vec_tmp);	// delete all items
 
 //	for(i=0; i<chr_vec.size(); i++){
 //		chr = chr_vec.at(i);
@@ -503,6 +505,7 @@ int Genome::processAssembleWork(){
 	paras->assemble_reg_workDone_num = 0;
 	num_work = paras->assem_work_vec.size();
 	num_work_per_ten_percent = num_work / paras->num_parts_progress;
+	if(num_work_per_ten_percent==0) num_work_per_ten_percent = 1;
 	for(size_t i=0; i<num_work; i++){
 		assem_work_opt = paras->assem_work_vec.at(i);
 		var_cand_file = getVarcandFile(assem_work_opt->chrname, chromeVector, assem_work_opt->clip_reg_flag);
@@ -563,7 +566,7 @@ int Genome::genomeCall(){
 	// call variants
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("chr7")==0)
+		//if(chr->chrname.compare("chr1")==0)
 		{
 			chr->chrLoadDataCall();
 			chr->chrCall();

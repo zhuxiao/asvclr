@@ -69,6 +69,12 @@ void Block::setOutputDir(string& out_dir_detect_prefix, string& out_dir_assemble
 	out_dir_call = preprocessPipeChar(out_dir_call);
 }
 
+// set limit regions
+void Block::setLimitRegs(vector<simpleReg_t*> &sub_limit_reg_vec){
+	for(size_t i=0; i<sub_limit_reg_vec.size(); i++) this->sub_limit_reg_vec.push_back(sub_limit_reg_vec.at(i));
+	this->sub_limit_reg_vec.shrink_to_fit();
+}
+
 // initialize the base array of the block
 Base *Block::initBaseArray(){
 	covLoader cov_loader(chrname, startPos, endPos, fai);
@@ -530,32 +536,46 @@ int Block::computeAbSigs(){
 // process single region
 int Block::processSingleRegion(size_t startRpos, size_t endRPos, size_t regFlag){
 
+	vector<simpleReg_t*> sub_limit_reg_vec_tmp;
+	bool process_flag;
+
 //	if(startRpos>4534233)
 //		cout << "\t" << chrname << ":" << startRpos << "-" << endRPos << endl;
 
-	// construct a region
-	Region tmp_reg(chrname, startRpos, endRPos, chrlen, startPos, endPos, baseArr+startRpos-startPos, regFlag, paras);
-	tmp_reg.setMeanBlockCov(meanCov);  // set the mean coverage
-
-	// compute the abnormal signatures in a region
-	if(tmp_reg.wholeRefGapFlag==false and isMisAlnReg(tmp_reg)==false){
-		tmp_reg.computeRegAbSigs();
-
-		// detect clip regions
-		tmp_reg.detectHighClipReg();
-
-		// detect indel candidate regions and SNV candidates
-		tmp_reg.detectIndelReg();
-		tmp_reg.detectSNV();
-
-		// copy the indels and SNVs
-		copySVEvents(tmp_reg);
-
-		// output the nums
-		//tmp_reg.printRegAbSigs();
-
-		//cout << "NO: " << tmp_reg.startMidPartPos << "-" << tmp_reg.endMidPartPos << endl;
+	process_flag = true;
+	if(paras->limit_reg_process_flag){
+		if(sub_limit_reg_vec.size()){
+			sub_limit_reg_vec_tmp = getSimpleRegs(chrname, startRpos, endRPos, sub_limit_reg_vec);
+			if(sub_limit_reg_vec_tmp.size()==0) process_flag = false;
+		}else process_flag = false;
 	}
+
+	if(process_flag){
+		// construct a region
+		Region tmp_reg(chrname, startRpos, endRPos, chrlen, startPos, endPos, baseArr+startRpos-startPos, regFlag, paras);
+		tmp_reg.setMeanBlockCov(meanCov);  // set the mean coverage
+
+		// compute the abnormal signatures in a region
+		if(tmp_reg.wholeRefGapFlag==false and isMisAlnReg(tmp_reg)==false){
+			tmp_reg.computeRegAbSigs();
+
+			// detect clip regions
+			tmp_reg.detectHighClipReg();
+
+			// detect indel candidate regions and SNV candidates
+			tmp_reg.detectIndelReg();
+			tmp_reg.detectSNV();
+
+			// copy the indels and SNVs
+			copySVEvents(tmp_reg);
+
+			// output the nums
+			//tmp_reg.printRegAbSigs();
+
+			//cout << "NO: " << tmp_reg.startMidPartPos << "-" << tmp_reg.endMidPartPos << endl;
+		}
+	}
+
 	return 0;
 }
 

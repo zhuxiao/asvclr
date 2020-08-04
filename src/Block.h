@@ -26,6 +26,7 @@ class Block{
 		string chrname;
 		int64_t chrlen, startPos, endPos, winSize;      // 1-based position
 		string workdir, outCovFile;
+		vector<simpleReg_t*> sub_limit_reg_vec;
 
 		Base *baseArr;
 		vector<bam1_t*> alnDataVector;
@@ -61,6 +62,7 @@ class Block{
 		Block(string chrname, size_t chrlen, size_t startPos, size_t endPos, faidx_t *fai, Paras *paras);
 		virtual ~Block();
 		void setOutputDir(string& out_dir_detect_prefix, string& out_dir_assemble_prefix, string& out_dir_call_prefix);
+		void setLimitRegs(vector<simpleReg_t*> &sub_limit_reg_vec);
 		void setRegIngFlag(bool headIgnFlag, bool tailIgnFlag);
 		void blockFillDataEst(size_t op_est);
 		void blockDetect();

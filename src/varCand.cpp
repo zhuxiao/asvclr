@@ -355,12 +355,16 @@ void varCand::assignBestAlnFlag(){
 
 // assign align orientation flag
 void varCand::assignAlnOrientFlag(){
-	int32_t aln_orient = -1;
+	int32_t aln_orient = -1, maxQueryLen;
 	blat_aln_t *blat_aln;
+
+	maxQueryLen = 0;
 	for(size_t i=0; i<blat_aln_vec.size(); i++){
 		blat_aln = blat_aln_vec.at(i);
-		if(blat_aln->best_aln==true)
+		if(blat_aln->best_aln==true and blat_aln->query_len>(size_t)maxQueryLen){
 			aln_orient = blat_aln->aln_orient;
+			maxQueryLen = blat_aln->query_len;
+		}
 	}
 	if(aln_orient!=-1){
 		for(size_t i=0; i<varVec.size(); i++)
@@ -702,6 +706,8 @@ void varCand::determineIndelType(){
 
 					newFlag = false;
 					reg_vec_tmp = findVarvecItemAll(startRefPos, endRefPos, varVec);
+					if(reg_vec_tmp.size()==0) reg_vec_tmp = findVarvecItemAllExtSize(startRefPos, endRefPos, varVec, 50, 50); // try extend size
+
 					if(reg_vec_tmp.size()>0){ // found, true positive, and then update its information
 						for(k=0; k<(int32_t)reg_vec_tmp.size(); k++){
 							reg = reg_vec_tmp.at(k);
@@ -794,7 +800,7 @@ void varCand::callShortVariants(){
 					aln_seg = getAlnSeg(reg);
 					if(aln_seg){
 						// compute local locations
-						local_aln = new localAln_t;
+						local_aln = new localAln_t();
 						local_aln->reg = reg;
 						local_aln->aln_seg = aln_seg;
 						local_aln->startRefPos = local_aln->endRefPos = -1;
@@ -1085,18 +1091,18 @@ void varCand::computeSeqAlignment(localAln_t *local_aln){
 	local_aln->alignResultVec.push_back(subjectAlnResult);
 
 #if ALIGN_DEBUG
-	cout << local_aln->alignResultVec[0] << endl;
-	cout << local_aln->alignResultVec[1] << endl;
-	cout << local_aln->alignResultVec[2] << endl;
+	cout << "Query: " << local_aln->alignResultVec[0] << endl;
+	cout << "       " << local_aln->alignResultVec[1] << endl;
+	cout << "Sbjct: " << local_aln->alignResultVec[2] << endl;
 #endif
 
 	// adjust alignment
 	adjustAlnResult(local_aln);
 
 #if ALIGN_DEBUG
-	cout << local_aln->alignResultVec[0] << endl;
-	cout << local_aln->alignResultVec[1] << endl;
-	cout << local_aln->alignResultVec[2] << endl;
+	cout << "Query: " << local_aln->alignResultVec[0] << endl;
+	cout << "       " << local_aln->alignResultVec[1] << endl;
+	cout << "Sbjct: " << local_aln->alignResultVec[2] << endl;
 #endif
 
 	free(scoreArr);
@@ -1339,9 +1345,9 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 		int32_t len = end_aln_idx_var - start_aln_idx_var + 1;
 		if(len>0){
 			int32_t start_aln_idx_new, end_aln_idx_new;
-			start_aln_idx_new = start_aln_idx_var - 10;
+			start_aln_idx_new = start_aln_idx_var - 100;
 			if(start_aln_idx_new<0) start_aln_idx_new = 0;
-			end_aln_idx_new = len + 30;
+			end_aln_idx_new = len + 300;
 			if(end_aln_idx_new>(int32_t)midseq_aln.size()) end_aln_idx_new = midseq_aln.size();
 			cout << startRefPos_aln << "-" << endRefPos_aln << ", " << start_aln_idx_var << "-" << end_aln_idx_var  << endl;
 			cout << "\t" << ctgseq_aln.substr(start_aln_idx_new, end_aln_idx_new) << endl;
@@ -1722,7 +1728,7 @@ void varCand::mergeNeighboringVariants(vector<reg_t*> &foundRegVec, vector<reg_t
 vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRegVec, vector<reg_t*> &candRegVec){
 	reg_t *reg, *reg_tmp, *reg_new_1, *reg_new_2, *reg_new_3, *reg_new_4;
 	int32_t i, j, idx, same_count, opID1, opID2, startShiftLen, endShiftLen;
-	int32_t startRefPos1, endRefPos1, startQueryPos1, endQueryPos1, startRefPos2, endRefPos2, startQueryPos2, endQueryPos2;
+	int32_t startRefPos1, endRefPos1, startQueryPos1, endQueryPos1, startRefPos2, endRefPos2, startQueryPos2, endQueryPos2, tmp_pos;
 	int32_t new_startRefPos, new_endRefPos, new_startLocalRefPos, new_endLocalRefPos, new_startQueryPos, new_endQueryPos;
 	vector<int32_t> numVec1, numVec2;
 	vector<reg_t*> updatedRegVec[foundRegVec.size()], regVec_tmp, processed_reg_vec;
@@ -1789,7 +1795,19 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						startQueryPos1 = reg_tmp->startQueryPos;
 						endQueryPos1 = reg->startQueryPos - 1;
 					}
-					if(opID1!=0 and startRefPos1<endRefPos1 and startQueryPos1<endQueryPos1){
+					if(startRefPos1>endRefPos1){ // exchange
+						tmp_pos = startRefPos1;
+						startRefPos1 = endRefPos1;
+						endRefPos1 = tmp_pos;
+					}
+					if(startQueryPos1>endQueryPos1){ // exchange
+						tmp_pos = startQueryPos1;
+						startQueryPos1 = endQueryPos1;
+						endQueryPos1 = tmp_pos;
+					}
+
+					//if(opID1!=0 and startRefPos1<endRefPos1 and startQueryPos1<endQueryPos1){
+					if(opID1!=0){
 						numVec1 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos1, endRefPos1, reg_tmp->query_id, startQueryPos1, endQueryPos1, reg->aln_orient, inBamFile, fai);
 						if(numVec1[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec1[1]>0){ // found variant features
 							//if(numVec1[3]>=SV_MIN_DIST and numVec1[3]<endRefPos1-startRefPos1+1)
@@ -1818,7 +1836,19 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						endQueryPos2 = reg_tmp->endQueryPos;
 					}
 
-					if(opID2!=0 and startRefPos2<endRefPos2 and startQueryPos2<endQueryPos2){
+					if(startRefPos2>endRefPos2){ // exchange
+						tmp_pos = startRefPos2;
+						startRefPos2 = endRefPos2;
+						endRefPos2 = tmp_pos;
+					}
+					if(startQueryPos2>endQueryPos2){ // exchange
+						tmp_pos = startQueryPos2;
+						startQueryPos2 = endQueryPos2;
+						endQueryPos2 = tmp_pos;
+					}
+
+					//if(opID2!=0 and startRefPos2<endRefPos2 and startQueryPos2<endQueryPos2){
+					if(opID2!=0){
 						numVec2 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos2, endRefPos2, reg_tmp->query_id, startQueryPos2, endQueryPos2, reg->aln_orient, inBamFile, fai);
 						if(numVec2[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec2[1]>0){ // found variant features
 							//if(numVec2[2]>=SV_MIN_DIST and numVec2[2]<endRefPos2-startRefPos2+1)
@@ -1899,13 +1929,19 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 							reg->endRefPos = new_endRefPos;
 							reg->endLocalRefPos = new_endLocalRefPos;
 							reg->endQueryPos = new_endQueryPos;
+
+							if(isRegValid(reg)){
+								exchangeRegLoc(reg);
+								updatedRegVec[i].push_back(reg);
+								processed_reg_vec.push_back(reg);
+							}
 						}
 
-						if(isRegValid(reg)){
-							exchangeRegLoc(reg);
-							updatedRegVec[i].push_back(reg);
-							processed_reg_vec.push_back(reg);
-						}
+//						if(isRegValid(reg)){
+//							exchangeRegLoc(reg);
+//							updatedRegVec[i].push_back(reg);
+//							processed_reg_vec.push_back(reg);
+//						}
 
 					}else if((opID1==1 or opID1==0) and opID2==2){ // check and split the region
 						reg_new_3 = new reg_t();

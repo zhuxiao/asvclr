@@ -76,7 +76,8 @@ string Chrome::getVarcandClipregFilename(){
 int Chrome::generateChrBlocks(){
 	int pos, begPos, endPos;
 	Block *block_tmp;
-	bool headIgnFlag, tailIgnFlag;
+	bool headIgnFlag, tailIgnFlag, block_process_flag;
+	vector<simpleReg_t*> sub_limit_reg_vec;
 
 	blockNum = 0;
 	pos = 1;
@@ -95,9 +96,19 @@ int Chrome::generateChrBlocks(){
 		if(endPos==chrlen) tailIgnFlag = false;
 		else tailIgnFlag = true;
 
-		block_tmp = allocateBlock(chrname, chrlen, begPos, endPos, fai, headIgnFlag, tailIgnFlag);
-		block_tmp->setOutputDir(out_dir_detect, out_dir_assemble, out_dir_call);
-		blockVector.push_back(block_tmp);
+		// allocate block according to 'process_flag'
+		block_process_flag = true;
+		if(paras->limit_reg_process_flag){
+			sub_limit_reg_vec = getSimpleRegs(chrname, begPos, endPos, paras->limit_reg_vec);
+			if(sub_limit_reg_vec.size()==0) block_process_flag = false;
+		}
+
+		if(block_process_flag){
+			block_tmp = allocateBlock(chrname, chrlen, begPos, endPos, fai, headIgnFlag, tailIgnFlag);
+			block_tmp->setOutputDir(out_dir_detect, out_dir_assemble, out_dir_call);
+			if(paras->limit_reg_process_flag) block_tmp->setLimitRegs(sub_limit_reg_vec);
+			blockVector.push_back(block_tmp);
+		}
 	}
 	blockVector.shrink_to_fit();
 
@@ -1671,7 +1682,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("output_hg19_v1.7_2.0_M1_20200630/3_call/chr7/blat_chr7_157958504-157967941.sim4")==0)
+		//if(var_cand->alnfilename.compare("output_hg19_v1.7_2.0_M1_20200630/3_call/chr1/blat_chr1_801943-810078.sim4")==0)
 		{
 			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();

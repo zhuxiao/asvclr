@@ -57,6 +57,12 @@ typedef struct {
 
 // from Paras.h
 typedef struct {
+	string chrname;
+	int64_t startPos, endPos;	// -1 for CHR format
+}simpleReg_t;
+
+// from Paras.h
+typedef struct {
 	string chrname, readsfilename, contigfilename, refseqfilename, tmpdir;
 	reg_t **var_array;
 	uint32_t arr_size;

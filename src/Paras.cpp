@@ -20,6 +20,19 @@ Paras::Paras(int argc, char **argv)
 	if(checkBamFile()!=0) exit(1);
 }
 
+//Destructor
+Paras::~Paras(){
+	if(!limit_reg_vec.empty()) destroyLimitRegVector();
+}
+
+// free the memory of limited regions
+void Paras::destroyLimitRegVector(){
+	vector<simpleReg_t*>::iterator s_reg;
+	for(s_reg=limit_reg_vec.begin(); s_reg!=limit_reg_vec.end(); s_reg++)
+		delete (*s_reg);   // free each node
+	vector<simpleReg_t*>().swap(limit_reg_vec);
+}
+
 // initialization
 void Paras::init()
 {
@@ -140,25 +153,29 @@ int Paras::parseParas(int argc, char **argv)
 	if (argc < 2) { showUsage(); return 1; }
 
     if (strcmp(argv[1], "-h") == 0 or strcmp(argv[1], "help") == 0 or strcmp(argv[1], "--help") == 0) {
-        if (argc == 2) { showUsage(); return 0; }
+        if (argc == 2) { showUsage(); exit(0); }
         argv++;
         argc = 2;
     }
 
     if (strcmp(argv[1], "detect")==0){
+    	if(argc==2){ showDetectUsage(); exit(0); }
     	command = "detect";
     	return parseDetectParas(argc-1, argv+1);
     }else if(strcmp(argv[1], "assemble")==0){
+    	if(argc==2){ showAssembleUsage(); exit(0); }
     	command = "assemble";
     	return parseAssembleParas(argc-1, argv+1);
     }else if(strcmp(argv[1], "call")==0){
+    	if(argc==2){ showCallUsage(); exit(0); }
     	command = "call";
     	return parseCallParas(argc-1, argv+1);
     }else if(strcmp(argv[1], "all")==0){
+    	if(argc==2){ showAllUsage(); exit(0); }
     	command = "all";
     	return parseAllParas(argc-1, argv+1);
     }else{
-    	cerr << "invalid command " << argv[1] << endl;
+    	cerr << "Error: invalid command " << argv[1] << endl << endl;
     	showUsage(); return 1;
     }
 }
@@ -174,6 +191,8 @@ int Paras::parseDetectParas(int argc, char **argv)
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
 	mask_val = MASK_VAL_DEFAULT;
 	outDir = OUT_DIR;
+	simpleReg_t *simple_reg;
+	string simple_reg_str;
 
 	while( (opt = getopt(argc, argv, ":b:s:c:o:p:t:M:h")) != -1 ){
 		switch(opt){
@@ -205,21 +224,24 @@ int Paras::parseDetectParas(int argc, char **argv)
 		return 1;
 	}
 
-	opt = argc - optind; // the rederence and BAM file on the command line
+	opt = argc - optind; // the reference and BAM file on the command line
 	if(opt>=2) {
 		refFile = argv[optind];
 		inBamFile = argv[optind+1];
+
+		for(int i=optind+2; i<argc; i++){
+			cout << "limit region [" << i-optind-2 << "]: " << argv[i] << endl;
+
+			simple_reg_str = argv[i];
+			simple_reg = allocateSimpleReg(simple_reg_str);
+			if(simple_reg) limit_reg_vec.push_back(simple_reg);
+		}
+		if(limit_reg_vec.size()) limit_reg_process_flag = true;
 	}else{
 		cout << "Error: Please specify the reference file and coordinate-sorted BAM file." << endl << endl;
 		showDetectUsage();
 		return 1;
 	}
-
-//	if(refFile.size()==0){
-//		cout << "Error: Please specify the reference" << endl << endl;
-//		showDetectUsage();
-//		return 1;
-//	}
 
 	return 0;
 }
@@ -242,7 +264,6 @@ int Paras::parseAssembleParas(int argc, char **argv)
 
 	while( (opt = getopt(argc, argv, ":b:S:m:n:c:x:o:p:t:T:M:R:h")) != -1 ){
 		switch(opt){
-			//case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
 			case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -295,12 +316,6 @@ int Paras::parseAssembleParas(int argc, char **argv)
 		return 1;
 	}
 
-//	if(refFile.size()==0){
-//		cout << "Error: Please specify the reference" << endl << endl;
-//		showAssembleUsage();
-//		return 1;
-//	}
-
 	return 0;
 }
 
@@ -319,7 +334,6 @@ int Paras::parseCallParas(int argc, char **argv)
 
 	while( (opt = getopt(argc, argv, ":b:S:m:n:c:o:p:t:M:h")) != -1 ){
 		switch(opt){
-			//case 'f': refFile = optarg; break;
 			case 'b': blockSize = stoi(optarg); break;
 			case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -376,10 +390,11 @@ int Paras::parseAllParas(int argc, char **argv)
 	delete_reads_val = 1;
 	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
 	outDir = OUT_DIR;
+	simpleReg_t *simple_reg;
+	string simple_reg_str;
 
 	while( (opt = getopt(argc, argv, ":b:s:S:m:n:c:x:o:p:t:T:M:R:h")) != -1 ){
 		switch(opt){
-			//case 'f': refFile = optarg; break;
 			case 'b': assemSlideSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
 			case 'S': assemSlideSize = stoi(optarg); break;
@@ -427,6 +442,15 @@ int Paras::parseAllParas(int argc, char **argv)
 	if(opt>=2) {
 		refFile = argv[optind];
 		inBamFile = argv[optind+1];
+
+		for(int i=optind+2; i<argc; i++){
+			cout << "limit region [" << i-optind-2 << "]: " << argv[i] << endl;
+
+			simple_reg_str = argv[i];
+			simple_reg = allocateSimpleReg(simple_reg_str);
+			if(simple_reg) limit_reg_vec.push_back(simple_reg);
+		}
+		if(limit_reg_vec.size()) limit_reg_process_flag = true;
 	}else{
 		cout << "Error: Please specify the reference file and coordinate-sorted BAM file." << endl << endl;
 		showAllUsage();
@@ -447,11 +471,14 @@ void Paras::showUsage()
 {
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [region ...]?" << endl << endl;
+	cout << "Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Coordinate sorted BAM file" << endl << endl;
+	cout << "     REF_FILE     Reference file (required)" << endl;
+	cout << "     BAM_FILE     Coordinate-sorted BAM file" << endl;
+	cout << "     Region       Limit reference region to process: CHR|CHR:START-END." << endl;
+	cout << "                  If unspecified, all reference regions will be " << endl;
+	cout << "                  processed (optional)" << endl << endl;
 
 	cout << "Commands:" << endl;
 	cout << "     detect       detect indel signatures in aligned reads" << endl;
@@ -465,11 +492,14 @@ void Paras::showDetectUsage()
 {
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [region ...]?" << endl << endl;
+	cout << "Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Coordinate sorted BAM file" << endl << endl;
+	cout << "     REF_FILE     Reference file (required)" << endl;
+	cout << "     BAM_FILE     Coordinate-sorted BAM file (required)" << endl;
+	cout << "     Region       Limit reference region to process: CHR|CHR:START-END." << endl;
+	cout << "                  If unspecified, all reference regions will be " << endl;
+	cout << "                  processed (optional)" << endl << endl;
 
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
@@ -477,7 +507,8 @@ void Paras::showDetectUsage()
 	cout << "     -m INT       minimal SV size to detect [2]" << endl;
 	cout << "     -n INT       minimal clipping reads supporting a SV [7]" << endl;
 	cout << "     -c INT       maximal clipping region size to detect [10000]" << endl;
-	cout << "     -o STR       output directory [output]" << endl;
+	//cout << "     -r FILE      limit reference regions to process [null]: CHR|CHR:START-END" << endl;
+	cout << "     -o DIR       output directory [output]" << endl;
 	cout << "     -p STR       prefix of output result files [null]" << endl;
 	cout << "     -t INT       number of concurrent work [1]" << endl;
 	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
@@ -489,11 +520,11 @@ void Paras::showAssembleUsage()
 {
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE> [region ...]?" << endl << endl;
+	cout << "Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Coordinate sorted BAM file" << endl << endl;
+	cout << "     REF_FILE     Reference file (required)" << endl;
+	cout << "     BAM_FILE     Coordinate-sorted BAM file (required)" << endl << endl;
 
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
@@ -501,7 +532,7 @@ void Paras::showAssembleUsage()
 	cout << "     -c INT       maximal clipping region size [10000]" << endl;
 	cout << "     -x FLOAT     expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
 	cout << "                  0 for no coverage sampling" << endl;
-	cout << "     -o STR       output directory [output]" << endl;
+	cout << "     -o DIR       output directory [output]" << endl;
 	cout << "     -p STR       prefix of output result files [null]" << endl;
 	cout << "     -t INT       number of concurrent work [1]" << endl;
 	cout << "     -T INT       limited number of threads for each assemble work [0]:" << endl;
@@ -518,17 +549,17 @@ void Paras::showCallUsage()
 {
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage: asvclr call [options] <REF_FILE> <BAM_FILE> [region ...]?" << endl << endl;
+	cout << "Usage: asvclr call [options] <REF_FILE> <BAM_FILE>" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Coordinate sorted BAM file" << endl << endl;
+	cout << "     REF_FILE     Reference file (required)" << endl;
+	cout << "     BAM_FILE     Coordinate-sorted BAM file (required)" << endl << endl;
 
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -S INT       assemble slide size used in 'assemble' command [10000]" << endl;
 	cout << "     -c INT       maximal clipping region size [10000]" << endl;
-	cout << "     -o STR       output directory [output]" << endl;
+	cout << "     -o DIR       output directory [output]" << endl;
 	cout << "     -p STR       prefix of output result files [null]" << endl;
 	cout << "     -t INT       number of concurrent work [1]" << endl;
 	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
@@ -540,11 +571,14 @@ void Paras::showAllUsage()
 {
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [region ...]?" << endl << endl;
+	cout << "Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "     REF_FILE     Reference file" << endl;
-	cout << "     BAM_FILE     Reference coordinate sorted file" << endl << endl;
+	cout << "     REF_FILE     Reference file (required)" << endl;
+	cout << "     BAM_FILE     Coordinate-sorted file (required)" << endl;
+	cout << "     Region       Limit reference region to process: CHR|CHR:START-END." << endl;
+	cout << "                  If unspecified, all reference regions will be " << endl;
+	cout << "                  processed (optional)" << endl << endl;
 
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
@@ -555,7 +589,7 @@ void Paras::showAllUsage()
 	cout << "     -c INT       maximal clipping region size [10000]" << endl;
 	cout << "     -x FLOAT     expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
 	cout << "                  0 for no coverage sampling" << endl;
-	cout << "     -o STR       output directory [output]" << endl;
+	cout << "     -o DIR       output directory [output]" << endl;
 	cout << "     -p STR       prefix of output result files [null]" << endl;
 	cout << "     -t INT       number of concurrent work [1]" << endl;
 	cout << "     -T INT       limited number of threads for each assemble work [0]:" << endl;
@@ -677,3 +711,35 @@ size_t Paras::estimateSinglePara(size_t *arr, size_t n, double threshold, size_t
 	return val;
 }
 
+// allocate simple region node
+simpleReg_t* Paras::allocateSimpleReg(string &simple_reg_str){
+	simpleReg_t *simple_reg = NULL;
+	vector<string> str_vec, pos_vec;
+	string chrname_tmp;
+	int64_t pos1, pos2;
+
+	str_vec = split(simple_reg_str, ":");
+	if(str_vec.size()){
+		chrname_tmp = str_vec.at(0);
+		if(str_vec.size()==1){
+			pos1 = pos2 = -1;
+		}else if(str_vec.size()==2){
+			pos_vec = split(str_vec.at(1), "-");
+			if(pos_vec.size()==2){
+				pos1 = stoi(pos_vec.at(0));
+				pos2 = stoi(pos_vec.at(1));
+			}else goto fail;
+		}else goto fail;
+	}else goto fail;
+
+	simple_reg = new simpleReg_t();
+	simple_reg->chrname = chrname_tmp;
+	simple_reg->startPos = pos1;
+	simple_reg->endPos = pos2;
+
+	return simple_reg;
+
+fail:
+	cout << "Skipped invalid region: " << simple_reg_str << endl;
+	return NULL;
+}

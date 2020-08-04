@@ -23,7 +23,9 @@ class Chrome{
 	public:
 		Paras *paras;
 		string chrname;
-		int32_t chrlen;
+		int64_t chrlen;
+		bool process_flag;
+
 
 		// output directory
 		string out_dir_detect, out_dir_assemble, out_dir_call;

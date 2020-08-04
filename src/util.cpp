@@ -193,7 +193,7 @@ reg_t* findVarvecItem(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &va
 	return target_reg;
 }
 
-// find the vector item
+// find all the vector item
 vector<reg_t*> findVarvecItemAll(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &varVec){
 	reg_t *reg;
 	vector<reg_t*> reg_vec_ret;
@@ -221,6 +221,22 @@ reg_t* findVarvecItemExtSize(int32_t startRefPos, int32_t endRefPos, vector<reg_
 		}
 	}
 	return target_reg;
+}
+
+// find all the vector item according to extended margin size
+vector<reg_t*> findVarvecItemAllExtSize(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &varVec, int32_t leftExtSize, int32_t rightExtSize){
+	reg_t *reg;
+	vector<reg_t*> reg_vec_ret;
+
+	for(size_t i=0; i<varVec.size(); i++){
+		reg = varVec[i];
+		if((startRefPos+leftExtSize>=reg->startRefPos and startRefPos<=reg->endRefPos+rightExtSize) or (endRefPos+leftExtSize>=reg->startRefPos and endRefPos<=reg->endRefPos+rightExtSize)
+			or (reg->startRefPos+leftExtSize>=startRefPos and reg->startRefPos<=endRefPos+rightExtSize) or (reg->endRefPos+leftExtSize>=startRefPos and reg->endRefPos<=endRefPos+rightExtSize)){
+			// overlap
+			reg_vec_ret.push_back(reg);
+		}
+	}
+	return reg_vec_ret;
 }
 
 // get the vector index
@@ -1226,6 +1242,25 @@ string deleteTailPathChar(string &dirname){
 	}else{
 		return dirname;
 	}
+}
+
+// get simple regions
+vector<simpleReg_t*> getSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec){
+	simpleReg_t *simple_reg;
+	vector<simpleReg_t*> sub_simple_reg_vec;
+
+	for(size_t i=0; i<limit_reg_vec.size(); i++){
+		simple_reg = limit_reg_vec.at(i);
+		if(simple_reg->chrname.compare(chrname)==0){
+			if(simple_reg->startPos==-1 and simple_reg->endPos==-1) // CHR format
+				sub_simple_reg_vec.push_back(simple_reg);
+			else{ // CHR:START-END
+				if(isOverlappedPos(simple_reg->startPos, simple_reg->endPos, begPos, endPos))  // overlap
+					sub_simple_reg_vec.push_back(simple_reg);
+			}
+		}
+	}
+	return sub_simple_reg_vec;
 }
 
 

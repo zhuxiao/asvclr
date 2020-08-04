@@ -61,7 +61,6 @@ class Genome{
 		void saveDetectResultToFile();
 		void mergeDetectResult();
 		int processAssembleWork();
-		//void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag);
 		ofstream* getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, bool clip_reg_flag);
 
 		void recallIndelsFromTRA();

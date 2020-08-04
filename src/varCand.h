@@ -26,7 +26,7 @@ using namespace std;
 #define INVALID_COV_RATIO_THRES				0.5	 // the minimal coverage ratio to determine a invalid blat alignment
 #define MIN_AVER_SIZE_ALN_SEG				1000
 
-#define VAR_ALN_EXTEND_SIZE					200
+#define VAR_ALN_EXTEND_SIZE					1000	// 200
 #define SHORT_VAR_ALN_CHECK_EXTEND_SIZE		20	// 50
 #define MIN_MISMATCH_NUM_SHORT_VAR_CALL		2
 #define MIN_DISAGR_NUM_SHORT_VAR_CALL		1

@@ -26,6 +26,7 @@ size_t getCtgCount(string &contigfilename);
 reg_t* findVarvecItem(int32_t startPos, int32_t endPos, vector<reg_t*> &varVec);
 vector<reg_t*> findVarvecItemAll(int32_t startPos, int32_t endPos, vector<reg_t*> &varVec);
 reg_t* findVarvecItemExtSize(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &varVec, int32_t leftExtSize, int32_t rightExtSize);
+vector<reg_t*> findVarvecItemAllExtSize(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &varVec, int32_t leftExtSize, int32_t rightExtSize);
 int32_t getVectorIdx(reg_t *reg, vector<reg_t*> &varVec);
 reg_t* getOverlappedReg(reg_t *reg, vector<reg_t*> &varVec);
 int32_t getOverlappedRegIdx(reg_t *reg, vector<reg_t*> &varVec);
@@ -65,6 +66,7 @@ void outputAssemWorkOptToFile(vector<assembleWork_opt*> &assem_work_opt_vec);
 string getOldOutDirname(string &filename, string &sub_work_dir);
 string getUpdatedItemFilename(string &filename, string &out_dir, string &old_out_dir);
 string deleteTailPathChar(string &dirname);
+vector<simpleReg_t*> getSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec);
 
 class Time{
 	private:
