@@ -36,14 +36,17 @@ $ asvclr all -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
 ```
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
-Program: ASVCLR (Accurate Structural Variation Caller for Long Reads)
-Version: 0.6.6 (using htslib 1.9)
+Program: ASVCLR (Accurate Structural Variant Caller for Long Reads)
+Version: 0.6.7 (using htslib 1.9)
 
-Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [region ...]?
+Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]
 
 Description:
-     REF_FILE     Reference file
-     BAM_FILE     Reference coordinate sorted file
+     REF_FILE     Reference file (required)
+     BAM_FILE     Coordinate-sorted file (required)
+     Region       Limit reference region to process: CHR|CHR:START-END.
+                  If unspecified, all reference regions will be 
+                  processed (optional)
 
 Options: 
      -b INT       block size [1000000]
@@ -71,14 +74,17 @@ Besides, the overall help information can be shown as below:
 
 ```sh
 $ asvclr
-Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.6.6 (using htslib 1.9)
+Program: asvclr (Accurate Structural Variant Caller for Long Reads)
+Version: 0.6.7 (using htslib 1.9)
 
-Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [region ...]?
+Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]
 
 Description:
-     REF_FILE     Reference file
-     BAM_FILE     Coordinate sorted BAM file
+     REF_FILE     Reference file (required)
+     BAM_FILE     Coordinate-sorted BAM file
+     Region       Limit reference region to process: CHR|CHR:START-END.
+                  If unspecified, all reference regions will be 
+                  processed (optional)
 
 Commands:
      detect       detect indel signatures in aligned reads
@@ -113,15 +119,17 @@ And the help information are shown below:
 
 ```sh
 $ asvclr detect
-Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.6.6 (using htslib 1.9)
+Program: asvclr (Accurate Structural Variant Caller for Long Reads)
+Version: 0.6.7 (using htslib 1.9)
 
-Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [region ...]?
+Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]
 
 Description:
-     REF_FILE     Reference file
-     BAM_FILE     Coordinate sorted BAM file
-
+     REF_FILE     Reference file (required)
+     BAM_FILE     Coordinate-sorted BAM file (required)
+     Region       Limit reference region to process: CHR|CHR:START-END.
+                  If unspecified, all reference regions will be 
+                  processed (optional)
 Options: 
      -b INT       block size [1000000]
      -s INT       detect slide size [500]
@@ -147,14 +155,14 @@ And the help information are shown below:
 
 ```sh
 $ asvclr assemble
-Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.6.6 (using htslib 1.9)
+Program: asvclr (Accurate Structural Variant Caller for Long Reads)
+Version: 0.6.7 (using htslib 1.9)
 
-Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE> [region ...]?
+Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>
 
 Description:
-     REF_FILE     Reference file
-     BAM_FILE     Coordinate sorted BAM file
+     REF_FILE     Reference file (required)
+     BAM_FILE     Coordinate-sorted BAM file (required)
 
 Options: 
      -b INT       block size [1000000]
@@ -190,14 +198,14 @@ And the help information are shown below:
 
 ```sh
 $ asvclr call
-Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 0.6.6 (using htslib 1.9)
+Program: asvclr (Accurate Structural Variant Caller for Long Reads)
+Version: 0.6.7 (using htslib 1.9)
 
-Usage: asvclr call [options] <REF_FILE> <BAM_FILE> [region ...]?
+Usage: asvclr call [options] <REF_FILE> <BAM_FILE>
 
 Description:
-     REF_FILE     Reference file
-     BAM_FILE     Coordinate sorted BAM file
+     REF_FILE     Reference file (required)
+     BAM_FILE     Coordinate-sorted BAM file (required)
 
 Options: 
      -b INT       block size [1000000]
