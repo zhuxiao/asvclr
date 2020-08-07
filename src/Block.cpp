@@ -27,6 +27,7 @@ Block::Block(string chrname, size_t chrlen, size_t startPos, size_t endPos, faid
 	winSize = paras->slideSize * 3;
 	headIgnFlag = false;
 	tailIgnFlag = false;
+	process_flag = true;
 
 	meanCov = 0;
 
@@ -73,6 +74,11 @@ void Block::setOutputDir(string& out_dir_detect_prefix, string& out_dir_assemble
 void Block::setLimitRegs(vector<simpleReg_t*> &sub_limit_reg_vec){
 	for(size_t i=0; i<sub_limit_reg_vec.size(); i++) this->sub_limit_reg_vec.push_back(sub_limit_reg_vec.at(i));
 	this->sub_limit_reg_vec.shrink_to_fit();
+}
+
+// set process flag
+void Block::setProcessFlag(bool process_flag){
+	this->process_flag = process_flag;
 }
 
 // initialize the base array of the block

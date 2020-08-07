@@ -48,6 +48,11 @@ void Genome::init(){
 		out_dir_result = paras->out_dir_result;
 	}
 
+	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IROTH);  // create the directory  for detect command
+	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IROTH);  // create directory for assemble command
+	mkdir(out_dir_call.c_str(), S_IRWXU | S_IROTH);  // create directory for call command
+	mkdir(out_dir_tra.c_str(), S_IRWXU | S_IROTH);  // create the directory for TRA
+
 	result_prefix = "";
 	if(paras->outFilePrefix.size()) result_prefix = paras->outFilePrefix + "_";
 	out_filename_detect_snv = out_dir_detect + "/" + result_prefix + "genome_SNV_candidates";
@@ -59,6 +64,15 @@ void Genome::init(){
 	out_filename_result_tra = out_dir_result + "/" + result_prefix + "genome_TRA.bedpe";
 	out_filename_result_vars = out_dir_result + "/" + result_prefix + "genome_variants.bed";
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
+
+	limit_reg_filename = out_dir_detect + "/" + paras->limit_reg_filename;
+
+	if(paras->limit_reg_process_flag) saveLimitRegsToFile(limit_reg_filename, paras->limit_reg_vec);
+	else {
+		if(paras->command.compare("detect")==0 or paras->command.compare("all")==0){
+			if(isFileExist(limit_reg_filename)) remove(limit_reg_filename.c_str());
+		}else loadLimitRegs();
+	}
 
 	// load the fai
 	fai = fai_load(paras->refFile.c_str());
@@ -81,6 +95,62 @@ void Genome::init(){
 
 	// sort chromesomes
 	sortChromes(chromeVector, chr_vec_tmp);
+}
+
+// save limit regions to file
+void Genome::saveLimitRegsToFile(string &limit_reg_filename, vector<simpleReg_t*> &limit_reg_vec){
+	ofstream outfile;
+	simpleReg_t *simple_reg;
+	string line;
+
+	outfile.open(limit_reg_filename);
+	if(!outfile.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file: " << limit_reg_filename << endl;
+		exit(1);
+	}
+
+	outfile << "#Chr\tStart\tEnd" << endl;
+	for(size_t i=0; i<limit_reg_vec.size(); i++){
+		simple_reg = limit_reg_vec.at(i);
+		line = simple_reg->chrname;
+		if(simple_reg->startPos!=-1 and simple_reg->endPos!=-1) line += "\t" + to_string(simple_reg->startPos) + "\t" + to_string(simple_reg->endPos);
+		outfile << line << endl;
+	}
+	outfile.close();
+}
+
+// load limit regions
+void Genome::loadLimitRegs(){
+	ifstream infile;
+	string line, simple_reg_str, desc;
+	vector<string> str_vec;
+	simpleReg_t *simple_reg;
+
+	// check the file
+	if(isFileExist(limit_reg_filename)){
+		infile.open(limit_reg_filename);
+		if(!infile.is_open()){
+			cerr << __func__ << ": cannot open file " << limit_reg_filename << ", error." << endl;
+			exit(1);
+		}
+
+		while(getline(infile, line)){
+			if(line.size()>0 and line.at(0)!='#'){
+				str_vec = split(line, "\t");
+				simple_reg_str = str_vec.at(0);
+				if(str_vec.size()==3) simple_reg_str += ":" + str_vec.at(1) + "-" + str_vec.at(2);
+				simple_reg = allocateSimpleReg(simple_reg_str);
+				if(simple_reg) paras->limit_reg_vec.push_back(simple_reg);
+			}
+		}
+		infile.close();
+
+		if(paras->limit_reg_vec.size()) {
+			paras->limit_reg_process_flag = true;
+			desc = "Load limit regions to process:";
+			printLimitRegs(paras->limit_reg_vec, desc);
+		}
+	}
 }
 
 // allocate the Chrome node
@@ -233,12 +303,10 @@ void Genome::estimateSVSizeNum(){
 int Genome::genomeDetect(){
 	Time time;
 
-	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IROTH);  // create the directory for detect command
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("chr1")==0)
-		{
+		if(chr->process_flag){
 			cout << "[" << time.getTime() << "]: processing Chr: " << chr->chrname << ", size: " << chr->chrlen << " bp" << endl;
 			chr->chrDetect();
 		}
@@ -417,12 +485,13 @@ void Genome::saveDetectResultToFile(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->chrMergeDetectResultToFile();
+		if(chr->process_flag) chr->chrMergeDetectResultToFile();
 	}
 }
 
 // merge detect result to single file
 void Genome::mergeDetectResult(){
+	Chrome *chr;
 	ofstream out_file_snv, out_file_indel, out_file_clipReg;
 
 	out_file_snv.open(out_filename_detect_snv);
@@ -441,11 +510,13 @@ void Genome::mergeDetectResult(){
 		exit(1);
 	}
 
-	vector<Chrome*>::iterator chr;
-	for(chr=chromeVector.begin(); chr!=chromeVector.end(); chr++){
-		copySingleFile((*chr)->out_filename_detect_indel, out_file_indel); // indel
-		copySingleFile((*chr)->out_filename_detect_snv, out_file_snv); // snv
-		copySingleFile((*chr)->out_filename_detect_clipReg, out_file_clipReg); // clip regions
+	for(size_t i=0; i<chromeVector.size(); i++){
+		chr=chromeVector.at(i);
+		if(chr->process_flag){
+			copySingleFile(chr->out_filename_detect_indel, out_file_indel); // indel
+			copySingleFile(chr->out_filename_detect_snv, out_file_snv); // snv
+			copySingleFile(chr->out_filename_detect_clipReg, out_file_clipReg); // clip regions
+		}
 	}
 
 	out_file_snv.close();
@@ -455,14 +526,12 @@ void Genome::mergeDetectResult(){
 
 // local assembly for genome
 int Genome::genomeLocalAssemble(){
-	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IROTH);  // create directory for assemble command
 	Chrome *chr;
 	Time time;
 
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("1")==0)
-		{
+		if(chr->process_flag){
 			chr->chrLoadDataAssemble();  // load the variation data
 			chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
 		}
@@ -559,14 +628,12 @@ int Genome::genomeCall(){
 	Chrome *chr;
 	Time time;
 
-	mkdir(out_dir_call.c_str(), S_IRWXU | S_IROTH);  // create directory for call command
-
 	cout << "Begin calling variants ..." << endl;
 
 	// call variants
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("chr1")==0)
+		if(chr->process_flag)
 		{
 			chr->chrLoadDataCall();
 			chr->chrCall();
@@ -740,8 +807,6 @@ void Genome::genomeCallTra(){
 	vector<blatAlnTra*> blat_aln_tra_vec;
 
 	cout << "[" << time.getTime() << "]: call genomic translocations ..." << endl;
-
-	mkdir(out_dir_tra.c_str(), S_IRWXU | S_IROTH);  // create the directory for TRA
 
 	generateBlatAlnFilenameTra();
 	blat_aln_tra_vec = loadBlatAlnDataTra();
@@ -1708,7 +1773,7 @@ void Genome::genomeFillVarseq(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("12")==0)
+		if(chr->process_flag)
 			chr->chrFillVarseq();
 	}
 
@@ -1804,11 +1869,8 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 					var_cand_tmp->margin_adjusted_flag = false;
 
 					// assembly status
-					struct stat fileStat;
-					if (stat(var_cand_tmp->ctgfilename.c_str(), &fileStat) == 0)
-						var_cand_tmp->assem_success = true;
-					else
-						var_cand_tmp->assem_success = false;
+					if (isFileExist(var_cand_tmp->ctgfilename)) var_cand_tmp->assem_success = true;
+					else var_cand_tmp->assem_success = false;
 					if(var_cand_tmp->assem_success){
 
 						var_cand_tmp->loadBlatAlnData(); // BLAT align
@@ -1888,12 +1950,8 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 					var_cand_tmp->margin_adjusted_flag = false;
 
 					// assembly status
-					struct stat fileStat;
-					if (stat(var_cand_tmp->ctgfilename.c_str(), &fileStat) == 0)
-						var_cand_tmp->assem_success = true;
-					else
-						var_cand_tmp->assem_success = false;
-
+					if (isFileExist(var_cand_tmp->ctgfilename)) var_cand_tmp->assem_success = true;
+					else var_cand_tmp->assem_success = false;
 					if(var_cand_tmp->assem_success){
 
 						var_cand_tmp->loadBlatAlnData(); // BLAT align
@@ -2121,7 +2179,8 @@ void Genome::genomeSaveCallSV2File(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->saveCallSV2File();
+		if(chr->process_flag)
+			chr->saveCallSV2File();
 	}
 
 	// save TRA
@@ -2196,6 +2255,7 @@ void Genome::saveTraCall2File(){
 void Genome::mergeCallResult(){
 	ofstream out_file_indel, out_file_clipReg, out_file_vars;
 	string header_line_bed, header_line_bedpe;
+	Chrome *chr;
 
 	out_file_indel.open(out_filename_result_indel);
 	if(!out_file_indel.is_open()){
@@ -2219,8 +2279,11 @@ void Genome::mergeCallResult(){
 	out_file_clipReg << header_line_bed << endl;
 
 	for(size_t i=0; i<chromeVector.size(); i++){
-		copySingleFile(chromeVector.at(i)->out_filename_call_indel, out_file_indel); // indel
-		copySingleFile(chromeVector.at(i)->out_filename_call_clipReg, out_file_clipReg); // clip_reg
+		chr = chromeVector.at(i);
+		if(chr->process_flag){
+			copySingleFile(chr->out_filename_call_indel, out_file_indel); // indel
+			copySingleFile(chr->out_filename_call_clipReg, out_file_clipReg); // clip_reg
+		}
 	}
 	out_file_indel.close();
 	out_file_clipReg.close();

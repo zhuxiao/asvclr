@@ -18,12 +18,12 @@ void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector){
 	bam_hdr_t *header;
 
 	if ((in = sam_open(inBamFile.c_str(), "r")) == 0) {
-		cerr << __func__ << ": failed to open " << inBamFile.c_str() << " for reading" << endl;
+		cerr << __func__ << ": failed to open " << inBamFile << " for reading" << endl;
 		exit(1);
 	}
 
 	if ((header = sam_hdr_read(in)) == 0) {
-		cerr << __func__ << ": fail to read the header from " << inBamFile.c_str() << endl;
+		cerr << __func__ << ": fail to read the header from " << inBamFile << endl;
 		exit(1);
 	}
 

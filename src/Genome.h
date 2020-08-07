@@ -29,6 +29,8 @@ class Genome{
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
 		string out_filename_result_snv, out_filename_result_indel, out_filename_result_clipReg, out_filename_result_tra, out_filename_result_vars;
 
+		string limit_reg_filename;
+
 		//vector<varCand*> var_cand_vec;
 
 		string blat_aln_info_filename_tra;
@@ -48,6 +50,8 @@ class Genome{
 
 	private:
 		void init();
+		void saveLimitRegsToFile(string &limit_reg_filename, vector<simpleReg_t*> &limit_reg_vec);
+		void loadLimitRegs();
 		Chrome* allocateChrome(string& chrname, int chrlen, faidx_t *fai);
 		void sortChromes(vector<Chrome*> &chr_vec, vector<Chrome*> &chr_vec_tmp);
 		int getGenomeSize();

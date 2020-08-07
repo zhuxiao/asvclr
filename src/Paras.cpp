@@ -599,6 +599,7 @@ void Paras::showAllUsage()
 
 // output parameters
 void Paras::outputParas(){
+
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
 
@@ -619,6 +620,9 @@ void Paras::outputParas(){
 	else cout << "Mask mis-aligned regions: no" << endl;
 	if(delete_reads_flag) cout << "Delete local temporary reads: yes" << endl << endl;
 	else cout << "Delete local temporary reads: no" << endl << endl;
+
+	string desc = "Limit regions to process:";
+	printLimitRegs(limit_reg_vec, desc);
 }
 
 // output the estimation parameters
@@ -705,37 +709,4 @@ size_t Paras::estimateSinglePara(size_t *arr, size_t n, double threshold, size_t
 	if(val<min_val) val = min_val;
 
 	return val;
-}
-
-// allocate simple region node
-simpleReg_t* Paras::allocateSimpleReg(string &simple_reg_str){
-	simpleReg_t *simple_reg = NULL;
-	vector<string> str_vec, pos_vec;
-	string chrname_tmp;
-	int64_t pos1, pos2;
-
-	str_vec = split(simple_reg_str, ":");
-	if(str_vec.size()){
-		chrname_tmp = str_vec.at(0);
-		if(str_vec.size()==1){
-			pos1 = pos2 = -1;
-		}else if(str_vec.size()==2){
-			pos_vec = split(str_vec.at(1), "-");
-			if(pos_vec.size()==2){
-				pos1 = stoi(pos_vec.at(0));
-				pos2 = stoi(pos_vec.at(1));
-			}else goto fail;
-		}else goto fail;
-	}else goto fail;
-
-	simple_reg = new simpleReg_t();
-	simple_reg->chrname = chrname_tmp;
-	simple_reg->startPos = pos1;
-	simple_reg->endPos = pos2;
-
-	return simple_reg;
-
-fail:
-	cout << "Skipped invalid region: " << simple_reg_str << endl;
-	return NULL;
 }

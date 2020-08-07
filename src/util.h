@@ -67,6 +67,8 @@ string getOldOutDirname(string &filename, string &sub_work_dir);
 string getUpdatedItemFilename(string &filename, string &out_dir, string &old_out_dir);
 string deleteTailPathChar(string &dirname);
 vector<simpleReg_t*> getSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec);
+simpleReg_t* allocateSimpleReg(string &simple_reg_str);
+void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, string &description);
 
 class Time{
 	private:

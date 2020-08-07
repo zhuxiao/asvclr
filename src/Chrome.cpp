@@ -74,11 +74,12 @@ string Chrome::getVarcandClipregFilename(){
 
 // generate the chromosome blocks
 int Chrome::generateChrBlocks(){
-	int pos, begPos, endPos;
+	int64_t pos, begPos, endPos, process_num;
 	Block *block_tmp;
 	bool headIgnFlag, tailIgnFlag, block_process_flag;
 	vector<simpleReg_t*> sub_limit_reg_vec;
 
+	process_num = 0;
 	blockNum = 0;
 	pos = 1;
 	while(pos<=chrlen){
@@ -103,20 +104,23 @@ int Chrome::generateChrBlocks(){
 			if(sub_limit_reg_vec.size()==0) block_process_flag = false;
 		}
 
-		if(block_process_flag){
-			block_tmp = allocateBlock(chrname, chrlen, begPos, endPos, fai, headIgnFlag, tailIgnFlag);
-			block_tmp->setOutputDir(out_dir_detect, out_dir_assemble, out_dir_call);
-			if(paras->limit_reg_process_flag) block_tmp->setLimitRegs(sub_limit_reg_vec);
-			blockVector.push_back(block_tmp);
-		}
+		block_tmp = allocateBlock(chrname, chrlen, begPos, endPos, fai, headIgnFlag, tailIgnFlag, block_process_flag);
+		block_tmp->setOutputDir(out_dir_detect, out_dir_assemble, out_dir_call);
+		if(sub_limit_reg_vec.size()) block_tmp->setLimitRegs(sub_limit_reg_vec);
+		blockVector.push_back(block_tmp);
+
+		if(block_process_flag) process_num ++;
 	}
 	blockVector.shrink_to_fit();
+
+	if(process_num>0) process_flag = true;
+	else  process_flag = false;
 
 	return 0;
 }
 
 // allocate the memory for one block
-Block *Chrome::allocateBlock(string& chrname, size_t chrlen, int startPos, int endPos, faidx_t *fai, bool headIgnFlag, bool tailIgnFlag){
+Block *Chrome::allocateBlock(string& chrname, size_t chrlen, int startPos, int endPos, faidx_t *fai, bool headIgnFlag, bool tailIgnFlag, bool block_process_flag){
 	Block *block_tmp = new Block(chrname, chrlen, startPos, endPos, fai, paras);
 	if(!block_tmp){
 		cerr << "Chrome: cannot allocate memory" << endl;
@@ -124,6 +128,7 @@ Block *Chrome::allocateBlock(string& chrname, size_t chrlen, int startPos, int e
 	}
 	block_tmp->setRegIngFlag(headIgnFlag, tailIgnFlag);
 	block_tmp->setAssembledChrClipRegVec(&assembled_chr_clipReg_vec);
+	block_tmp->setProcessFlag(block_process_flag);
 	return block_tmp;
 }
 
@@ -237,7 +242,7 @@ void Chrome::chrFillDataEst(size_t op_est){
 
 		if(flag){ // valid region
 			//cout << "Est region: " << chrname << ":" << begPos << "-" << endPos << endl;
-			block_tmp = allocateBlock(chrname, chrlen, begPos, endPos, fai, false, false);
+			block_tmp = allocateBlock(chrname, chrlen, begPos, endPos, fai, false, false, true);
 			// fill the data
 			block_tmp->blockFillDataEst(op_est);
 			delete block_tmp;
@@ -266,7 +271,7 @@ int Chrome::chrDetect(){
 	//cout << "[" << time.getTime() << "]: remove FP indels and SNVs in mate clip region on chromosome ..." << endl;
 	removeFPIndelSnvInClipReg(mateClipRegVector);
 
-	// remove redundant Indel for 'detect' command
+	// remove redundant Indels for 'detect' command
 	//cout << "[" << time.getTime() << "]: remove redundant indels on chromosome ..." << endl;
 	removeRedundantIndelDetect();
 
@@ -283,9 +288,9 @@ int Chrome::chrDetect_st(){
 	//Time time;
 	Block* bloc;
 	for(size_t i=0; i<blockVector.size(); i++){
-		//if(i>=48)
+		bloc = blockVector.at(i);
+		if(bloc->process_flag)
 		{
-			bloc = blockVector.at(i);
 			//cout << "[" << time.getTime() << "]: [" << i << "]: detect files:" << bloc->out_dir_detect << "/" << bloc->snvFilenameDetect << ", " << bloc->indelFilenameDetect << endl;
 			bloc->blockDetect();
 		}

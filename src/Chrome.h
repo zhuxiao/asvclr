@@ -89,7 +89,7 @@ class Chrome{
 
 	private:
 		void init();
-		Block *allocateBlock(string& chrname, size_t chrlen, int begPos, int endPos, faidx_t *fai, bool headIgnFlag, bool tailIgnFlag);
+		Block *allocateBlock(string& chrname, size_t chrlen, int begPos, int endPos, faidx_t *fai, bool headIgnFlag, bool tailIgnFlag, bool block_process_flag);
 		void destroyBlockVector();
 		void destroyVarCandVector(vector<varCand*> &var_cand_vec);
 		void destroyMisAlnVector();

@@ -20,9 +20,8 @@ int main(int argc, char **argv) {
 
 	genome.generateGenomeBlocks();
 
-	// detect indels
-	if(paras.command.compare("detect")==0 or paras.command.compare("all")==0)
-	{
+	// detect
+	if(paras.command.compare("detect")==0 or paras.command.compare("all")==0){
 		time.setStartTime();
 		cout << "[" << time.getTime() << "]: detect structural variations ..." << endl;
 		genome.genomeDetect();
@@ -33,8 +32,7 @@ int main(int argc, char **argv) {
 	}
 
 	// assemble
-	if(paras.command.compare("assemble")==0 or paras.command.compare("all")==0)
-	{
+	if(paras.command.compare("assemble")==0 or paras.command.compare("all")==0){
 		time.setStartTime();
 		cout << "[" << time.getTime() << "]: local assemble ..." << endl;
 
@@ -47,8 +45,7 @@ int main(int argc, char **argv) {
 	}
 
 	// call
-	if(paras.command.compare("call")==0 or paras.command.compare("all")==0)
-	{
+	if(paras.command.compare("call")==0 or paras.command.compare("all")==0){
 		time.setStartTime();
 		cout << "[" << time.getTime() << "]: call variants ..." << endl;
 

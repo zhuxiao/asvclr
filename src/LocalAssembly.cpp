@@ -497,7 +497,6 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 	string canu_cmd, assem_prefix, cmd2, cmd3, cmd4, tmp_ctg_filename, gnuplotTested_str, fast_option;
 	int i, genomeSize_Canu, step_size;
 	bool flag;
-	struct stat fileStat;
 	string cmd_limited_threads_str, limited_threads_str;
 
 //	gnuplotTested_str = "";
@@ -509,10 +508,9 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 //		fast_option = " -fast";
 
 	// check the file
-	if (stat(contigfilename.c_str(), &fileStat) == 0)
-		if(fileStat.st_size>0) { // contig was generated successfully previously
-			return true;
-		}
+	flag = isFileExist(contigfilename);
+	if(flag) return true; // contig was generated successfully previously
+
 
 	// generate command string
 	assem_prefix = "assembly";
@@ -540,9 +538,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 		system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
 		// save assembly result and remove temporary files if successfully assembled
-		if (stat(tmp_ctg_filename.c_str(), &fileStat) == 0)
-			if(fileStat.st_size>0) flag = true; // contig generated successfully
-
+		flag = isFileExist(tmp_ctg_filename);
 		if(flag){ // contig generated successfully
 			rename(tmp_ctg_filename.c_str(), contigfilename.c_str());
 			system(cmd4.c_str());  // remove temporary files
@@ -556,9 +552,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
 			// save assembly result and remove temporary files if successfully assembled
-			if (stat(tmp_ctg_filename.c_str(), &fileStat) == 0)
-				if(fileStat.st_size>0) flag = true; // contig generated successfully
-
+			flag = isFileExist(tmp_ctg_filename);
 			if(flag){ // contig generated successfully
 				rename(tmp_ctg_filename.c_str(), contigfilename.c_str());
 				system(cmd4.c_str());  // remove temporary files
@@ -577,7 +571,6 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 	string canu_cmd, assem_prefix, cmd2, cmd3, cmd4, tmp_ctg_filename, gnuplotTested_str, fast_option;
 	int i, genomeSize_Canu, step_size;
 	bool flag;
-	struct stat fileStat;
 	string cmd_limited_threads_str, limited_threads_str;
 
 //	gnuplotTested_str = "";
@@ -589,10 +582,8 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 //		fast_option = " -fast";
 
 	// check the file
-	if (stat(contigfilename.c_str(), &fileStat) == 0)
-		if(fileStat.st_size>0) { // contig was generated successfully previously
-			return true;
-		}
+	flag = isFileExist(contigfilename);
+	if(flag) return true;  // contig was generated successfully previously
 
 	// generate command string
 	assem_prefix = "assembly";
@@ -620,9 +611,7 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 		system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
 		// save assembly result and remove temporary files if successfully assembled
-		if (stat(tmp_ctg_filename.c_str(), &fileStat) == 0)
-			if(fileStat.st_size>0) flag = true; // contig generated successfully
-
+		flag = isFileExist(tmp_ctg_filename);
 		if(flag){ // contig generated successfully
 			rename(tmp_ctg_filename.c_str(), contigfilename.c_str());
 			system(cmd4.c_str());  // remove temporary files
@@ -636,9 +625,7 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
 			// save assembly result and remove temporary files if successfully assembled
-			if (stat(tmp_ctg_filename.c_str(), &fileStat) == 0)
-				if(fileStat.st_size>0) flag = true; // contig generated successfully
-
+			flag = isFileExist(tmp_ctg_filename);
 			if(flag){ // contig generated successfully
 				rename(tmp_ctg_filename.c_str(), contigfilename.c_str());
 				system(cmd4.c_str());  // remove temporary files
@@ -674,11 +661,8 @@ void LocalAssembly::recordAssemblyInfo(ofstream &assembly_info_file){
 	infile.close();
 
 	// assembly status
-	struct stat fileStat;
-	if (stat(contigfilename.c_str(), &fileStat) == 0)
-		assembly_status = ASSEMBLY_SUCCESS;
-	else
-		assembly_status = ASSEMBLY_FAILURE;
+	if (isFileExist(contigfilename)) assembly_status = ASSEMBLY_SUCCESS;
+	else assembly_status = ASSEMBLY_FAILURE;
 
 	line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename + "\t" + left_shift_size_str + "\t" + right_shift_size_str + "\t" + assembly_status;
 

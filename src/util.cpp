@@ -156,11 +156,7 @@ size_t getCtgCount(string &contigfilename){
 	ifstream infile;
 	bool flag = false;
 
-	struct stat fileStat;
-	if (stat(contigfilename.c_str(), &fileStat) == 0)
-		if(fileStat.st_size>0)
-			flag = true;
-
+	flag = isFileExist(contigfilename);
 	ctg_num = 0;
 	if(flag){
 		infile.open(contigfilename);
@@ -1262,6 +1258,57 @@ vector<simpleReg_t*> getSimpleRegs(string &chrname, int64_t begPos, int64_t endP
 	}
 	return sub_simple_reg_vec;
 }
+
+// allocate simple region node
+simpleReg_t* allocateSimpleReg(string &simple_reg_str){
+	simpleReg_t *simple_reg = NULL;
+	vector<string> str_vec, pos_vec;
+	string chrname_tmp;
+	int64_t pos1, pos2;
+
+	str_vec = split(simple_reg_str, ":");
+	if(str_vec.size()){
+		chrname_tmp = str_vec.at(0);
+		if(str_vec.size()==1){
+			pos1 = pos2 = -1;
+		}else if(str_vec.size()==2){
+			pos_vec = split(str_vec.at(1), "-");
+			if(pos_vec.size()==2){
+				pos1 = stoi(pos_vec.at(0));
+				pos2 = stoi(pos_vec.at(1));
+			}else goto fail;
+		}else goto fail;
+	}else goto fail;
+
+	simple_reg = new simpleReg_t();
+	simple_reg->chrname = chrname_tmp;
+	simple_reg->startPos = pos1;
+	simple_reg->endPos = pos2;
+
+	return simple_reg;
+
+fail:
+	cout << "Skipped invalid region: " << simple_reg_str << endl;
+	return NULL;
+}
+
+// print limit regions
+void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, string &description){
+	simpleReg_t *limit_reg;
+	string limit_reg_str;
+
+	if(limit_reg_vec.size()){
+		cout << description << endl;
+		for(size_t i=0; i<limit_reg_vec.size(); i++){
+			limit_reg = limit_reg_vec.at(i);
+			limit_reg_str = limit_reg->chrname;
+			if(limit_reg->startPos!=-1 and limit_reg->endPos!=-1) limit_reg_str += ":" + to_string(limit_reg->startPos) + "-" + to_string(limit_reg->endPos);
+			cout << "region [" << i << "]: " << limit_reg_str << endl;
+		}
+		cout << endl;
+	}
+}
+
 
 
 Time::Time() {
