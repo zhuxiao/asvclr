@@ -306,10 +306,8 @@ int Genome::genomeDetect(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->process_flag){
-			cout << "[" << time.getTime() << "]: processing Chr: " << chr->chrname << ", size: " << chr->chrlen << " bp" << endl;
-			chr->chrDetect();
-		}
+		if(chr->print_flag) cout << "[" << time.getTime() << "]: processing Chr: " << chr->chrname << ", size: " << chr->chrlen << " bp" << endl;
+		chr->chrDetect();
 	}
 
 	// remove redundant translocations
@@ -397,13 +395,13 @@ void Genome::removeInvalidMateClipItem(){
 		for(j=0; j<chr->mateClipRegVector.size(); ){
 			clip_reg = chr->mateClipRegVector.at(j);
 			if(clip_reg->valid_flag==false){
-				if(clip_reg->leftClipReg) delete clip_reg->leftClipReg;
-				if(clip_reg->leftClipReg2) delete clip_reg->leftClipReg2;
-				if(clip_reg->rightClipReg) delete clip_reg->rightClipReg;
-				if(clip_reg->rightClipReg2) delete clip_reg->rightClipReg2;
-				if(clip_reg->var_cand) chr->removeVarCandNodeClipReg(clip_reg->var_cand);  // free item
-				if(clip_reg->left_var_cand_tra) chr->removeVarCandNodeClipReg(clip_reg->left_var_cand_tra);  // free item
-				if(clip_reg->right_var_cand_tra) chr->removeVarCandNodeClipReg(clip_reg->right_var_cand_tra);  // free item
+				if(clip_reg->leftClipReg) { delete clip_reg->leftClipReg; clip_reg->leftClipReg = NULL; }
+				if(clip_reg->leftClipReg2) { delete clip_reg->leftClipReg2; clip_reg->leftClipReg2 = NULL; }
+				if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; }
+				if(clip_reg->rightClipReg2) { delete clip_reg->rightClipReg2; clip_reg->rightClipReg2 = NULL; }
+				if(clip_reg->var_cand) { chr->removeVarCandNodeClipReg(clip_reg->var_cand); clip_reg->var_cand = NULL; } // free item
+				if(clip_reg->left_var_cand_tra) { chr->removeVarCandNodeClipReg(clip_reg->left_var_cand_tra); clip_reg->left_var_cand_tra = NULL; }  // free item
+				if(clip_reg->right_var_cand_tra) { chr->removeVarCandNodeClipReg(clip_reg->right_var_cand_tra); clip_reg->right_var_cand_tra = NULL; }  // free item
 				delete clip_reg;
 				chr->mateClipRegVector.erase(chr->mateClipRegVector.begin()+j);
 			}else j++;
@@ -485,7 +483,7 @@ void Genome::saveDetectResultToFile(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->process_flag) chr->chrMergeDetectResultToFile();
+		if(chr->process_block_num>0) chr->chrMergeDetectResultToFile();
 	}
 }
 
@@ -512,7 +510,8 @@ void Genome::mergeDetectResult(){
 
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr=chromeVector.at(i);
-		if(chr->process_flag){
+		//if(chr->process_block_num)
+		{
 			copySingleFile(chr->out_filename_detect_indel, out_file_indel); // indel
 			copySingleFile(chr->out_filename_detect_snv, out_file_snv); // snv
 			copySingleFile(chr->out_filename_detect_clipReg, out_file_clipReg); // clip regions
@@ -529,13 +528,8 @@ int Genome::genomeLocalAssemble(){
 	Chrome *chr;
 	Time time;
 
-	for(size_t i=0; i<chromeVector.size(); i++){
-		chr = chromeVector.at(i);
-		if(chr->process_flag){
-			chr->chrLoadDataAssemble();  // load the variation data
-			chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
-		}
-	}
+	// load assemble data
+	genomeLoadDataAssemble();
 
 	cout << "Number of previously assembled regions: " << paras->assemble_reg_preDone_num << endl;
 	cout << "Number of regions to be assembled: " << paras->assemble_reg_work_total << endl;
@@ -558,6 +552,24 @@ int Genome::genomeLocalAssemble(){
 	return 0;
 }
 
+void Genome::genomeLoadDataAssemble(){
+	Chrome *chr;
+
+	// load previously assembled information
+	for(size_t i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		chr->loadPrevAssembledInfo();
+	}
+
+	for(size_t i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		//if(chr->chrname.compare("chr14")==0)
+		{
+			chr->chrLoadDataAssemble();  // load the variant data
+			chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
+		}
+	}
+}
 
 // process assemble work using thread pool
 int Genome::processAssembleWork(){
@@ -633,7 +645,7 @@ int Genome::genomeCall(){
 	// call variants
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->process_flag)
+		//if(chr->process_block_num)
 		{
 			chr->chrLoadDataCall();
 			chr->chrCall();
@@ -1773,7 +1785,7 @@ void Genome::genomeFillVarseq(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->process_flag)
+		if(chr->process_block_num)
 			chr->chrFillVarseq();
 	}
 
@@ -2179,7 +2191,7 @@ void Genome::genomeSaveCallSV2File(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->process_flag)
+		//if(chr->process_block_num)
 			chr->saveCallSV2File();
 	}
 
@@ -2280,7 +2292,8 @@ void Genome::mergeCallResult(){
 
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->process_flag){
+		//if(chr->process_block_num)
+		{
 			copySingleFile(chr->out_filename_call_indel, out_file_indel); // indel
 			copySingleFile(chr->out_filename_call_clipReg, out_file_clipReg); // clip_reg
 		}

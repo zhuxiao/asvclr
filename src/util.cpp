@@ -45,6 +45,8 @@ int copySingleFile(string &infilename, ofstream &outfile){
 	ifstream infile;
 	string line;
 
+	if(isFileExist(infilename)==false) return 0;
+
 	infile.open(infilename);
 	if(!infile.is_open()){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << infilename << endl;
@@ -1042,7 +1044,7 @@ string getCallFileHeaderBedpe(){
 	return header_line;
 }
 
-assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, bool clip_reg_flag){
+assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, bool clip_reg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 	assembleWork_opt *assem_work_opt;
 	assem_work_opt = new assembleWork_opt();
 	assem_work_opt->chrname = chrname;
@@ -1057,11 +1059,22 @@ assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, s
 	assem_work_opt->arr_size = varVec.size();
 	for(size_t i=0; i<varVec.size(); i++) assem_work_opt->var_array[i] = varVec.at(i);
 
+	// limit process regions
+	assem_work_opt->limit_reg_process_flag = limit_reg_process_flag;
+	assem_work_opt->limit_reg_array = NULL;
+	assem_work_opt->limit_reg_array_size = 0;
+	if(limit_reg_process_flag and limit_reg_vec.size()){
+		assem_work_opt->limit_reg_array = (simpleReg_t**)malloc(limit_reg_vec.size()*sizeof(simpleReg_t*));
+		assem_work_opt->limit_reg_array_size = limit_reg_vec.size();
+		for(size_t i=0; i<limit_reg_vec.size(); i++) assem_work_opt->limit_reg_array[i] = limit_reg_vec.at(i);
+	}
+
 	return assem_work_opt;
 }
 
 void releaseAssemWorkOpt(assembleWork_opt *assem_work_opt){
 	free(assem_work_opt->var_array);
+	if(assem_work_opt->limit_reg_array_size>0) free(assem_work_opt->limit_reg_array);
 	delete assem_work_opt;
 }
 
@@ -1118,40 +1131,36 @@ void* processSingleAssembleWork(void *arg){
 	assembleWork *assem_work = (assembleWork *)arg;
 	assembleWork_opt *assem_work_opt = assem_work->assem_work_opt;
 	vector<reg_t*> varVec;
-	size_t num_done, num_work, num_work_per_ten_percent;
+	vector<simpleReg_t*> sub_limit_reg_vec;
+	size_t i, num_done, num_work, num_work_per_ten_percent;
 	double percentage;
 	Time time;
 
-	//pthread_mutex_lock(assem_work->p_mtx_assemble_reg_workDone_num);
-	//cout << "assemble region [" << assem_work->work_id << "]: " << assem_work_opt->readsfilename << endl;
-	//pthread_mutex_unlock(assem_work->p_mtx_assemble_reg_workDone_num);
+//	pthread_mutex_lock(assem_work->p_mtx_assemble_reg_workDone_num);
+//	cout << "assemble region [" << assem_work->work_id << "]: " << assem_work_opt->readsfilename << endl;
+//	pthread_mutex_unlock(assem_work->p_mtx_assemble_reg_workDone_num);
 
-	for(size_t i=0; i<assem_work_opt->arr_size; i++) varVec.push_back(assem_work_opt->var_array[i]);
+	for(i=0; i<assem_work_opt->arr_size; i++) varVec.push_back(assem_work_opt->var_array[i]);
+	for(i=0; i<assem_work_opt->limit_reg_array_size; i++) sub_limit_reg_vec.push_back(assem_work_opt->limit_reg_array[i]);
 
-	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->delete_reads_flag);
+	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->delete_reads_flag, assem_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
 	// output progress information
 	pthread_mutex_lock(assem_work->p_mtx_assemble_reg_workDone_num);
 	(*assem_work->p_assemble_reg_workDone_num) ++;
 	num_done = *assem_work->p_assemble_reg_workDone_num;
-	pthread_mutex_unlock(assem_work->p_mtx_assemble_reg_workDone_num);
 
 	num_work = assem_work->num_work;
 	num_work_per_ten_percent = assem_work->num_work_per_ten_percent;
 	if(num_done==1 and num_done!=num_work){
 		num_done = 0;
 		percentage = (double)num_done / num_work * 100;
-		pthread_mutex_lock(assem_work->p_mtx_assemble_reg_workDone_num);
 		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
-		pthread_mutex_unlock(assem_work->p_mtx_assemble_reg_workDone_num);
-
 	}else if(num_done%num_work_per_ten_percent==0 or num_done==num_work){
 		percentage = (double)num_done / num_work * 100;
-
-		pthread_mutex_lock(assem_work->p_mtx_assemble_reg_workDone_num);
 		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
-		pthread_mutex_unlock(assem_work->p_mtx_assemble_reg_workDone_num);
 	}
+	pthread_mutex_unlock(assem_work->p_mtx_assemble_reg_workDone_num);
 
 	delete (assembleWork *)arg;
 
@@ -1159,18 +1168,21 @@ void* processSingleAssembleWork(void *arg){
 }
 
 
-void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag){
+void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 
 	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, 0, expected_cov_assemble, delete_reads_flag);
 
-	// extract the corresponding refseq from reference
-	local_assembly.extractRefseq();
+	local_assembly.setLimitRegs(limit_reg_process_flag, limit_reg_vec);
+	if(local_assembly.assem_success_preDone_flag==false){
+		// extract the corresponding refseq from reference
+		local_assembly.extractRefseq();
 
-	// extract the reads data from BAM file
-	local_assembly.extractReadsDataFromBAM();
+		// extract the reads data from BAM file
+		local_assembly.extractReadsDataFromBAM();
 
-	// local assembly using Canu
-	local_assembly.localAssembleCanu();
+		// local assembly using Canu
+		local_assembly.localAssembleCanu();
+	}
 
 	// record assembly information
 	local_assembly.recordAssemblyInfo(assembly_info_file);
@@ -1179,7 +1191,7 @@ void performLocalAssembly(string &readsfilename, string &contigfilename, string 
 	varVec.clear();
 }
 
-void outputAssemWorkOptToFile(vector<assembleWork_opt*> &assem_work_opt_vec){
+void outputAssemWorkOptToFile_debug(vector<assembleWork_opt*> &assem_work_opt_vec){
 	assembleWork_opt *assem_work_opt;
 	reg_t *reg;
 	for(size_t i=0; i<assem_work_opt_vec.size(); i++){
@@ -1240,23 +1252,119 @@ string deleteTailPathChar(string &dirname){
 	}
 }
 
-// get simple regions
-vector<simpleReg_t*> getSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec){
+// get overlapped simple regions
+vector<simpleReg_t*> getOverlappedSimpleRegsExt(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec, int32_t ext_size){
 	simpleReg_t *simple_reg;
 	vector<simpleReg_t*> sub_simple_reg_vec;
+	bool flag;
+	int64_t new_startRegPos, new_endRegPos;
 
-	for(size_t i=0; i<limit_reg_vec.size(); i++){
-		simple_reg = limit_reg_vec.at(i);
-		if(simple_reg->chrname.compare(chrname)==0){
-			if(simple_reg->startPos==-1 and simple_reg->endPos==-1) // CHR format
-				sub_simple_reg_vec.push_back(simple_reg);
-			else{ // CHR:START-END
-				if(isOverlappedPos(simple_reg->startPos, simple_reg->endPos, begPos, endPos))  // overlap
-					sub_simple_reg_vec.push_back(simple_reg);
+	if(chrname.size()){
+		for(size_t i=0; i<limit_reg_vec.size(); i++){
+			simple_reg = limit_reg_vec.at(i);
+			flag = false;
+			if(simple_reg->chrname.compare(chrname)==0){
+				if((begPos==-1 and endPos==-1) or (simple_reg->startPos==-1 and simple_reg->endPos==-1)) flag = true;
+				else{
+					new_startRegPos = simple_reg->startPos - ext_size;
+					if(new_startRegPos<1) new_startRegPos = 1;
+					new_endRegPos = simple_reg->endPos + ext_size;
+					if(isOverlappedPos(begPos, endPos, new_startRegPos, new_endRegPos)) flag = true;
+				}
+
+				if(flag) sub_simple_reg_vec.push_back(simple_reg);
 			}
 		}
 	}
+
 	return sub_simple_reg_vec;
+}
+
+// get overlapped simple regions
+vector<simpleReg_t*> getOverlappedSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec){
+	simpleReg_t *simple_reg;
+	vector<simpleReg_t*> sub_simple_reg_vec;
+	bool flag;
+
+
+	if(chrname.size()){
+		for(size_t i=0; i<limit_reg_vec.size(); i++){
+			simple_reg = limit_reg_vec.at(i);
+			flag = false;
+			if(simple_reg->chrname.compare(chrname)==0){
+				if((begPos==-1 and endPos==-1) or (simple_reg->startPos==-1 and simple_reg->endPos==-1)) flag = true;
+				else if(isOverlappedPos(begPos, endPos, simple_reg->startPos, simple_reg->endPos)) flag = true;
+
+				if(flag) sub_simple_reg_vec.push_back(simple_reg);
+			}
+		}
+	}
+
+	return sub_simple_reg_vec;
+}
+
+// get fully contained simple regions
+vector<simpleReg_t*> getFullyContainedSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec){
+	simpleReg_t *simple_reg;
+	vector<simpleReg_t*> sub_simple_reg_vec;
+	bool flag;
+
+	if(chrname.size()){
+		for(size_t i=0; i<limit_reg_vec.size(); i++){
+			simple_reg = limit_reg_vec.at(i);
+			flag = false;
+			if(simple_reg->chrname.compare(chrname)==0){
+				if((begPos==-1 and endPos==-1) and (simple_reg->startPos==-1 and simple_reg->endPos==-1)){ // chr, chr --> true
+					flag = true;
+				}else if(simple_reg->startPos==-1 and simple_reg->endPos==-1){ // chr:start-end, chr --> true
+					flag = true;
+				}else{ // CHR:START-END fully contained in 'simple_reg'
+					if(isFullyContainedReg(chrname, begPos, endPos, simple_reg->chrname, simple_reg->startPos, simple_reg->endPos))
+						flag = true;
+				}
+			}
+			if(flag) sub_simple_reg_vec.push_back(simple_reg);
+		}
+	}
+	return sub_simple_reg_vec;
+}
+
+// determine whether region1 is fully contained in region2
+bool isFullyContainedReg(string &chrname1, int64_t begPos1,  int64_t endPos1, string &chrname2, int64_t startPos2, int64_t endPos2){
+	bool flag = false;
+	if(chrname1.compare(chrname2)==0 and begPos1>=startPos2 and endPos1<=endPos2) flag = true;
+	return flag;
+}
+
+// get simple regions whose region contain the given start or end position
+vector<simpleReg_t*> getPosContainedSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec){
+	simpleReg_t *simple_reg;
+	vector<simpleReg_t*> sub_simple_reg_vec;
+	bool flag;
+
+	if(chrname.size()){
+		for(size_t i=0; i<limit_reg_vec.size(); i++){
+			simple_reg = limit_reg_vec.at(i);
+			flag = false;
+			if(simple_reg->chrname.compare(chrname)==0){
+				if(simple_reg->startPos==-1 and simple_reg->endPos==-1){ // pos, chr --> true
+					flag = true;
+				}else if((begPos>=simple_reg->startPos and begPos<=simple_reg->endPos) or (endPos>=simple_reg->startPos and endPos<=simple_reg->endPos)){
+					flag = true;
+				}
+			}
+			if(flag) sub_simple_reg_vec.push_back(simple_reg);
+		}
+	}
+
+	return sub_simple_reg_vec;
+}
+
+// determine whether the start position is contained in region2
+bool isPosContained(string &chrname1, int64_t begPos1, string &chrname2, int64_t startPos2, int64_t endPos2){
+	bool flag = false;
+	if(chrname1.compare(chrname2)==0 and begPos1>=startPos2 and begPos1<=endPos2) flag = true;
+	return flag;
 }
 
 // allocate simple region node
@@ -1292,6 +1400,14 @@ fail:
 	return NULL;
 }
 
+// free the memory of limited regions
+void destroyLimitRegVector(vector<simpleReg_t*> &limit_reg_vec){
+	vector<simpleReg_t*>::iterator s_reg;
+	for(s_reg=limit_reg_vec.begin(); s_reg!=limit_reg_vec.end(); s_reg++)
+		delete (*s_reg);   // free each node
+	vector<simpleReg_t*>().swap(limit_reg_vec);
+}
+
 // print limit regions
 void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, string &description){
 	simpleReg_t *limit_reg;
@@ -1309,6 +1425,84 @@ void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, string &description){
 	}
 }
 
+string getLimitRegStr(vector<simpleReg_t*> &limit_reg_vec){
+	simpleReg_t *limit_reg;
+	string limit_reg_str;
+
+	if(limit_reg_vec.size()){
+		limit_reg = limit_reg_vec.at(0);
+		limit_reg_str = limit_reg->chrname;
+		if(limit_reg->startPos!=-1 and limit_reg->endPos!=-1) limit_reg_str += ":" + to_string(limit_reg->startPos) + "-" + to_string(limit_reg->endPos);
+		for(size_t i=1; i<limit_reg_vec.size(); i++){
+			limit_reg = limit_reg_vec.at(i);
+			limit_reg_str = limit_reg->chrname;
+			if(limit_reg->startPos!=-1 and limit_reg->endPos!=-1) limit_reg_str += ":" + to_string(limit_reg->startPos) + "-" + to_string(limit_reg->endPos);
+			limit_reg_str += ":" + limit_reg_str;
+		}
+	}
+
+	return limit_reg_str;
+}
+
+// get region by given file name
+void getRegByFilename(simpleReg_t *reg, string &filename, string &pattern_str){
+	string simple_filename, chr_pos_str, chr_str, pos_str;
+	vector<string> pos_vec;
+	size_t pos, pattern_size;
+
+	reg->chrname = "";
+	reg->startPos = reg->endPos = -1;
+	pattern_size = pattern_str.size();
+
+	pos = filename.find_last_of("/");			// path/pattern_chr_start-end
+	simple_filename = filename.substr(pos+1);	// pattern_chr_start-end
+	pos = simple_filename.find(pattern_str);
+	chr_pos_str = simple_filename.substr(pos+pattern_size+1); // chr_start-end
+	pos = chr_pos_str.find_last_of("_");
+	chr_str = chr_pos_str.substr(0, pos);
+	pos_str = chr_pos_str.substr(pos+1);
+	pos_vec = split(pos_str, "-");
+
+	reg->chrname = chr_str;
+	reg->startPos = stoi(pos_vec.at(0));
+	reg->endPos = stoi(pos_vec.at(1));
+}
+
+// extract simple regions by string formated regions
+vector<simpleReg_t*> extractSimpleRegsByStr(string &regs_str){
+	vector<simpleReg_t*> limit_reg_vec;
+	simpleReg_t *simple_reg;
+	vector<string> reg_vec, chr_pos_vec, pos_vec;
+	string reg_str, chrname_reg;
+	int64_t start_pos, end_pos;
+
+	reg_vec = split(regs_str, ";");
+	for(size_t i=0; i<reg_vec.size(); i++){
+		reg_str = reg_vec.at(i);	// CHR or CHR:START-END
+
+		chr_pos_vec = split(reg_str, ":");
+		chrname_reg = chr_pos_vec.at(0);
+		if(chr_pos_vec.size()==1)
+			start_pos = end_pos = -1;
+		else if(chr_pos_vec.size()==2){
+			pos_vec = split(chr_pos_vec.at(1), "-");
+			start_pos = stoi(pos_vec.at(0));
+			end_pos = stoi(pos_vec.at(1));
+		}else{
+			cerr << __func__ << ", line=" << __LINE__ << ", invalid simple region: " << reg_str << ", error!" << endl;
+			exit(1);
+		}
+
+		simple_reg = new simpleReg_t();
+		simple_reg->chrname = chrname_reg;
+		simple_reg->startPos = start_pos;
+		simple_reg->endPos = end_pos;
+
+		limit_reg_vec.push_back(simple_reg);
+	}
+
+	return limit_reg_vec;
+}
 
 
 Time::Time() {

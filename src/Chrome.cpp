@@ -38,6 +38,8 @@ Chrome::~Chrome(){
 // initialization
 void Chrome::init(){
 	blockNum = 0;
+	process_block_num = 0;
+	print_flag = true;
 }
 
 // set the output directory
@@ -74,12 +76,12 @@ string Chrome::getVarcandClipregFilename(){
 
 // generate the chromosome blocks
 int Chrome::generateChrBlocks(){
-	int64_t pos, begPos, endPos, process_num;
+	int64_t pos, begPos, endPos;
 	Block *block_tmp;
 	bool headIgnFlag, tailIgnFlag, block_process_flag;
 	vector<simpleReg_t*> sub_limit_reg_vec;
 
-	process_num = 0;
+	process_block_num = 0;
 	blockNum = 0;
 	pos = 1;
 	while(pos<=chrlen){
@@ -100,7 +102,8 @@ int Chrome::generateChrBlocks(){
 		// allocate block according to 'process_flag'
 		block_process_flag = true;
 		if(paras->limit_reg_process_flag){
-			sub_limit_reg_vec = getSimpleRegs(chrname, begPos, endPos, paras->limit_reg_vec);
+			//sub_limit_reg_vec = getSimpleRegs(chrname, begPos, endPos, paras->limit_reg_vec);
+			sub_limit_reg_vec = getOverlappedSimpleRegs(chrname, begPos, endPos, paras->limit_reg_vec);
 			if(sub_limit_reg_vec.size()==0) block_process_flag = false;
 		}
 
@@ -109,12 +112,12 @@ int Chrome::generateChrBlocks(){
 		if(sub_limit_reg_vec.size()) block_tmp->setLimitRegs(sub_limit_reg_vec);
 		blockVector.push_back(block_tmp);
 
-		if(block_process_flag) process_num ++;
+		if(block_process_flag) process_block_num ++;
 	}
 	blockVector.shrink_to_fit();
 
-	if(process_num>0) process_flag = true;
-	else  process_flag = false;
+	if(process_block_num>0) print_flag = true;
+	else  print_flag = false;
 
 	return 0;
 }
@@ -486,6 +489,16 @@ void Chrome::processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, 
 			}
 		}
 	}else{
+		// delete mate clip region
+		if(mate_clip_reg.leftClipReg) { delete mate_clip_reg.leftClipReg; mate_clip_reg.leftClipReg = NULL; }
+		if(mate_clip_reg.leftClipReg2) { delete mate_clip_reg.leftClipReg2; mate_clip_reg.leftClipReg2 = NULL; }
+		if(mate_clip_reg.rightClipReg) { delete mate_clip_reg.rightClipReg; mate_clip_reg.rightClipReg = NULL; }
+		if(mate_clip_reg.rightClipReg2) { delete mate_clip_reg.rightClipReg2; mate_clip_reg.rightClipReg2 = NULL; }
+		if(mate_clip_reg.var_cand) { removeVarCandNodeClipReg(mate_clip_reg.var_cand); mate_clip_reg.var_cand = NULL; } // free item
+		if(mate_clip_reg.left_var_cand_tra) { removeVarCandNodeClipReg(mate_clip_reg.left_var_cand_tra); mate_clip_reg.left_var_cand_tra = NULL; }  // free item
+		if(mate_clip_reg.right_var_cand_tra) { removeVarCandNodeClipReg(mate_clip_reg.right_var_cand_tra); mate_clip_reg.right_var_cand_tra = NULL; }  // free item
+
+		// add the region into indel vector
 		reg = new reg_t();
 		reg->chrname = chrname;
 		reg->startRefPos = clip_reg->startRefPos;
@@ -502,7 +515,7 @@ void Chrome::processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, 
 
 		// get position
 		idx_tmp = -1;
-		bloc = blockVector.at(computeBlocID(clip_reg->startRefPos));
+		bloc = computeBlocByPos(clip_reg->startRefPos, blockVector);
 		for(i=0; i<bloc->indelVector.size(); i++){
 			reg_tmp = bloc->indelVector.at(i);
 			if(reg->startRefPos<reg_tmp->startRefPos){
@@ -1121,13 +1134,22 @@ void Chrome::chrMergeDetectResultToFile(){
 
 // set assembly information file for local assembly
 void Chrome::chrSetVarCandFiles(){
-	string line, new_line, tmp_filename, header_line, old_out_dir, refseqfilename, contigfilename, readsfilename;
-	vector<string> str_vec;
+	string line, new_line, tmp_filename, header_line, old_out_dir, refseqfilename, contigfilename, readsfilename, pattern_str, limit_reg_str;
+	vector<string> str_vec, var_str, var_str1, var_str2;
 	ifstream infile;
 	size_t i;
+	simpleReg_t *simple_reg, *prev_simple_reg;
+	vector<simpleReg_t*> sub_limit_reg_vec, prev_limit_reg_vec, prev_limit_reg_vec_tmp, pos_limit_reg_vec;
+	bool flag, pos_contained_flag;
 
 	// indel
 	if(isFileExist(var_cand_indel_filename)){
+
+		if(paras->limit_reg_process_flag){
+			pattern_str = REFSEQ_PATTERN;
+			simple_reg = new simpleReg_t();
+		}
+
 		tmp_filename = var_cand_indel_filename + "_tmp";
 		rename(var_cand_indel_filename.c_str(), tmp_filename.c_str());
 
@@ -1158,10 +1180,56 @@ void Chrome::chrSetVarCandFiles(){
 					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
 					readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
 
-					new_line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename;
-					for(i=3; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+					flag = true;
+					pos_contained_flag = false;
+					if(paras->limit_reg_process_flag) {
+						getRegByFilename(simple_reg, refseqfilename, pattern_str);
+						//sub_limit_reg_vec = getSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+						sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+						if(sub_limit_reg_vec.size()==0){
+							flag = false;
+							prev_limit_reg_vec = extractSimpleRegsByStr(str_vec.at(8));
+							for(i=0; i<prev_limit_reg_vec.size(); i++){
+								prev_simple_reg = prev_limit_reg_vec.at(i);
+								//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, paras->limit_reg_vec);
+								prev_limit_reg_vec_tmp = getFullyContainedSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, paras->limit_reg_vec);
+								if(prev_limit_reg_vec_tmp.size()){
+									flag = true;
+									break;
+								}
+							}
 
-					var_cand_indel_file << new_line << endl;
+							if(flag==false){ // position contained
+								pos_limit_reg_vec = getPosContainedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+								if(pos_limit_reg_vec.size()){
+									flag = true;
+									pos_contained_flag = true;
+								}
+							}
+						}
+					}
+
+					if(flag){
+						new_line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename;
+						for(i=3; i<=7; i++) new_line += "\t" + str_vec.at(i);
+
+						// limit regions
+						if(paras->limit_reg_process_flag){
+							if(sub_limit_reg_vec.size()) limit_reg_str = getLimitRegStr(sub_limit_reg_vec);
+							else {
+								if(pos_contained_flag==false) limit_reg_str = getLimitRegStr(prev_limit_reg_vec);
+								else limit_reg_str = getLimitRegStr(pos_limit_reg_vec);
+							}
+						}else limit_reg_str = LIMIT_REG_ALL_STR;
+						new_line += "\t" + limit_reg_str;
+
+						// other fields
+						for(i=9; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+
+						var_cand_indel_file << new_line << endl;
+					}
+
+					if(!prev_limit_reg_vec.empty()) destroyLimitRegVector(prev_limit_reg_vec);
 				}else
 					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE', skipped!" << endl;
 			}
@@ -1169,6 +1237,7 @@ void Chrome::chrSetVarCandFiles(){
 
 		infile.close();
 		remove(tmp_filename.c_str());
+		if(paras->limit_reg_process_flag) delete simple_reg;
 	}else{
 		var_cand_indel_file.open(var_cand_indel_filename);
 		if(!var_cand_indel_file.is_open()){
@@ -1182,6 +1251,12 @@ void Chrome::chrSetVarCandFiles(){
 
 	// clipReg
 	if(isFileExist(var_cand_clipReg_filename)){
+
+		if(paras->limit_reg_process_flag){
+			pattern_str = CLIPREG_PATTERN;
+			simple_reg = new simpleReg_t();
+		}
+
 		tmp_filename = var_cand_clipReg_filename + "_tmp";
 		rename(var_cand_clipReg_filename.c_str(), tmp_filename.c_str());
 
@@ -1212,10 +1287,55 @@ void Chrome::chrSetVarCandFiles(){
 					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
 					readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
 
-					new_line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename;
-					for(i=3; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+					flag = true;
+					pos_contained_flag = false;
+					if(paras->limit_reg_process_flag) {
+						getRegByFilename(simple_reg, refseqfilename, pattern_str);
+						//sub_limit_reg_vec = getSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+						sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+						if(sub_limit_reg_vec.size()==0) {
+							flag = false;
+							prev_limit_reg_vec = extractSimpleRegsByStr(str_vec.at(8));
+							for(i=0; i<prev_limit_reg_vec.size(); i++){
+								prev_simple_reg = prev_limit_reg_vec.at(i);
+								//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, paras->limit_reg_vec);
+								prev_limit_reg_vec_tmp = getFullyContainedSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, paras->limit_reg_vec);
+								if(prev_limit_reg_vec_tmp.size()){
+									flag = true;
+									break;
+								}
+							}
+							if(flag==false){ // position contained
+								pos_limit_reg_vec = getPosContainedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+								if(pos_limit_reg_vec.size()){
+									flag = true;
+									pos_contained_flag = true;
+								}
+							}
+						}
+					}
 
-					var_cand_clipReg_file << new_line << endl;
+					if(flag){
+						new_line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename;
+						for(i=3; i<=7; i++) new_line += "\t" + str_vec.at(i);
+
+						// limit regions
+						if(paras->limit_reg_process_flag){
+							if(sub_limit_reg_vec.size()) limit_reg_str = getLimitRegStr(sub_limit_reg_vec);
+							else {
+								if(pos_contained_flag==false) limit_reg_str = getLimitRegStr(prev_limit_reg_vec);
+								else limit_reg_str = getLimitRegStr(pos_limit_reg_vec);
+							}
+						}else limit_reg_str = LIMIT_REG_ALL_STR;
+						new_line += "\t" + limit_reg_str;
+
+						// other fields
+						for(i=9; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+
+						var_cand_clipReg_file << new_line << endl;
+					}
+
+					if(!prev_limit_reg_vec.empty()) destroyLimitRegVector(prev_limit_reg_vec);
 				}else
 					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
 			}
@@ -1223,6 +1343,7 @@ void Chrome::chrSetVarCandFiles(){
 
 		infile.close();
 		remove(tmp_filename.c_str());
+		if(paras->limit_reg_process_flag) delete simple_reg;
 	}else{
 		var_cand_clipReg_file.open(var_cand_clipReg_filename);
 		if(!var_cand_clipReg_file.is_open()){
@@ -1235,9 +1356,8 @@ void Chrome::chrSetVarCandFiles(){
 	}
 
 	vector<Block*>::iterator bloc;
-	for(bloc=blockVector.begin(); bloc!=blockVector.end(); bloc++){
+	for(bloc=blockVector.begin(); bloc!=blockVector.end(); bloc++)
 		(*bloc)->setVarCandFiles(&var_cand_indel_file, &var_cand_clipReg_file);
-	}
 }
 
 // reset assembly information file for local assembly
@@ -1286,26 +1406,35 @@ void Chrome::chrLoadDataAssemble(){
 	// initialize block information
 	for(i=0; i<mateClipRegVector.size(); i++){
 		mate_clip_reg = mateClipRegVector.at(i);
-		if(mate_clip_reg->leftClipReg and mate_clip_reg->leftClipReg->chrname.compare(chrname)==0) tmp_bloc = blockVector.at(computeBlocID(mate_clip_reg->leftClipReg->startRefPos));  // get the block
-		else if(mate_clip_reg->rightClipReg and mate_clip_reg->rightClipReg->chrname.compare(chrname)==0) tmp_bloc = blockVector.at(computeBlocID(mate_clip_reg->rightClipReg->startRefPos));  // get the block
-		else if(mate_clip_reg->leftClipReg2 and mate_clip_reg->leftClipReg2->chrname.compare(chrname)==0) tmp_bloc = blockVector.at(computeBlocID(mate_clip_reg->leftClipReg2->startRefPos));  // get the block
-		else if(mate_clip_reg->rightClipReg2 and mate_clip_reg->rightClipReg2->chrname.compare(chrname)==0) tmp_bloc = blockVector.at(computeBlocID(mate_clip_reg->rightClipReg2->startRefPos));  // get the block
+		if(mate_clip_reg->leftClipReg and mate_clip_reg->leftClipReg->chrname.compare(chrname)==0) tmp_bloc = computeBlocByPos(mate_clip_reg->leftClipReg->startRefPos, blockVector);  // get the block
+		else if(mate_clip_reg->rightClipReg and mate_clip_reg->rightClipReg->chrname.compare(chrname)==0) tmp_bloc = computeBlocByPos(mate_clip_reg->rightClipReg->startRefPos, blockVector);  // get the block
+		else if(mate_clip_reg->leftClipReg2 and mate_clip_reg->leftClipReg2->chrname.compare(chrname)==0) tmp_bloc = computeBlocByPos(mate_clip_reg->leftClipReg2->startRefPos, blockVector);  // get the block
+		else if(mate_clip_reg->rightClipReg2 and mate_clip_reg->rightClipReg2->chrname.compare(chrname)==0) tmp_bloc = computeBlocByPos(mate_clip_reg->rightClipReg2->startRefPos, blockVector);  // get the block
 		tmp_bloc->mateClipRegVector.push_back(mate_clip_reg);
 	}
-
-	// load previous assembly information
-	loadPrevAssembledInfo(false);
-	loadPrevAssembledInfo(true);
 }
 
 // load detected indel data for local assembly
 void Chrome::chrLoadIndelDataAssemble(){
+	vector<simpleReg_t*> limit_reg_vec;
+	//if(paras->limit_reg_process_flag) limit_reg_vec = getSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
+	if(paras->limit_reg_process_flag) limit_reg_vec = getOverlappedSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
+	chrLoadIndelData(paras->limit_reg_process_flag, limit_reg_vec);
+}
+
+// load detected indel data
+void Chrome::chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 	string line;
 	vector<string> str_vec;
 	ifstream infile;
-	size_t begPos, endPos;
+	int64_t begPos, endPos;
 	Block* tmp_bloc;
 	reg_t *reg;
+	simpleReg_t *simple_reg;
+	vector<simpleReg_t*> sub_limit_reg_vec;
+	bool flag;
+
+	if(isFileExist(out_filename_detect_indel)==false) return;
 
 	infile.open(out_filename_detect_indel);
 	if(!infile.is_open()){
@@ -1313,54 +1442,72 @@ void Chrome::chrLoadIndelDataAssemble(){
 		exit(1);
 	}
 
+	if(limit_reg_process_flag) simple_reg = new simpleReg_t();
+
 	while(getline(infile, line)){
 		if(line.size()>0 and line.at(0)!='#'){
 			str_vec = split(line, "\t");
 			begPos = stoi(str_vec[1]);
 			endPos = stoi(str_vec[2]);
-			tmp_bloc = blockVector.at(computeBlocID(begPos));  // get the block
+			tmp_bloc = computeBlocByPos(begPos, blockVector);  // get the block
 
-			reg = new reg_t();
-			reg->chrname = chrname;
-			reg->startRefPos = begPos;
-			reg->endRefPos = endPos;
-			reg->startLocalRefPos = reg->endLocalRefPos = 0;
-			reg->startQueryPos = reg->endQueryPos = 0;
-			reg->var_type = VAR_UNC;
-			reg->sv_len = 0;
-			reg->query_id = -1;
-			reg->blat_aln_id = -1;
-			reg->call_success_status = false;
-			reg->short_sv_flag = false;
-			reg->zero_cov_flag = false;
-			//cout << "blocID=" << computeBlocID(begPos) << ", reg:" << begPos << "-" << endPos << endl;
+			// deal with limit regions
+			flag = true;
+			if(limit_reg_process_flag) {
+				//sub_limit_reg_vec = getSimpleRegs(chrname, begPos, endPos, limit_reg_vec);
+				sub_limit_reg_vec = getOverlappedSimpleRegsExt(chrname, begPos, endPos, limit_reg_vec, ASSEM_SLIDE_SIZE);
+				if(sub_limit_reg_vec.size()==0) flag = false;
+			}
 
-			tmp_bloc->indelVector.push_back(reg);  // add the variation
+			if(flag){
+				reg = new reg_t();
+				reg->chrname = chrname;
+				reg->startRefPos = begPos;
+				reg->endRefPos = endPos;
+				reg->startLocalRefPos = reg->endLocalRefPos = 0;
+				reg->startQueryPos = reg->endQueryPos = 0;
+				reg->var_type = VAR_UNC;
+				reg->sv_len = 0;
+				reg->query_id = -1;
+				reg->blat_aln_id = -1;
+				reg->call_success_status = false;
+				reg->short_sv_flag = false;
+				reg->zero_cov_flag = false;
+				//cout << "blocID=" << computeBlocID(begPos, blockVector) << ", reg:" << begPos << "-" << endPos << endl;
+
+				tmp_bloc->indelVector.push_back(reg);  // add the variation
+			}
 		}
 	}
 	infile.close();
+	if(limit_reg_process_flag) delete simple_reg;
 }
 
 // load detected indel data for local assembly
 void Chrome::chrLoadClipRegDataAssemble(){
-	chrLoadMateClipRegData();
+	chrLoadMateClipRegData(paras->limit_reg_process_flag, paras->limit_reg_vec);
 }
 
-void Chrome::chrLoadMateClipRegData(){
+void Chrome::chrLoadMateClipRegData(bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 	string line, chrname1, chrname2, chrname3, chrname4;
 	vector<string> str_vec;
 	ifstream infile;
-	//size_t startRefPos1, endRefPos1, startRefPos2, endRefPos2;
 	reg_t *reg1, *reg2, *reg3, *reg4;
-	bool mate_flag;
+	bool mate_flag, flag, flag1, flag2, flag3, flag4;
 	mateClipReg_t* mate_clip_reg;
 	size_t var_type, left_size, left_size2, right_size, right_size2, dup_num_tmp;
+	simpleReg_t *simple_reg;
+	vector<simpleReg_t*> sub_limit_reg_vec;
+
+	if(isFileExist(out_filename_detect_clipReg)==false) return;
 
 	infile.open(out_filename_detect_clipReg);
 	if(!infile.is_open()){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_detect_clipReg << endl;
 		exit(1);
 	}
+
+	if(limit_reg_process_flag) simple_reg = new simpleReg_t();
 
 	while(getline(infile, line)){
 		if(line.size()>0 and line.at(0)!='#'){
@@ -1378,67 +1525,148 @@ void Chrome::chrLoadMateClipRegData(){
 			if(str_vec.at(12).compare("0")==0) mate_flag = false;
 			else mate_flag = true;
 
-			left_size = left_size2 = right_size = right_size2 = 0; var_type = VAR_UNC; dup_num_tmp = 0;
-			if(str_vec.at(13).compare("####")==0){
-				if(str_vec.at(14).compare("-")!=0) { left_size = stoi(str_vec.at(14)); }
-				if(str_vec.at(15).compare("-")!=0) { left_size2 = stoi(str_vec.at(15)); }
-				if(str_vec.at(16).compare("-")!=0) { right_size = stoi(str_vec.at(16)); }
-				if(str_vec.at(17).compare("-")!=0) { right_size2 = stoi(str_vec.at(17)); }
+			// deal with limit regions
+			flag1 = flag2 = flag3 = flag4 = true;
+			if(reg1){
+				if(limit_reg_process_flag) {
+					//sub_limit_reg_vec = getSimpleRegs(reg1->chrname, reg1->startRefPos, reg1->endRefPos, limit_reg_vec);
+					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg1->chrname, reg1->startRefPos, reg1->endRefPos, limit_reg_vec, ASSEM_SLIDE_SIZE);
+					if(sub_limit_reg_vec.size()==0) flag1 = false;
+				}
+			}else flag1 = false;
+			if(reg2){
+				if(limit_reg_process_flag) {
+					//sub_limit_reg_vec = getSimpleRegs(reg2->chrname, reg2->startRefPos, reg2->endRefPos, limit_reg_vec);
+					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg2->chrname, reg2->startRefPos, reg2->endRefPos, limit_reg_vec, ASSEM_SLIDE_SIZE);
+					if(sub_limit_reg_vec.size()==0) flag2 = false;
+				}
+			}else flag2 = false;
+			if(reg3){
+				if(limit_reg_process_flag) {
+					//sub_limit_reg_vec = getSimpleRegs(reg3->chrname, reg3->startRefPos, reg3->endRefPos, limit_reg_vec);
+					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg3->chrname, reg3->startRefPos, reg3->endRefPos, limit_reg_vec, ASSEM_SLIDE_SIZE);
+					if(sub_limit_reg_vec.size()==0) flag3 = false;
+				}
+			}else flag3 = false;
+			if(reg4){
+				if(limit_reg_process_flag) {
+					//sub_limit_reg_vec = getSimpleRegs(reg4->chrname, reg4->startRefPos, reg4->endRefPos, limit_reg_vec);
+					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg4->chrname, reg4->startRefPos, reg4->endRefPos, limit_reg_vec, ASSEM_SLIDE_SIZE);
+					if(sub_limit_reg_vec.size()==0) flag4 = false;
+				}
+			}else flag4 = false;
 
-				if(str_vec.at(18).compare("UNC")==0) var_type = VAR_UNC;
-				else if(str_vec.at(18).compare("DUP")==0) var_type = VAR_DUP;
-				else if(str_vec.at(18).compare("INV")==0) var_type = VAR_INV;
-				else if(str_vec.at(18).compare("TRA")==0) var_type = VAR_TRA;
-				else if(str_vec.at(18).compare("MIX")==0) var_type = VAR_MIX;
+			flag = false;
+			if(flag1 or flag2 or flag3 or flag4) flag = true;
 
-				if(str_vec.at(19).compare("-")!=0) { dup_num_tmp = stoi(str_vec.at(19)); }
+			if(flag){
+				left_size = left_size2 = right_size = right_size2 = 0; var_type = VAR_UNC; dup_num_tmp = 0;
+				if(str_vec.at(13).compare("####")==0){
+					if(str_vec.at(14).compare("-")!=0) { left_size = stoi(str_vec.at(14)); }
+					if(str_vec.at(15).compare("-")!=0) { left_size2 = stoi(str_vec.at(15)); }
+					if(str_vec.at(16).compare("-")!=0) { right_size = stoi(str_vec.at(16)); }
+					if(str_vec.at(17).compare("-")!=0) { right_size2 = stoi(str_vec.at(17)); }
+
+					if(str_vec.at(18).compare("UNC")==0) var_type = VAR_UNC;
+					else if(str_vec.at(18).compare("DUP")==0) var_type = VAR_DUP;
+					else if(str_vec.at(18).compare("INV")==0) var_type = VAR_INV;
+					else if(str_vec.at(18).compare("TRA")==0) var_type = VAR_TRA;
+					else if(str_vec.at(18).compare("MIX")==0) var_type = VAR_MIX;
+
+					if(str_vec.at(19).compare("-")!=0) { dup_num_tmp = stoi(str_vec.at(19)); }
+				}
+
+				mate_clip_reg = new mateClipReg_t();
+				mate_clip_reg->leftClipReg = reg1;
+				mate_clip_reg->leftClipReg2 = reg2;
+				mate_clip_reg->rightClipReg = reg3;
+				mate_clip_reg->rightClipReg2 = reg4;
+				mate_clip_reg->reg_mated_flag = mate_flag;
+				mate_clip_reg->valid_flag = true;
+				mate_clip_reg->call_success_flag = false;
+				mate_clip_reg->sv_type = var_type;
+				mate_clip_reg->leftMeanClipPos = left_size;
+				mate_clip_reg->leftMeanClipPos2 = left_size2;
+				mate_clip_reg->rightMeanClipPos = right_size;
+				mate_clip_reg->rightMeanClipPos2 = right_size2;
+
+				mate_clip_reg->leftClipRegNum = 0;
+				if(mate_clip_reg->leftClipReg) mate_clip_reg->leftClipRegNum ++;
+				if(mate_clip_reg->leftClipReg2) mate_clip_reg->leftClipRegNum ++;
+				mate_clip_reg->rightClipRegNum = 0;
+				if(mate_clip_reg->rightClipReg) mate_clip_reg->rightClipRegNum ++;
+				if(mate_clip_reg->rightClipReg2) mate_clip_reg->rightClipRegNum ++;
+
+				//
+				mate_clip_reg->chrname_leftTra1 = mate_clip_reg->chrname_rightTra1 = mate_clip_reg->chrname_leftTra2 = mate_clip_reg->chrname_rightTra2 = "";
+				mate_clip_reg->leftClipPosTra1 = mate_clip_reg->rightClipPosTra1 = mate_clip_reg->leftClipPosTra2 = mate_clip_reg->rightClipPosTra2 = -1;
+				mate_clip_reg->dup_num = dup_num_tmp;
+				mateClipRegVector.push_back(mate_clip_reg);
+			}else{
+				if(reg1) delete reg1;
+				if(reg2) delete reg2;
+				if(reg3) delete reg3;
+				if(reg4) delete reg4;
 			}
-
-			mate_clip_reg = new mateClipReg_t();
-			mate_clip_reg->leftClipReg = reg1;
-			mate_clip_reg->leftClipReg2 = reg2;
-			mate_clip_reg->rightClipReg = reg3;
-			mate_clip_reg->rightClipReg2 = reg4;
-			mate_clip_reg->reg_mated_flag = mate_flag;
-			mate_clip_reg->valid_flag = true;
-			mate_clip_reg->call_success_flag = false;
-			mate_clip_reg->sv_type = var_type;
-			mate_clip_reg->leftMeanClipPos = left_size;
-			mate_clip_reg->leftMeanClipPos2 = left_size2;
-			mate_clip_reg->rightMeanClipPos = right_size;
-			mate_clip_reg->rightMeanClipPos2 = right_size2;
-
-			mate_clip_reg->leftClipRegNum = 0;
-			if(mate_clip_reg->leftClipReg) mate_clip_reg->leftClipRegNum ++;
-			if(mate_clip_reg->leftClipReg2) mate_clip_reg->leftClipRegNum ++;
-			mate_clip_reg->rightClipRegNum = 0;
-			if(mate_clip_reg->rightClipReg) mate_clip_reg->rightClipRegNum ++;
-			if(mate_clip_reg->rightClipReg2) mate_clip_reg->rightClipRegNum ++;
-
-			//
-			mate_clip_reg->chrname_leftTra1 = mate_clip_reg->chrname_rightTra1 = mate_clip_reg->chrname_leftTra2 = mate_clip_reg->chrname_rightTra2 = "";
-			mate_clip_reg->leftClipPosTra1 = mate_clip_reg->rightClipPosTra1 = mate_clip_reg->leftClipPosTra2 = mate_clip_reg->rightClipPosTra2 = -1;
-			mate_clip_reg->dup_num = dup_num_tmp;
-			mateClipRegVector.push_back(mate_clip_reg);
 		}
 	}
 	infile.close();
+
+	if(limit_reg_process_flag) delete simple_reg;
+}
+
+// compute block by reference position
+Block* Chrome::computeBlocByPos(int64_t begPos, vector<Block*> &block_vec){
+	int32_t bloc_ID = computeBlocID(begPos, block_vec);
+	return block_vec.at(bloc_ID);
 }
 
 // compute block ID
-int32_t Chrome::computeBlocID(size_t begPos){
-	int32_t bloc_ID;
+int32_t Chrome::computeBlocID(int64_t begPos, vector<Block*> &block_vec){
+	int32_t bloc_ID, bloc_ID_tmp;
+	size_t i;
+	Block *bloc, *mid_bloc;
 
-	bloc_ID = begPos / (paras->blockSize - 2 * paras->slideSize);
-	if(bloc_ID>=blockNum) bloc_ID = blockNum - 1;
+	bloc_ID_tmp = begPos / (paras->blockSize - 2 * paras->slideSize);
+	if(bloc_ID_tmp>=blockNum) bloc_ID_tmp = blockNum - 1;
+
+	bloc_ID = bloc_ID_tmp;
+
+	mid_bloc = block_vec.at(bloc_ID_tmp);
+	if(begPos<=mid_bloc->startPos){
+		for(i=bloc_ID_tmp; i>=0; i--){
+			bloc = block_vec.at(i);
+			if(bloc->startPos<=begPos){
+				bloc_ID = i;
+				break;
+			}
+		}
+	}else{
+		for(i=bloc_ID_tmp+1; i<(size_t)blockNum; i++){
+			bloc = block_vec.at(i);
+			if(bloc->startPos>begPos){
+				bloc_ID = i - 1;
+				break;
+			}
+		}
+	}
 
 	return bloc_ID;
 }
 
 // load previously assembled information
-void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
+void Chrome::loadPrevAssembledInfo(){
+	vector<simpleReg_t*> limit_reg_vec;
+	//if(paras->limit_reg_process_flag) limit_reg_vec = getSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
+	if(paras->limit_reg_process_flag) limit_reg_vec = getOverlappedSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
+	loadPrevAssembledInfo2(false, paras->limit_reg_process_flag, limit_reg_vec);
+	loadPrevAssembledInfo2(true, paras->limit_reg_process_flag, paras->limit_reg_vec);
+}
+
+// load previously assembled information
+void Chrome::loadPrevAssembledInfo2(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 	ifstream infile;
-	string infilename, line, done_str, old_out_dir, refseqfilename, contigfilename, readsfilename;
+	string infilename, line, done_str, old_out_dir, refseqfilename, contigfilename, readsfilename, pattern_str;
 	varCand *var_cand_tmp;
 	vector<string> line_vec, var_str, var_str1, var_str2;
 	vector<string> str_vec, str_vec2, str_vec3;
@@ -1446,6 +1674,9 @@ void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
 	reg_t *reg;
 	Block *tmp_bloc;
 	int64_t begPos;
+	simpleReg_t *simple_reg, *prev_simple_reg;
+	vector<simpleReg_t*> sub_limit_reg_vec, prev_limit_reg_vec, prev_limit_reg_vec_tmp, pos_limit_reg_vec;
+	bool flag, pos_contained_flag, prev_delete_flag;
 
 	if(clipReg_flag) infilename = var_cand_clipReg_filename;
 	else infilename = var_cand_indel_filename;
@@ -1458,19 +1689,15 @@ void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
 		exit(1);
 	}
 
+	if(limit_reg_process_flag){
+		if(clipReg_flag) pattern_str = CLIPREG_PATTERN;
+		else pattern_str = REFSEQ_PATTERN;
+		simple_reg = new simpleReg_t();
+	}
+
 	old_out_dir = "";
 	while(getline(infile, line)){
 		if(line.size()>0 and line.at(0)!='#'){
-			// allocate memory
-			var_cand_tmp = new varCand();
-
-			var_cand_tmp->chrname = "";
-			var_cand_tmp->var_cand_filename = "";
-			var_cand_tmp->out_dir_call = "";
-			var_cand_tmp->misAln_filename = "";
-			var_cand_tmp->inBamFile = "";
-			var_cand_tmp->fai = NULL;
-
 			line_vec = split(line, "\t");
 
 			// update item file name
@@ -1479,64 +1706,124 @@ void Chrome::loadPrevAssembledInfo(bool clipReg_flag){
 			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
 			readsfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
 
-			var_cand_tmp->refseqfilename = refseqfilename;  // refseq file name
-			var_cand_tmp->ctgfilename = contigfilename;  // contig file name
-			var_cand_tmp->readsfilename = readsfilename;  // reads file name
-			var_cand_tmp->ref_left_shift_size = stoi(line_vec.at(3));  // ref_left_shift_size
-			var_cand_tmp->ref_right_shift_size = stoi(line_vec.at(4));  // ref_right_shift_size
+//			if(refseqfilename.compare("output_test_limit_reg_20200807/output_chr2/2_assemble/chr2/refseq_chr2_149997126-150006879.fa")==0){
+//				cout << __LINE__ << ": " << refseqfilename << endl;
+//			}
 
-			var_cand_tmp->blat_aligned_info_vec = NULL;
-			var_cand_tmp->blat_var_cand_file = NULL;
+			flag = true;
+			pos_contained_flag = false;
+			prev_delete_flag = true;
+			if(limit_reg_process_flag) {
+				getRegByFilename(simple_reg, refseqfilename, pattern_str);
+				//sub_limit_reg_vec = getSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+				sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+				if(sub_limit_reg_vec.size()==0){ // further to check previously recorded limited process regions
+					flag = false;
+					prev_limit_reg_vec = extractSimpleRegsByStr(line_vec.at(8));
+					for(i=0; i<prev_limit_reg_vec.size(); i++){
+						prev_simple_reg = prev_limit_reg_vec.at(i);
+						//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
+						prev_limit_reg_vec_tmp = getFullyContainedSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
+						if(prev_limit_reg_vec_tmp.size()){ // region fully contained
+							flag = true;
+							break;
+						}
+					}
 
-			if(line_vec[5].compare(ASSEMBLY_SUCCESS)==0) var_cand_tmp->assem_success = true;
-			else var_cand_tmp->assem_success = false;
-
-			var_cand_tmp->ctg_num = 0;
-
-			// load variations
-			if(line_vec.at(6).compare("-")!=0){
-				var_str = split(line_vec.at(6), ";");
-				for(i=0; i<var_str.size(); i++){
-					var_str1 = split(var_str.at(i), ":");
-					var_str2 = split(var_str1.at(1), "-");
-					reg = new reg_t();
-					reg->chrname = var_str1.at(0);
-					reg->startRefPos = stoi(var_str2.at(0));
-					reg->endRefPos = stoi(var_str2.at(1));
-					reg->startLocalRefPos = reg->endLocalRefPos = 0;
-					reg->startQueryPos = reg->endQueryPos = 0;
-					reg->sv_len = 0;
-					reg->dup_num = 0;
-					reg->var_type = VAR_UNC;
-					reg->query_id = -1;
-					reg->blat_aln_id = -1;
-					reg->call_success_status = false;
-					reg->short_sv_flag = false;
-					reg->zero_cov_flag = false;
-					var_cand_tmp->varVec.push_back(reg);  // variation vector
+					if(flag==false){ // position contained
+						pos_limit_reg_vec = getPosContainedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+						if(pos_limit_reg_vec.size()){
+							flag = true;
+							pos_contained_flag = true;
+						}
+					}
 				}
-				var_cand_tmp->varVec.shrink_to_fit();
 			}
 
-			// deal with 'DONE' string
-			done_str = line_vec.at(line_vec.size()-1);
-			if(done_str.compare(DONE_STR)==0 and var_cand_tmp->varVec.size()>0){
-				if(clipReg_flag) assembled_chr_clipReg_vec.push_back(var_cand_tmp);
-				else{
-					begPos = var_cand_tmp->varVec.at(0)->startRefPos;
-					tmp_bloc = blockVector.at(computeBlocID(begPos));  // get the block
-					tmp_bloc->assembled_indel_vec.push_back(var_cand_tmp);
+			if(flag){
+				// allocate memory
+				var_cand_tmp = new varCand();
+				var_cand_tmp->chrname = "";
+				var_cand_tmp->var_cand_filename = "";
+				var_cand_tmp->out_dir_call = "";
+				var_cand_tmp->misAln_filename = "";
+				var_cand_tmp->inBamFile = "";
+				var_cand_tmp->fai = NULL;
+
+				var_cand_tmp->refseqfilename = refseqfilename;  // refseq file name
+				var_cand_tmp->ctgfilename = contigfilename;  // contig file name
+				var_cand_tmp->readsfilename = readsfilename;  // reads file name
+				var_cand_tmp->ref_left_shift_size = stoi(line_vec.at(3));  // ref_left_shift_size
+				var_cand_tmp->ref_right_shift_size = stoi(line_vec.at(4));  // ref_right_shift_size
+
+				var_cand_tmp->blat_aligned_info_vec = NULL;
+				var_cand_tmp->blat_var_cand_file = NULL;
+
+				if(line_vec[5].compare(ASSEMBLY_SUCCESS)==0) var_cand_tmp->assem_success = true;
+				else var_cand_tmp->assem_success = false;
+
+				var_cand_tmp->ctg_num = 0;
+
+				// load variations
+				if(line_vec.at(6).compare("-")!=0){
+					var_str = split(line_vec.at(6), ";");
+					for(i=0; i<var_str.size(); i++){
+						var_str1 = split(var_str.at(i), ":");
+						var_str2 = split(var_str1.at(1), "-");
+						reg = new reg_t();
+						reg->chrname = var_str1.at(0);
+						reg->startRefPos = stoi(var_str2.at(0));
+						reg->endRefPos = stoi(var_str2.at(1));
+						reg->startLocalRefPos = reg->endLocalRefPos = 0;
+						reg->startQueryPos = reg->endQueryPos = 0;
+						reg->sv_len = 0;
+						reg->dup_num = 0;
+						reg->var_type = VAR_UNC;
+						reg->query_id = -1;
+						reg->blat_aln_id = -1;
+						reg->call_success_status = false;
+						reg->short_sv_flag = false;
+						reg->zero_cov_flag = false;
+						var_cand_tmp->varVec.push_back(reg);  // variation vector
+					}
+					var_cand_tmp->varVec.shrink_to_fit();
 				}
-			}else delete var_cand_tmp;
+
+				// limit regions
+				var_cand_tmp->limit_reg_process_flag = paras->limit_reg_process_flag;
+				if(sub_limit_reg_vec.size()) for(i=0; i<sub_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(sub_limit_reg_vec.at(i));
+				else {
+					if(pos_contained_flag==false){
+						for(i=0; i<prev_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(prev_limit_reg_vec.at(i));
+						var_cand_tmp->limit_reg_delete_flag = true;
+						prev_delete_flag = false;
+					}else for(i=0; i<pos_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(pos_limit_reg_vec.at(i));
+				}
+				// deal with 'DONE' string
+				done_str = line_vec.at(line_vec.size()-1);
+				if(done_str.compare(DONE_STR)==0 and var_cand_tmp->varVec.size()>0){
+					if(clipReg_flag) {
+						assembled_chr_clipReg_vec.push_back(var_cand_tmp);
+						paras->assembled_clipReg_filename_vec.push_back(var_cand_tmp->ctgfilename);
+					}else{
+						begPos = var_cand_tmp->varVec.at(0)->startRefPos;
+						tmp_bloc = computeBlocByPos(begPos, blockVector);  // get the block
+						tmp_bloc->assembled_indel_vec.push_back(var_cand_tmp);
+					}
+				}else delete var_cand_tmp;
+			}
+
+			if(!prev_limit_reg_vec.empty() and prev_delete_flag) destroyLimitRegVector(prev_limit_reg_vec);
 		}
 	}
 
 	infile.close();
+	if(limit_reg_process_flag) delete simple_reg;
 }
 
 // get the assembly file header line which starts with '#'
 string Chrome::getAssembleFileHeaderLine(){
-	string header_line = "#RefFile\tContigFile\tReadsFile\tLeftShiftSize\tRightShiftSize\tStatus\tVarRegs\tCovSamplingInfo\tDoneFlag";
+	string header_line = "#RefFile\tContigFile\tReadsFile\tLeftShiftSize\tRightShiftSize\tStatus\tVarRegs\tCovSamplingInfo\tLimitRegs\tDoneFlag";
 	return header_line;
 }
 
@@ -1573,11 +1860,9 @@ int Chrome::chrGenerateLocalAssembleWorkOpt(){
 int Chrome::chrGenerateLocalAssembleWorkOpt_st(){
 	Block *bloc;
 	for(size_t i=0; i<blockVector.size(); i++){
-//		if(i==1)
-		{
-			bloc = blockVector.at(i);
+		bloc = blockVector.at(i);
+		if(bloc->process_flag)
 			bloc->blockGenerateLocalAssembleWorkOpt();
-		}
 	}
 	return 0;
 }
@@ -1649,7 +1934,7 @@ int Chrome::chrCall(){
 
 	mkdir(out_dir_call.c_str(), S_IRWXU | S_IROTH);  // create the directory for call command
 
-	cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
+	if(print_flag) cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
 
 	// set blat var_cand files
 	setBlatVarcandFiles();
@@ -1687,9 +1972,9 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("output_hg19_v1.7_2.0_M1_20200630/3_call/chr1/blat_chr1_801943-810078.sim4")==0)
+		if(var_cand->alnfilename.compare("output_test_limit_reg_20200807/output_chr10/3_call/chr10/blat_chr10_6687403-6693768.sim4")==0)
 		{
-			//cout << ">>>>>>>>> " << i << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
+			//cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();
 		}
 	}
@@ -1729,17 +2014,21 @@ void Chrome::chrLoadDataCall(){
 }
 
 void Chrome::loadVarCandData(){
-	if(mateClipRegVector.size()==0) chrLoadMateClipRegData();
-	loadVarCandDataFromFile(var_cand_vec, var_cand_indel_filename, false);
-	loadVarCandDataFromFile(var_cand_clipReg_vec, var_cand_clipReg_filename, true);
+	vector<simpleReg_t*> limit_reg_vec;
+	//if(paras->limit_reg_process_flag) limit_reg_vec = getSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
+	if(paras->limit_reg_process_flag) limit_reg_vec = getOverlappedSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
+
+	if(mateClipRegVector.size()==0) chrLoadMateClipRegData(paras->limit_reg_process_flag, limit_reg_vec);
+	loadVarCandDataFromFile(var_cand_vec, var_cand_indel_filename, false, paras->limit_reg_process_flag, limit_reg_vec);
+	loadVarCandDataFromFile(var_cand_clipReg_vec, var_cand_clipReg_filename, true, paras->limit_reg_process_flag, paras->limit_reg_vec);
 
 	// load previously blat aligned information
-	loadPrevBlatAlnItems(false);
-	loadPrevBlatAlnItems(true);
+	loadPrevBlatAlnItems(false, paras->limit_reg_process_flag, limit_reg_vec);
+	loadPrevBlatAlnItems(true, paras->limit_reg_process_flag, paras->limit_reg_vec);
 }
 
-void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var_cand_filename, bool clipReg_flag){
-	string line, ctg_assembly_str, alnfilename, str_tmp, chrname_str, old_out_dir, refseqfilename, contigfilename, readsfilename;
+void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var_cand_filename, bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+	string line, ctg_assembly_str, alnfilename, str_tmp, chrname_str, old_out_dir, refseqfilename, contigfilename, readsfilename, pattern_str;
 	vector<string> line_vec, var_str, var_str1, var_str2;
 	vector<string> str_vec, str_vec2, str_vec3;
 	ifstream infile;
@@ -1748,6 +2037,9 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 	varCand *var_cand_tmp;
 	mateClipReg_t *mate_clip_reg;
 	int32_t clip_reg_idx_tra;
+	simpleReg_t *simple_reg, *prev_simple_reg;
+	vector<simpleReg_t*> sub_limit_reg_vec, prev_limit_reg_vec, prev_limit_reg_vec_tmp, pos_limit_reg_vec;
+	bool flag, pos_contained_flag, prev_delete_flag;
 
 	infile.open(var_cand_filename);
 	if(!infile.is_open()){
@@ -1755,19 +2047,15 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 		exit(1);
 	}
 
+	if(limit_reg_process_flag){
+		if(clipReg_flag) pattern_str = CLIPREG_PATTERN;
+		else pattern_str = REFSEQ_PATTERN;
+		simple_reg = new simpleReg_t();
+	}
+
 	lineNum = 0;
 	while(getline(infile, line)){
 		if(line.size()>0 and line.at(0)!='#'){
-			// allocate memory
-			var_cand_tmp = new varCand();
-
-			var_cand_tmp->chrname = chrname;
-			var_cand_tmp->var_cand_filename = var_cand_filename;
-			var_cand_tmp->out_dir_call = out_dir_call;
-			var_cand_tmp->misAln_filename = misAln_reg_filename;
-			var_cand_tmp->inBamFile = paras->inBamFile;
-			var_cand_tmp->fai = fai;
-
 			line_vec = split(line, "\t");
 
 			// update item file name
@@ -1776,125 +2064,180 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
 			readsfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
 
-			var_cand_tmp->refseqfilename = refseqfilename;	// refseq file name
-			var_cand_tmp->ctgfilename = contigfilename;	// contig file name
-			var_cand_tmp->readsfilename = readsfilename;	// reads file name
-			var_cand_tmp->ref_left_shift_size = stoi(line_vec[3]);	// ref_left_shift_size
-			var_cand_tmp->ref_right_shift_size = stoi(line_vec[4]);	// ref_right_shift_size
-
-			var_cand_tmp->blat_aligned_info_vec = NULL;
-			var_cand_tmp->blat_var_cand_file = NULL;
-
-			if(line_vec[5].compare(ASSEMBLY_SUCCESS)==0) var_cand_tmp->assem_success = true;
-			else var_cand_tmp->assem_success = false;
-
-			// get the number of contigs
-			var_cand_tmp->ctg_num = getCtgCount(var_cand_tmp->ctgfilename);
-
-			// load variations
-			if(line_vec.at(6).compare("-")!=0){
-				var_str = split(line_vec.at(6), ";");
-				for(i=0; i<var_str.size(); i++){
-					var_str1 = split(var_str.at(i), ":");
-					var_str2 = split(var_str1.at(1), "-");
-					reg = new reg_t();
-					reg->chrname = var_str1.at(0);
-					reg->startRefPos = stoi(var_str2.at(0));
-					reg->endRefPos = stoi(var_str2.at(1));
-					reg->startLocalRefPos = reg->endLocalRefPos = 0;
-					reg->startQueryPos = reg->endQueryPos = 0;
-					reg->sv_len = 0;
-					reg->dup_num = 0;
-					reg->var_type = VAR_UNC;
-					reg->query_id = -1;
-					reg->blat_aln_id = -1;
-					reg->call_success_status = false;
-					reg->short_sv_flag = false;
-					reg->zero_cov_flag = false;
-					var_cand_tmp->varVec.push_back(reg);  // variation vector
-				}
-				var_cand_tmp->varVec.shrink_to_fit();
-			}
-
-			// generate alignment file names
-			str_vec = split(line_vec[1], "/");
-			str_tmp = str_vec[str_vec.size()-1];  // contig file
-			str_vec2 = split(str_tmp, "_");
-
-			alnfilename = out_dir_call + "/blat";
-			for(i=1; i<str_vec2.size()-1; i++)
-				alnfilename += "_" + str_vec2[i];
-
-			str_tmp = str_vec2[str_vec2.size()-1];
-			str_vec3 = split(str_tmp, ".");
-
-			alnfilename += "_" + str_vec3[0];
-			for(i=1; i<str_vec3.size()-1; i++)
-				alnfilename += "." + str_vec3[i];
-			alnfilename += ".sim4";
-
-			var_cand_tmp->alnfilename = alnfilename;
-			var_cand_tmp->align_success = false;
-			var_cand_tmp->clip_reg_flag = clipReg_flag;
-
-			// assign clipping information
-			mate_clip_reg = NULL;
-			if(clipReg_flag) {
-				reg1 = var_cand_tmp->varVec.at(0);
-				reg2 = (var_cand_tmp->varVec.size()>=2) ? var_cand_tmp->varVec.at(var_cand_tmp->varVec.size()-1) : NULL;
-				mate_clip_reg = getMateClipReg(reg1, reg2, &clip_reg_idx_tra);
-			}
-			if(mate_clip_reg){
-				if(mate_clip_reg->sv_type==VAR_DUP or mate_clip_reg->sv_type==VAR_INV){ // DUP or INV
-					var_cand_tmp->leftClipRefPos = mate_clip_reg->leftMeanClipPos>0 ? mate_clip_reg->leftMeanClipPos : mate_clip_reg->leftMeanClipPos2;
-					var_cand_tmp->rightClipRefPos = mate_clip_reg->rightMeanClipPos>0 ? mate_clip_reg->rightMeanClipPos : mate_clip_reg->rightMeanClipPos2;
-					var_cand_tmp->sv_type = mate_clip_reg->sv_type;
-					var_cand_tmp->dup_num = mate_clip_reg->dup_num;
-					mate_clip_reg->var_cand = var_cand_tmp;
-				}else if(mate_clip_reg->sv_type==VAR_TRA){ // TRA
-					if(clip_reg_idx_tra==0){
-						var_cand_tmp->leftClipRefPos = mate_clip_reg->leftMeanClipPos;
-						var_cand_tmp->rightClipRefPos = mate_clip_reg->rightMeanClipPos;
-						mate_clip_reg->var_cand = var_cand_tmp;
-					}else if(clip_reg_idx_tra==1){
-						var_cand_tmp->chrname = mate_clip_reg->leftClipReg->chrname;
-						var_cand_tmp->leftClipRefPos = mate_clip_reg->leftClipReg->startRefPos;
-						var_cand_tmp->rightClipRefPos = mate_clip_reg->leftClipReg->endRefPos;
-						mate_clip_reg->left_var_cand_tra = var_cand_tmp;
-					}else if(clip_reg_idx_tra==2){
-						var_cand_tmp->chrname = mate_clip_reg->rightClipReg->chrname;
-						var_cand_tmp->leftClipRefPos = mate_clip_reg->rightClipReg->startRefPos;
-						var_cand_tmp->rightClipRefPos = mate_clip_reg->rightClipReg->endRefPos;
-						mate_clip_reg->right_var_cand_tra = var_cand_tmp;
-					}else if(clip_reg_idx_tra==3){
-						var_cand_tmp->chrname = mate_clip_reg->leftClipReg->chrname;
-						var_cand_tmp->leftClipRefPos = mate_clip_reg->leftMeanClipPos;
-						var_cand_tmp->rightClipRefPos = mate_clip_reg->leftMeanClipPos2;
-						mate_clip_reg->left_var_cand_tra = var_cand_tmp;
-					}else if(clip_reg_idx_tra==4){
-						var_cand_tmp->chrname = mate_clip_reg->rightClipReg->chrname;
-						var_cand_tmp->leftClipRefPos = mate_clip_reg->rightMeanClipPos;
-						var_cand_tmp->rightClipRefPos = mate_clip_reg->rightMeanClipPos2;
-						mate_clip_reg->right_var_cand_tra = var_cand_tmp;
+			flag = true;
+			pos_contained_flag = false;
+			prev_delete_flag = true;
+			if(limit_reg_process_flag) {
+				getRegByFilename(simple_reg, refseqfilename, pattern_str);
+				//sub_limit_reg_vec = getSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+				sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+				if(sub_limit_reg_vec.size()==0) {
+					flag = false;
+					prev_limit_reg_vec = extractSimpleRegsByStr(line_vec.at(8));
+					for(i=0; i<prev_limit_reg_vec.size(); i++){
+						prev_simple_reg = prev_limit_reg_vec.at(i);
+						//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
+						prev_limit_reg_vec_tmp = getFullyContainedSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
+						if(prev_limit_reg_vec_tmp.size()){ // region fully contained
+							flag = true;
+							break;
+						}
 					}
-					var_cand_tmp->sv_type = mate_clip_reg->sv_type;
-					var_cand_tmp->dup_num = 0;
-				}else{
-					cerr << __func__ << ", line=" << __LINE__ << ", invalid variation type=" << mate_clip_reg->sv_type << ", error!" << endl;
-					exit(1);
+
+					if(flag==false){ // position contained
+						pos_limit_reg_vec = getPosContainedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+						if(pos_limit_reg_vec.size()){
+							flag = true;
+							pos_contained_flag = true;
+						}
+					}
 				}
-			}else{
-				var_cand_tmp->leftClipRefPos = var_cand_tmp->rightClipRefPos = 0;
-				var_cand_tmp->sv_type = VAR_UNC;
-				var_cand_tmp->dup_num = 0;
 			}
 
-			var_cand_vec.push_back(var_cand_tmp);
-			lineNum ++;
+			if(flag){
+				// allocate memory
+				var_cand_tmp = new varCand();
+				var_cand_tmp->chrname = chrname;
+				var_cand_tmp->var_cand_filename = var_cand_filename;
+				var_cand_tmp->out_dir_call = out_dir_call;
+				var_cand_tmp->misAln_filename = misAln_reg_filename;
+				var_cand_tmp->inBamFile = paras->inBamFile;
+				var_cand_tmp->fai = fai;
+
+				var_cand_tmp->refseqfilename = refseqfilename;	// refseq file name
+				var_cand_tmp->ctgfilename = contigfilename;	// contig file name
+				var_cand_tmp->readsfilename = readsfilename;	// reads file name
+				var_cand_tmp->ref_left_shift_size = stoi(line_vec[3]);	// ref_left_shift_size
+				var_cand_tmp->ref_right_shift_size = stoi(line_vec[4]);	// ref_right_shift_size
+
+				var_cand_tmp->blat_aligned_info_vec = NULL;
+				var_cand_tmp->blat_var_cand_file = NULL;
+
+				if(line_vec[5].compare(ASSEMBLY_SUCCESS)==0) var_cand_tmp->assem_success = true;
+				else var_cand_tmp->assem_success = false;
+
+				// get the number of contigs
+				var_cand_tmp->ctg_num = getCtgCount(var_cand_tmp->ctgfilename);
+
+				// load variations
+				if(line_vec.at(6).compare("-")!=0){
+					var_str = split(line_vec.at(6), ";");
+					for(i=0; i<var_str.size(); i++){
+						var_str1 = split(var_str.at(i), ":");
+						var_str2 = split(var_str1.at(1), "-");
+						reg = new reg_t();
+						reg->chrname = var_str1.at(0);
+						reg->startRefPos = stoi(var_str2.at(0));
+						reg->endRefPos = stoi(var_str2.at(1));
+						reg->startLocalRefPos = reg->endLocalRefPos = 0;
+						reg->startQueryPos = reg->endQueryPos = 0;
+						reg->sv_len = 0;
+						reg->dup_num = 0;
+						reg->var_type = VAR_UNC;
+						reg->query_id = -1;
+						reg->blat_aln_id = -1;
+						reg->call_success_status = false;
+						reg->short_sv_flag = false;
+						reg->zero_cov_flag = false;
+						var_cand_tmp->varVec.push_back(reg);  // variation vector
+					}
+					var_cand_tmp->varVec.shrink_to_fit();
+				}
+
+				// limit regions
+				var_cand_tmp->limit_reg_process_flag = limit_reg_process_flag;
+				if(sub_limit_reg_vec.size()) for(i=0; i<sub_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(sub_limit_reg_vec.at(i));
+				else{
+					if(pos_contained_flag==false){
+						for(i=0; i<prev_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(prev_limit_reg_vec.at(i));
+						var_cand_tmp->limit_reg_delete_flag = true;
+						prev_delete_flag = false;
+					}else for(i=0; i<pos_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(pos_limit_reg_vec.at(i));
+				}
+
+				// generate alignment file names
+				str_vec = split(line_vec[1], "/");
+				str_tmp = str_vec[str_vec.size()-1];  // contig file
+				str_vec2 = split(str_tmp, "_");
+
+				alnfilename = out_dir_call + "/blat";
+				for(i=1; i<str_vec2.size()-1; i++)
+					alnfilename += "_" + str_vec2[i];
+
+				str_tmp = str_vec2[str_vec2.size()-1];
+				str_vec3 = split(str_tmp, ".");
+
+				alnfilename += "_" + str_vec3[0];
+				for(i=1; i<str_vec3.size()-1; i++)
+					alnfilename += "." + str_vec3[i];
+				alnfilename += ".sim4";
+
+				var_cand_tmp->alnfilename = alnfilename;
+				var_cand_tmp->align_success = false;
+				var_cand_tmp->clip_reg_flag = clipReg_flag;
+
+				// assign clipping information
+				mate_clip_reg = NULL;
+				if(clipReg_flag) {
+					reg1 = var_cand_tmp->varVec.at(0);
+					reg2 = (var_cand_tmp->varVec.size()>=2) ? var_cand_tmp->varVec.at(var_cand_tmp->varVec.size()-1) : NULL;
+					mate_clip_reg = getMateClipReg(reg1, reg2, &clip_reg_idx_tra);
+				}
+				if(mate_clip_reg){
+					if(mate_clip_reg->sv_type==VAR_DUP or mate_clip_reg->sv_type==VAR_INV){ // DUP or INV
+						var_cand_tmp->leftClipRefPos = mate_clip_reg->leftMeanClipPos>0 ? mate_clip_reg->leftMeanClipPos : mate_clip_reg->leftMeanClipPos2;
+						var_cand_tmp->rightClipRefPos = mate_clip_reg->rightMeanClipPos>0 ? mate_clip_reg->rightMeanClipPos : mate_clip_reg->rightMeanClipPos2;
+						var_cand_tmp->sv_type = mate_clip_reg->sv_type;
+						var_cand_tmp->dup_num = mate_clip_reg->dup_num;
+						mate_clip_reg->var_cand = var_cand_tmp;
+					}else if(mate_clip_reg->sv_type==VAR_TRA){ // TRA
+						if(clip_reg_idx_tra==0){
+							var_cand_tmp->leftClipRefPos = mate_clip_reg->leftMeanClipPos;
+							var_cand_tmp->rightClipRefPos = mate_clip_reg->rightMeanClipPos;
+							mate_clip_reg->var_cand = var_cand_tmp;
+						}else if(clip_reg_idx_tra==1){
+							var_cand_tmp->chrname = mate_clip_reg->leftClipReg->chrname;
+							var_cand_tmp->leftClipRefPos = mate_clip_reg->leftClipReg->startRefPos;
+							var_cand_tmp->rightClipRefPos = mate_clip_reg->leftClipReg->endRefPos;
+							mate_clip_reg->left_var_cand_tra = var_cand_tmp;
+						}else if(clip_reg_idx_tra==2){
+							var_cand_tmp->chrname = mate_clip_reg->rightClipReg->chrname;
+							var_cand_tmp->leftClipRefPos = mate_clip_reg->rightClipReg->startRefPos;
+							var_cand_tmp->rightClipRefPos = mate_clip_reg->rightClipReg->endRefPos;
+							mate_clip_reg->right_var_cand_tra = var_cand_tmp;
+						}else if(clip_reg_idx_tra==3){
+							var_cand_tmp->chrname = mate_clip_reg->leftClipReg->chrname;
+							var_cand_tmp->leftClipRefPos = mate_clip_reg->leftMeanClipPos;
+							var_cand_tmp->rightClipRefPos = mate_clip_reg->leftMeanClipPos2;
+							mate_clip_reg->left_var_cand_tra = var_cand_tmp;
+						}else if(clip_reg_idx_tra==4){
+							var_cand_tmp->chrname = mate_clip_reg->rightClipReg->chrname;
+							var_cand_tmp->leftClipRefPos = mate_clip_reg->rightMeanClipPos;
+							var_cand_tmp->rightClipRefPos = mate_clip_reg->rightMeanClipPos2;
+							mate_clip_reg->right_var_cand_tra = var_cand_tmp;
+						}
+						var_cand_tmp->sv_type = mate_clip_reg->sv_type;
+						var_cand_tmp->dup_num = 0;
+					}else{
+						cerr << __func__ << ", line=" << __LINE__ << ", invalid variation type=" << mate_clip_reg->sv_type << ", error!" << endl;
+						exit(1);
+					}
+				}else{
+					var_cand_tmp->leftClipRefPos = var_cand_tmp->rightClipRefPos = 0;
+					var_cand_tmp->sv_type = VAR_UNC;
+					var_cand_tmp->dup_num = 0;
+				}
+
+				var_cand_vec.push_back(var_cand_tmp);
+				lineNum ++;
+			}
+
+			if(!prev_limit_reg_vec.empty() and prev_delete_flag) destroyLimitRegVector(prev_limit_reg_vec);
 		}
 	}
 	var_cand_vec.shrink_to_fit();
 	infile.close();
+	if(limit_reg_process_flag) delete simple_reg;
 
 	//cout << var_cand_filename << "\tlineNum=" << lineNum << endl;
 }
@@ -1997,6 +2340,8 @@ void Chrome::loadMisAlnRegData(){
 	vector<string> line_vec;
 	reg_t *reg;
 
+	if(isFileExist(misAln_reg_filename)==false) return;
+
 	infile.open(misAln_reg_filename);
 	if(!infile.is_open()){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << misAln_reg_filename << endl;
@@ -2044,11 +2389,15 @@ void Chrome::sortMisAlnRegData(){
 }
 
 // load previously blat aligned information
-void Chrome::loadPrevBlatAlnItems(bool clipReg_flag){
+void Chrome::loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 	ifstream infile;
-	string infilename, line, done_str, old_out_dir, alnfilename, refseqfilename, contigfilename;
+	string infilename, line, done_str, old_out_dir, alnfilename, refseqfilename, contigfilename, pattern_str;
 	vector<string> line_vec;
 	varCand *var_cand_tmp;
+	simpleReg_t *simple_reg, *prev_simple_reg;
+	vector<simpleReg_t*> sub_limit_reg_vec, prev_limit_reg_vec, prev_limit_reg_vec_tmp, pos_limit_reg_vec;
+	bool flag, pos_contained_flag, prev_delete_flag;
+	size_t i;
 
 	if(clipReg_flag) infilename = blat_var_cand_clipReg_filename;
 	else infilename = blat_var_cand_indel_filename;
@@ -2061,19 +2410,15 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag){
 		exit(1);
 	}
 
+	if(limit_reg_process_flag){
+		if(clipReg_flag) pattern_str = CLIPREG_PATTERN;
+		else pattern_str = REFSEQ_PATTERN;
+		simple_reg = new simpleReg_t();
+	}
+
 	old_out_dir = "";
 	while(getline(infile, line)){
 		if(line.size()>0 and line.at(0)!='#'){
-			// allocate memory
-			var_cand_tmp = new varCand();
-
-			var_cand_tmp->chrname = "";
-			var_cand_tmp->var_cand_filename = "";
-			var_cand_tmp->out_dir_call = "";
-			var_cand_tmp->misAln_filename = "";
-			var_cand_tmp->inBamFile = "";
-			var_cand_tmp->fai = NULL;
-
 			line_vec = split(line, "\t");
 
 			// update item file name
@@ -2082,42 +2427,107 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag){
 			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
 			refseqfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
 
-			var_cand_tmp->alnfilename = alnfilename;  // align file name
-			var_cand_tmp->ctgfilename = contigfilename;  // contig file name
-			var_cand_tmp->refseqfilename = refseqfilename;  // refseq file name
-			var_cand_tmp->ref_left_shift_size = 0;  // ref_left_shift_size
-			var_cand_tmp->ref_right_shift_size = 0;  // ref_right_shift_size
+			flag = true;
+			pos_contained_flag = false;
+			prev_delete_flag = true;
+			if(limit_reg_process_flag) {
+				getRegByFilename(simple_reg, refseqfilename, pattern_str);
+				//sub_limit_reg_vec = getSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+				sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+				if(sub_limit_reg_vec.size()==0) {
+					flag = false;
+					prev_limit_reg_vec = extractSimpleRegsByStr(line_vec.at(4));
+					for(i=0; i<prev_limit_reg_vec.size(); i++){
+						prev_simple_reg = prev_limit_reg_vec.at(i);
+						//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
+						prev_limit_reg_vec_tmp = getFullyContainedSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
+						if(prev_limit_reg_vec_tmp.size()){  // region fully contained
+							flag = true;
+							break;
+						}
+					}
 
-			var_cand_tmp->blat_aligned_info_vec = NULL;
-			var_cand_tmp->blat_var_cand_file = NULL;
+					if(flag==false){  // position contained
+						pos_limit_reg_vec = getPosContainedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+						if(pos_limit_reg_vec.size()){
+							flag = true;
+							pos_contained_flag = true;
+						}
+					}
+				}
+			}
 
-			if(line_vec[3].compare(ALIGN_SUCCESS)==0) var_cand_tmp->align_success = true;
-			else var_cand_tmp->align_success = false;
+			if(flag){
+				// allocate memory
+				var_cand_tmp = new varCand();
 
-			var_cand_tmp->ctg_num = 0;
+				var_cand_tmp->chrname = "";
+				var_cand_tmp->var_cand_filename = "";
+				var_cand_tmp->out_dir_call = "";
+				var_cand_tmp->misAln_filename = "";
+				var_cand_tmp->inBamFile = "";
+				var_cand_tmp->fai = NULL;
 
-			// deal with 'DONE' string
-			done_str = line_vec.at(line_vec.size()-1);
-			if(done_str.compare(DONE_STR)==0){
-				if(clipReg_flag) blat_aligned_chr_clipReg_varCand_vec.push_back(var_cand_tmp);
-				else blat_aligned_chr_varCand_vec.push_back(var_cand_tmp);
-			}else delete var_cand_tmp;
+				var_cand_tmp->alnfilename = alnfilename;  // align file name
+				var_cand_tmp->ctgfilename = contigfilename;  // contig file name
+				var_cand_tmp->refseqfilename = refseqfilename;  // refseq file name
+				var_cand_tmp->ref_left_shift_size = 0;  // ref_left_shift_size
+				var_cand_tmp->ref_right_shift_size = 0;  // ref_right_shift_size
+
+				var_cand_tmp->blat_aligned_info_vec = NULL;
+				var_cand_tmp->blat_var_cand_file = NULL;
+
+				if(line_vec[3].compare(ALIGN_SUCCESS)==0) var_cand_tmp->align_success = true;
+				else var_cand_tmp->align_success = false;
+
+				var_cand_tmp->ctg_num = 0;
+
+				// limit regions
+				var_cand_tmp->limit_reg_process_flag = limit_reg_process_flag;
+				if(sub_limit_reg_vec.size()>0) for(i=0; i<sub_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(sub_limit_reg_vec.at(i));
+				else{
+					if(pos_contained_flag==false){
+						for(i=0; i<prev_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(prev_limit_reg_vec.at(i));
+						var_cand_tmp->limit_reg_delete_flag = true;
+						prev_delete_flag = false;
+					}else for(i=0; i<pos_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(pos_limit_reg_vec.at(i));
+				}
+
+				// deal with 'DONE' string
+				done_str = line_vec.at(line_vec.size()-1);
+				if(done_str.compare(DONE_STR)==0){
+					if(clipReg_flag) blat_aligned_chr_clipReg_varCand_vec.push_back(var_cand_tmp);
+					else blat_aligned_chr_varCand_vec.push_back(var_cand_tmp);
+				}else delete var_cand_tmp;
+			}
+
+			if(!prev_limit_reg_vec.empty() and prev_delete_flag) destroyLimitRegVector(prev_limit_reg_vec);
 		}
 	}
 
 	infile.close();
+	if(limit_reg_process_flag) delete simple_reg;
 }
 
 // set blat var_cand files
 void Chrome::setBlatVarcandFiles(){
 	ifstream infile;
-	string line, new_line, tmp_filename, header_line, old_out_dir, alnfilename, contigfilename, refseqfilename;
+	string line, new_line, tmp_filename, header_line, old_out_dir, alnfilename, contigfilename, refseqfilename, pattern_str, limit_reg_str;
 	vector<string> str_vec;
 	varCand *var_cand;
 	size_t i;
+	simpleReg_t *simple_reg, *prev_simple_reg;
+	vector<simpleReg_t*> sub_limit_reg_vec, prev_limit_reg_vec, prev_limit_reg_vec_tmp, pos_limit_reg_vec;
+	bool flag, pos_contained_flag;
 
 	// indel
 	if(isFileExist(blat_var_cand_indel_filename)){
+
+		if(paras->limit_reg_process_flag){
+			pattern_str = REFSEQ_PATTERN;
+			simple_reg = new simpleReg_t();
+		}
+
 		tmp_filename = blat_var_cand_indel_filename + "_tmp";
 		rename(blat_var_cand_indel_filename.c_str(), tmp_filename.c_str());
 
@@ -2147,10 +2557,56 @@ void Chrome::setBlatVarcandFiles(){
 					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
 					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
 
-					new_line = alnfilename + "\t" + contigfilename + "\t" + refseqfilename;
-					for(i=3; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+					flag = true;
+					pos_contained_flag = false;
+					if(paras->limit_reg_process_flag) {
+						getRegByFilename(simple_reg, refseqfilename, pattern_str);
+						//sub_limit_reg_vec = getSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+						sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+						if(sub_limit_reg_vec.size()==0) {
+							flag = false;
+							prev_limit_reg_vec = extractSimpleRegsByStr(str_vec.at(4));
+							for(i=0; i<prev_limit_reg_vec.size(); i++){
+								prev_simple_reg = prev_limit_reg_vec.at(i);
+								//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, paras->limit_reg_vec);
+								prev_limit_reg_vec_tmp = getFullyContainedSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, paras->limit_reg_vec);
+								if(prev_limit_reg_vec_tmp.size()){  // region fully contained
+									flag = true;
+									break;
+								}
+							}
 
-					blat_var_cand_indel_file << new_line << endl;
+							if(flag==false){  // position contained
+								pos_limit_reg_vec = getPosContainedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+								if(pos_limit_reg_vec.size()){
+									flag = true;
+									pos_contained_flag = true;
+								}
+							}
+						}
+					}
+
+					if(flag){
+						new_line = alnfilename + "\t" + contigfilename + "\t" + refseqfilename;
+						new_line += "\t" + str_vec.at(3);
+
+						// limit regions
+						if(paras->limit_reg_process_flag){
+							if(sub_limit_reg_vec.size()) limit_reg_str = getLimitRegStr(sub_limit_reg_vec);
+							else {
+								if(pos_contained_flag==false) limit_reg_str = getLimitRegStr(prev_limit_reg_vec);
+								else limit_reg_str = getLimitRegStr(pos_limit_reg_vec);
+							}
+						}else limit_reg_str = LIMIT_REG_ALL_STR;
+						new_line += "\t" + limit_reg_str;
+
+						// other fields
+						for(i=5; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+
+						blat_var_cand_indel_file << new_line << endl;
+					}
+
+					if(!prev_limit_reg_vec.empty()) destroyLimitRegVector(prev_limit_reg_vec);
 				}else
 					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
 			}
@@ -2158,6 +2614,7 @@ void Chrome::setBlatVarcandFiles(){
 
 		infile.close();
 		remove(tmp_filename.c_str());
+		if(paras->limit_reg_process_flag) delete simple_reg;
 	}else{
 		blat_var_cand_indel_file.open(blat_var_cand_indel_filename);
 		if(!blat_var_cand_indel_file.is_open()){
@@ -2175,6 +2632,12 @@ void Chrome::setBlatVarcandFiles(){
 
 	// clipReg
 	if(isFileExist(blat_var_cand_clipReg_filename)){
+
+		if(paras->limit_reg_process_flag){
+			pattern_str = CLIPREG_PATTERN;
+			simple_reg = new simpleReg_t();
+		}
+
 		tmp_filename = blat_var_cand_clipReg_filename + "_tmp";
 		rename(blat_var_cand_clipReg_filename.c_str(), tmp_filename.c_str());
 
@@ -2204,10 +2667,56 @@ void Chrome::setBlatVarcandFiles(){
 					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
 					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
 
-					new_line = alnfilename + "\t" + contigfilename + "\t" + refseqfilename;
-					for(i=3; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+					flag = true;
+					pos_contained_flag = false;
+					if(paras->limit_reg_process_flag) {
+						getRegByFilename(simple_reg, refseqfilename, pattern_str);
+						//sub_limit_reg_vec = getSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+						sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+						if(sub_limit_reg_vec.size()==0){
+							flag = false;
+							prev_limit_reg_vec = extractSimpleRegsByStr(str_vec.at(4));
+							for(i=0; i<prev_limit_reg_vec.size(); i++){
+								prev_simple_reg = prev_limit_reg_vec.at(i);
+								//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, paras->limit_reg_vec);
+								prev_limit_reg_vec_tmp = getFullyContainedSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, paras->limit_reg_vec);
+								if(prev_limit_reg_vec_tmp.size()){ // region fully contained
+									flag = true;
+									break;
+								}
+							}
 
-					blat_var_cand_clipReg_file << new_line << endl;
+							if(flag==false){ // position contained
+								pos_limit_reg_vec = getPosContainedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, paras->limit_reg_vec);
+								if(pos_limit_reg_vec.size()){
+									flag = true;
+									pos_contained_flag = true;
+								}
+							}
+						}
+					}
+
+					if(flag){
+						new_line = alnfilename + "\t" + contigfilename + "\t" + refseqfilename;
+						new_line += "\t" + str_vec.at(3);
+
+						// limit regions
+						if(paras->limit_reg_process_flag){
+							if(sub_limit_reg_vec.size()) limit_reg_str = getLimitRegStr(sub_limit_reg_vec);
+							else{
+								if(pos_contained_flag==false) limit_reg_str = getLimitRegStr(prev_limit_reg_vec);
+								else limit_reg_str = getLimitRegStr(pos_limit_reg_vec);
+							}
+						}else limit_reg_str = LIMIT_REG_ALL_STR;
+						new_line += "\t" + limit_reg_str;
+
+						// other fields
+						for(i=5; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i);
+
+						blat_var_cand_clipReg_file << new_line << endl;
+					}
+
+					if(!prev_limit_reg_vec.empty()) destroyLimitRegVector(prev_limit_reg_vec);
 				}else
 					cout << "line=" << __LINE__ << "," << var_cand_indel_filename << ": line does not end with 'DONE'!" << endl;
 			}
@@ -2215,6 +2724,7 @@ void Chrome::setBlatVarcandFiles(){
 
 		infile.close();
 		remove(tmp_filename.c_str());
+		if(paras->limit_reg_process_flag) delete simple_reg;
 	}else{
 		blat_var_cand_clipReg_file.open(blat_var_cand_clipReg_filename);
 		if(!blat_var_cand_clipReg_file.is_open()){
@@ -2247,7 +2757,7 @@ void Chrome::resetBlatVarcandFiles(){
 
 // get blat align file header line which starts with '#'
 string Chrome::getBlatVarcandFileHeaderLine(){
-	string header_line = "#BlatAlnFile\tContigFile\tRefFile\tStatus\tDoneFlag";
+	string header_line = "#BlatAlnFile\tContigFile\tRefFile\tStatus\tLimitRegs\tDoneFlag";
 	return header_line;
 }
 

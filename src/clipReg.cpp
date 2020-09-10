@@ -501,6 +501,9 @@ void clipReg::computeClipRegs(){
 	if(mate_clip_reg.rightClipReg) mate_clip_reg.rightClipRegNum ++;
 	if(mate_clip_reg.rightClipReg2) mate_clip_reg.rightClipRegNum ++;
 
+	mate_clip_reg.var_cand = NULL;
+	mate_clip_reg.left_var_cand_tra = mate_clip_reg.right_var_cand_tra = NULL;
+
 	// remove FP region for single clip end
 	removeFPClipSingleEnd(mate_clip_reg);
 
@@ -562,7 +565,7 @@ void clipReg::removeFalseOverlappedMateClipReg(){
 }
 
 void clipReg::removeFPClipSingleEnd(mateClipReg_t &mate_clip_reg){
-	size_t dist;
+	int64_t dist;
 	bool valid_flag;
 
 	if(mate_clip_reg.leftClipRegNum==2){

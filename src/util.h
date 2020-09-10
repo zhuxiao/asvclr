@@ -55,20 +55,30 @@ void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename
 void cleanPrevAssembledTmpDir(const string &assem_dir_str, const string &dir_prefix);
 string getCallFileHeaderBed();
 string getCallFileHeaderBedpe();
-assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, bool clip_reg_flag);
+assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, bool clip_reg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 void releaseAssemWorkOpt(assembleWork_opt *assem_work_opt);
 void destroyAssembleWorkOptVec(vector<assembleWork_opt*> &assem_work_vec);
 void *doit_canu(void *arg);
 int test_canu(int n, vector<string> &cmd_vec);
 void* processSingleAssembleWork(void *arg);
-void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag);
-void outputAssemWorkOptToFile(vector<assembleWork_opt*> &assem_work_opt_vec);
+void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+void outputAssemWorkOptToFile_debug(vector<assembleWork_opt*> &assem_work_opt_vec);
 string getOldOutDirname(string &filename, string &sub_work_dir);
 string getUpdatedItemFilename(string &filename, string &out_dir, string &old_out_dir);
 string deleteTailPathChar(string &dirname);
-vector<simpleReg_t*> getSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec);
+// get overlapped simple regions
+vector<simpleReg_t*> getOverlappedSimpleRegsExt(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec, int32_t ext_size);
+vector<simpleReg_t*> getOverlappedSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec);
+vector<simpleReg_t*> getFullyContainedSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec);
+bool isFullyContainedReg(string &chrname1, int64_t begPos1, int64_t endPos1, string &chrname2, int64_t startPos2, int64_t endPos2);
+vector<simpleReg_t*> getPosContainedSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec);
 simpleReg_t* allocateSimpleReg(string &simple_reg_str);
+void destroyLimitRegVector(vector<simpleReg_t*> &limit_reg_vec);
 void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, string &description);
+void getRegByFilename(simpleReg_t *reg, string &filename, string &pattern_str);
+vector<simpleReg_t*> extractSimpleRegsByStr(string &regs_str);
+string getLimitRegStr(vector<simpleReg_t*> &limit_reg_vec);
+
 
 class Time{
 	private:

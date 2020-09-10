@@ -137,7 +137,7 @@ void MultiThread::runGenAssembleWorkOpt(){
 	for (size_t i=0; i < blockVector->size(); i++){
 		if(i%num_threads==user_tid_tmp){
 			bloc = blockVector->at(i);
-			bloc->blockGenerateLocalAssembleWorkOpt();
+			if(bloc->process_flag) bloc->blockGenerateLocalAssembleWorkOpt();
 		}
 	}
 }

@@ -60,6 +60,8 @@ class varCand {
 	public:
 		string var_cand_filename, out_dir_call, chrname, inBamFile, misAln_filename;
 		faidx_t *fai;
+		vector<simpleReg_t*> sub_limit_reg_vec;
+		bool limit_reg_process_flag, limit_reg_delete_flag;
 
 		string refseqfilename, ctgfilename, readsfilename, alnfilename;
 		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num;

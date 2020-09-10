@@ -25,6 +25,11 @@ LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, stri
 	this->compensation_coefficient = 1;
 	sampling_flag = false;
 	this->delete_reads_flag = delete_reads_flag;
+
+	if(isFileExist(contigfilename)) assem_success_preDone_flag = true;
+	else assem_success_preDone_flag = false;
+
+	limit_reg_process_flag = false;
 }
 
 LocalAssembly::~LocalAssembly() {
@@ -53,6 +58,12 @@ void LocalAssembly::destoryFqSeqs(vector<struct fqSeqNode*> &fq_seq_vec){
 		delete fq_node;
 	}
 	vector<struct fqSeqNode*>().swap(fq_seq_vec);
+}
+
+// set limit process regions
+void LocalAssembly::setLimitRegs(bool limit_reg_process_flag, vector<simpleReg_t*> limit_reg_vec){
+	this->limit_reg_process_flag = limit_reg_process_flag;
+	for(size_t i=0; i<limit_reg_vec.size(); i++) this->limit_reg_vec.push_back(limit_reg_vec.at(i));
 }
 
 // extract the corresponding refseq from reference
@@ -641,10 +652,11 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 
 // record assembly information
 void LocalAssembly::recordAssemblyInfo(ofstream &assembly_info_file){
-	string line, assembly_status, header, left_shift_size_str, right_shift_size_str, reg_str, sampling_str;
+	string line, assembly_status, header, left_shift_size_str, right_shift_size_str, reg_str, sampling_str, limit_reg_str, limit_reg_str2;
 	reg_t *reg;
 	ifstream infile;
 	vector<string> str_vec;
+	simpleReg_t *simple_reg;
 
 	// ref shift size
 	infile.open(refseqfilename);
@@ -680,12 +692,31 @@ void LocalAssembly::recordAssemblyInfo(ofstream &assembly_info_file){
 	}
 
 	// coverage sampling information
-	sampling_str = to_string(local_cov_original);
-	if(sampling_flag){
-		sampling_str = sampling_str + ";" + to_string(sampled_cov) + ";" + to_string(compensation_coefficient) + ";" + SAMPLED_STR;
-	}else
-		sampling_str = sampling_str + ";-;" + ";" + to_string(compensation_coefficient) + UNSAMPLED_STR;
+	if(sampling_flag)
+		sampling_str = to_string(local_cov_original) + ";" + to_string(sampled_cov) + ";" + to_string(compensation_coefficient) + ";" + SAMPLED_STR;
+	else{
+		sampling_str = "-;-;-;-;";
+		sampling_str = sampling_str + UNSAMPLED_STR;
+	}
 	line += "\t" + sampling_str;
+
+	// limit process regions
+	if(limit_reg_process_flag){
+		if(limit_reg_vec.size()){
+			simple_reg = limit_reg_vec.at(0);
+			limit_reg_str = simple_reg->chrname;
+			if(simple_reg->startPos!=-1 and simple_reg->endPos!=-1) limit_reg_str += ":" + to_string(simple_reg->startPos) + "-" + to_string(simple_reg->endPos);
+			for(size_t i=1; i<limit_reg_vec.size(); i++){
+				simple_reg = limit_reg_vec.at(i);
+				limit_reg_str2 = simple_reg->chrname;
+				if(simple_reg->startPos!=-1 and simple_reg->endPos!=-1) limit_reg_str2 += ":" + to_string(simple_reg->startPos) + "-" + to_string(simple_reg->endPos);
+				limit_reg_str += ";" + limit_reg_str2;
+			}
+		}else limit_reg_str = "-";
+	}else{
+		limit_reg_str = LIMIT_REG_ALL_STR;
+	}
+	line += "\t" + limit_reg_str;
 
 	// done string
 	line = line + "\t" + DONE_STR;

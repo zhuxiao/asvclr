@@ -97,7 +97,7 @@ class Block{
 		void computeDisagrNumSingleRegion(size_t startRpos, size_t endRPos, size_t regFlag);
 		bool isMisAlnReg(Region &reg);
 		int computeAbSigs();
-		int processSingleRegion(size_t startRpos, size_t endRPos, size_t regFlag);
+		int processSingleRegion(int64_t startRpos, int64_t endRPos, int64_t regFlag);
 		void copySVEvents(Region &reg);
 		void computeZeroCovReg(Region &reg);
 		void updateZeroCovRegUsingIndelReg(vector<reg_t*> &zeroCovRegVec, vector<reg_t*> &indelVec);
@@ -110,7 +110,9 @@ class Block{
 		void blockGenerateLocalAssembleWorkOpt_Indel();
 		void blockGenerateLocalAssembleWorkOpt_ClipReg();
 		void saveSV2File();
-		bool getPrevAssembledDoneFlag(string &contigfilename, vector<varCand*> *assembled_varcand_vec);
+		bool getPrevAssembledDoneFlag(string &contigfilename, bool clipReg_flag);
+		bool getPrevAssembledDoneFlag2(string &contigfilename, vector<varCand*> *assembled_varcand_vec);
+		bool getPrevAssembledDoneFlag2(string &contigfilename, vector<string> &assembled_filename_vec);
 
 		// duplication and inversion
 		void mergeOverlappedClipReg();

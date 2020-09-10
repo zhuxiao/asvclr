@@ -35,6 +35,11 @@ class LocalAssembly {
 		string chrname, readsfilename, contigfilename, refseqfilename, tmpdir, inBamFile; // canu_version;
 		int64_t chrlen, assembly_extend_size, startRefPos_assembly, endRefPos_assembly;
 		size_t num_threads_per_assem_work;
+		bool assem_success_preDone_flag;
+
+		// limit process regions
+		bool limit_reg_process_flag;
+		vector<simpleReg_t*> limit_reg_vec;
 
 		vector<reg_t*> varVec;
 		faidx_t *fai;
@@ -55,6 +60,7 @@ class LocalAssembly {
 		void extractReadsDataFromBAM();
 		bool localAssembleCanu();
 		void recordAssemblyInfo(ofstream &assembly_info_file);
+		void setLimitRegs(bool limit_reg_process_flag, vector<simpleReg_t*> limit_reg_vec);
 
 	private:
 		void destoryAlnData();

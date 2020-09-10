@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"0.6.8"
+#define PROG_VERSION				"0.7.0"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -54,6 +54,8 @@ using namespace std;
 
 #define SAMPLED_STR					"SAMPLED"
 #define UNSAMPLED_STR				"UNSAMPLED"
+
+#define LIMIT_REG_ALL_STR			"ALL"
 
 #define EXPECTED_COV_ASSEMBLE		30.0f
 #define MASK_VAL_DEFAULT			0
@@ -114,6 +116,9 @@ class Paras
 		pthread_mutex_t mtx_assemble_reg_workDone_num;
 		size_t num_threads_per_assem_work;
 
+		// previously assembled regions
+		vector<string> assembled_clipReg_filename_vec;
+
 	public:
 		Paras();
 		Paras(int argc, char **argv);
@@ -124,7 +129,6 @@ class Paras
 		void outputEstParas(string info);
 
 	private:
-		void destroyLimitRegVector();
 		void init();
 		//string getCanuVersion();
 		int checkBamFile();

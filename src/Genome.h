@@ -64,6 +64,7 @@ class Genome{
 		mateClipReg_t* getSameClipRegTRA(mateClipReg_t *clip_reg_given, vector<Chrome*> &chrome_vec);
 		void saveDetectResultToFile();
 		void mergeDetectResult();
+		void genomeLoadDataAssemble();
 		int processAssembleWork();
 		ofstream* getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, bool clip_reg_flag);
 

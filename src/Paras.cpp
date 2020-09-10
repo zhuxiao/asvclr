@@ -11,8 +11,7 @@ Paras::Paras(){
 }
 
 // Constructor with parameters
-Paras::Paras(int argc, char **argv)
-{
+Paras::Paras(int argc, char **argv){
 	init();
 	if(parseParas(argc, argv)!=0) exit(1);
 
@@ -22,20 +21,11 @@ Paras::Paras(int argc, char **argv)
 
 //Destructor
 Paras::~Paras(){
-	if(!limit_reg_vec.empty()) destroyLimitRegVector();
-}
-
-// free the memory of limited regions
-void Paras::destroyLimitRegVector(){
-	vector<simpleReg_t*>::iterator s_reg;
-	for(s_reg=limit_reg_vec.begin(); s_reg!=limit_reg_vec.end(); s_reg++)
-		delete (*s_reg);   // free each node
-	vector<simpleReg_t*>().swap(limit_reg_vec);
+	if(!limit_reg_vec.empty()) destroyLimitRegVector(limit_reg_vec);
 }
 
 // initialization
-void Paras::init()
-{
+void Paras::init(){
 	command = "";
 	inBamFile = "";
 	outFilePrefix = "";
@@ -148,8 +138,7 @@ int Paras::checkBamFile(){
 }
 
 // parse the parameters
-int Paras::parseParas(int argc, char **argv)
-{
+int Paras::parseParas(int argc, char **argv){
 	if (argc < 2) { showUsage(); return 1; }
 
     if (strcmp(argv[1], "-h") == 0 or strcmp(argv[1], "help") == 0 or strcmp(argv[1], "--help") == 0) {
@@ -181,8 +170,7 @@ int Paras::parseParas(int argc, char **argv)
 }
 
 // parse the parameters for detect command
-int Paras::parseDetectParas(int argc, char **argv)
-{
+int Paras::parseDetectParas(int argc, char **argv){
 	int opt, threadNum_tmp = 1, mask_val;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
@@ -245,8 +233,7 @@ int Paras::parseDetectParas(int argc, char **argv)
 }
 
 // parse the parameters for assemble command
-int Paras::parseAssembleParas(int argc, char **argv)
-{
+int Paras::parseAssembleParas(int argc, char **argv){
 	int opt, threadNum_tmp = 1, mask_val, delete_reads_val;
 	blockSize = BLOCKSIZE;
 	slideSize = ASSEM_SLIDE_SIZE;
@@ -318,8 +305,7 @@ int Paras::parseAssembleParas(int argc, char **argv)
 }
 
 // parse the parameters for call command
-int Paras::parseCallParas(int argc, char **argv)
-{
+int Paras::parseCallParas(int argc, char **argv){
 	int opt, threadNum_tmp = 1, mask_val;
 	blockSize = BLOCKSIZE;
 	slideSize = ASSEM_SLIDE_SIZE;
@@ -374,8 +360,7 @@ int Paras::parseCallParas(int argc, char **argv)
 }
 
 // parse the parameters for 'all' command
-int Paras::parseAllParas(int argc, char **argv)
-{
+int Paras::parseAllParas(int argc, char **argv){
 	int opt, threadNum_tmp = 1, mask_val, delete_reads_val;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
@@ -463,8 +448,7 @@ int Paras::parseAllParas(int argc, char **argv)
 }
 
 // show the usage
-void Paras::showUsage()
-{
+void Paras::showUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
 	cout << "Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
@@ -484,8 +468,7 @@ void Paras::showUsage()
 }
 
 // show the usage for detect command
-void Paras::showDetectUsage()
-{
+void Paras::showDetectUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
 	cout << "Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
@@ -512,8 +495,7 @@ void Paras::showDetectUsage()
 }
 
 // show the usage for assemble command
-void Paras::showAssembleUsage()
-{
+void Paras::showAssembleUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
 	cout << "Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>" << endl << endl;
@@ -541,8 +523,7 @@ void Paras::showAssembleUsage()
 }
 
 // show the usage for call command
-void Paras::showCallUsage()
-{
+void Paras::showCallUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
 	cout << "Usage: asvclr call [options] <REF_FILE> <BAM_FILE>" << endl << endl;
@@ -563,8 +544,7 @@ void Paras::showCallUsage()
 }
 
 // show the usage for all command
-void Paras::showAllUsage()
-{
+void Paras::showAllUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
 	cout << "Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;

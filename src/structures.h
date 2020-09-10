@@ -22,6 +22,7 @@ typedef struct{
 typedef struct{
 	string chrname;
 	int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
+	//int64_t ref_len, local_ref_len, query_len;
 	int32_t var_type, aln_orient, dup_num;
 	int32_t query_id, sv_len, blat_aln_id;
 	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
@@ -65,8 +66,9 @@ typedef struct {
 typedef struct {
 	string chrname, readsfilename, contigfilename, refseqfilename, tmpdir;
 	reg_t **var_array;
-	uint32_t arr_size;
-	bool clip_reg_flag;
+	simpleReg_t **limit_reg_array;
+	uint32_t arr_size, limit_reg_array_size;
+	bool clip_reg_flag, limit_reg_process_flag;
 }assembleWork_opt;
 
 // from Paras.h

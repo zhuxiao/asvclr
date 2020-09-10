@@ -18,6 +18,12 @@ varCand::varCand(){
 
 varCand::~varCand() {
 	if(clip_reg) delete clip_reg;
+	if(limit_reg_delete_flag){
+		for(size_t i=0; i<sub_limit_reg_vec.size(); i++)
+			delete sub_limit_reg_vec.at(i);
+		vector<simpleReg_t*>().swap(sub_limit_reg_vec);
+		limit_reg_delete_flag = false;
+	}
 }
 
 void varCand::init(){
@@ -33,6 +39,7 @@ void varCand::init(){
 	dup_num = 0;
 	margin_adjusted_flag = false;
 	blat_var_cand_file = NULL;
+	limit_reg_delete_flag = false;
 }
 
 void varCand::destroyVarCand(){
@@ -79,7 +86,7 @@ void varCand::alnCtg2Refseq(){
 
 // record blat aligned information
 void varCand::recordBlatAlnInfo(){
-	string line, aln_flag_str;
+	string line, aln_flag_str, limit_reg_str;
 	bool aln_flag;
 
 	if(blat_var_cand_file){
@@ -87,7 +94,11 @@ void varCand::recordBlatAlnInfo(){
 		if(aln_flag) aln_flag_str = ALIGN_SUCCESS;
 		else aln_flag_str = ALIGN_FAILURE;
 
-		line = alnfilename + "\t" + ctgfilename + "\t" + refseqfilename + "\t" + aln_flag_str + "\t" + DONE_STR;
+		// limit regions
+		if(limit_reg_process_flag) limit_reg_str = getLimitRegStr(sub_limit_reg_vec);
+		else limit_reg_str = LIMIT_REG_ALL_STR;
+
+		line = alnfilename + "\t" + ctgfilename + "\t" + refseqfilename + "\t" + aln_flag_str + "\t" + limit_reg_str + "\t" + DONE_STR;
 
 		pthread_mutex_lock(&mutex_write_blat_aln);
 		*blat_var_cand_file << line << endl;
@@ -640,13 +651,15 @@ void varCand::updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query
 
 // call indel types
 void varCand::determineIndelType(){
-	int32_t  i, j, k, query_dist, ref_dist, decrease_size, var_type, startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
+	int32_t  i, j, k, query_dist, ref_dist, decrease_size, var_type;
+	int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
 	blat_aln_t *blat_aln;
 	aln_seg_t *seg1, *seg2;
 	reg_t *reg, *reg_tmp;
 	string reg_str;
 	bool newFlag, updateFlag;
 	vector<reg_t*> foundRegVec, candRegVec, reg_vec_tmp;
+	//vector<int64_t> ref_query_len_vec; // ref_len, local_ref_len, query_len
 
 	for(i=0; i<(int32_t)blat_aln_vec.size(); i++){
 		var_type = VAR_UNC;
@@ -713,8 +726,7 @@ void varCand::determineIndelType(){
 							reg = reg_vec_tmp.at(k);
 							if(reg->blat_aln_id==-1)
 								reg->blat_aln_id = i;
-							if(reg->blat_aln_id==i)
-							{
+							if(reg->blat_aln_id==i){
 								foundRegVec.push_back(reg);
 
 								reg_tmp = new reg_t();
@@ -1728,8 +1740,8 @@ void varCand::mergeNeighboringVariants(vector<reg_t*> &foundRegVec, vector<reg_t
 vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRegVec, vector<reg_t*> &candRegVec){
 	reg_t *reg, *reg_tmp, *reg_new_1, *reg_new_2, *reg_new_3, *reg_new_4;
 	int32_t i, j, idx, same_count, opID1, opID2, startShiftLen, endShiftLen;
-	int32_t startRefPos1, endRefPos1, startQueryPos1, endQueryPos1, startRefPos2, endRefPos2, startQueryPos2, endQueryPos2, tmp_pos;
-	int32_t new_startRefPos, new_endRefPos, new_startLocalRefPos, new_endLocalRefPos, new_startQueryPos, new_endQueryPos;
+	int64_t startRefPos1, endRefPos1, startQueryPos1, endQueryPos1, startRefPos2, endRefPos2, startQueryPos2, endQueryPos2, tmp_pos, query_len;
+	int64_t new_startRefPos, new_endRefPos, new_startLocalRefPos, new_endLocalRefPos, new_startQueryPos, new_endQueryPos;
 	vector<int32_t> numVec1, numVec2;
 	vector<reg_t*> updatedRegVec[foundRegVec.size()], regVec_tmp, processed_reg_vec;
 	vector< vector<reg_t*> > regVec;
@@ -1778,12 +1790,16 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 				// compute the variant locations
 				computeVarRegLoc(reg, reg_tmp);
 
+				FastaSeqLoader ctgseqloader(ctgfilename);
+				query_len = ctgseqloader.getFastaSeqLen(reg_tmp->query_id);
+
 				if(reg->startLocalRefPos>0 and reg->endLocalRefPos>0 and reg->startQueryPos>0 and reg->endQueryPos>0){
 					// check left marginal regions
 					opID1 = -1;
 					if(reg->startRefPos==reg_tmp->startRefPos){
 						opID1 = 0;
 						numVec1.insert(numVec1.begin(), 6, 0);
+						startRefPos1 = endRefPos1 = startQueryPos1 = endQueryPos1 = 0; // will be not used
 					}else if(reg->startRefPos<reg_tmp->startRefPos){
 						startRefPos1 = reg->startRefPos;
 						endRefPos1 = reg_tmp->startRefPos - 1;
@@ -1806,6 +1822,10 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						endQueryPos1 = tmp_pos;
 					}
 
+					// check subject length and query length
+					if(startQueryPos1<1) startQueryPos1 = 1;
+					if(endQueryPos1>query_len) endQueryPos1 = query_len;
+
 					//if(opID1!=0 and startRefPos1<endRefPos1 and startQueryPos1<endQueryPos1){
 					if(opID1!=0){
 						numVec1 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos1, endRefPos1, reg_tmp->query_id, startQueryPos1, endQueryPos1, reg->aln_orient, inBamFile, fai);
@@ -1824,6 +1844,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 					if(reg_tmp->endRefPos==reg->endRefPos){
 						opID2 = 0;
 						numVec2.insert(numVec2.begin(), 6, 0);
+						startRefPos2 = endRefPos2 = startQueryPos2 = endQueryPos2 = 0; // will be not used
 					}else if(reg_tmp->endRefPos<reg->endRefPos){
 						startRefPos2 = reg_tmp->endRefPos + 1;
 						endRefPos2 = reg->endRefPos;
@@ -1846,6 +1867,10 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 						startQueryPos2 = endQueryPos2;
 						endQueryPos2 = tmp_pos;
 					}
+
+					// check subject length and query length
+					if(startQueryPos2<1) startQueryPos2 = 1;
+					if(endQueryPos2>query_len) endQueryPos2 = query_len;
 
 					//if(opID2!=0 and startRefPos2<endRefPos2 and startQueryPos2<endQueryPos2){
 					if(opID2!=0){
