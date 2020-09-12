@@ -3242,71 +3242,74 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 	refPos = startCheckRefPos;
 	queryPos = startCheckQueryPos;
 	shiftRefSize = shiftQuerySize = 0;
-	while(queryPos>=1 and localRefPos>=1){
-		baseMatchFlag = isBaseMatch(queryseq.at(queryPos-1), refseq.at(localRefPos-1));
-		if(baseMatchFlag){
-			queryPos --; localRefPos --; refPos --; shiftRefSize++; shiftQuerySize++;
-		}else{
-			misNum = 0;
 
-			if(localRefPos<subseq_len) subseq_len = localRefPos;
-			if(queryPos<subseq_len) subseq_len = queryPos;
+	if(maxShiftRefSize>0 and maxShiftQuerySize>0){
+		while(queryPos>=1 and localRefPos>=1){
+			baseMatchFlag = isBaseMatch(queryseq.at(queryPos-1), refseq.at(localRefPos-1));
+			if(baseMatchFlag){
+				queryPos --; localRefPos --; refPos --; shiftRefSize++; shiftQuerySize++;
+			}else{
+				misNum = 0;
 
-			localRefPos_start = localRefPos - subseq_len + 1;
-			queryPos_start = queryPos - subseq_len + 1;
+				if(localRefPos<subseq_len) subseq_len = localRefPos;
+				if(queryPos<subseq_len) subseq_len = queryPos;
 
-			// compute local locations
-			local_aln = new localAln_t;
-			local_aln->reg = NULL;
-			local_aln->aln_seg = NULL;
-			local_aln->startRefPos = local_aln->endRefPos = -1;
-			local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
-			local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
+				localRefPos_start = localRefPos - subseq_len + 1;
+				queryPos_start = queryPos - subseq_len + 1;
 
-			// get sub local sequence
-			local_aln->refseq = refseq.substr(localRefPos_start-1, subseq_len);
-			local_aln->ctgseq = queryseq.substr(queryPos_start-1, subseq_len);
+				// compute local locations
+				local_aln = new localAln_t;
+				local_aln->reg = NULL;
+				local_aln->aln_seg = NULL;
+				local_aln->startRefPos = local_aln->endRefPos = -1;
+				local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
+				local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
 
-			// pairwise alignment
-			upperSeq(local_aln->ctgseq);
-			upperSeq(local_aln->refseq);
-			computeSeqAlignment(local_aln);
+				// get sub local sequence
+				local_aln->refseq = refseq.substr(localRefPos_start-1, subseq_len);
+				local_aln->ctgseq = queryseq.substr(queryPos_start-1, subseq_len);
 
-			// compute the number of mismatches
-			misNum = computeMismatchNumLocalAln(local_aln);
-			if(local_aln->localRefRightShiftLen<local_aln->queryRightShiftLen)
-				misNum += local_aln->queryRightShiftLen;
-			else
-				misNum += local_aln->localRefRightShiftLen;
+				// pairwise alignment
+				upperSeq(local_aln->ctgseq);
+				upperSeq(local_aln->refseq);
+				computeSeqAlignment(local_aln);
 
-			if(misNum<=5){
-				queryPos -=  subseq_len - local_aln->queryLeftShiftLen;
-				localRefPos -=  subseq_len - local_aln->localRefLeftShiftLen;
-				refPos -= subseq_len - local_aln->localRefLeftShiftLen;
-				shiftRefSize += subseq_len - local_aln->localRefLeftShiftLen;
-				shiftQuerySize += subseq_len - local_aln->queryLeftShiftLen;
-				delete local_aln;
-			}else {
-				if(local_aln->localRefRightShiftLen<=2 and local_aln->queryRightShiftLen<=2){
-					// compute the number of shift bases
-					tmp_len = 0;
-					midseq_aln = local_aln->alignResultVec.at(1);
-					for(i=midseq_aln.size()-1; i>=0; i--){
-						if(midseq_aln.at(i)=='|') tmp_len ++; // match
-						else break; // mismatch
+				// compute the number of mismatches
+				misNum = computeMismatchNumLocalAln(local_aln);
+				if(local_aln->localRefRightShiftLen<local_aln->queryRightShiftLen)
+					misNum += local_aln->queryRightShiftLen;
+				else
+					misNum += local_aln->localRefRightShiftLen;
+
+				if(misNum<=5){
+					queryPos -=  subseq_len - local_aln->queryLeftShiftLen;
+					localRefPos -=  subseq_len - local_aln->localRefLeftShiftLen;
+					refPos -= subseq_len - local_aln->localRefLeftShiftLen;
+					shiftRefSize += subseq_len - local_aln->localRefLeftShiftLen;
+					shiftQuerySize += subseq_len - local_aln->queryLeftShiftLen;
+					delete local_aln;
+				}else {
+					if(local_aln->localRefRightShiftLen<=2 and local_aln->queryRightShiftLen<=2){
+						// compute the number of shift bases
+						tmp_len = 0;
+						midseq_aln = local_aln->alignResultVec.at(1);
+						for(i=midseq_aln.size()-1; i>=0; i--){
+							if(midseq_aln.at(i)=='|') tmp_len ++; // match
+							else break; // mismatch
+						}
+						queryPos -= tmp_len + local_aln->queryRightShiftLen;
+						localRefPos -= tmp_len + local_aln->localRefRightShiftLen;
+						refPos -= tmp_len + local_aln->localRefRightShiftLen;
+						shiftRefSize += tmp_len + local_aln->localRefRightShiftLen;
+						shiftQuerySize += tmp_len + local_aln->queryRightShiftLen;
 					}
-					queryPos -= tmp_len + local_aln->queryRightShiftLen;
-					localRefPos -= tmp_len + local_aln->localRefRightShiftLen;
-					refPos -= tmp_len + local_aln->localRefRightShiftLen;
-					shiftRefSize += tmp_len + local_aln->localRefRightShiftLen;
-					shiftQuerySize += tmp_len + local_aln->queryRightShiftLen;
+					delete local_aln;
+					break;
 				}
-				delete local_aln;
-				break;
 			}
-		}
 
-		if(refPos<=minCheckRefPos or shiftRefSize>=maxShiftRefSize or shiftQuerySize>=maxShiftQuerySize) break;
+			if(refPos<=minCheckRefPos or shiftRefSize>=maxShiftRefSize or shiftQuerySize>=maxShiftQuerySize) break;
+		}
 	}
 
 	refShiftSize = startCheckLocalRefPos - localRefPos;
@@ -3353,72 +3356,75 @@ vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, al
 	refPos = startCheckRefPos;
 	queryPos = startCheckQueryPos;
 	shiftRefSize = shiftQuerySize = 0;
-	while(queryPos<=(int64_t)queryseq.size() and localRefPos<=(int64_t)refseq.size()){
-		baseMatchFlag = isBaseMatch(queryseq.at(queryPos-1), refseq.at(localRefPos-1));
-		if(baseMatchFlag){
-			queryPos ++; localRefPos ++; refPos ++; shiftRefSize++; shiftQuerySize++;
-		}else{
-			misNum = 0;
 
-			localRefPos_start = localRefPos;
-			queryPos_start = queryPos;
-
-			tmp_len = refseq.size() - localRefPos;
-			if(tmp_len<subseq_len) subseq_len = tmp_len;
-			tmp_len = queryseq.size() - queryPos;
-			if(tmp_len<subseq_len) subseq_len = tmp_len;
-
-			// compute local locations
-			local_aln = new localAln_t;
-			local_aln->reg = NULL;
-			local_aln->aln_seg = NULL;
-			local_aln->startRefPos = local_aln->endRefPos = -1;
-			local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
-			local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
-
-			local_aln->refseq = refseq.substr(localRefPos_start-1, subseq_len);
-			local_aln->ctgseq = queryseq.substr(queryPos_start-1, subseq_len);
-
-			// pairwise alignment
-			upperSeq(local_aln->ctgseq);
-			upperSeq(local_aln->refseq);
-			computeSeqAlignment(local_aln);
-
-			// compute the number of mismatches
-			misNum = computeMismatchNumLocalAln(local_aln);
-			if(local_aln->localRefLeftShiftLen<local_aln->queryLeftShiftLen)
-				misNum += local_aln->queryLeftShiftLen;
-			else
-				misNum += local_aln->localRefLeftShiftLen;
-
-			if(misNum<=5){
-				queryPos +=  subseq_len - local_aln->queryRightShiftLen;
-				localRefPos +=  subseq_len - local_aln->localRefRightShiftLen;
-				refPos += subseq_len - local_aln->localRefRightShiftLen;
-				shiftRefSize += subseq_len - local_aln->localRefRightShiftLen;
-				shiftQuerySize += subseq_len - local_aln->queryRightShiftLen;
-				delete local_aln;
+	if(maxShiftRefSize>0 and maxShiftQuerySize>0){
+		while(queryPos<=(int64_t)queryseq.size() and localRefPos<=(int64_t)refseq.size()){
+			baseMatchFlag = isBaseMatch(queryseq.at(queryPos-1), refseq.at(localRefPos-1));
+			if(baseMatchFlag){
+				queryPos ++; localRefPos ++; refPos ++; shiftRefSize++; shiftQuerySize++;
 			}else{
-				if(local_aln->localRefLeftShiftLen<=2 and local_aln->queryLeftShiftLen<=2){
-					// compute the number of shift bases
-					tmp_len = 0;
-					midseq_aln = local_aln->alignResultVec.at(1);
-					for(i=0; i<(int64_t)midseq_aln.size(); i++){
-						if(midseq_aln.at(i)=='|') tmp_len ++; // match
-						else break; // mismatch
-					}
-					queryPos += tmp_len + local_aln->queryLeftShiftLen;
-					localRefPos += tmp_len + local_aln->localRefLeftShiftLen;
-					refPos += tmp_len + local_aln->localRefLeftShiftLen;
-					shiftRefSize += tmp_len + local_aln->localRefLeftShiftLen;
-					shiftQuerySize += tmp_len + local_aln->queryLeftShiftLen;
-				}
-				delete local_aln;
-				break;
-			}
-		}
+				misNum = 0;
 
-		if(refPos>=maxCheckRefPos or shiftRefSize>=maxShiftRefSize or shiftQuerySize>=maxShiftQuerySize) break;
+				localRefPos_start = localRefPos;
+				queryPos_start = queryPos;
+
+				tmp_len = refseq.size() - localRefPos;
+				if(tmp_len<subseq_len) subseq_len = tmp_len;
+				tmp_len = queryseq.size() - queryPos;
+				if(tmp_len<subseq_len) subseq_len = tmp_len;
+
+				// compute local locations
+				local_aln = new localAln_t;
+				local_aln->reg = NULL;
+				local_aln->aln_seg = NULL;
+				local_aln->startRefPos = local_aln->endRefPos = -1;
+				local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
+				local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
+
+				local_aln->refseq = refseq.substr(localRefPos_start-1, subseq_len);
+				local_aln->ctgseq = queryseq.substr(queryPos_start-1, subseq_len);
+
+				// pairwise alignment
+				upperSeq(local_aln->ctgseq);
+				upperSeq(local_aln->refseq);
+				computeSeqAlignment(local_aln);
+
+				// compute the number of mismatches
+				misNum = computeMismatchNumLocalAln(local_aln);
+				if(local_aln->localRefLeftShiftLen<local_aln->queryLeftShiftLen)
+					misNum += local_aln->queryLeftShiftLen;
+				else
+					misNum += local_aln->localRefLeftShiftLen;
+
+				if(misNum<=5){
+					queryPos +=  subseq_len - local_aln->queryRightShiftLen;
+					localRefPos +=  subseq_len - local_aln->localRefRightShiftLen;
+					refPos += subseq_len - local_aln->localRefRightShiftLen;
+					shiftRefSize += subseq_len - local_aln->localRefRightShiftLen;
+					shiftQuerySize += subseq_len - local_aln->queryRightShiftLen;
+					delete local_aln;
+				}else{
+					if(local_aln->localRefLeftShiftLen<=2 and local_aln->queryLeftShiftLen<=2){
+						// compute the number of shift bases
+						tmp_len = 0;
+						midseq_aln = local_aln->alignResultVec.at(1);
+						for(i=0; i<(int64_t)midseq_aln.size(); i++){
+							if(midseq_aln.at(i)=='|') tmp_len ++; // match
+							else break; // mismatch
+						}
+						queryPos += tmp_len + local_aln->queryLeftShiftLen;
+						localRefPos += tmp_len + local_aln->localRefLeftShiftLen;
+						refPos += tmp_len + local_aln->localRefLeftShiftLen;
+						shiftRefSize += tmp_len + local_aln->localRefLeftShiftLen;
+						shiftQuerySize += tmp_len + local_aln->queryLeftShiftLen;
+					}
+					delete local_aln;
+					break;
+				}
+			}
+
+			if(refPos>=maxCheckRefPos or shiftRefSize>=maxShiftRefSize or shiftQuerySize>=maxShiftQuerySize) break;
+		}
 	}
 
 	refShiftSize = localRefPos - startCheckLocalRefPos;

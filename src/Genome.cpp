@@ -537,7 +537,7 @@ int Genome::genomeLocalAssemble(){
 	//outputAssemWorkOptToFile(paras->assem_work_vec);
 
 	// begin assemble
-	cout << "[" << time.getTime() << "]: start local assemble..." << endl;
+	if(paras->assem_work_vec.size()) cout << "[" << time.getTime() << "]: start local assemble..." << endl;
 	processAssembleWork();
 
 	computeVarNumStatAssemble(); // compute statistics for assemble command
@@ -826,12 +826,12 @@ void Genome::genomeCallTra(){
 	if(paras->num_threads<=1){
 		cout << "Blat alignment using single thread ..." << endl;
 		blatAlnTra_st(&blat_aln_tra_vec);
-		cout << "Blat alignment using single thread finished." << endl;
+		cout << "Blat alignment finished." << endl;
 	}else{
 		// blat aln using multiple threads
 		cout << "Blat alignment using " << paras->num_threads << " threads ..." << endl;
 		blatAlnTra_mt(&blat_aln_tra_vec);
-		cout << "Blat alignment using multiple threads finished." << endl;
+		cout << "Blat alignment finished." << endl;
 	}
 	releaseBlatAlnDataTra(blat_aln_tra_vec);
 

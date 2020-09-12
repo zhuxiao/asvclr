@@ -455,7 +455,7 @@ void Paras::showUsage(){
 
 	cout << "Description:" << endl;
 	cout << "     REF_FILE     Reference file (required)" << endl;
-	cout << "     BAM_FILE     Coordinate-sorted BAM file" << endl;
+	cout << "     BAM_FILE     Coordinate-sorted BAM file (required)" << endl;
 	cout << "     Region       Limit reference region to process: CHR|CHR:START-END." << endl;
 	cout << "                  If unspecified, all reference regions will be " << endl;
 	cout << "                  processed (optional)" << endl << endl;
