@@ -80,6 +80,7 @@ void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, string &description);
 void getRegByFilename(simpleReg_t *reg, string &filename, string &pattern_str);
 vector<simpleReg_t*> extractSimpleRegsByStr(string &regs_str);
 string getLimitRegStr(vector<simpleReg_t*> &limit_reg_vec);
+void createDir(string &dirname);
 
 
 class Time{

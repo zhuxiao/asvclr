@@ -2,6 +2,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <pthread.h>
+#include <cerrno>
 #include <htslib/thread_pool.h>
 
 #include "LocalAssembly.h"
@@ -1571,6 +1572,23 @@ vector<simpleReg_t*> extractSimpleRegsByStr(string &regs_str){
 	return limit_reg_vec;
 }
 
+// create directory
+void createDir(string &dirname){
+	string dirname_tmp;
+	vector<string> str_vec;
+	int32_t ret;
+
+	str_vec = split(dirname, "/");
+	dirname_tmp = str_vec.at(0);
+	for(size_t i=0; i<str_vec.size(); i++){
+		ret = mkdir(dirname_tmp.c_str(), S_IRWXU | S_IROTH);  // create the output directory
+		if(ret==-1 and errno!=EEXIST){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot create directory: " << dirname_tmp << endl;
+			exit(1);
+		}
+		if(i+1<str_vec.size()) dirname_tmp = dirname_tmp + "/" + str_vec.at(i+1);
+	}
+}
 
 
 Time::Time() {

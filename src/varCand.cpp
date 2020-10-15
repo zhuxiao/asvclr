@@ -2436,7 +2436,7 @@ void varCand::adjustVarLoc(localAln_t *local_aln){
 	reg_t *reg;
 	bool extend_flag;
 
-	if(local_aln->start_aln_idx_var==-1 or local_aln->end_aln_idx_var) return;
+	if(local_aln->start_aln_idx_var==-1 or local_aln->end_aln_idx_var==-1) return;
 
 	ctgseq_aln = local_aln->alignResultVec[0];
 	midseq_aln = local_aln->alignResultVec[1];

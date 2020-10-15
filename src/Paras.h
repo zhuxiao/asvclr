@@ -33,9 +33,9 @@ using namespace std;
 #define MIN_INDEL_EVENT_NUM			5
 #define MIN_SV_SIZE_USR				2
 
-#define MIN_CLIP_READS_NUM_THRES	7	// to be parameterized
+#define MIN_CLIP_READS_NUM_THRES	7
 
-#define MAX_CLIP_REG_SIZE			10000  // to be parameterized
+#define MAX_CLIP_REG_SIZE			20000
 
 #define SIZE_PERCENTILE_EST			0.95
 #define NUM_PERCENTILE_EST			0.99995

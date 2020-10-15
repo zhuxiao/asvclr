@@ -33,7 +33,8 @@ void Genome::init(){
 
 	out_dir = paras->outDir;
 	if(out_dir.size()>0){
-		mkdir(out_dir.c_str(), S_IRWXU | S_IROTH);  // create the output directory
+		//mkdir(out_dir.c_str(), S_IRWXU | S_IROTH);
+		createDir(out_dir);   // create the output directory
 
 		out_dir_detect = out_dir + "/" + paras->out_dir_detect;
 		out_dir_assemble = out_dir + "/" + paras->out_dir_assemble;
