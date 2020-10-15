@@ -763,7 +763,8 @@ void Block::removeFalseIndel(){
 		foundReg = NULL;
 		reg = indelVector.at(i);
 		if(reg->zero_cov_flag==false)
-			foundReg = findVarvecItemExtSize(reg->startRefPos, reg->endRefPos, clipRegVector, CLIP_END_EXTEND_SIZE, CLIP_END_EXTEND_SIZE);
+			//foundReg = findVarvecItemExtSize(reg->startRefPos, reg->endRefPos, clipRegVector, CLIP_END_EXTEND_SIZE, CLIP_END_EXTEND_SIZE);
+			foundReg = findVarvecItem(reg->startRefPos, reg->endRefPos, clipRegVector);
 		if(foundReg) { flag = true; delete reg; indelVector.erase(indelVector.begin()+i); }
 		else i++;
 	}

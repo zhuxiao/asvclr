@@ -123,12 +123,13 @@ class varCand {
 		void computeSeqAlignment(localAln_t *local_aln);
 		void adjustAlnResult(localAln_t *local_aln);
 		void computeVarLoc(localAln_t *local_aln);
+		void adjustVarLoc(localAln_t *local_aln);
 		//void confirmVarLoc(localAln_t *local_aln);
 		void confirmShortVar(localAln_t *local_aln);
 		int32_t getMismatchNumAln(vector<string> &alignResultVec, int32_t start_check_idx, int32_t end_check_idx);
 		//int32_t getDisagreeNum(Base *baseArray, int32_t arr_size);
 		int32_t computeHighIndelBaseNum(Base *baseArray, int32_t arr_size, float threshold);
-		void adjustVarLoc(localAln_t *local_aln);
+		void adjustVarLocShortVar(localAln_t *local_aln);
 		int32_t getAdjustedStartAlnIdxVar(localAln_t *local_aln);
 		int32_t getAdjustedEndAlnIdxVar(localAln_t *local_aln);
 		void adjustLeftLocShortVar(localAln_t *local_aln, int32_t newStartAlnIdx);

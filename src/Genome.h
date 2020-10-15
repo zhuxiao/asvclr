@@ -68,6 +68,7 @@ class Genome{
 		int processAssembleWork();
 		ofstream* getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, bool clip_reg_flag);
 
+		void genomeLoadMateClipRegData();
 		void recallIndelsFromTRA();
 		void genomeCallTra();
 		void generateBlatAlnFilenameTra();
@@ -84,6 +85,7 @@ class Genome{
 		vector<int32_t> computeTraClippingLoc(size_t query_clip_part_flag, varCand *var_cand, vector<int32_t> &aln_idx_vec, varCand *var_cand_tmp, vector<int32_t> &mate_aln_idx_vec);
 		bool computeTraCallSuccessFlag(vector<int32_t> &tra_loc_vec, vector<int32_t> &tra_loc_vec2, varCand *var_cand, varCand *var_cand_tmp,  mateClipReg_t *clip_reg);
 		void saveTraLoc2ClipReg(mateClipReg_t *clip_reg, vector<int32_t> &tra_loc_vec, varCand *var_cand, varCand *var_cand_tmp, size_t round_num);
+		void saveTraLoc2ClipRegForAlnFailure(mateClipReg_t *clip_reg);
 		void mergeCloseRangeTra();
 		mateClipReg_t* getNearDistedClipReg(mateClipReg_t *clip_reg, vector<Chrome*> &chrome_vec);
 		vector<int32_t> computeDistsTra(mateClipReg_t *clip_reg1, mateClipReg_t *clip_reg2);

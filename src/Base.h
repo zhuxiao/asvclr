@@ -20,7 +20,7 @@ class Base
 		vector<delEvent_t*> delVector;  // deletion event vector
 		vector<clipEvent_t*> clipVector;  // deletion event vector
 
-		size_t num_shortIns, num_shortdel, num_shortClip;
+		int32_t num_shortIns, num_shortdel, num_shortClip, del_num_from_del_vec;
 
 	public:
 		Base();

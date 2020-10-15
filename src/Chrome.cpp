@@ -5,11 +5,12 @@
 #include "util.h"
 
 // Constructor with parameters
-Chrome::Chrome(string& chrname, int chrlen, faidx_t *fai, Paras *paras){
+Chrome::Chrome(string& chrname, int chrlen, faidx_t *fai, Paras *paras, vector<Chrome*> *chr_vec){
 	this->paras = paras;
 	this->chrname = chrname;
 	this->chrlen = chrlen;
 	this->fai = fai;
+	this->chr_vec = chr_vec;
 	init();
 
 	blocks_out_file = chrname + "_blocks.bed";
@@ -257,7 +258,9 @@ void Chrome::chrFillDataEst(size_t op_est){
 
 // detect indels for chrome
 int Chrome::chrDetect(){
-	//Time time;
+	Time time;
+
+	if(print_flag) cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
 
 	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IROTH);  // create the directory for detect command
 
@@ -427,7 +430,7 @@ void Chrome::processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, 
 	reg_t *reg, *reg_tmp;
 	mateClipReg_t *clip_reg_new;
 	Block *bloc;
-	int32_t idx_tmp;;
+	int32_t idx_tmp;
 
 	if(mate_clip_reg.valid_flag){
 		// add mate clip region
@@ -456,6 +459,7 @@ void Chrome::processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, 
 			clip_reg_new->dup_num = mate_clip_reg.dup_num;
 			clip_reg_new->valid_flag = mate_clip_reg.valid_flag;
 			clip_reg_new->call_success_flag = false;
+			clip_reg_new->tra_rescue_success_flag = false;
 			mateClipRegVector.push_back(clip_reg_new);
 		}
 
@@ -1485,17 +1489,17 @@ void Chrome::chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> 
 
 // load detected indel data for local assembly
 void Chrome::chrLoadClipRegDataAssemble(){
-	chrLoadMateClipRegData(paras->limit_reg_process_flag, paras->limit_reg_vec);
+	chrLoadMateClipRegDataOp(paras->limit_reg_process_flag, paras->limit_reg_vec);
 }
 
-void Chrome::chrLoadMateClipRegData(bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void Chrome::chrLoadMateClipRegDataOp(bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 	string line, chrname1, chrname2, chrname3, chrname4;
 	vector<string> str_vec;
 	ifstream infile;
 	reg_t *reg1, *reg2, *reg3, *reg4;
 	bool mate_flag, flag, flag1, flag2, flag3, flag4;
 	mateClipReg_t* mate_clip_reg;
-	size_t var_type, left_size, left_size2, right_size, right_size2, dup_num_tmp;
+	size_t var_type, left_size, left_size2, right_size, right_size2, dup_num_tmp, rd_num_left, rd_num_left2, rd_num_right, rd_num_right2;
 	simpleReg_t *simple_reg;
 	vector<simpleReg_t*> sub_limit_reg_vec;
 
@@ -1513,6 +1517,7 @@ void Chrome::chrLoadMateClipRegData(bool limit_reg_process_flag, vector<simpleRe
 		if(line.size()>0 and line.at(0)!='#'){
 			reg1 = reg2 = reg3 = reg4 = NULL;
 			str_vec = split(line, "\t");
+
 			chrname1 = str_vec.at(0);
 			if(chrname1.compare("-")!=0) { reg1 = new reg_t(); reg1->chrname = chrname1; reg1->startRefPos = stoi(str_vec.at(1)); reg1->endRefPos = stoi(str_vec.at(2)); reg1->zero_cov_flag = false; }
 			chrname2 = str_vec.at(3);
@@ -1561,6 +1566,7 @@ void Chrome::chrLoadMateClipRegData(bool limit_reg_process_flag, vector<simpleRe
 
 			if(flag){
 				left_size = left_size2 = right_size = right_size2 = 0; var_type = VAR_UNC; dup_num_tmp = 0;
+				rd_num_left = rd_num_left2 = rd_num_right = rd_num_right2 = 0;
 				if(str_vec.at(13).compare("####")==0){
 					if(str_vec.at(14).compare("-")!=0) { left_size = stoi(str_vec.at(14)); }
 					if(str_vec.at(15).compare("-")!=0) { left_size2 = stoi(str_vec.at(15)); }
@@ -1574,6 +1580,12 @@ void Chrome::chrLoadMateClipRegData(bool limit_reg_process_flag, vector<simpleRe
 					else if(str_vec.at(18).compare("MIX")==0) var_type = VAR_MIX;
 
 					if(str_vec.at(19).compare("-")!=0) { dup_num_tmp = stoi(str_vec.at(19)); }
+
+					// support reads number information
+					rd_num_left = stoi(str_vec.at(20));
+					rd_num_left2 = stoi(str_vec.at(21));
+					rd_num_right = stoi(str_vec.at(22));
+					rd_num_right2 = stoi(str_vec.at(23));
 				}
 
 				mate_clip_reg = new mateClipReg_t();
@@ -1597,7 +1609,13 @@ void Chrome::chrLoadMateClipRegData(bool limit_reg_process_flag, vector<simpleRe
 				if(mate_clip_reg->rightClipReg) mate_clip_reg->rightClipRegNum ++;
 				if(mate_clip_reg->rightClipReg2) mate_clip_reg->rightClipRegNum ++;
 
-				//
+				// support reads number information
+				mate_clip_reg->leftClipPosNum = rd_num_left;
+				mate_clip_reg->leftClipPosNum2 = rd_num_left2;
+				mate_clip_reg->rightClipPosNum = rd_num_right;
+				mate_clip_reg->rightClipPosNum2 = rd_num_right2;
+
+				mate_clip_reg->tra_rescue_success_flag = false;
 				mate_clip_reg->chrname_leftTra1 = mate_clip_reg->chrname_rightTra1 = mate_clip_reg->chrname_leftTra2 = mate_clip_reg->chrname_rightTra2 = "";
 				mate_clip_reg->leftClipPosTra1 = mate_clip_reg->rightClipPosTra1 = mate_clip_reg->leftClipPosTra2 = mate_clip_reg->rightClipPosTra2 = -1;
 				mate_clip_reg->dup_num = dup_num_tmp;
@@ -1972,7 +1990,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("output_hg19_v1.7_2.0_M0_20200909/3_call/chr9_gl000199_random/blat_chr9_gl000199_random_64601-72429.sim4")==0)
+		//if(var_cand->alnfilename.compare("output_test_limit_reg_20200807/output_chr1/3_call/chr1/blat_chr1_5726401-5736000.sim4")==0)
 		{
 			//cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();
@@ -2018,7 +2036,7 @@ void Chrome::loadVarCandData(){
 	//if(paras->limit_reg_process_flag) limit_reg_vec = getSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
 	if(paras->limit_reg_process_flag) limit_reg_vec = getOverlappedSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
 
-	if(mateClipRegVector.size()==0) chrLoadMateClipRegData(paras->limit_reg_process_flag, limit_reg_vec);
+	//if(mateClipRegVector.size()==0) chrLoadMateClipRegDataOp(paras->limit_reg_process_flag, limit_reg_vec);
 	loadVarCandDataFromFile(var_cand_vec, var_cand_indel_filename, false, paras->limit_reg_process_flag, limit_reg_vec);
 	loadVarCandDataFromFile(var_cand_clipReg_vec, var_cand_clipReg_filename, true, paras->limit_reg_process_flag, paras->limit_reg_vec);
 
@@ -2027,8 +2045,18 @@ void Chrome::loadVarCandData(){
 	loadPrevBlatAlnItems(true, paras->limit_reg_process_flag, paras->limit_reg_vec);
 }
 
+void Chrome::chrLoadMateClipRegData(){
+	vector<simpleReg_t*> limit_reg_vec;
+	if(mateClipRegVector.size()==0){
+		//if(paras->limit_reg_process_flag) limit_reg_vec = getSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
+		if(paras->limit_reg_process_flag) limit_reg_vec = getOverlappedSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
+		chrLoadMateClipRegDataOp(paras->limit_reg_process_flag, limit_reg_vec);
+	}
+}
+
 void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var_cand_filename, bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 	string line, ctg_assembly_str, alnfilename, str_tmp, chrname_str, old_out_dir, refseqfilename, contigfilename, readsfilename, pattern_str;
+	string chrname_mate_clip_reg, dirname_call_mate_clip_reg;
 	vector<string> line_vec, var_str, var_str1, var_str2;
 	vector<string> str_vec, str_vec2, str_vec3;
 	ifstream infile;
@@ -2063,6 +2091,11 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			refseqfilename = getUpdatedItemFilename(line_vec.at(0), paras->outDir, old_out_dir);
 			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
 			readsfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
+			chrname_mate_clip_reg = getChrnameByFilename(contigfilename);
+
+//			if(refseqfilename.compare("output_hg19_M0_20200917/2_assemble/chrUn_gl000234/clipReg_refseq_chrUn_gl000234_40405-40531.fa")==0 or refseqfilename.compare("output_hg19_M0_20200917/2_assemble/chrUn_gl000231/clipReg_refseq_chrUn_gl000234_40405-40531.fa")==0){
+//				cout << line << endl;
+//			}
 
 			flag = true;
 			pos_contained_flag = false;
@@ -2160,7 +2193,8 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				str_tmp = str_vec[str_vec.size()-1];  // contig file
 				str_vec2 = split(str_tmp, "_");
 
-				alnfilename = out_dir_call + "/blat";
+				dirname_call_mate_clip_reg = getDirnameCall(chrname_mate_clip_reg);
+				alnfilename = dirname_call_mate_clip_reg + "/blat";
 				for(i=1; i<str_vec2.size()-1; i++)
 					alnfilename += "_" + str_vec2[i];
 
@@ -2181,7 +2215,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				if(clipReg_flag) {
 					reg1 = var_cand_tmp->varVec.at(0);
 					reg2 = (var_cand_tmp->varVec.size()>=2) ? var_cand_tmp->varVec.at(var_cand_tmp->varVec.size()-1) : NULL;
-					mate_clip_reg = getMateClipReg(reg1, reg2, &clip_reg_idx_tra);
+					mate_clip_reg = getMateClipReg(reg1, reg2, &clip_reg_idx_tra, chrname_mate_clip_reg);
 				}
 				if(mate_clip_reg){
 					if(mate_clip_reg->sv_type==VAR_DUP or mate_clip_reg->sv_type==VAR_INV){ // DUP or INV
@@ -2242,16 +2276,51 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 	//cout << var_cand_filename << "\tlineNum=" << lineNum << endl;
 }
 
-// get the mate clip region
-mateClipReg_t* Chrome::getMateClipReg(reg_t *reg1, reg_t *reg2, int32_t *clip_reg_idx_tra){
+string Chrome::getDirnameCall(string &chrname_given){
+	string dirname_call_ret;
+	Chrome *chr;
+	for(size_t i=0; i<chr_vec->size(); i++){
+		chr = chr_vec->at(i);
+		if(chr->chrname.compare(chrname_given)==0){
+			dirname_call_ret = chr->out_dir_call;
+			break;
+		}
+	}
+	return dirname_call_ret;
+}
+
+// get the mate clip region operation
+mateClipReg_t* Chrome::getMateClipReg(reg_t *reg1, reg_t *reg2, int32_t *clip_reg_idx_tra, string &chrname_mate_clip_reg){
+	Chrome *chr, *chr_mate_clip_reg = NULL;
+	mateClipReg_t *mate_clip_reg = NULL;
+
+	if(chrname_mate_clip_reg.compare(chrname)==0)
+		mate_clip_reg = getMateClipRegOp(reg1, reg2, clip_reg_idx_tra, mateClipRegVector);
+	else{ // search other chromosomes
+		for(size_t i=0; i<chr_vec->size(); i++){
+			chr = chr_vec->at(i);
+			if(chr->chrname.compare(chrname_mate_clip_reg)==0){
+				chr_mate_clip_reg = chr;
+				break;
+			}
+		}
+		if(chr_mate_clip_reg)
+			mate_clip_reg = getMateClipRegOp(reg1, reg2, clip_reg_idx_tra, chr_mate_clip_reg->mateClipRegVector);
+	}
+
+	return mate_clip_reg;
+}
+
+// get the mate clip region operation
+mateClipReg_t* Chrome::getMateClipRegOp(reg_t *reg1, reg_t *reg2, int32_t *clip_reg_idx_tra, vector<mateClipReg_t*> &mate_clipReg_vec){
 	mateClipReg_t *mate_clip_reg;
 	size_t i;
 	int32_t idx;
 	reg_t *reg, *reg1_tmp, *reg2_tmp;
 
 	idx = -1; *clip_reg_idx_tra = -1;
-	for(i=0; i<mateClipRegVector.size(); i++){
-		mate_clip_reg = mateClipRegVector.at(i);
+	for(i=0; i<mate_clipReg_vec.size(); i++){
+		mate_clip_reg = mate_clipReg_vec.at(i);
 		if(mate_clip_reg->valid_flag){
 			if(mate_clip_reg->sv_type==VAR_INV or mate_clip_reg->sv_type==VAR_DUP){ // DUP or INV
 				//if(((reg1==NULL and mate_clip_reg->leftClipReg==NULL) or (reg1 and mate_clip_reg->leftClipReg and reg1->chrname.compare(mate_clip_reg->leftClipReg->chrname)==0 and reg1->startRefPos==mate_clip_reg->leftClipReg->startRefPos and reg1->endRefPos==mate_clip_reg->leftClipReg->endRefPos))
@@ -2287,14 +2356,14 @@ mateClipReg_t* Chrome::getMateClipReg(reg_t *reg1, reg_t *reg2, int32_t *clip_re
 					}
 				}
 			}else{
-				cerr << __func__ << ", line=" << __LINE__ << ", invalid variation type=" << mate_clip_reg->sv_type << ", error!" << endl;
+				cerr << __func__ << ", line=" << __LINE__ << ", invalid variant type=" << mate_clip_reg->sv_type << ", error!" << endl;
 				exit(1);
 			}
 			if(idx!=-1) break;
 		}
 	}
 
-	if(idx!=-1) mate_clip_reg = mateClipRegVector.at(idx);
+	if(idx!=-1) mate_clip_reg = mate_clipReg_vec.at(idx);
 	else mate_clip_reg = NULL;
 
 	return mate_clip_reg;

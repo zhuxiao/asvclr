@@ -16,7 +16,7 @@
 #include "LocalAssembly.h"
 #include "alnDataLoader.h"
 
-#define MIN_ADJACENT_REG_DIST		50
+//#define MIN_ADJACENT_REG_DIST		50
 
 using namespace std;
 

@@ -19,7 +19,7 @@ void Base::init(){
 	coverage.num_max = -1;
 	coverage.idx_max = -1;
 
-	num_shortIns = num_shortdel = num_shortClip = 0;
+	num_shortIns = num_shortdel = num_shortClip = del_num_from_del_vec = 0;
 }
 
 // destroy base, including insVector, delVector and clipVector
@@ -213,7 +213,8 @@ size_t Base::getLargeIndelNum(size_t thres){
 }
 
 size_t Base::getTotalIndelNum(){
-	return insVector.size() + delVector.size() + num_shortIns + num_shortdel;
+	//return insVector.size() + delVector.size() + num_shortIns + num_shortdel;
+	return insVector.size() + del_num_from_del_vec + num_shortIns + num_shortdel;
 }
 
 size_t Base::getTotalClipNum(){

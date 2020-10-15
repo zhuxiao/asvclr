@@ -445,6 +445,11 @@ void varCand::blatFilterByQueryCoverage(){
 	aln_seg_t *aln_seg;
 	float covRatio;
 
+	if(ctg_num==0) {
+		cout << "ctgfilename=" << ctgfilename << ", ctg_num=" << ctg_num << endl;
+		return;
+	}
+
 	// allocate array
 	query_cov_array = new int8_t *[ctg_num]();
 	FastaSeqLoader fa_loader(ctgfilename);
@@ -719,7 +724,7 @@ void varCand::determineIndelType(){
 
 					newFlag = false;
 					reg_vec_tmp = findVarvecItemAll(startRefPos, endRefPos, varVec);
-					if(reg_vec_tmp.size()==0) reg_vec_tmp = findVarvecItemAllExtSize(startRefPos, endRefPos, varVec, 50, 50); // try extend size
+					if(reg_vec_tmp.size()==0) reg_vec_tmp = findVarvecItemAllExtSize(startRefPos, endRefPos, varVec, 100, 100); // try extend size
 
 					if(reg_vec_tmp.size()>0){ // found, true positive, and then update its information
 						for(k=0; k<(int32_t)reg_vec_tmp.size(); k++){
@@ -752,7 +757,7 @@ void varCand::determineIndelType(){
 					}else { // if it is a false negative discovery, search the newVarVec
 						reg = findVarvecItem(startRefPos, endRefPos, newVarVec);
 						if(reg==NULL) {  // if not exist, add it to newVarVec
-							reg = new reg_t;
+							reg = new reg_t();
 							reg->var_type = var_type;
 							reg->chrname = chrname;
 							reg->startRefPos = startRefPos;
@@ -840,8 +845,8 @@ void varCand::callShortVariants(){
 						// compute variant location
 						computeVarLoc(local_aln);
 
-						// adjust the variant locations according to alignment
-						adjustVarLoc(local_aln);
+						// adjust the short variant locations according to alignment
+						adjustVarLocShortVar(local_aln);
 
 						//confirmVarLoc(local_aln);
 
@@ -1372,6 +1377,7 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 	local_aln->start_aln_idx_var = start_aln_idx_var;
 	local_aln->end_aln_idx_var = end_aln_idx_var;
 
+	if(local_aln->cand_reg) local_aln->reg->query_id = local_aln->cand_reg->query_id;
 	if(start_aln_idx_var!=-1 and end_aln_idx_var!=-1){
 		local_aln->reg->startRefPos = startRefPos_aln;
 		local_aln->reg->endRefPos = endRefPos_aln;
@@ -1384,6 +1390,7 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 		local_aln->reg->endLocalRefPos = 0;
 		local_aln->reg->startQueryPos = 0;
 		local_aln->reg->endQueryPos = 0;
+		local_aln->start_aln_idx_var = local_aln->end_aln_idx_var = -1;
 	}
 }
 
@@ -1476,10 +1483,15 @@ void varCand::confirmShortVar(localAln_t *local_aln){
 		for(i=local_aln->start_aln_idx_var; i>=start_check_idx; i--)
 			if(refseq_aln[i]!='-')
 				startRefPos --;
+		if(startRefPos<1) startRefPos = 1;
 		endRefPos = local_aln->reg->endRefPos;
 		for(i=local_aln->end_aln_idx_var; i<=end_check_idx; i++)
 			if(refseq_aln[i]!='-')
 				endRefPos ++;
+
+		if(startRefPos<=0){
+			cout << startRefPos << endl;
+		}
 
 		// compute the number of mismatched bases
 		mismatchNum_aln = getMismatchNumAln(local_aln->alignResultVec, start_check_idx, end_check_idx);
@@ -1518,8 +1530,8 @@ int32_t varCand::computeHighIndelBaseNum(Base *baseArray, int32_t arr_size, floa
 	return num;
 }
 
-// adjust the variant locations according to alignment
-void varCand::adjustVarLoc(localAln_t *local_aln){
+// adjust the short variant locations according to alignment
+void varCand::adjustVarLocShortVar(localAln_t *local_aln){
 	int32_t start_aln_idx_var_new, end_aln_idx_var_new, tmp;
 
 	if(local_aln->start_aln_idx_var!=-1 and local_aln->end_aln_idx_var!=-1){
@@ -1745,7 +1757,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 	vector<int32_t> numVec1, numVec2;
 	vector<reg_t*> updatedRegVec[foundRegVec.size()], regVec_tmp, processed_reg_vec;
 	vector< vector<reg_t*> > regVec;
-	bool flag;
+	bool flag, ref_exchange_flag1, ref_exchange_flag2, query_exchange_flag1, query_exchange_flag2;
 
 	// deal with the two sets
 	i = 0;
@@ -1783,7 +1795,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 			reg = varVec[idx];
 			reg_tmp = candRegVec[i];
 
-			flag = false;
+			flag = ref_exchange_flag1 = ref_exchange_flag2 = query_exchange_flag1 = query_exchange_flag2 = false;
 			for(j=0; j<(int32_t)processed_reg_vec.size(); j++) if(processed_reg_vec.at(j)==reg){ flag = true; break; }
 
 			if(flag==false){
@@ -1794,412 +1806,428 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 				query_len = ctgseqloader.getFastaSeqLen(reg_tmp->query_id);
 
 				if(reg->startLocalRefPos>0 and reg->endLocalRefPos>0 and reg->startQueryPos>0 and reg->endQueryPos>0){
-					// check left marginal regions
-					opID1 = -1;
-					if(reg->startRefPos==reg_tmp->startRefPos){
-						opID1 = 0;
-						numVec1.insert(numVec1.begin(), 6, 0);
-						startRefPos1 = endRefPos1 = startQueryPos1 = endQueryPos1 = 0; // will be not used
-					}else if(reg->startRefPos<reg_tmp->startRefPos){
-						startRefPos1 = reg->startRefPos;
-						endRefPos1 = reg_tmp->startRefPos - 1;
-						startQueryPos1 = reg->startQueryPos;
-						endQueryPos1 = reg_tmp->startQueryPos - 1;
-					}else{
-						startRefPos1 = reg_tmp->startRefPos;
-						endRefPos1 = reg->startRefPos - 1;
-						startQueryPos1 = reg_tmp->startQueryPos;
-						endQueryPos1 = reg->startQueryPos - 1;
-					}
-					if(startRefPos1>endRefPos1){ // exchange
-						tmp_pos = startRefPos1;
-						startRefPos1 = endRefPos1;
-						endRefPos1 = tmp_pos;
-					}
-					if(startQueryPos1>endQueryPos1){ // exchange
-						tmp_pos = startQueryPos1;
-						startQueryPos1 = endQueryPos1;
-						endQueryPos1 = tmp_pos;
-					}
+					if(isOverlappedReg(reg, reg_tmp)==false){ // no overlap and add the variant region
+						updatedRegVec[i].push_back(reg);
+						processed_reg_vec.push_back(reg);
+					}else{ // overlap and try split the region
+						// check left marginal regions
+						opID1 = -1;
+						if(reg->startRefPos==reg_tmp->startRefPos){
+							opID1 = 0;
+							numVec1.insert(numVec1.begin(), 6, 0);
+							startRefPos1 = endRefPos1 = startQueryPos1 = endQueryPos1 = 0; // will be not used
+						}else if(reg->startRefPos<reg_tmp->startRefPos){
+							startRefPos1 = reg->startRefPos;
+							endRefPos1 = reg_tmp->startRefPos - 1;
+							startQueryPos1 = reg->startQueryPos;
+							endQueryPos1 = reg_tmp->startQueryPos - 1;
+						}else{
+							startRefPos1 = reg_tmp->startRefPos;
+							endRefPos1 = reg->startRefPos - 1;
+							startQueryPos1 = reg_tmp->startQueryPos;
+							endQueryPos1 = reg->startQueryPos - 1;
+						}
+						if(startRefPos1>endRefPos1){ // exchange
+							//cout << "aaaaaaaaaaa line=" << __LINE__ << ", ref1 exchanged: " << reg->chrname << ":" << startRefPos1 << "-" << endRefPos1 << endl;
+							tmp_pos = startRefPos1;
+							startRefPos1 = endRefPos1;
+							endRefPos1 = tmp_pos;
+							ref_exchange_flag1 = true;
+						}
+						if(startQueryPos1>endQueryPos1){ // exchange
+							//cout << "bbbbbbbbbbb line=" << __LINE__ << ", query1 exchanged: " << reg_tmp->query_id << ":" << startQueryPos1 << "-" << endQueryPos1 << ", ref_reg: " << reg->chrname << ":" << startRefPos1 << "-" << endRefPos1 << endl;
+							tmp_pos = startQueryPos1;
+							startQueryPos1 = endQueryPos1;
+							endQueryPos1 = tmp_pos;
+							query_exchange_flag1 = true;
+						}
 
-					// check subject length and query length
-					if(startQueryPos1<1) startQueryPos1 = 1;
-					if(endQueryPos1>query_len) endQueryPos1 = query_len;
+						// check subject length and query length
+						if(startQueryPos1<1) startQueryPos1 = 1;
+						if(endQueryPos1>query_len) endQueryPos1 = query_len;
 
-					//if(opID1!=0 and startRefPos1<endRefPos1 and startQueryPos1<endQueryPos1){
-					if(opID1!=0){
-						numVec1 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos1, endRefPos1, reg_tmp->query_id, startQueryPos1, endQueryPos1, reg->aln_orient, inBamFile, fai);
-						if(numVec1[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec1[1]>0){ // found variant features
-							//if(numVec1[3]>=SV_MIN_DIST and numVec1[3]<endRefPos1-startRefPos1+1)
-							if(numVec1[3]>=SV_MIN_DIST and numVec1[4]==0)
-								opID1 = 2;
-							else
+						//if(opID1!=0 and startRefPos1<endRefPos1 and startQueryPos1<endQueryPos1){
+						if(opID1!=0){
+							numVec1 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos1, endRefPos1, reg_tmp->query_id, startQueryPos1, endQueryPos1, reg->aln_orient, inBamFile, fai);
+							if(numVec1[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec1[1]>0){ // found variant features
+								//if(numVec1[3]>=SV_MIN_DIST and numVec1[3]<endRefPos1-startRefPos1+1)
+								if(numVec1[3]>=SV_MIN_DIST and numVec1[4]==0)
+									opID1 = 2;
+								else
+									opID1 = 1;
+							}else
 								opID1 = 1;
-						}else
-							opID1 = 1;
-					}
-
-					// check right marginal regions
-					opID2 = -1;
-					if(reg_tmp->endRefPos==reg->endRefPos){
-						opID2 = 0;
-						numVec2.insert(numVec2.begin(), 6, 0);
-						startRefPos2 = endRefPos2 = startQueryPos2 = endQueryPos2 = 0; // will be not used
-					}else if(reg_tmp->endRefPos<reg->endRefPos){
-						startRefPos2 = reg_tmp->endRefPos + 1;
-						endRefPos2 = reg->endRefPos;
-						startQueryPos2 = reg_tmp->endQueryPos + 1;
-						endQueryPos2 = reg->endQueryPos;
-					}else{
-						startRefPos2 = reg->endRefPos + 1;
-						endRefPos2 = reg_tmp->endRefPos;
-						startQueryPos2 = reg->endQueryPos + 1;
-						endQueryPos2 = reg_tmp->endQueryPos;
-					}
-
-					if(startRefPos2>endRefPos2){ // exchange
-						tmp_pos = startRefPos2;
-						startRefPos2 = endRefPos2;
-						endRefPos2 = tmp_pos;
-					}
-					if(startQueryPos2>endQueryPos2){ // exchange
-						tmp_pos = startQueryPos2;
-						startQueryPos2 = endQueryPos2;
-						endQueryPos2 = tmp_pos;
-					}
-
-					// check subject length and query length
-					if(startQueryPos2<1) startQueryPos2 = 1;
-					if(endQueryPos2>query_len) endQueryPos2 = query_len;
-
-					//if(opID2!=0 and startRefPos2<endRefPos2 and startQueryPos2<endQueryPos2){
-					if(opID2!=0){
-						numVec2 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos2, endRefPos2, reg_tmp->query_id, startQueryPos2, endQueryPos2, reg->aln_orient, inBamFile, fai);
-						if(numVec2[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec2[1]>0){ // found variant features
-							//if(numVec2[2]>=SV_MIN_DIST and numVec2[2]<endRefPos2-startRefPos2+1)
-							if(numVec2[2]>=SV_MIN_DIST and numVec2[4]==0)
-								opID2 = 2;
-							else
-								opID2 = 1;
-						}else
-							opID2 = 1;
-					}
-
-					// update their information at the same time
-					if(opID1!=2 and opID2!=2){
-						new_startRefPos = reg->startRefPos;
-						new_startLocalRefPos = reg->startLocalRefPos;
-						new_startQueryPos = reg->startQueryPos;
-						new_endRefPos = reg->startRefPos;
-						new_endLocalRefPos = reg->startLocalRefPos;
-						new_endQueryPos = reg->startQueryPos;
-
-						if(opID1==0){
-							new_startRefPos = reg_tmp->startRefPos;
-							new_startLocalRefPos = reg_tmp->startLocalRefPos;
-							new_startQueryPos = reg_tmp->startQueryPos;
-							//reg->startRefPos = reg_tmp->startRefPos;
-							//reg->startLocalRefPos = reg_tmp->startLocalRefPos;
-							//reg->startQueryPos = reg_tmp->startQueryPos;
-						}else if(opID1==1){ // update information
-							startShiftLen = getEndShiftLenFromNumVec(numVec1, 1);
-							if(reg->startRefPos<reg_tmp->startRefPos){
-								new_startRefPos = reg->startRefPos + startShiftLen;
-								new_startLocalRefPos = reg->startLocalRefPos + startShiftLen;
-								new_startQueryPos = reg->startQueryPos + startShiftLen;
-								//reg->startRefPos += numVec1[2];
-								//reg->startLocalRefPos += numVec1[2];
-								//reg->startQueryPos += numVec1[2];
-							}else{
-								new_startRefPos = reg_tmp->startRefPos + startShiftLen;
-								new_startLocalRefPos = reg_tmp->startLocalRefPos + startShiftLen;
-								new_startQueryPos = reg_tmp->startQueryPos + startShiftLen;
-								//reg->startRefPos = reg_tmp->startRefPos + numVec1[2];
-								//reg->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
-								//reg->startQueryPos = reg_tmp->startQueryPos + numVec1[2];
-							}
 						}
 
-						if(opID2==0){
-							new_endRefPos = reg_tmp->endRefPos;
-							new_endLocalRefPos = reg_tmp->endLocalRefPos;
-							new_endQueryPos = reg_tmp->endQueryPos;
-							//reg->endRefPos = reg_tmp->endRefPos;
-							//reg->endLocalRefPos = reg_tmp->endLocalRefPos;
-							//reg->endQueryPos = reg_tmp->endQueryPos;
-						}else if(opID2==1){
-							endShiftLen = getEndShiftLenFromNumVec(numVec2, 2);
-							if(reg_tmp->endRefPos<reg->endRefPos){
-								new_endRefPos = reg->endRefPos - endShiftLen;
-								new_endLocalRefPos = reg->endLocalRefPos - endShiftLen;
-								new_endQueryPos = reg->endQueryPos - endShiftLen;
-								//reg->endRefPos -= numVec2[3];
-								//reg->endLocalRefPos -= numVec2[3];
-								//reg->endQueryPos -= numVec2[3];
-							}else{
-								new_endRefPos = reg_tmp->endRefPos - endShiftLen;
-								new_endLocalRefPos = reg_tmp->endLocalRefPos - endShiftLen;
-								new_endQueryPos = reg_tmp->endQueryPos - endShiftLen;
-								//reg->endRefPos = reg_tmp->endRefPos - numVec2[3];
-								//reg->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
-								//reg->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
-							}
-						}
-						reg->query_id = reg_tmp->query_id;
-
-						if(new_startRefPos<=new_endRefPos and new_startQueryPos<=new_endQueryPos){
-							reg->startRefPos = new_startRefPos;
-							reg->startLocalRefPos = new_startLocalRefPos;
-							reg->startQueryPos = new_startQueryPos;
-							reg->endRefPos = new_endRefPos;
-							reg->endLocalRefPos = new_endLocalRefPos;
-							reg->endQueryPos = new_endQueryPos;
-
-							if(isRegValid(reg)){
-								exchangeRegLoc(reg);
-								updatedRegVec[i].push_back(reg);
-								processed_reg_vec.push_back(reg);
-							}
+						// check right marginal regions
+						opID2 = -1;
+						if(reg_tmp->endRefPos==reg->endRefPos){
+							opID2 = 0;
+							numVec2.insert(numVec2.begin(), 6, 0);
+							startRefPos2 = endRefPos2 = startQueryPos2 = endQueryPos2 = 0; // will be not used
+						}else if(reg_tmp->endRefPos<reg->endRefPos){
+							startRefPos2 = reg_tmp->endRefPos + 1;
+							endRefPos2 = reg->endRefPos;
+							startQueryPos2 = reg_tmp->endQueryPos + 1;
+							endQueryPos2 = reg->endQueryPos;
+						}else{
+							startRefPos2 = reg->endRefPos + 1;
+							endRefPos2 = reg_tmp->endRefPos;
+							startQueryPos2 = reg->endQueryPos + 1;
+							endQueryPos2 = reg_tmp->endQueryPos;
 						}
 
-//						if(isRegValid(reg)){
-//							exchangeRegLoc(reg);
-//							updatedRegVec[i].push_back(reg);
-//							processed_reg_vec.push_back(reg);
+						if(startRefPos2>endRefPos2){ // exchange to tolerate errors
+							//cout << "ccccccccccc line=" << __LINE__ << ", ref2 exchanged: " << reg->chrname << ":" << startRefPos2 << "-" << endRefPos2 << endl;
+							tmp_pos = startRefPos2;
+							startRefPos2 = endRefPos2;
+							endRefPos2 = tmp_pos;
+							ref_exchange_flag2 = true;
+						}
+						if(startQueryPos2>endQueryPos2){ // exchange
+							//cout << "ddddddddddd line=" << __LINE__ << ", query2 exchanged: " << reg_tmp->query_id << ":" << startQueryPos2 << "-" << endQueryPos2 << ", ref_reg: " << reg->chrname << ":" << startRefPos2 << "-" << endRefPos2 << endl;
+							tmp_pos = startQueryPos2;
+							startQueryPos2 = endQueryPos2;
+							endQueryPos2 = tmp_pos;
+							query_exchange_flag2 = true;
+						}
+
+//						if(ref_exchange_flag1 or ref_exchange_flag2 or query_exchange_flag1 or query_exchange_flag2){
+//							cout << reg_tmp->chrname << ":" << reg_tmp->startRefPos << "-" << reg_tmp->endRefPos << ", " << reg_tmp->query_id << ":" << reg_tmp->startQueryPos << "-" << reg_tmp->endQueryPos << endl;
 //						}
 
-					}else if((opID1==1 or opID1==0) and opID2==2){ // check and split the region
-						reg_new_3 = new reg_t();
-						reg_new_3->startRefPos = reg_tmp->startRefPos;
-						reg_new_3->startLocalRefPos = reg_tmp->startLocalRefPos;
-						reg_new_3->startQueryPos = reg_tmp->startQueryPos;
-						if(reg_tmp->endRefPos<reg->endRefPos){
-							reg_new_3->endRefPos = reg_tmp->endRefPos;
-							reg_new_3->endLocalRefPos = reg_tmp->endLocalRefPos;
-							reg_new_3->endQueryPos = reg_tmp->endQueryPos;
-						}else{
-							reg_new_3->endRefPos = reg->endRefPos;
-							reg_new_3->endLocalRefPos = reg->endLocalRefPos;
-							reg_new_3->endQueryPos = reg->endQueryPos;
-						}
-						reg_new_3->chrname = reg_tmp->chrname;
-						reg_new_3->query_id = reg_tmp->query_id;
-						reg_new_3->blat_aln_id = reg_tmp->blat_aln_id;
-						reg_new_3->aln_orient = reg_tmp->aln_orient;
-						reg_new_3->zero_cov_flag = false;
+						// check subject length and query length
+						if(startQueryPos2<1) startQueryPos2 = 1;
+						if(endQueryPos2>query_len) endQueryPos2 = query_len;
 
-						reg_new_4 = new reg_t();
-						if(reg_tmp->endRefPos<reg->endRefPos){
-							reg_new_4->startRefPos = reg_tmp->endRefPos + numVec2[2];
-							reg_new_4->startLocalRefPos = reg_tmp->endLocalRefPos + numVec2[2];
-							reg_new_4->startQueryPos = reg_tmp->endQueryPos + numVec2[2];
-
-							reg_new_4->endRefPos = reg->endRefPos - numVec2[3];
-							reg_new_4->endLocalRefPos = reg->endLocalRefPos - numVec2[3];
-							reg_new_4->endQueryPos = reg->endQueryPos - numVec2[3];
-						}else{
-							reg_new_4->startRefPos = reg->endRefPos + numVec2[2];
-							reg_new_4->startLocalRefPos = reg->endLocalRefPos + numVec2[2];
-							reg_new_4->startQueryPos = reg->endQueryPos + numVec2[2];
-
-							reg_new_4->endRefPos = reg_tmp->endRefPos - numVec2[3];
-							reg_new_4->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
-							reg_new_4->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
-						}
-						reg_new_4->chrname = reg_tmp->chrname;
-						reg_new_4->query_id = reg_tmp->query_id;
-						reg_new_4->blat_aln_id = reg_tmp->blat_aln_id;
-						reg_new_4->aln_orient = reg_tmp->aln_orient;
-						reg_new_4->zero_cov_flag = false;
-
-						// update information according to opID1==1
-						startShiftLen = getEndShiftLenFromNumVec(numVec1, 1);
-						if(reg_tmp->startRefPos<reg->startRefPos){
-							reg_new_3->startRefPos = reg_tmp->startRefPos + numVec1[2];
-							reg_new_3->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
-							reg_new_3->startQueryPos = reg_tmp->startQueryPos + numVec1[2];
-						}else{
-							reg_new_3->startRefPos = reg->startRefPos + numVec1[2];
-							reg_new_3->startLocalRefPos = reg->startLocalRefPos + numVec1[2];
-							reg_new_3->startQueryPos = reg->startQueryPos + numVec1[2];
+						//if(opID2!=0 and startRefPos2<endRefPos2 and startQueryPos2<endQueryPos2){
+						if(opID2!=0){
+							numVec2 = computeDisagreeNumAndHighIndelBaseNumAndMarginDist(reg->chrname, startRefPos2, endRefPos2, reg_tmp->query_id, startQueryPos2, endQueryPos2, reg->aln_orient, inBamFile, fai);
+							if(numVec2[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec2[1]>0){ // found variant features
+								//if(numVec2[2]>=SV_MIN_DIST and numVec2[2]<endRefPos2-startRefPos2+1)
+								if(numVec2[2]>=SV_MIN_DIST and numVec2[4]==0)
+									opID2 = 2;
+								else
+									opID2 = 1;
+							}else
+								opID2 = 1;
 						}
 
-						flag = false;
-						if(isRegValid(reg_new_3)){
-							exchangeRegLoc(reg_new_3);
-							updatedRegVec[i].push_back(reg_new_3);
-							flag = true;
-						}else delete reg_new_3;
-						if(isRegValid(reg_new_4)){
-							exchangeRegLoc(reg_new_4);
-							updatedRegVec[i].push_back(reg_new_4);
-							flag = true;
-						}else delete reg_new_4;
+						// update their information at the same time
+						if(opID1!=2 and opID2!=2){
+							new_startRefPos = reg->startRefPos;
+							new_startLocalRefPos = reg->startLocalRefPos;
+							new_startQueryPos = reg->startQueryPos;
+							new_endRefPos = reg->startRefPos;
+							new_endLocalRefPos = reg->startLocalRefPos;
+							new_endQueryPos = reg->startQueryPos;
 
-						if(flag) processed_reg_vec.push_back(reg);
+							if(opID1==0){
+								new_startRefPos = reg_tmp->startRefPos;
+								new_startLocalRefPos = reg_tmp->startLocalRefPos;
+								new_startQueryPos = reg_tmp->startQueryPos;
+								//reg->startRefPos = reg_tmp->startRefPos;
+								//reg->startLocalRefPos = reg_tmp->startLocalRefPos;
+								//reg->startQueryPos = reg_tmp->startQueryPos;
+							}else if(opID1==1){ // update information
+								startShiftLen = getEndShiftLenFromNumVec(numVec1, 1);
+								if(reg->startRefPos<reg_tmp->startRefPos){
+									new_startRefPos = reg->startRefPos + startShiftLen;
+									new_startLocalRefPos = reg->startLocalRefPos + startShiftLen;
+									new_startQueryPos = reg->startQueryPos + startShiftLen;
+									//reg->startRefPos += numVec1[2];
+									//reg->startLocalRefPos += numVec1[2];
+									//reg->startQueryPos += numVec1[2];
+								}else{
+									new_startRefPos = reg_tmp->startRefPos + startShiftLen;
+									new_startLocalRefPos = reg_tmp->startLocalRefPos + startShiftLen;
+									new_startQueryPos = reg_tmp->startQueryPos + startShiftLen;
+									//reg->startRefPos = reg_tmp->startRefPos + numVec1[2];
+									//reg->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
+									//reg->startQueryPos = reg_tmp->startQueryPos + numVec1[2];
+								}
+							}
 
-					}else if(opID1==2 and (opID2==1 or opID2==0)){ // check and split the region
-						reg_new_1 = new reg_t();
-						if(reg->startRefPos<reg_tmp->startRefPos){
-							reg_new_1->startRefPos = reg->startRefPos + numVec1[2];
-							reg_new_1->startLocalRefPos = reg->startLocalRefPos + numVec1[2];
-							reg_new_1->startQueryPos = reg->startQueryPos + numVec1[2];
+							if(opID2==0){
+								new_endRefPos = reg_tmp->endRefPos;
+								new_endLocalRefPos = reg_tmp->endLocalRefPos;
+								new_endQueryPos = reg_tmp->endQueryPos;
+								//reg->endRefPos = reg_tmp->endRefPos;
+								//reg->endLocalRefPos = reg_tmp->endLocalRefPos;
+								//reg->endQueryPos = reg_tmp->endQueryPos;
+							}else if(opID2==1){
+								endShiftLen = getEndShiftLenFromNumVec(numVec2, 2);
+								if(reg_tmp->endRefPos<reg->endRefPos){
+									new_endRefPos = reg->endRefPos - endShiftLen;
+									new_endLocalRefPos = reg->endLocalRefPos - endShiftLen;
+									new_endQueryPos = reg->endQueryPos - endShiftLen;
+									//reg->endRefPos -= numVec2[3];
+									//reg->endLocalRefPos -= numVec2[3];
+									//reg->endQueryPos -= numVec2[3];
+								}else{
+									new_endRefPos = reg_tmp->endRefPos - endShiftLen;
+									new_endLocalRefPos = reg_tmp->endLocalRefPos - endShiftLen;
+									new_endQueryPos = reg_tmp->endQueryPos - endShiftLen;
+									//reg->endRefPos = reg_tmp->endRefPos - numVec2[3];
+									//reg->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
+									//reg->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
+								}
+							}
 
-							reg_new_1->endRefPos = reg_tmp->startRefPos - 1 - numVec1[3];
-							reg_new_1->endLocalRefPos = reg_tmp->startLocalRefPos - 1 - numVec1[3];
-							reg_new_1->endQueryPos = reg_tmp->startQueryPos - 1 - numVec1[3];
-						}else{
-							reg_new_1->startRefPos = reg_tmp->startRefPos + numVec1[2];
-							reg_new_1->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
-							reg_new_1->startQueryPos = reg_tmp->startQueryPos + numVec1[2];
+							if(new_startRefPos<=new_endRefPos and new_startQueryPos<=new_endQueryPos){
+								reg->startRefPos = new_startRefPos;
+								reg->startLocalRefPos = new_startLocalRefPos;
+								reg->startQueryPos = new_startQueryPos;
+								reg->endRefPos = new_endRefPos;
+								reg->endLocalRefPos = new_endLocalRefPos;
+								reg->endQueryPos = new_endQueryPos;
 
-							reg_new_1->endRefPos = reg->startRefPos - 1 - numVec1[3];
-							reg_new_1->endLocalRefPos = reg->startLocalRefPos - 1 - numVec1[3];
-							reg_new_1->endQueryPos = reg->startQueryPos - 1 - numVec1[3];
-						}
-						reg_new_1->chrname = reg->chrname;
-						reg_new_1->query_id = reg_tmp->query_id;
-						reg_new_1->blat_aln_id = reg->blat_aln_id;
-						reg_new_1->aln_orient = reg->aln_orient;
-						reg_new_1->zero_cov_flag = false;
+								if(isRegValid(reg)){
+									exchangeRegLoc(reg);
+									updatedRegVec[i].push_back(reg);
+									processed_reg_vec.push_back(reg);
+								}
+							}
 
-						reg_new_2 = new reg_t();
-						if(reg->startRefPos<reg_tmp->startRefPos){
-							reg_new_2->startRefPos = reg_tmp->startRefPos;
-							reg_new_2->startLocalRefPos = reg_tmp->startLocalRefPos;
-							reg_new_2->startQueryPos = reg_tmp->startQueryPos;
-						}else{
-							reg_new_2->startRefPos = reg->startRefPos;
-							reg_new_2->startLocalRefPos = reg->startLocalRefPos;
-							reg_new_2->startQueryPos = reg->startQueryPos;
-						}
-						reg_new_2->chrname = reg_tmp->chrname;
-						reg_new_2->endRefPos = reg_tmp->endRefPos;
-						reg_new_2->endLocalRefPos = reg_tmp->endLocalRefPos;
-						reg_new_2->endQueryPos = reg_tmp->endQueryPos;
-						reg_new_2->query_id = reg_tmp->query_id;
-						reg_new_2->blat_aln_id = reg_tmp->blat_aln_id;
-						reg_new_2->aln_orient = reg_tmp->aln_orient;
-						reg_new_2->zero_cov_flag = false;
+//							if(isRegValid(reg)){
+//								exchangeRegLoc(reg);
+//								updatedRegVec[i].push_back(reg);
+//								processed_reg_vec.push_back(reg);
+//							}
 
-						// update information according to opID2==1
-						endShiftLen = getEndShiftLenFromNumVec(numVec2, 2);
-						if(reg_tmp->endRefPos<reg->endRefPos){
-							reg_new_2->endRefPos = reg->endRefPos - numVec2[3];
-							reg_new_2->endLocalRefPos = reg->endLocalRefPos - numVec2[3];
-							reg_new_2->endQueryPos = reg->endQueryPos - numVec2[3];
-						}else{
-							reg_new_2->endRefPos = reg_tmp->endRefPos - numVec2[3];
-							reg_new_2->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
-							reg_new_2->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
-						}
+						}else if((opID1==1 or opID1==0) and opID2==2){ // check and split the region
+							reg_new_3 = new reg_t();
+							reg_new_3->startRefPos = reg_tmp->startRefPos;
+							reg_new_3->startLocalRefPos = reg_tmp->startLocalRefPos;
+							reg_new_3->startQueryPos = reg_tmp->startQueryPos;
+							if(reg_tmp->endRefPos<reg->endRefPos){
+								reg_new_3->endRefPos = reg_tmp->endRefPos;
+								reg_new_3->endLocalRefPos = reg_tmp->endLocalRefPos;
+								reg_new_3->endQueryPos = reg_tmp->endQueryPos;
+							}else{
+								reg_new_3->endRefPos = reg->endRefPos;
+								reg_new_3->endLocalRefPos = reg->endLocalRefPos;
+								reg_new_3->endQueryPos = reg->endQueryPos;
+							}
+							reg_new_3->chrname = reg_tmp->chrname;
+							reg_new_3->query_id = reg_tmp->query_id;
+							reg_new_3->blat_aln_id = reg_tmp->blat_aln_id;
+							reg_new_3->aln_orient = reg_tmp->aln_orient;
+							reg_new_3->zero_cov_flag = false;
 
-						flag = false;
-						if(isRegValid(reg_new_1)){
-							exchangeRegLoc(reg_new_1);
-							updatedRegVec[i].push_back(reg_new_1);
-							flag = true;
-						}else delete reg_new_1;
-						if(isRegValid(reg_new_2)){
-							exchangeRegLoc(reg_new_2);
-							updatedRegVec[i].push_back(reg_new_2);
-							flag = true;
-						}else delete reg_new_2;
+							reg_new_4 = new reg_t();
+							if(reg_tmp->endRefPos<reg->endRefPos){
+								reg_new_4->startRefPos = reg_tmp->endRefPos + numVec2[2];
+								reg_new_4->startLocalRefPos = reg_tmp->endLocalRefPos + numVec2[2];
+								reg_new_4->startQueryPos = reg_tmp->endQueryPos + numVec2[2];
 
-						if(flag) processed_reg_vec.push_back(reg);
+								reg_new_4->endRefPos = reg->endRefPos - numVec2[3];
+								reg_new_4->endLocalRefPos = reg->endLocalRefPos - numVec2[3];
+								reg_new_4->endQueryPos = reg->endQueryPos - numVec2[3];
+							}else{
+								reg_new_4->startRefPos = reg->endRefPos + numVec2[2];
+								reg_new_4->startLocalRefPos = reg->endLocalRefPos + numVec2[2];
+								reg_new_4->startQueryPos = reg->endQueryPos + numVec2[2];
 
-					}else if(opID1==2 and opID2==2){ // check and split the region
-						reg_new_1 = new reg_t();
-						if(reg->startRefPos<reg_tmp->startRefPos){
-							reg_new_1->startRefPos = reg->startRefPos + numVec1[2];
-							reg_new_1->startLocalRefPos = reg->startLocalRefPos + numVec1[2];
-							reg_new_1->startQueryPos = reg->startQueryPos + numVec1[2];
+								reg_new_4->endRefPos = reg_tmp->endRefPos - numVec2[3];
+								reg_new_4->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
+								reg_new_4->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
+							}
+							reg_new_4->chrname = reg_tmp->chrname;
+							reg_new_4->query_id = reg_tmp->query_id;
+							reg_new_4->blat_aln_id = reg_tmp->blat_aln_id;
+							reg_new_4->aln_orient = reg_tmp->aln_orient;
+							reg_new_4->zero_cov_flag = false;
 
-							reg_new_1->endRefPos = reg_tmp->startRefPos - 1 - numVec1[3];
-							reg_new_1->endLocalRefPos = reg_tmp->startLocalRefPos - 1 - numVec1[3];
-							reg_new_1->endQueryPos = reg_tmp->startQueryPos - 1 - numVec1[3];
-						}else{
-							reg_new_1->startRefPos = reg_tmp->startRefPos + numVec1[2];
-							reg_new_1->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
-							reg_new_1->startQueryPos = reg_tmp->startQueryPos + numVec1[2];
+							// update information according to opID1==1
+							startShiftLen = getEndShiftLenFromNumVec(numVec1, 1);
+							if(reg_tmp->startRefPos<reg->startRefPos){
+								reg_new_3->startRefPos = reg_tmp->startRefPos + numVec1[2];
+								reg_new_3->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
+								reg_new_3->startQueryPos = reg_tmp->startQueryPos + numVec1[2];
+							}else{
+								reg_new_3->startRefPos = reg->startRefPos + numVec1[2];
+								reg_new_3->startLocalRefPos = reg->startLocalRefPos + numVec1[2];
+								reg_new_3->startQueryPos = reg->startQueryPos + numVec1[2];
+							}
 
-							reg_new_1->endRefPos = reg->startRefPos - 1 - numVec1[3];
-							reg_new_1->endLocalRefPos = reg->startLocalRefPos - 1 - numVec1[3];
-							reg_new_1->endQueryPos = reg->startQueryPos - 1 - numVec1[3];
-						}
-						reg_new_1->chrname = reg->chrname;
-						reg_new_1->query_id = reg_tmp->query_id;
-						reg_new_1->blat_aln_id = reg->blat_aln_id;
-						reg_new_1->aln_orient = reg->aln_orient;
-						reg_new_1->zero_cov_flag = false;
+							flag = false;
+							if(isRegValid(reg_new_3)){
+								exchangeRegLoc(reg_new_3);
+								updatedRegVec[i].push_back(reg_new_3);
+								flag = true;
+							}else delete reg_new_3;
+							if(isRegValid(reg_new_4)){
+								exchangeRegLoc(reg_new_4);
+								updatedRegVec[i].push_back(reg_new_4);
+								flag = true;
+							}else delete reg_new_4;
 
-						reg_new_2 = new reg_t();
-						if(reg->startRefPos<reg_tmp->startRefPos){
-							reg_new_2->startRefPos = reg_tmp->startRefPos;
-							reg_new_2->startLocalRefPos = reg_tmp->startLocalRefPos;
-							reg_new_2->startQueryPos = reg_tmp->startQueryPos;
-						}else{
-							reg_new_2->startRefPos = reg->startRefPos;
-							reg_new_2->startLocalRefPos = reg->startLocalRefPos;
-							reg_new_2->startQueryPos = reg->startQueryPos;
-						}
-						if(reg->endRefPos<reg_tmp->endRefPos){
-							reg_new_2->endRefPos = reg->endRefPos;
-							reg_new_2->endLocalRefPos = reg->endLocalRefPos;
-							reg_new_2->endQueryPos = reg->endQueryPos;
-						}else{
+							if(flag) processed_reg_vec.push_back(reg);
+
+						}else if(opID1==2 and (opID2==1 or opID2==0)){ // check and split the region
+							reg_new_1 = new reg_t();
+							if(reg->startRefPos<reg_tmp->startRefPos){
+								reg_new_1->startRefPos = reg->startRefPos + numVec1[2];
+								reg_new_1->startLocalRefPos = reg->startLocalRefPos + numVec1[2];
+								reg_new_1->startQueryPos = reg->startQueryPos + numVec1[2];
+
+								reg_new_1->endRefPos = reg_tmp->startRefPos - 1 - numVec1[3];
+								reg_new_1->endLocalRefPos = reg_tmp->startLocalRefPos - 1 - numVec1[3];
+								reg_new_1->endQueryPos = reg_tmp->startQueryPos - 1 - numVec1[3];
+							}else{
+								reg_new_1->startRefPos = reg_tmp->startRefPos + numVec1[2];
+								reg_new_1->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
+								reg_new_1->startQueryPos = reg_tmp->startQueryPos + numVec1[2];
+
+								reg_new_1->endRefPos = reg->startRefPos - 1 - numVec1[3];
+								reg_new_1->endLocalRefPos = reg->startLocalRefPos - 1 - numVec1[3];
+								reg_new_1->endQueryPos = reg->startQueryPos - 1 - numVec1[3];
+							}
+							reg_new_1->chrname = reg->chrname;
+							reg_new_1->query_id = reg_tmp->query_id;
+							reg_new_1->blat_aln_id = reg->blat_aln_id;
+							reg_new_1->aln_orient = reg->aln_orient;
+							reg_new_1->zero_cov_flag = false;
+
+							reg_new_2 = new reg_t();
+							if(reg->startRefPos<reg_tmp->startRefPos){
+								reg_new_2->startRefPos = reg_tmp->startRefPos;
+								reg_new_2->startLocalRefPos = reg_tmp->startLocalRefPos;
+								reg_new_2->startQueryPos = reg_tmp->startQueryPos;
+							}else{
+								reg_new_2->startRefPos = reg->startRefPos;
+								reg_new_2->startLocalRefPos = reg->startLocalRefPos;
+								reg_new_2->startQueryPos = reg->startQueryPos;
+							}
+							reg_new_2->chrname = reg_tmp->chrname;
 							reg_new_2->endRefPos = reg_tmp->endRefPos;
 							reg_new_2->endLocalRefPos = reg_tmp->endLocalRefPos;
 							reg_new_2->endQueryPos = reg_tmp->endQueryPos;
+							reg_new_2->query_id = reg_tmp->query_id;
+							reg_new_2->blat_aln_id = reg_tmp->blat_aln_id;
+							reg_new_2->aln_orient = reg_tmp->aln_orient;
+							reg_new_2->zero_cov_flag = false;
+
+							// update information according to opID2==1
+							endShiftLen = getEndShiftLenFromNumVec(numVec2, 2);
+							if(reg_tmp->endRefPos<reg->endRefPos){
+								reg_new_2->endRefPos = reg->endRefPos - numVec2[3];
+								reg_new_2->endLocalRefPos = reg->endLocalRefPos - numVec2[3];
+								reg_new_2->endQueryPos = reg->endQueryPos - numVec2[3];
+							}else{
+								reg_new_2->endRefPos = reg_tmp->endRefPos - numVec2[3];
+								reg_new_2->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
+								reg_new_2->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
+							}
+
+							flag = false;
+							if(isRegValid(reg_new_1)){
+								exchangeRegLoc(reg_new_1);
+								updatedRegVec[i].push_back(reg_new_1);
+								flag = true;
+							}else delete reg_new_1;
+							if(isRegValid(reg_new_2)){
+								exchangeRegLoc(reg_new_2);
+								updatedRegVec[i].push_back(reg_new_2);
+								flag = true;
+							}else delete reg_new_2;
+
+							if(flag) processed_reg_vec.push_back(reg);
+
+						}else if(opID1==2 and opID2==2){ // check and split the region
+							reg_new_1 = new reg_t();
+							if(reg->startRefPos<reg_tmp->startRefPos){
+								reg_new_1->startRefPos = reg->startRefPos + numVec1[2];
+								reg_new_1->startLocalRefPos = reg->startLocalRefPos + numVec1[2];
+								reg_new_1->startQueryPos = reg->startQueryPos + numVec1[2];
+
+								reg_new_1->endRefPos = reg_tmp->startRefPos - 1 - numVec1[3];
+								reg_new_1->endLocalRefPos = reg_tmp->startLocalRefPos - 1 - numVec1[3];
+								reg_new_1->endQueryPos = reg_tmp->startQueryPos - 1 - numVec1[3];
+							}else{
+								reg_new_1->startRefPos = reg_tmp->startRefPos + numVec1[2];
+								reg_new_1->startLocalRefPos = reg_tmp->startLocalRefPos + numVec1[2];
+								reg_new_1->startQueryPos = reg_tmp->startQueryPos + numVec1[2];
+
+								reg_new_1->endRefPos = reg->startRefPos - 1 - numVec1[3];
+								reg_new_1->endLocalRefPos = reg->startLocalRefPos - 1 - numVec1[3];
+								reg_new_1->endQueryPos = reg->startQueryPos - 1 - numVec1[3];
+							}
+							reg_new_1->chrname = reg->chrname;
+							reg_new_1->query_id = reg_tmp->query_id;
+							reg_new_1->blat_aln_id = reg->blat_aln_id;
+							reg_new_1->aln_orient = reg->aln_orient;
+							reg_new_1->zero_cov_flag = false;
+
+							reg_new_2 = new reg_t();
+							if(reg->startRefPos<reg_tmp->startRefPos){
+								reg_new_2->startRefPos = reg_tmp->startRefPos;
+								reg_new_2->startLocalRefPos = reg_tmp->startLocalRefPos;
+								reg_new_2->startQueryPos = reg_tmp->startQueryPos;
+							}else{
+								reg_new_2->startRefPos = reg->startRefPos;
+								reg_new_2->startLocalRefPos = reg->startLocalRefPos;
+								reg_new_2->startQueryPos = reg->startQueryPos;
+							}
+							if(reg->endRefPos<reg_tmp->endRefPos){
+								reg_new_2->endRefPos = reg->endRefPos;
+								reg_new_2->endLocalRefPos = reg->endLocalRefPos;
+								reg_new_2->endQueryPos = reg->endQueryPos;
+							}else{
+								reg_new_2->endRefPos = reg_tmp->endRefPos;
+								reg_new_2->endLocalRefPos = reg_tmp->endLocalRefPos;
+								reg_new_2->endQueryPos = reg_tmp->endQueryPos;
+							}
+							reg_new_2->chrname = reg_tmp->chrname;
+							reg_new_2->query_id = reg_tmp->query_id;
+							reg_new_2->blat_aln_id = reg_tmp->blat_aln_id;
+							reg_new_2->aln_orient = reg_tmp->aln_orient;
+							reg_new_2->zero_cov_flag = false;
+
+							reg_new_4 = new reg_t();
+							if(reg_tmp->endRefPos<reg->endRefPos){
+								reg_new_4->startRefPos = reg_tmp->endRefPos + numVec2[2];
+								reg_new_4->startLocalRefPos = reg_tmp->endLocalRefPos + numVec2[2];
+								reg_new_4->startQueryPos = reg_tmp->endQueryPos + numVec2[2];
+
+								reg_new_4->endRefPos = reg->endRefPos - numVec2[3];
+								reg_new_4->endLocalRefPos = reg->endLocalRefPos - numVec2[3];
+								reg_new_4->endQueryPos = reg->endQueryPos - numVec2[3];
+							}else{
+								reg_new_4->startRefPos = reg->endRefPos + numVec2[2];
+								reg_new_4->startLocalRefPos = reg->endLocalRefPos + numVec2[2];
+								reg_new_4->startQueryPos = reg->endQueryPos + numVec2[2];
+
+								reg_new_4->endRefPos = reg_tmp->endRefPos - numVec2[3];
+								reg_new_4->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
+								reg_new_4->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
+							}
+							reg_new_4->chrname = reg_tmp->chrname;
+							reg_new_4->query_id = reg_tmp->query_id;
+							reg_new_4->blat_aln_id = reg_tmp->blat_aln_id;
+							reg_new_4->aln_orient = reg_tmp->aln_orient;
+							reg_new_4->zero_cov_flag = false;
+
+							flag = false;
+							if(isRegValid(reg_new_1)){
+								exchangeRegLoc(reg_new_1);
+								updatedRegVec[i].push_back(reg_new_1);
+								flag = true;
+							}else delete reg_new_1;
+							if(isRegValid(reg_new_2)){
+								exchangeRegLoc(reg_new_2);
+								updatedRegVec[i].push_back(reg_new_2);
+								flag = true;
+							}else delete reg_new_2;
+							if(isRegValid(reg_new_4)){
+								exchangeRegLoc(reg_new_4);
+								updatedRegVec[i].push_back(reg_new_4);
+								flag = true;
+							}else delete reg_new_4;
+
+							if(flag) processed_reg_vec.push_back(reg);
 						}
-						reg_new_2->chrname = reg_tmp->chrname;
-						reg_new_2->query_id = reg_tmp->query_id;
-						reg_new_2->blat_aln_id = reg_tmp->blat_aln_id;
-						reg_new_2->aln_orient = reg_tmp->aln_orient;
-						reg_new_2->zero_cov_flag = false;
-
-						reg_new_4 = new reg_t();
-						if(reg_tmp->endRefPos<reg->endRefPos){
-							reg_new_4->startRefPos = reg_tmp->endRefPos + numVec2[2];
-							reg_new_4->startLocalRefPos = reg_tmp->endLocalRefPos + numVec2[2];
-							reg_new_4->startQueryPos = reg_tmp->endQueryPos + numVec2[2];
-
-							reg_new_4->endRefPos = reg->endRefPos - numVec2[3];
-							reg_new_4->endLocalRefPos = reg->endLocalRefPos - numVec2[3];
-							reg_new_4->endQueryPos = reg->endQueryPos - numVec2[3];
-						}else{
-							reg_new_4->startRefPos = reg->endRefPos + numVec2[2];
-							reg_new_4->startLocalRefPos = reg->endLocalRefPos + numVec2[2];
-							reg_new_4->startQueryPos = reg->endQueryPos + numVec2[2];
-
-							reg_new_4->endRefPos = reg_tmp->endRefPos - numVec2[3];
-							reg_new_4->endLocalRefPos = reg_tmp->endLocalRefPos - numVec2[3];
-							reg_new_4->endQueryPos = reg_tmp->endQueryPos - numVec2[3];
-						}
-						reg_new_4->chrname = reg_tmp->chrname;
-						reg_new_4->query_id = reg_tmp->query_id;
-						reg_new_4->blat_aln_id = reg_tmp->blat_aln_id;
-						reg_new_4->aln_orient = reg_tmp->aln_orient;
-						reg_new_4->zero_cov_flag = false;
-
-						flag = false;
-						if(isRegValid(reg_new_1)){
-							exchangeRegLoc(reg_new_1);
-							updatedRegVec[i].push_back(reg_new_1);
-							flag = true;
-						}else delete reg_new_1;
-						if(isRegValid(reg_new_2)){
-							exchangeRegLoc(reg_new_2);
-							updatedRegVec[i].push_back(reg_new_2);
-							flag = true;
-						}else delete reg_new_2;
-						if(isRegValid(reg_new_4)){
-							exchangeRegLoc(reg_new_4);
-							updatedRegVec[i].push_back(reg_new_4);
-							flag = true;
-						}else delete reg_new_4;
-
-						if(flag) processed_reg_vec.push_back(reg);
 					}
 				}else{
 //					reg_new_tmp = new reg_t();
@@ -2217,7 +2245,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 //
 //					updatedRegVec[i].push_back(reg_new_tmp);
 
-					cout << "******** line=" << __LINE__ << ", new variant region: " << reg_tmp->chrname << ":" << reg_tmp->startRefPos << "-" << reg_tmp->endRefPos << endl;
+					//cout << "******** line=" << __LINE__ << ", new variant region: " << reg_tmp->chrname << ":" << reg_tmp->startRefPos << "-" << reg_tmp->endRefPos << endl;
 				}
 			}
 		}
@@ -2360,12 +2388,13 @@ void varCand::computeVarRegLoc(reg_t *reg, reg_t *cand_reg){
 	localAln_t *local_aln;
 
 	// prepare align information
-	local_aln = new localAln_t;
+	local_aln = new localAln_t();
 	local_aln->reg = reg;
 	local_aln->cand_reg = cand_reg;
 	local_aln->startRefPos = local_aln->endRefPos = -1;
 	local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
 	local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
+	local_aln->start_aln_idx_var = local_aln->end_aln_idx_var = -1;
 	computeLocalLocsAln(local_aln);
 
 	// get align sequences
@@ -2383,10 +2412,262 @@ void varCand::computeVarRegLoc(reg_t *reg, reg_t *cand_reg){
 	// compute locations
 	computeVarLoc(local_aln);
 
+	// adjust the variant locations by computing the around gap location
+	adjustVarLoc(local_aln);
+
 	// confirm the variant locations, i.e. there are no mismatches on both sides of the region
 	//confirmVarLoc(local_aln);
 
 	delete local_aln;
+}
+
+// adjust variant locations according to alignment
+void varCand::adjustVarLoc(localAln_t *local_aln){
+	struct misRegNode{
+		int32_t start_aln_idx, end_aln_idx, reg_size;
+		int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
+		bool gap_flag;
+	};
+	int64_t ref_pos, local_ref_pos, query_pos, tmp, startMisRefPos, endMisRefPos, startMisLocalRefPos, endMisLocalRefPos, startMisQueryPos, endMisQueryPos;
+	int32_t i, j, start_check_idx, end_check_idx, mis_reg_size, begin_mismatch_aln_idx, end_mismatch_aln_idx, max_reg_idx, maxValue, left_reg_idx, right_reg_idx;
+	string ctgseq_aln, midseq_aln, refseq_aln;
+	vector<struct misRegNode*> misReg_vec;	// all the mismatch regions including gap regions
+	struct misRegNode* mis_reg, *mis_reg2;
+	reg_t *reg;
+	bool extend_flag;
+
+	if(local_aln->start_aln_idx_var==-1 or local_aln->end_aln_idx_var) return;
+
+	ctgseq_aln = local_aln->alignResultVec[0];
+	midseq_aln = local_aln->alignResultVec[1];
+	refseq_aln = local_aln->alignResultVec[2];
+
+	// check left side
+	startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
+	begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
+	mis_reg_size = 0;
+
+	start_check_idx = local_aln->start_aln_idx_var;
+	end_check_idx = start_check_idx - EXT_SIZE_CHK_VAR_LOC;
+	if(end_check_idx<0) end_check_idx = 0;
+	extend_flag = false;
+
+	reg = local_aln->reg;
+	ref_pos = reg->startRefPos;
+	local_ref_pos = reg->startLocalRefPos;
+	query_pos = reg->startQueryPos;
+	for(i=start_check_idx; i>=end_check_idx; i--){
+		if(midseq_aln[i]==' '){ // mismatch including gap
+			if(end_mismatch_aln_idx==-1){
+				end_mismatch_aln_idx = i;
+				endMisRefPos = ref_pos;
+				endMisLocalRefPos = local_ref_pos;
+				endMisQueryPos = query_pos;
+				mis_reg_size = 1;
+			}else{
+				mis_reg_size ++;
+			}
+
+			if(ctgseq_aln[i]=='-'){ // gap in query
+				ref_pos --;
+				local_ref_pos --;
+			}else if(refseq_aln[i]=='-'){ // gap in reference
+				query_pos --;
+			}else{ // mismatch
+				query_pos --;
+				ref_pos --;
+				local_ref_pos --;
+			}
+
+			if(i==end_check_idx and extend_flag==false){
+				end_check_idx -= EXT_SIZE_CHK_VAR_LOC;
+				if(end_check_idx<0) end_check_idx = 0;
+				extend_flag = true;
+				//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
+			}
+		}else{ // match
+			if(end_mismatch_aln_idx!=-1){
+				begin_mismatch_aln_idx = i + 1;
+				startMisRefPos = ref_pos;
+				startMisLocalRefPos = local_ref_pos;
+				startMisQueryPos = query_pos;
+
+				mis_reg = new struct misRegNode();
+				mis_reg->start_aln_idx = begin_mismatch_aln_idx;
+				mis_reg->end_aln_idx = end_mismatch_aln_idx;
+				mis_reg->reg_size = mis_reg_size;
+				mis_reg->startRefPos = startMisRefPos;
+				mis_reg->endRefPos = endMisRefPos;
+				mis_reg->startLocalRefPos = startMisLocalRefPos;
+				mis_reg->endLocalRefPos = endMisLocalRefPos;
+				mis_reg->startQueryPos = startMisQueryPos;
+				mis_reg->endQueryPos = endMisQueryPos;
+				misReg_vec.push_back(mis_reg);
+
+				begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
+				startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
+				mis_reg_size = 0;
+
+				if(extend_flag) break;
+			}
+
+			query_pos --;
+			ref_pos --;
+			local_ref_pos --;
+		}
+	}
+
+	// check right side
+	startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
+	begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
+	mis_reg_size = 0;
+
+	start_check_idx = local_aln->end_aln_idx_var;
+	end_check_idx = start_check_idx + EXT_SIZE_CHK_VAR_LOC;
+	if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
+	extend_flag = false;
+
+	ref_pos = reg->endRefPos;
+	local_ref_pos = reg->endLocalRefPos;
+	query_pos = reg->endQueryPos;
+	for(i=start_check_idx; i<=end_check_idx; i++){
+		if(midseq_aln[i]==' '){ // mismatch including gap
+			if(begin_mismatch_aln_idx==-1){
+				begin_mismatch_aln_idx = i;
+				startMisRefPos = ref_pos;
+				startMisLocalRefPos = local_ref_pos;
+				startMisQueryPos = query_pos;
+				mis_reg_size = 1;
+			}else{
+				mis_reg_size ++;
+			}
+
+			if(ctgseq_aln[i]=='-'){ // gap in query
+				ref_pos ++;
+				local_ref_pos ++;
+			}else if(refseq_aln[i]=='-'){ // gap in reference
+				query_pos ++;
+			}else{ // mismatch
+				query_pos ++;
+				ref_pos ++;
+				local_ref_pos ++;
+			}
+
+			if(i==end_check_idx){
+				if(extend_flag==false){
+					end_check_idx += EXT_SIZE_CHK_VAR_LOC;
+					if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
+					extend_flag = true;
+					//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
+				}else if(begin_mismatch_aln_idx!=-1){ // mismatch region not closed
+					end_check_idx += EXT_SIZE_CHK_VAR_LOC;
+					if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
+					//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
+				}
+			}
+		}else{ // match
+			if(begin_mismatch_aln_idx!=-1){
+				end_mismatch_aln_idx = i - 1;
+				endMisRefPos = ref_pos;
+				endMisLocalRefPos = local_ref_pos;
+				endMisQueryPos = query_pos;
+
+				mis_reg = new struct misRegNode();
+				mis_reg->start_aln_idx = begin_mismatch_aln_idx;
+				mis_reg->end_aln_idx = end_mismatch_aln_idx;
+				mis_reg->reg_size = mis_reg_size;
+				mis_reg->startRefPos = startMisRefPos;
+				mis_reg->endRefPos = endMisRefPos;
+				mis_reg->startLocalRefPos = startMisLocalRefPos;
+				mis_reg->endLocalRefPos = endMisLocalRefPos;
+				mis_reg->startQueryPos = startMisQueryPos;
+				mis_reg->endQueryPos = endMisQueryPos;
+				misReg_vec.push_back(mis_reg);
+
+				begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
+				startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
+				mis_reg_size = 0;
+
+				if(extend_flag) break;
+			}
+
+			query_pos ++;
+			ref_pos ++;
+			local_ref_pos ++;
+		}
+	}
+
+	// sort
+	for(i=0; i<(int32_t)misReg_vec.size(); i++){
+		mis_reg = misReg_vec.at(i);
+		for(j=i+1; j<(int32_t)misReg_vec.size(); j++){
+			mis_reg2 = misReg_vec.at(j);
+			if(mis_reg->start_aln_idx>mis_reg2->start_aln_idx){ // exchange
+				tmp = mis_reg->start_aln_idx; mis_reg->start_aln_idx = mis_reg2->start_aln_idx; mis_reg2->start_aln_idx = tmp;
+				tmp = mis_reg->end_aln_idx; mis_reg->end_aln_idx = mis_reg2->end_aln_idx; mis_reg2->end_aln_idx = tmp;
+				tmp = mis_reg->reg_size; mis_reg->reg_size = mis_reg2->reg_size; mis_reg2->reg_size = tmp;
+				tmp = mis_reg->startRefPos; mis_reg->startRefPos = mis_reg2->startRefPos; mis_reg2->startRefPos = tmp;
+				tmp = mis_reg->endRefPos; mis_reg->endRefPos = mis_reg2->endRefPos; mis_reg2->endRefPos = tmp;
+				tmp = mis_reg->startLocalRefPos; mis_reg->startLocalRefPos = mis_reg2->startLocalRefPos; mis_reg2->startLocalRefPos = tmp;
+				tmp = mis_reg->endLocalRefPos; mis_reg->endLocalRefPos = mis_reg2->endLocalRefPos; mis_reg2->endLocalRefPos = tmp;
+				tmp = mis_reg->startQueryPos; mis_reg->startQueryPos = mis_reg2->startQueryPos; mis_reg2->startQueryPos = tmp;
+				tmp = mis_reg->endQueryPos; mis_reg->endQueryPos = mis_reg2->endQueryPos; mis_reg2->endQueryPos = tmp;
+			}
+		}
+	}
+
+	// get maximum mismatch region
+	max_reg_idx = -1;
+	maxValue = 0;
+	for(i=0; i<(int32_t)misReg_vec.size(); i++){
+		mis_reg = misReg_vec.at(i);
+		if(mis_reg->reg_size>maxValue){
+			max_reg_idx = i;
+			maxValue = mis_reg->reg_size;
+		}
+	}
+
+	// check its neighbors
+	if(max_reg_idx!=-1){
+		left_reg_idx = right_reg_idx = -1;
+
+		// left side extend
+		mis_reg = misReg_vec.at(max_reg_idx);
+		for(i=max_reg_idx-1; i>=0; i--){
+			mis_reg2 = misReg_vec.at(i);
+			if(mis_reg->start_aln_idx-mis_reg2->end_aln_idx<=MIN_ADJACENT_REG_DIST){ // distance less than threshold
+				left_reg_idx = i;
+				mis_reg = mis_reg2;
+				mis_reg2 = NULL;
+			}else break;
+		}
+		if(left_reg_idx==-1) left_reg_idx = max_reg_idx;
+
+		// right side extend
+		mis_reg = misReg_vec.at(max_reg_idx);
+		for(i=max_reg_idx+1; i<(int32_t)misReg_vec.size()-1; i++){
+			mis_reg2 = misReg_vec.at(i);
+			if(mis_reg2->start_aln_idx-mis_reg->end_aln_idx<=MIN_ADJACENT_REG_DIST){ // distance less than threshold
+				right_reg_idx = i;
+				mis_reg = mis_reg2;
+				mis_reg2 = NULL;
+			}else break;
+		}
+		if(right_reg_idx==-1) right_reg_idx = max_reg_idx;
+
+		mis_reg = misReg_vec.at(left_reg_idx);
+		mis_reg2 = misReg_vec.at(right_reg_idx);
+		reg->startRefPos = mis_reg->startRefPos;
+		reg->endRefPos = mis_reg2->endRefPos;
+		reg->startLocalRefPos = mis_reg->startLocalRefPos;
+		reg->endLocalRefPos = mis_reg2->endLocalRefPos;
+		reg->startQueryPos = mis_reg->startQueryPos;
+		reg->endQueryPos = mis_reg2->endQueryPos;
+	}
+
+	// release memory
+	for(j=0; j<(int32_t)misReg_vec.size(); j++) delete misReg_vec.at(j);
+	vector<struct misRegNode*>().swap(misReg_vec);
 }
 
 // compute margins of variations
@@ -2537,14 +2818,10 @@ int32_t varCand::getEndShiftLenFromNumVec(vector<int32_t> &numVec, size_t end_fl
 	int32_t endShiftLen = 0;
 
 	if(numVec[4]==1){
-		if(numVec[5]==1)
+		if(numVec[5]==1 and end_flag==1)
 			endShiftLen = numVec[2];
-		else if(numVec[5]==2)
+		else if(numVec[5]==2 and end_flag==2)
 			endShiftLen = numVec[3];
-		else{
-			cerr << "line=" << __LINE__ << ", all_match_flag=" << numVec[4] << ", all_match_flag=" << numVec[5] << endl;
-			exit(1);
-		}
 	}else{
 		if(end_flag==1)
 			endShiftLen = numVec[2];

@@ -808,6 +808,36 @@ void printMateClipReg(mateClipReg_t *mate_clip_reg){
 	cout << "\tvalid_flag=" << mate_clip_reg->valid_flag << ", call_success_flag=" << mate_clip_reg->call_success_flag << ", leftClipRegNum=" << mate_clip_reg->leftClipRegNum << ", rightClipRegNum=" << mate_clip_reg->rightClipRegNum << ", sv_type=" << mate_clip_reg->sv_type << ", dup_num=" << mate_clip_reg->dup_num << endl;
 }
 
+vector<string> getLeftRightPartChrname(mateClipReg_t *mate_clip_reg){
+	vector<string> chrname_vec;
+	string chrname_left = "", chrname_right = "";
+
+	// left part
+	if(mate_clip_reg->leftClipRegNum==2){
+		chrname_left = mate_clip_reg->leftClipReg->chrname;
+	}else if(mate_clip_reg->leftClipRegNum==1){
+		if(mate_clip_reg->leftClipReg)
+			chrname_left = mate_clip_reg->leftClipReg->chrname;
+		else if(mate_clip_reg->leftClipReg2)
+			chrname_left = mate_clip_reg->leftClipReg2->chrname;
+	}
+
+	// right part
+	if(mate_clip_reg->rightClipRegNum==2){
+		chrname_right = mate_clip_reg->rightClipReg->chrname;
+	}else if(mate_clip_reg->rightClipRegNum==1){
+		if(mate_clip_reg->rightClipReg)
+			chrname_right = mate_clip_reg->rightClipReg->chrname;
+		else if(mate_clip_reg->rightClipReg2)
+			chrname_right = mate_clip_reg->rightClipReg2->chrname;
+	}
+
+	chrname_vec.push_back(chrname_left);
+	chrname_vec.push_back(chrname_right);
+
+	return chrname_vec;
+}
+
 // preprocess pipe command characters
 string preprocessPipeChar(string &cmd_str){
 	char ch;
@@ -943,9 +973,9 @@ bool isRegValid(reg_t *reg){
 	bool flag = false;
 	if(reg->startRefPos<=reg->endRefPos and reg->startLocalRefPos<=reg->endLocalRefPos and reg->startQueryPos<=reg->endQueryPos)
 		flag = true;
-	if(flag==false){
-		cout << "========= Invalid region: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", local_Loc: " << reg->startLocalRefPos << "-" << reg->endLocalRefPos << ", query_Loc: " << reg->startQueryPos << "-" << reg->endQueryPos << endl;
-	}
+//	if(flag==false){
+//		cout << "========= Invalid region: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", local_Loc: " << reg->startLocalRefPos << "-" << reg->endLocalRefPos << ", query_Loc: " << reg->startQueryPos << "-" << reg->endQueryPos << endl;
+//	}
 	return flag;
 }
 
@@ -1040,7 +1070,7 @@ string getCallFileHeaderBed(){
 // get call file header line for INDEL which starts with '#'
 string getCallFileHeaderBedpe(){
 	string header_line;
-	header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tSVType\tSVLen1\tSVLen2\tRef\tAlt1\tRef2\tAlt2";
+	header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tSVType\tSVLen1\tSVLen2\tRef1\tAlt1\tRef2\tAlt2";
 	return header_line;
 }
 
@@ -1073,8 +1103,8 @@ assembleWork_opt* allocateAssemWorkOpt(string &chrname, string &readsfilename, s
 }
 
 void releaseAssemWorkOpt(assembleWork_opt *assem_work_opt){
-	free(assem_work_opt->var_array);
-	if(assem_work_opt->limit_reg_array_size>0) free(assem_work_opt->limit_reg_array);
+	free(assem_work_opt->var_array); assem_work_opt->var_array = NULL;
+	if(assem_work_opt->limit_reg_array_size>0) { free(assem_work_opt->limit_reg_array); assem_work_opt->limit_reg_array = NULL; assem_work_opt->limit_reg_array_size = 0; }
 	delete assem_work_opt;
 }
 
@@ -1145,6 +1175,11 @@ void* processSingleAssembleWork(void *arg){
 
 	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->delete_reads_flag, assem_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
+	// release memory
+	sub_limit_reg_vec.clear();
+	if(assem_work_opt->arr_size>0) { free(assem_work_opt->var_array); assem_work_opt->var_array = NULL; assem_work_opt->arr_size = 0; }
+	if(assem_work_opt->limit_reg_array_size>0) { free(assem_work_opt->limit_reg_array); assem_work_opt->limit_reg_array = NULL; assem_work_opt->limit_reg_array_size = 0; }
+
 	// output progress information
 	pthread_mutex_lock(assem_work->p_mtx_assemble_reg_workDone_num);
 	(*assem_work->p_assemble_reg_workDone_num) ++;
@@ -1193,23 +1228,35 @@ void performLocalAssembly(string &readsfilename, string &contigfilename, string 
 
 void outputAssemWorkOptToFile_debug(vector<assembleWork_opt*> &assem_work_opt_vec){
 	assembleWork_opt *assem_work_opt;
-	reg_t *reg;
+//	reg_t *reg;
+	ofstream outfile;
+
+	outfile.open("assemble_work_list");
+	if(!outfile.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file" << endl;
+		exit(1);
+	}
+
 	for(size_t i=0; i<assem_work_opt_vec.size(); i++){
 		assem_work_opt = assem_work_opt_vec.at(i);
+		outfile << assem_work_opt->refseqfilename << "\t" << assem_work_opt->contigfilename << "\t" << assem_work_opt->readsfilename << endl;
+
 		//cout << "assemble region [" << i << "]: " << assem_work_opt->readsfilename << endl;
-		if(assem_work_opt->chrname.compare("chr2")==0 and (assem_work_opt->var_array[0]->startRefPos==148051825 or assem_work_opt->var_array[assem_work_opt->arr_size-1]->endRefPos==145138636))
-		{
-			cout << "assemble region [" << i << "]: " << assem_work_opt->readsfilename << endl;
-			for(size_t j=0; j<assem_work_opt->arr_size; j++){
-				reg = assem_work_opt->var_array[j];
-				cout << "\t[" << j << "]" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
-			}
-		}
-//		for(size_t j=0; j<assem_work_opt->arr_size; j++){
+//		if(assem_work_opt->chrname.compare("chr2")==0 and (assem_work_opt->var_array[0]->startRefPos==148051825 or assem_work_opt->var_array[assem_work_opt->arr_size-1]->endRefPos==145138636))
+//		{
+//			cout << "assemble region [" << i << "]: " << assem_work_opt->readsfilename << endl;
+//			for(size_t j=0; j<assem_work_opt->arr_size; j++){
+//				reg = assem_work_opt->var_array[j];
+//				cout << "\t[" << j << "]" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+//			}
+//		}
+//		for(size_t j=0; j<assem_work_opt->->arr_size; j++){
 //			reg = assem_work_opt->var_array[j];
 //			cout << "\t[" << j << "]" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 //		}
 	}
+
+	outfile.close();
 }
 
 // get old output directory name
@@ -1241,6 +1288,27 @@ string getUpdatedItemFilename(string &filename, string &out_dir, string &old_out
 		new_filename = out_dir + "/" + filename.substr(old_out_dir.size());
 
 	return new_filename;
+}
+
+// get chromosome name by given file name
+string getChrnameByFilename(string &filename){
+	string chrname;
+	int32_t start_idx, end_idx;
+
+	if(filename.size()>0){
+		start_idx = end_idx = -1;
+		end_idx = filename.find_last_of("/") - 1;
+		for(int32_t i=end_idx; i>=0; i--){
+			if(filename.at(i)=='/'){
+				start_idx = i + 1;
+				break;
+			}
+		}
+		if(start_idx!=-1 and end_idx!=-1)
+			chrname = filename.substr(start_idx, end_idx-start_idx+1);
+	}
+
+	return chrname;
 }
 
 // delete the tail '/' path character
@@ -1285,7 +1353,6 @@ vector<simpleReg_t*> getOverlappedSimpleRegs(string &chrname, int64_t begPos, in
 	simpleReg_t *simple_reg;
 	vector<simpleReg_t*> sub_simple_reg_vec;
 	bool flag;
-
 
 	if(chrname.size()){
 		for(size_t i=0; i<limit_reg_vec.size(); i++){
@@ -1503,6 +1570,7 @@ vector<simpleReg_t*> extractSimpleRegsByStr(string &regs_str){
 
 	return limit_reg_vec;
 }
+
 
 
 Time::Time() {

@@ -48,7 +48,7 @@ typedef struct{
 	size_t leftClipRegNum, rightClipRegNum;
 
 	size_t sv_type, dup_num;
-	bool reg_mated_flag, valid_flag, call_success_flag;
+	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag;
 	varCand *var_cand, *left_var_cand_tra, *right_var_cand_tra;  // TRA
 	string chrname_leftTra1, chrname_rightTra1, chrname_leftTra2, chrname_rightTra2;
 	int32_t leftClipPosTra1, rightClipPosTra1, leftClipPosTra2, rightClipPosTra2;

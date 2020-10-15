@@ -383,8 +383,9 @@ bool Region::haveMuchShortIndelsAround(int64_t startCheckPos, int64_t endCheckPo
 
 	for(int64_t i=startCheckPos; i<=endCheckPos; i++){
 		base = regBaseArr + i - startRPos;
-		if(base->insVector.size()>=paras->min_ins_num_filt or base->delVector.size()>=paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
-			or base->num_shortIns>=paras->min_ins_num_filt or base->num_shortdel>=paras->min_del_num_filt or base->num_shortClip>=paras->min_clip_num_filt
+		//if(base->insVector.size()>=paras->min_ins_num_filt or base->delVector.size()>=paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
+		if(base->insVector.size()>=paras->min_ins_num_filt or base->del_num_from_del_vec>=(int32_t)paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
+			or base->num_shortIns>=(int32_t)paras->min_ins_num_filt or base->num_shortdel>=(int32_t)paras->min_del_num_filt or base->num_shortClip>=(int32_t)paras->min_clip_num_filt
 			/*or base->getLargerInsNum(paras->min_ins_size_filt)>0 or base->getLargerDelNum(paras->min_del_size_filt)>0 or base->getLargerClipNum(paras->min_clip_size_filt)>0*/){
 			flag = true;
 			break;
@@ -415,8 +416,8 @@ void Region::detectIndelReg(){
 	int64_t i = startMidPartPos - subRegSize;
 	if(i<minRPos) i = minRPos;
 	while(i<endMidPartPos){
-		//if(i>48939000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
-		//	cout << i << endl;
+//		if(i>5889400)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
+//			cout << i << endl;
 
 		reg = getIndelReg(i);
 		if(reg){
@@ -544,13 +545,15 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 bool Region::haveNoAbSigs(Base *base, int64_t pos){
 	if(base->isDisagreeBase())
 		if(find(snvVector.begin(), snvVector.end(), pos)==snvVector.end()) return false;
-	if(base->isZeroCovBase() or base->insVector.size()>=paras->min_ins_num_filt or base->delVector.size()>=paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
+	if(base->isZeroCovBase() or base->insVector.size()>=paras->min_ins_num_filt or base->del_num_from_del_vec>=(int32_t)paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
+	//if(base->isZeroCovBase() or base->insVector.size()>=paras->min_ins_num_filt or base->delVector.size()>=paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
 		//or base->num_shortIns>=paras->min_ins_num_filt or base->num_shortdel>=paras->min_del_num_filt or base->num_shortClip>=paras->min_clip_num_filt
 		/*or base->getLargerInsNum(paras->min_ins_size_filt)>0 or base->getLargerDelNum(paras->min_del_size_filt)>0 or base->getLargerClipNum(paras->min_clip_size_filt)>0*/)
 		return false;
 //	else if(getMismatchBasesAround(pos-DISAGREE_CHK_REG, pos+DISAGREE_CHK_REG)>=DISAGREE_NUM_THRES_REG)
 //		return false;
-	else if(base->getLargeIndelNum(paras->large_indel_size_thres)>=3 or (double)(base->getTotalIndelNum()+base->getTotalClipNum())/base->getTotalCovNum()>=HIGH_INDEL_CLIP_RATIO_THRES)
+	//else if(base->getLargeIndelNum(paras->large_indel_size_thres)>=3 or (double)(base->getTotalIndelNum()+base->getTotalClipNum())/base->getTotalCovNum()>=HIGH_INDEL_CLIP_RATIO_THRES)
+	else if(base->getLargeIndelNum(paras->large_indel_size_thres)>=3 or base->getLargeIndelNum(paras->large_indel_size_thres*2)>=2 or (double)(base->getTotalIndelNum()+base->getTotalClipNum())/base->getTotalCovNum()>=HIGH_INDEL_CLIP_RATIO_THRES)
 		return false;
 	return true;
 }
@@ -592,6 +595,12 @@ int32_t Region::getLargeIndelBaseNum(int64_t startPos, int64_t endPos){
 		ratio = (double)large_indel_num / regBaseArr[i-startRPos].coverage.num_bases[5];
 		if(ratio>=LARGE_INDEL_RATIO_THRES)
 			total ++;
+		else{
+			large_indel_num = regBaseArr[i-startRPos].getLargeIndelNum(paras->large_indel_size_thres*2);
+			ratio = (double)large_indel_num / regBaseArr[i-startRPos].coverage.num_bases[5];
+			if(ratio>=0.5*LARGE_INDEL_RATIO_THRES)
+				total ++;
+		}
 	}
 
 	return total;
@@ -665,8 +674,9 @@ void Region::detectHighClipReg(){
 	int64_t i = startMidPartPos - SUB_CLIP_REG_SIZE;
 	if(i<1) i = 1;
 	while(i<endMidPartPos){
-//		if(i>253000)
+//		if(i>2932500)
 //			cout << i << endl;
+
 		reg_t *reg = getClipReg(i);
 		if(reg) {
 			clipRegVector.push_back(reg);
@@ -699,15 +709,28 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 			if(clip_reg_flag==false){ // first clip region
 				clip_reg_flag = true;
 				startPos_clip = startPos_tmp;
-				endPos_clip = endPos_tmp;
-			}else{
-				endPos_clip = endPos_tmp;
 			}
+			endPos_clip = endPos_tmp;
 		}else { // normal region
 			if(clip_reg_flag==true){
 				break;
 			}
 		}
+
+		if(startPos_clip!=-1 and endPos_clip!=-1){ // check disagreements
+			// compute the number of disagreements
+			int32_t disagreeNum = computeDisagreeNum(regBaseArr+startPos_clip-startRPos, endPos_clip-startPos_clip+1);
+			normal_reg_flag = haveNoClipSig(startPos_clip, endPos_clip, HIGH_CLIP_RATIO_THRES*3);
+
+			if(disagreeNum>=1 or normal_reg_flag==false) {
+				reg = allocateReg(chrname, startPos_clip, endPos_clip);
+				break;
+			}else{
+				clip_reg_flag = false;
+				startPos_clip = endPos_clip = -1;
+			}
+		}
+
 		checkPos = endPos_tmp + 1;
 	}
 
@@ -851,13 +874,13 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 //	}
 
 	// check disagreements
-	if(startPos_clip!=-1 and endPos_clip!=-1){
-		// compute the number of disagreements
-		int32_t disagreeNum = computeDisagreeNum(regBaseArr+startPos_clip-startRPos, endPos_clip-startPos_clip+1);
-		normal_reg_flag = haveNoClipSig(startPos_clip, endPos_clip, HIGH_CLIP_RATIO_THRES*3);
-
-		if(disagreeNum>=1 or normal_reg_flag==false) reg = allocateReg(chrname, startPos_clip, endPos_clip);
-	}
+//	if(startPos_clip!=-1 and endPos_clip!=-1){
+//		// compute the number of disagreements
+//		int32_t disagreeNum = computeDisagreeNum(regBaseArr+startPos_clip-startRPos, endPos_clip-startPos_clip+1);
+//		normal_reg_flag = haveNoClipSig(startPos_clip, endPos_clip, HIGH_CLIP_RATIO_THRES*3);
+//
+//		if(disagreeNum>=1 or normal_reg_flag==false) reg = allocateReg(chrname, startPos_clip, endPos_clip);
+//	}
 
 	return reg;
 }

@@ -156,7 +156,7 @@ void Genome::loadLimitRegs(){
 // allocate the Chrome node
 Chrome* Genome::allocateChrome(string& chrname, int chrlen, faidx_t *fai){
 	Chrome *chr_tmp;
-	chr_tmp = new Chrome(chrname, chrlen, fai, paras);
+	chr_tmp = new Chrome(chrname, chrlen, fai, paras, &chromeVector);
 	if(!chr_tmp){ cerr << "Genome: cannot allocate memory" << endl; exit(1); }
 	return chr_tmp;
 }
@@ -301,12 +301,9 @@ void Genome::estimateSVSizeNum(){
 
 // detect variations for genome
 int Genome::genomeDetect(){
-	Time time;
-
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->print_flag) cout << "[" << time.getTime() << "]: processing Chr: " << chr->chrname << ", size: " << chr->chrlen << " bp" << endl;
 		chr->chrDetect();
 	}
 
@@ -534,7 +531,7 @@ int Genome::genomeLocalAssemble(){
 	cout << "Number of previously assembled regions: " << paras->assemble_reg_preDone_num << endl;
 	cout << "Number of regions to be assembled: " << paras->assemble_reg_work_total << endl;
 
-	//outputAssemWorkOptToFile(paras->assem_work_vec);
+	//outputAssemWorkOptToFile_debug(paras->assem_work_vec);
 
 	// begin assemble
 	if(paras->assem_work_vec.size()) cout << "[" << time.getTime() << "]: start local assemble..." << endl;
@@ -576,10 +573,17 @@ int Genome::processAssembleWork(){
 	assembleWork_opt *assem_work_opt;
 	assembleWork *assem_work;
 	ofstream *var_cand_file;
-	size_t num_work, num_work_per_ten_percent;
+	size_t num_threads_work, num_work, num_work_per_ten_percent;
 
-	hts_tpool *p = hts_tpool_init(paras->num_threads);
-	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
+	num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
+	if(num_threads_work<1) num_threads_work = 1;
+
+	cout << "num_threads_work=" << num_threads_work << endl;
+
+//	hts_tpool *p = hts_tpool_init(paras->num_threads);
+//	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
+	hts_tpool *p = hts_tpool_init(num_threads_work);
+	hts_tpool_process *q = hts_tpool_process_init(p, num_threads_work*2, 1);
 
 	pthread_mutex_init(&paras->mtx_assemble_reg_workDone_num, NULL);
 
@@ -636,14 +640,16 @@ ofstream* Genome::getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, b
 
 // call variants for genome
 int Genome::genomeCall(){
-	size_t i;
 	Chrome *chr;
 	Time time;
 
 	cout << "Begin calling variants ..." << endl;
 
+	// load clipping region information
+	genomeLoadMateClipRegData();
+
 	// call variants
-	for(i=0; i<chromeVector.size(); i++){
+	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		//if(chr->process_block_num)
 		{
@@ -677,6 +683,15 @@ int Genome::genomeCall(){
 	return 0;
 }
 
+// load clipping region information
+void Genome::genomeLoadMateClipRegData(){
+	Chrome *chr;
+	for(size_t i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		chr->chrLoadMateClipRegData();
+	}
+}
+
 // find indels back from mate clip regions
 void Genome::recallIndelsFromTRA(){
 	size_t i, j, k, m, n, round_num, success_num, total, total_success;
@@ -687,9 +702,9 @@ void Genome::recallIndelsFromTRA(){
 	int32_t segIdx_start, segIdx_end, ref_dist, query_dist;
 	blat_aln_t *blat_aln;
 	aln_seg_t *seg1, *seg2;
-	reg_t *reg, *reg1, *reg2;
+	reg_t *reg, *reg1, *reg2, *reg3;
 	string chrname_tmp;
-	bool overlap_falg;
+	bool overlap_flag;
 
 	total = total_success = 0;
 	for(i=0; i<chromeVector.size(); i++){
@@ -702,15 +717,19 @@ void Genome::recallIndelsFromTRA(){
 
 			total ++;
 			clip_reg = chr->mateClipRegVector.at(j);
-			reg1 = reg2 = NULL;
-			if(clip_reg->valid_flag and clip_reg->call_success_flag==false and clip_reg->sv_type==VAR_TRA){ // valid TRA
-				for(round_num=0; round_num<2; round_num++){
+			reg1 = reg2 = reg3 = NULL;
+			if(clip_reg->valid_flag and (clip_reg->call_success_flag==false and clip_reg->tra_rescue_success_flag==false) and clip_reg->sv_type==VAR_TRA){ // valid TRA
+				for(round_num=0; round_num<3; round_num++){
 					if(round_num==0){
 						var_cand = clip_reg->left_var_cand_tra;
 						chrname_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg->chrname : clip_reg->leftClipReg2->chrname;
-					}else{
+					}else if(round_num==1){
 						var_cand = clip_reg->right_var_cand_tra;
 						chrname_tmp = clip_reg->rightClipReg ? clip_reg->rightClipReg->chrname : clip_reg->rightClipReg2->chrname;
+					}else{
+						var_cand = clip_reg->var_cand;
+						if(var_cand) chrname_tmp = var_cand->chrname;
+						else chrname_tmp = "";
 					}
 
 					if(var_cand){
@@ -742,8 +761,8 @@ void Genome::recallIndelsFromTRA(){
 								if(segIdx_start!=-1 and segIdx_end!=-1){
 									seg1 = blat_aln->aln_segs.at(segIdx_start);
 									seg2 = blat_aln->aln_segs.at(segIdx_end);
-									overlap_falg = isOverlappedPos(var_cand->leftClipRefPos, var_cand->rightClipRefPos, seg1->ref_end, seg2->ref_start);
-									if(overlap_falg){ // indel
+									overlap_flag = isOverlappedPos(var_cand->leftClipRefPos, var_cand->rightClipRefPos, seg1->ref_end, seg2->ref_start);
+									if(overlap_flag){ // indel
 										var_cand->call_success = true;
 										var_cand->clip_reg_flag = false;
 
@@ -769,7 +788,8 @@ void Genome::recallIndelsFromTRA(){
 										else reg->var_type = VAR_DEL;
 
 										if(round_num==0) reg1 = reg;
-										else reg2 = reg;
+										else if(round_num==1) reg2 = reg;
+										else reg3 = reg;
 
 										break;
 									}else
@@ -788,8 +808,7 @@ void Genome::recallIndelsFromTRA(){
 					clip_reg->leftClipRegNum = 0;
 					clip_reg->left_var_cand_tra = NULL;
 				}
-				if(reg2){
-					// right part
+				if(reg2){ // right part
 					clip_reg->right_var_cand_tra->varVec.push_back(reg2);
 
 					if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; clip_reg->rightMeanClipPos = 0; clip_reg->rightClipPosNum = 0; }
@@ -797,8 +816,21 @@ void Genome::recallIndelsFromTRA(){
 					clip_reg->rightClipRegNum = 0;
 					clip_reg->right_var_cand_tra = NULL;
 				}
+				if(reg3){ // one region
+					clip_reg->var_cand->varVec.push_back(reg3);
 
-				if(reg1 or reg2){
+					if(clip_reg->leftClipReg) { delete clip_reg->leftClipReg; clip_reg->leftClipReg = NULL; clip_reg->leftMeanClipPos = 0; clip_reg->leftClipPosNum = 0; }
+					if(clip_reg->leftClipReg2) { delete clip_reg->leftClipReg2; clip_reg->leftClipReg2 = NULL; clip_reg->leftMeanClipPos2 = 0; clip_reg->leftClipPosNum2 = 0; }
+					if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; clip_reg->rightMeanClipPos = 0; clip_reg->rightClipPosNum = 0; }
+					if(clip_reg->rightClipReg2) { delete clip_reg->rightClipReg2; clip_reg->rightClipReg2 = NULL; clip_reg->rightMeanClipPos2 = 0; clip_reg->rightClipPosNum2 = 0; }
+					clip_reg->leftClipRegNum = 0;
+					clip_reg->rightClipRegNum = 0;
+					clip_reg->left_var_cand_tra = NULL;
+					clip_reg->right_var_cand_tra = NULL;
+					clip_reg->var_cand = NULL;
+				}
+
+				if(reg1 or reg2 or reg3){
 					success_num ++;
 					total_success ++;
 					clip_reg->valid_flag = false;
@@ -906,7 +938,7 @@ void Genome::generateBlatAlnFilenameTra(){
 
 // call TRA according to mate clip regions
 void Genome::genomeCallTraOp(){
-	size_t i, j, k, t, round_num, success_num, total;
+	size_t i, j, k, t, round_num, success_num, total, fail_reason_id1, fail_reason_id2; // 0- unknown; 1- align failure
 	Chrome *chr;
 	vector<mateClipReg_t*> mate_clipReg_vec;
 	mateClipReg_t *clip_reg;
@@ -916,11 +948,12 @@ void Genome::genomeCallTraOp(){
 
 	total = 0;
 	for(i=0; i<chromeVector.size(); i++){
+		fail_reason_id1 = fail_reason_id2 = 0;
 		success_num = 0;
 		chr = chromeVector.at(i);
 		mate_clipReg_vec = chr->mateClipRegVector;
 		for(j=0; j<mate_clipReg_vec.size(); j++){
-//			if(i>=23 and j>=31)
+//			if(i>=6 and j>=320)
 //				cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << ", " << chr->chrname << endl;
 
 			clip_reg = chr->mateClipRegVector.at(j);
@@ -947,6 +980,11 @@ void Genome::genomeCallTraOp(){
 						if(tra_loc_vec.size()>0){
 							saveTraLoc2ClipReg(clip_reg, tra_loc_vec, var_cand, var_cand_tmp, round_num); // save TRA location to clip region
 							clip_reg->call_success_flag = true;
+						}else{ // set fail reason
+							if(var_cand->align_success==false or var_cand_tmp->align_success==false){
+								if(round_num==0) fail_reason_id1 = 1;
+								else fail_reason_id2  = 1;
+							}
 						}
 
 						// release memory
@@ -968,6 +1006,11 @@ void Genome::genomeCallTraOp(){
 				//cout << "chr " << i << ", j=" << j << ", TRA success" << endl;
 				success_num ++;
 				total ++;
+			}else{
+				if(fail_reason_id1==1 or fail_reason_id2==1){
+					//cout << clip_reg->leftClipPosNum << ", " << clip_reg->leftClipPosNum2 << ", " << clip_reg->rightClipPosNum << ", " << clip_reg->rightClipPosNum2 << endl;
+					saveTraLoc2ClipRegForAlnFailure(clip_reg);
+				}
 			}
 		}
 		//cout << "chr " << i << ": success_num=" << success_num << endl;
@@ -999,7 +1042,6 @@ vector<blatAlnTra*> Genome::loadBlatAlnDataTra(){
 	vector<blatAlnTra*> blat_aln_tra_vec;
 	blatAlnTra *blat_aln_tra;
 	vector<string> str_vec;
-
 
 	aln_filename_tra = out_dir_tra + "/" + "aln_filename_tra";
 	aln_file_tra.open(aln_filename_tra);
@@ -1466,7 +1508,32 @@ bool Genome::computeTraCallSuccessFlag(vector<int32_t> &tra_loc_vec, vector<int3
 
 	if(tra_loc_vec.size()>0){
 		if(clip_reg->leftClipRegNum==1 and clip_reg->rightClipRegNum==1){
-			if((tra_loc_vec.at(0)!=-1 or tra_loc_vec.at(1)!=-1) and (tra_loc_vec.at(2)!=-1 or tra_loc_vec.at(3)!=-1)){ // in correct region
+			if(tra_loc_vec.at(0)!=-1 and tra_loc_vec.at(1)!=-1 and tra_loc_vec.at(2)!=-1 and tra_loc_vec.at(3)!=-1){ // four values in 'tra_loc_vec'
+				if(tra_loc_vec.at(0)<tra_loc_vec.at(1)){
+					tra_loc1 = tra_loc_vec.at(0);
+					tra_loc2 = tra_loc_vec.at(1);
+				}else{
+					tra_loc1 = tra_loc_vec.at(1);
+					tra_loc2 = tra_loc_vec.at(0);
+				}
+				if(tra_loc_vec.at(2)<tra_loc_vec.at(3)){
+					tra_loc3 = tra_loc_vec.at(2);
+					tra_loc4 = tra_loc_vec.at(3);
+				}else{
+					tra_loc3 = tra_loc_vec.at(3);
+					tra_loc4 = tra_loc_vec.at(2);
+				}
+				reg1_clipReg = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
+				reg2_clipReg = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
+
+				overlap_flag1 = isOverlappedPos(tra_loc1, tra_loc2, reg1_clipReg->startRefPos, reg1_clipReg->endRefPos);
+				overlap_flag2 = isOverlappedPos(tra_loc3, tra_loc4, reg2_clipReg->startRefPos, reg2_clipReg->endRefPos);
+				overlap_flag3 = isOverlappedPos(tra_loc1, tra_loc2, reg2_clipReg->startRefPos, reg2_clipReg->endRefPos);
+				overlap_flag4 = isOverlappedPos(tra_loc3, tra_loc4, reg1_clipReg->startRefPos, reg1_clipReg->endRefPos);
+
+				if((overlap_flag1 and overlap_flag2) or (overlap_flag3 and overlap_flag4))
+					flag = true;
+			}else if((tra_loc_vec.at(0)!=-1 or tra_loc_vec.at(1)!=-1) and (tra_loc_vec.at(2)!=-1 or tra_loc_vec.at(3)!=-1)){ // missing some values in 'tra_loc_vec'
 				tra_loc1 = tra_loc_vec.at(0)!=-1 ? tra_loc_vec.at(0) : tra_loc_vec.at(1);
 				tra_loc2 = tra_loc_vec.at(2)!=-1 ? tra_loc_vec.at(2) : tra_loc_vec.at(3);
 				reg1_clipReg = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
@@ -1482,7 +1549,7 @@ bool Genome::computeTraCallSuccessFlag(vector<int32_t> &tra_loc_vec, vector<int3
 			if(tra_loc_vec.at(0)!=-1 and tra_loc_vec.at(1)!=-1 and tra_loc_vec.at(2)!=-1 and tra_loc_vec.at(3)!=-1){ // in correct region
 				if(tra_loc_vec.at(0)<tra_loc_vec.at(1)){
 					tra_loc1 = tra_loc_vec.at(0);
-					tra_loc2 = tra_loc_vec.at(0);
+					tra_loc2 = tra_loc_vec.at(1);
 				}else{
 					tra_loc1 = tra_loc_vec.at(1);
 					tra_loc2 = tra_loc_vec.at(0);
@@ -1612,6 +1679,47 @@ void Genome::saveTraLoc2ClipReg(mateClipReg_t *clip_reg, vector<int32_t> &tra_lo
 			clip_reg->leftClipPosTra1 = tra_loc_vec.at(2);
 			if(tra_loc_vec.at(3)!=-1) clip_reg->chrname_rightTra1 = var_cand_tmp->chrname;
 			clip_reg->rightClipPosTra1 = tra_loc_vec.at(3);
+		}
+	}
+}
+
+// save TRA location to clip region for alignment failures
+void Genome::saveTraLoc2ClipRegForAlnFailure(mateClipReg_t *clip_reg){
+	if(clip_reg->call_success_flag==false){
+		if(clip_reg->leftClipRegNum==1 and clip_reg->rightClipRegNum==1 and ((clip_reg->leftClipPosNum>=paras->minClipReadsNumSupportSV or clip_reg->leftClipPosNum2>=paras->minClipReadsNumSupportSV) and (clip_reg->rightClipPosNum>=paras->minClipReadsNumSupportSV or clip_reg->rightClipPosNum2>=paras->minClipReadsNumSupportSV))){
+			if(clip_reg->leftClipReg){
+				clip_reg->chrname_leftTra1 = clip_reg->leftClipReg->chrname;
+				clip_reg->leftClipPosTra1 = clip_reg->leftMeanClipPos;
+			}else if(clip_reg->leftClipReg2){
+				clip_reg->chrname_rightTra1 = clip_reg->leftClipReg2->chrname;
+				clip_reg->rightClipPosTra1 = clip_reg->leftMeanClipPos2;
+			}
+			if(clip_reg->rightClipReg){
+				clip_reg->chrname_leftTra2 = clip_reg->rightClipReg->chrname;
+				clip_reg->leftClipPosTra2 = clip_reg->rightMeanClipPos;
+			}else if(clip_reg->rightClipReg2){
+				clip_reg->chrname_rightTra2 = clip_reg->rightClipReg2->chrname;
+				clip_reg->rightClipPosTra2 = clip_reg->rightMeanClipPos2;
+			}
+			clip_reg->tra_rescue_success_flag = true;
+		}else if(clip_reg->leftClipRegNum==2 and clip_reg->rightClipRegNum==2 and (clip_reg->leftClipPosNum>=paras->minClipReadsNumSupportSV and clip_reg->leftClipPosNum2>=paras->minClipReadsNumSupportSV and clip_reg->rightClipPosNum>=paras->minClipReadsNumSupportSV and clip_reg->rightClipPosNum2>=paras->minClipReadsNumSupportSV)){
+			if(clip_reg->leftClipReg){
+				clip_reg->chrname_leftTra1 = clip_reg->leftClipReg->chrname;
+				clip_reg->leftClipPosTra1 = clip_reg->leftMeanClipPos;
+			}
+			if(clip_reg->leftClipReg2){
+				clip_reg->chrname_rightTra1 = clip_reg->leftClipReg2->chrname;
+				clip_reg->rightClipPosTra1 = clip_reg->leftMeanClipPos2;
+			}
+			if(clip_reg->rightClipReg){
+				clip_reg->chrname_leftTra2 = clip_reg->rightClipReg->chrname;
+				clip_reg->leftClipPosTra2 = clip_reg->rightMeanClipPos;
+			}
+			if(clip_reg->rightClipReg2){
+				clip_reg->chrname_rightTra2 = clip_reg->rightClipReg2->chrname;
+				clip_reg->rightClipPosTra2 = clip_reg->rightMeanClipPos2;
+			}
+			clip_reg->tra_rescue_success_flag = true;
 		}
 	}
 }
@@ -1811,7 +1919,7 @@ void Genome::genomeFillVarseqTra(){
 		chr = chromeVector.at(i);
 		for(j=0; j<chr->mateClipRegVector.size(); j++){
 			clip_reg = chr->mateClipRegVector.at(j);
-			if(clip_reg->valid_flag and clip_reg->call_success_flag and clip_reg->sv_type==VAR_TRA)
+			if(clip_reg->valid_flag and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA)
 				fillVarseqSingleMateClipReg(clip_reg, assembly_info_file);
 		}
 	}
@@ -1879,6 +1987,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 					var_cand_tmp->sv_type = clip_reg->sv_type;
 					var_cand_tmp->dup_num = clip_reg->dup_num;
 					var_cand_tmp->margin_adjusted_flag = false;
+					var_cand_tmp->ctg_num = getCtgCount(var_cand_tmp->ctgfilename);
 
 					// assembly status
 					if (isFileExist(var_cand_tmp->ctgfilename)) var_cand_tmp->assem_success = true;
@@ -1960,6 +2069,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 					var_cand_tmp->sv_type = clip_reg->sv_type;
 					var_cand_tmp->dup_num = clip_reg->dup_num;
 					var_cand_tmp->margin_adjusted_flag = false;
+					var_cand_tmp->ctg_num = getCtgCount(var_cand_tmp->ctgfilename);
 
 					// assembly status
 					if (isFileExist(var_cand_tmp->ctgfilename)) var_cand_tmp->assem_success = true;
@@ -2206,7 +2316,8 @@ void Genome::saveTraCall2File(){
 	ofstream outfile_tra;
 	vector<mateClipReg_t*> mate_clipReg_vec;
 	mateClipReg_t *clip_reg;
-	string line, header_line_bedpe;;
+	string line, chrname_tmp, header_line_bedpe;
+	vector<string> chrname_vec;
 	int32_t sv_len;
 
 	outfile_tra.open(out_filename_result_tra);
@@ -2223,13 +2334,21 @@ void Genome::saveTraCall2File(){
 		mate_clipReg_vec = chr->mateClipRegVector;
 		for(j=0; j<mate_clipReg_vec.size(); j++){
 			clip_reg = mate_clipReg_vec.at(j);
-			if(clip_reg->valid_flag and clip_reg->call_success_flag and clip_reg->sv_type==VAR_TRA and (clip_reg->leftClipPosTra1>0 or clip_reg->rightClipPosTra1>0) and (clip_reg->leftClipPosTra2>0 or clip_reg->rightClipPosTra2>0)){
-				line = clip_reg->left_var_cand_tra->chrname;
+			if(clip_reg->valid_flag and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA and (clip_reg->leftClipPosTra1>0 or clip_reg->rightClipPosTra1>0) and (clip_reg->leftClipPosTra2>0 or clip_reg->rightClipPosTra2>0)){
+				if(clip_reg->left_var_cand_tra==NULL or clip_reg->right_var_cand_tra==NULL){
+					cout << "i=" << i << ", j=" << j << endl;
+				}
+				//line = clip_reg->left_var_cand_tra->chrname;
+				//line = clip_reg->chrname_leftTra1.size()>0 ? clip_reg->chrname_leftTra1 : "-";
+				chrname_vec = getLeftRightPartChrname(clip_reg);
+				line = chrname_vec.at(0).size()>0 ? chrname_vec.at(0) : "-";
 				if(clip_reg->leftClipPosTra1>0) line += "\t" + to_string(clip_reg->leftClipPosTra1);
 				else line += "\t-";
 				if(clip_reg->rightClipPosTra1>0) line += "\t" + to_string(clip_reg->rightClipPosTra1);
 				else line += "\t-";
-				line += "\t" + clip_reg->right_var_cand_tra->chrname;
+				//line += "\t" + clip_reg->right_var_cand_tra->chrname;
+				chrname_tmp = chrname_vec.at(1).size()>0 ? chrname_vec.at(1) : "-";
+				line += chrname_tmp;
 				if(clip_reg->leftClipPosTra2>0) line += "\t" + to_string(clip_reg->leftClipPosTra2);
 				else line += "\t-";
 				if(clip_reg->rightClipPosTra2>0) line += "\t" + to_string(clip_reg->rightClipPosTra2);

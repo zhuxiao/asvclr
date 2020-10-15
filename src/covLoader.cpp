@@ -22,7 +22,7 @@ covLoader::~covLoader() {
 
 // initialize the base array of the block
 Base *covLoader::initBaseArray(){
-	Base *baseArray = new Base[endPos-startPos+1];
+	Base *baseArray = new Base[endPos-startPos+1]();
 	if(!baseArray){
 		cerr << __func__ << ": cannot allocate memory" << endl;
 		exit(1);
@@ -105,6 +105,9 @@ void covLoader::generateBaseCoverage(Base *baseArr, vector<bam1_t*> alnDataVecto
 		}
 
 	updateBaseCovInfo(baseArr);
+
+	// compute number of deletions
+	computeDelNumFromDelVec(baseArr);
 }
 
 // generate the alignment segments
@@ -392,6 +395,26 @@ void covLoader::updateBaseCovInfo(Base *baseArr){
 		baseArr[pos-startPos].delVector.shrink_to_fit();
 		baseArr[pos-startPos].clipVector.shrink_to_fit();
 		baseArr[pos-startPos].updateCovInfo();
+	}
+}
+
+// compute number of deletions
+void covLoader::computeDelNumFromDelVec(Base *baseArr){
+	Base *base;
+	delEvent_t *del_event;
+
+	size_t pos, pos_tmp, len;
+	for(pos=startPos; pos<=endPos; pos++){
+		base = baseArr + pos - startPos;
+		for(size_t i=0; i<base->delVector.size(); i++){
+			del_event = base->delVector.at(i);
+			len = del_event->seq.size();
+			for(size_t j=0; j<len; j++) {
+				pos_tmp = pos + j;
+				if(pos_tmp<=endPos) baseArr[pos_tmp-startPos].del_num_from_del_vec ++;
+				else break;
+			}
+		}
 	}
 }
 

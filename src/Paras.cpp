@@ -306,7 +306,7 @@ int Paras::parseAssembleParas(int argc, char **argv){
 
 // parse the parameters for call command
 int Paras::parseCallParas(int argc, char **argv){
-	int opt, threadNum_tmp = 1, mask_val;
+	int opt, threadNum_tmp = 1, mask_val, delete_reads_val;
 	blockSize = BLOCKSIZE;
 	slideSize = ASSEM_SLIDE_SIZE;
 	assemSlideSize = ASSEM_SLIDE_SIZE;
@@ -314,9 +314,10 @@ int Paras::parseCallParas(int argc, char **argv){
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
 	maxClipRegSize = MAX_CLIP_REG_SIZE;
 	mask_val = MASK_VAL_DEFAULT;
+	delete_reads_val = 1;
 	outDir = OUT_DIR;
 
-	while( (opt = getopt(argc, argv, ":b:S:m:n:c:o:p:t:M:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:S:m:n:c:o:p:t:M:R:h")) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'S': assemSlideSize = stoi(optarg); break;
@@ -327,6 +328,7 @@ int Paras::parseCallParas(int argc, char **argv){
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
 			case 'M': mask_val = stoi(optarg); break;
+			case 'R': delete_reads_val = stoi(optarg); break;
 			case 'h': showCallUsage(); exit(0);
 			case '?': cout << "unknown option -" << (char)optopt << endl; exit(1);
 			case ':': cout << "the option -" << (char)optopt << " needs a value" << endl; exit(1);
@@ -343,6 +345,13 @@ int Paras::parseCallParas(int argc, char **argv){
 	else{
 		cout << "Error: Please specify the correct mask flag for mis-aligned regions using -M option." << endl << endl;
 		showCallUsage();
+		return 1;
+	}
+	if(delete_reads_val==1) delete_reads_flag = true;
+	else if(delete_reads_val==0) delete_reads_flag = false;
+	else{
+		cout << "Error: Please specify the correct reads delete flag for local assembly using -R option." << endl << endl;
+		showAllUsage();
 		return 1;
 	}
 
@@ -540,6 +549,8 @@ void Paras::showCallUsage(){
 	cout << "     -p STR       prefix of output result files [null]" << endl;
 	cout << "     -t INT       number of concurrent work [1]" << endl;
 	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
+	cout << "     -R INT       Delete temporary reads during local assembly [1]:" << endl;
+	cout << "                  1 for yes, 0 for no" << endl;
 	cout << "     -h           show this help message and exit" << endl;
 }
 

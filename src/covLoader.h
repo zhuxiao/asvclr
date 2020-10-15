@@ -37,6 +37,7 @@ class covLoader {
 		void destroyMDSeg(vector<struct MD_seg*> segs_MD);
 		int updateBaseInfo(Base *baseArr, vector<struct alnSeg*> alnSegs);
 		void updateBaseCovInfo(Base *baseArr);
+		void computeDelNumFromDelVec(Base *baseArr);
 
 		// testing functions
 		void outputAlnSegs(vector<struct alnSeg*> alnSegs);

@@ -26,6 +26,7 @@ using namespace std;
 class Chrome{
 	public:
 		Paras *paras;
+		vector<Chrome*> *chr_vec;
 		string chrname;
 		int64_t chrlen;
 		//bool process_flag;
@@ -68,7 +69,7 @@ class Chrome{
 
 
 	public:
-		Chrome(string& chrname, int chrlen, faidx_t *fai, Paras *paras);
+		Chrome(string& chrname, int chrlen, faidx_t *fai, Paras *paras, vector<Chrome*> *chr_vec);
 		virtual ~Chrome();
 		void setOutputDir(string& out_dir_detect_prefix, string& out_dir_assemble_prefix, string& out_dir_call_prefix);
 		string getVarcandIndelFilename();
@@ -90,6 +91,7 @@ class Chrome{
 		void removeVarCandNodeClipReg(varCand *var_cand);
 		void chrFillVarseq();
 		void saveCallSV2File();
+		void chrLoadMateClipRegData();
 
 
 	private:
@@ -152,8 +154,10 @@ class Chrome{
 		mateClipReg_t *getMateRegEndSameClipReg(mateClipReg_t *clip_reg, vector<mateClipReg_t*> &mate_clipReg_vec);
 		void removeFPClipRegsDupInv();
 		vector<size_t> getOverlapClipReg(reg_t *given_reg);
-		void chrLoadMateClipRegData(bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
-		mateClipReg_t* getMateClipReg(reg_t *reg1, reg_t *reg2, int32_t *clip_reg_idx_tra);
+		void chrLoadMateClipRegDataOp(bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+		string getDirnameCall(string &chrname_given);
+		mateClipReg_t* getMateClipReg(reg_t *reg1, reg_t *reg2, int32_t *clip_reg_idx_tra, string &chrname_mate_clip_reg);
+		mateClipReg_t* getMateClipRegOp(reg_t *reg1, reg_t *reg2, int32_t *clip_reg_idx_tra, vector<mateClipReg_t*> &mate_clipReg_vec);
 
 		// save SV to file
 		void saveCallIndelClipReg2File(string &outfilename_indel, string &outfilename_clipReg);

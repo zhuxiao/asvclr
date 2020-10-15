@@ -44,6 +44,7 @@ void updateReg(reg_t* reg1, reg_t* reg2);
 void mergeAdjacentReg(vector<reg_t*> &regVec, size_t dist_thres);
 void printRegVec(vector<reg_t*> &regVec, string header);
 void printMateClipReg(mateClipReg_t *mate_clip_reg);
+vector<string> getLeftRightPartChrname(mateClipReg_t *mate_clip_reg);
 string preprocessPipeChar(string &cmd_str);
 bool isFileExist(string &filename);
 void removeRedundantItems(vector<reg_t*> &reg_vec);
@@ -65,6 +66,7 @@ void performLocalAssembly(string &readsfilename, string &contigfilename, string 
 void outputAssemWorkOptToFile_debug(vector<assembleWork_opt*> &assem_work_opt_vec);
 string getOldOutDirname(string &filename, string &sub_work_dir);
 string getUpdatedItemFilename(string &filename, string &out_dir, string &old_out_dir);
+string getChrnameByFilename(string &filename);
 string deleteTailPathChar(string &dirname);
 // get overlapped simple regions
 vector<simpleReg_t*> getOverlappedSimpleRegsExt(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec, int32_t ext_size);
