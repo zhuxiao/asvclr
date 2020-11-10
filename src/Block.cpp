@@ -653,6 +653,7 @@ void Block::computeZeroCovReg(Region &reg){
 			reg_tmp->call_success_status = false;
 			reg_tmp->short_sv_flag = false;
 			reg_tmp->zero_cov_flag = false;
+			reg_tmp->aln_seg_end_flag = false;
 
 			zeroCovRegVector.push_back(reg_tmp);
 			i = end_vec_idx + 1;

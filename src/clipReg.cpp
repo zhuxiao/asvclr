@@ -547,6 +547,7 @@ reg_t* clipReg::computeClipRegSingleVec(vector<clipPos_t> &clipPosVector){
 		reg->startRefPos = clipPosVector.at(minIdx).clipRefPos;
 		reg->endRefPos = clipPosVector.at(maxIdx).clipRefPos;
 		reg->zero_cov_flag = false;
+		reg->aln_seg_end_flag = false;
 	}
 
 	return reg;

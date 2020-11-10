@@ -28,8 +28,10 @@ vector<reg_t*> findVarvecItemAll(int32_t startPos, int32_t endPos, vector<reg_t*
 reg_t* findVarvecItemExtSize(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &varVec, int32_t leftExtSize, int32_t rightExtSize);
 vector<reg_t*> findVarvecItemAllExtSize(int32_t startRefPos, int32_t endRefPos, vector<reg_t*> &varVec, int32_t leftExtSize, int32_t rightExtSize);
 int32_t getVectorIdx(reg_t *reg, vector<reg_t*> &varVec);
+reg_t* getOverlappedRegByCallFlag(reg_t *reg, vector<reg_t*> &varVec);
 reg_t* getOverlappedReg(reg_t *reg, vector<reg_t*> &varVec);
 int32_t getOverlappedRegIdx(reg_t *reg, vector<reg_t*> &varVec);
+int32_t getOverlappedRegIdxByCallFlag(reg_t *reg, vector<reg_t*> &varVec);
 bool isOverlappedReg(reg_t* reg1, reg_t* reg2);
 bool isOverlappedPos(size_t startPos1, size_t endPos1, size_t startPos2, size_t endPos2);
 int32_t getOverlapSize(size_t startPos1, size_t endPos1, size_t startPos2, size_t endPos2);
@@ -50,9 +52,11 @@ bool isFileExist(string &filename);
 void removeRedundantItems(vector<reg_t*> &reg_vec);
 int32_t getLineCount(string &filename);
 bool isBaseMatch(char ctgBase, char refBase);
-bool isRegValid(reg_t *reg);
+bool isRegValid(reg_t *reg, int32_t min_size);
 void exchangeRegLoc(reg_t *reg);
 void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename);
+bool isBlatAlnResultMatch(string &contigfilename, string &alnfilename);
+int32_t getQueryNameLoc(string &query_name, vector<string> &query_name_vec);
 void cleanPrevAssembledTmpDir(const string &assem_dir_str, const string &dir_prefix);
 string getCallFileHeaderBed();
 string getCallFileHeaderBedpe();
@@ -81,6 +85,7 @@ void getRegByFilename(simpleReg_t *reg, string &filename, string &pattern_str);
 vector<simpleReg_t*> extractSimpleRegsByStr(string &regs_str);
 string getLimitRegStr(vector<simpleReg_t*> &limit_reg_vec);
 void createDir(string &dirname);
+vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_size);
 
 
 class Time{

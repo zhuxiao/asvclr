@@ -241,6 +241,7 @@ reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosR
 	reg->call_success_status = false;
 	reg->short_sv_flag = false;
 	reg->zero_cov_flag = false;
+	reg->aln_seg_end_flag = false;
 	return reg;
 }
 
@@ -526,7 +527,7 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 				num1 = getDisZeroCovNum(startPos_indel, endPos_indel);
 				//num2 = getMismatchBasesAround(startPos_indel, endPos_indel);
 				num3 = getLargeIndelBaseNum(startPos_indel, endPos_indel);
-				num_vec = getTotalHighIndelClipRatioBaseNum(startPos_indel, endPos_indel);
+				num_vec = getTotalHighIndelClipRatioBaseNum(regBaseArr+startPos_indel-startRPos, endPos_indel-startPos_indel+1);
 				num4 = num_vec.at(0);
 				high_indel_clip_ratio = num_vec.at(1);
 				//if(num1>0 or num2>=DISAGREE_NUM_THRES_REG or num3>0) {
@@ -614,33 +615,6 @@ int32_t Region::getLargeIndelNum(int64_t startPos, int64_t endPos){
 		large_indel_num += regBaseArr[i-startRPos].getLargeIndelNum(paras->large_indel_size_thres);
 	}
 	return large_indel_num;
-}
-
-// get the number of high ratio indel bases
-vector<double> Region::getTotalHighIndelClipRatioBaseNum(int64_t startPos, int64_t endPos){
-	int64_t i, indel_num, clip_num, total_cov, len;
-	double ratio, total, total2;
-	Base *base;
-	vector<double> base_num_vec;
-
-	total = total2 = 0;
-	for(i=startPos; i<=endPos; i++){
-		base  = regBaseArr + i - startRPos;
-		indel_num = base->getTotalIndelNum();
-		clip_num = base->getTotalClipNum();
-		total_cov = base->getTotalCovNum();
-		ratio = (double)(indel_num + clip_num) / total_cov;
-		if(ratio>=HIGH_INDEL_CLIP_RATIO_THRES) total ++;
-		if(ratio>=SECOND_INDEL_CLIP_RATIO_THRES) total2 ++;
-	}
-
-	len = endPos - startPos + 1;
-	ratio = (double)total2 / len;
-
-	base_num_vec.push_back(total);
-	base_num_vec.push_back(ratio);
-
-	return base_num_vec;
 }
 
 // determine the dif type for indel candidate

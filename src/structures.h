@@ -27,7 +27,7 @@ typedef struct{
 	int32_t query_id, sv_len, blat_aln_id;
 	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
 	string refseq, altseq;
-	bool call_success_status, short_sv_flag, zero_cov_flag;
+	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag;
 }reg_t;
 
 // from clipReg.h
@@ -98,7 +98,8 @@ typedef struct{
 // from varCand.h
 typedef struct{
 	//string query_name, subject_name;
-	size_t blat_aln_id, query_len, subject_len, query_id, aln_orient;
+	int32_t blat_aln_id, query_len, subject_len;
+	int32_t query_id:24, aln_orient:8;
 	bool head_hanging, tail_hanging, best_aln, valid_aln;  // default: false
 	vector<aln_seg_t*> aln_segs;
 } blat_aln_t;
@@ -106,8 +107,8 @@ typedef struct{
 // from varCand.h
 typedef struct{
 	reg_t *reg, *cand_reg;
-	aln_seg_t *aln_seg;
-	int32_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
+	aln_seg_t *aln_seg, *start_seg_extend, *end_seg_extend;  // for short variants
+	int64_t blat_aln_id, startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
 	string ctgseq, refseq;
 	vector<string> alignResultVec;		// [0]: aligned ctgseq, [1]: match character, [2]: aligned refseq
 	int32_t overlapLen, queryLeftShiftLen, queryRightShiftLen, localRefLeftShiftLen, localRefRightShiftLen;

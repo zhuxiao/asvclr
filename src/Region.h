@@ -106,7 +106,6 @@ class Region {
 		int32_t getDisZeroCovNum(int64_t startPos, int64_t endPos);
 		int32_t getLargeIndelBaseNum(int64_t startPos, int64_t endPos);
 		int32_t getLargeIndelNum(int64_t startPos, int64_t endPos);
-		vector<double> getTotalHighIndelClipRatioBaseNum(int64_t startPos, int64_t endPos);
 
 		// duplication and inversion
 		reg_t* getClipReg(int64_t startCheckPos);

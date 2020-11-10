@@ -27,7 +27,7 @@ using namespace std;
 #define MIN_AVER_SIZE_ALN_SEG				1000
 
 #define VAR_ALN_EXTEND_SIZE					1000	// 200
-#define SHORT_VAR_ALN_CHECK_EXTEND_SIZE		20	// 50
+#define SHORT_VAR_ALN_CHECK_EXTEND_SIZE		30	// 20
 #define MIN_MISMATCH_NUM_SHORT_VAR_CALL		2
 #define MIN_DISAGR_NUM_SHORT_VAR_CALL		1
 
@@ -105,7 +105,6 @@ class varCand {
 		void callIndelVariants();
 		void callClipRegVariants();
 		void blatParse();
-		int32_t getQueryNameLoc(string query_name, vector<string> query_name_vec);
 		void assignBestAlnFlag();
 		void assignAlnOrientFlag();
 		void blatFilter();
@@ -118,7 +117,8 @@ class varCand {
 		void callShortVariants();
 		bool isUnsplitAln(reg_t *reg);
 		bool determineQueryidReg(reg_t *reg);
-		aln_seg_t *getAlnSeg(reg_t *reg);
+		aln_seg_t *getAlnSeg(reg_t *reg, int64_t *blat_aln_id);
+		void computeExtendAlnSegs(localAln_t *local_aln);
 		void computeLocalLocsAlnShortVar(localAln_t *local_aln);
 		void computeSeqAlignment(localAln_t *local_aln);
 		void adjustAlnResult(localAln_t *local_aln);
@@ -148,6 +148,8 @@ class varCand {
 		void computeLocalLocsAln(localAln_t *local_aln);
 		void distinguishShortDupInvFromIndels();
 		double computeSimilaritySeqAln(localAln_t *local_aln);
+		void callVariantsAlnSegEnd();
+		vector<double> computeDisagreeNumAndHighIndelBaseNumAndClipNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 
 		// clippings
 		void determineClipRegVarType();

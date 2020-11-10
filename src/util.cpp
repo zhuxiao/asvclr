@@ -249,6 +249,13 @@ int32_t getVectorIdx(reg_t *reg, vector<reg_t*> &varVec){
 	return idx;
 }
 
+reg_t* getOverlappedRegByCallFlag(reg_t *reg, vector<reg_t*> &varVec){
+	reg_t *reg_ret = NULL;
+	int32_t idx = getOverlappedRegIdxByCallFlag(reg, varVec);
+	if(idx!=-1) reg_ret = varVec.at(idx);
+	return reg_ret;
+}
+
 reg_t* getOverlappedReg(reg_t *reg, vector<reg_t*> &varVec){
 	reg_t *reg_ret = NULL;
 	int32_t idx = getOverlappedRegIdx(reg, varVec);
@@ -268,6 +275,24 @@ int32_t getOverlappedRegIdx(reg_t *reg, vector<reg_t*> &varVec){
 		if(flag){
 			idx_ret = i;
 			break;
+		}
+	}
+	return idx_ret;
+}
+
+// get overlapped region
+int32_t getOverlappedRegIdxByCallFlag(reg_t *reg, vector<reg_t*> &varVec){
+	reg_t *reg_tmp;
+	bool flag;
+	int32_t idx_ret = -1;
+	for(size_t i=0; i<varVec.size(); i++){
+		reg_tmp = varVec.at(i);
+		if(reg_tmp->call_success_status){
+			flag = isOverlappedReg(reg, reg_tmp);
+			if(flag){
+				idx_ret = i;
+				break;
+			}
 		}
 	}
 	return idx_ret;
@@ -970,10 +995,12 @@ bool isBaseMatch(char ctgBase, char refBase){
 	return match_flag;
 }
 
-bool isRegValid(reg_t *reg){
+bool isRegValid(reg_t *reg, int32_t min_size){
 	bool flag = false;
-	if(reg->startRefPos<=reg->endRefPos and reg->startLocalRefPos<=reg->endLocalRefPos and reg->startQueryPos<=reg->endQueryPos)
-		flag = true;
+	if(reg->startRefPos<=reg->endRefPos and reg->startLocalRefPos<=reg->endLocalRefPos and reg->startQueryPos<=reg->endQueryPos){
+		if(reg->endRefPos-reg->startRefPos+1>=min_size or reg->endQueryPos-reg->startQueryPos+1>=min_size)
+			flag = true;
+	}
 //	if(flag==false){
 //		cout << "========= Invalid region: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", local_Loc: " << reg->startLocalRefPos << "-" << reg->endLocalRefPos << ", query_Loc: " << reg->startQueryPos << "-" << reg->endQueryPos << endl;
 //	}
@@ -1022,6 +1049,84 @@ void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename
 			}
 		}else break;
 	}
+}
+
+// check whether the blat alignment is matched to the contig
+bool isBlatAlnResultMatch(string &contigfilename, string &alnfilename){
+	bool flag;
+	vector<string> query_name_vec_ctg, query_name_vec_blat, line_vec, line_vec1, len_vec;
+	vector<size_t> query_len_vec_blat;
+	ifstream infile;
+	string line, query_name_blat, query_name_ctg;
+	size_t i, query_len_blat, query_len_ctg;
+	int32_t query_loc;
+
+	infile.open(alnfilename);
+	if(!infile.is_open()){
+		cerr << __func__ << "(), line=" << __LINE__ << ": cannot open file:" << alnfilename << endl;
+		exit(1);
+	}
+
+	// load query names
+	FastaSeqLoader fa_loader(contigfilename);
+	query_name_vec_ctg = fa_loader.getFastaSeqNames();
+
+	// get blat alignment information
+	while(getline(infile, line)){
+		if(line.size()){
+			if(line.substr(0, 3).compare("seq")==0){  // query and subject titles
+				line_vec = split(line, "=");
+				line_vec1 = split(line_vec[1].substr(1), ",");
+				if(line_vec[0][3]=='1') {
+					// get the query name and length
+					query_name_vec_blat.push_back(line_vec1.at(0));
+					len_vec = split(line_vec1[line_vec1.size()-1].substr(1), " ");
+					query_len_vec_blat.push_back(stoi(len_vec[0]));
+				}
+			}
+		}
+	}
+	infile.close();
+
+	// check the match items
+	flag = true;
+	for(i=0; i<query_name_vec_blat.size(); i++){
+		query_name_blat = query_name_vec_blat.at(i);
+		query_len_blat = query_len_vec_blat.at(i);
+
+		// search the query from contig vector
+		query_loc = getQueryNameLoc(query_name_blat, query_name_vec_ctg);
+		if(query_loc!=-1){ // query name matched
+			query_len_ctg = fa_loader.getFastaSeqLen(query_loc);
+			if(query_len_blat!=query_len_ctg) {
+				flag = false;
+				break;
+			}
+		}else{ // query name unmatched
+			flag = false;
+			break;
+		}
+	}
+
+	if(flag==false){
+		cerr << __func__ << ", line=" << __LINE__ << ", it is not matched between the blat alignment and its corresponding contig, contigfile=" << contigfilename << ", alnfile=" << alnfilename << ", error!" << endl;
+	}
+
+	return flag;
+}
+
+// get query name location
+int32_t getQueryNameLoc(string &query_name, vector<string> &query_name_vec){
+	int32_t i, loc = -1, query_name_len;
+	string query_name_tmp;
+	query_name_len = query_name.size();
+	if(query_name_vec.size()){
+		for(i=query_name_vec.size()-1; i>=0; i--){
+			query_name_tmp = query_name_vec.at(i).substr(0,query_name_len);
+			if(query_name_tmp.compare(query_name)==0) { loc = i; break; }
+		}
+	}
+	return loc;
 }
 
 // clean assemble temporary folders
@@ -1588,6 +1693,32 @@ void createDir(string &dirname){
 		}
 		if(i+1<str_vec.size()) dirname_tmp = dirname_tmp + "/" + str_vec.at(i+1);
 	}
+}
+
+// get the number of high ratio indel bases
+vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_size){
+	int32_t i, indel_num, clip_num, total_cov;
+	double ratio, total, total2;
+	Base *base;
+	vector<double> base_num_vec;
+
+	total = total2 = 0;
+	for(i=0; i<arr_size; i++){
+		base  = regBaseArr + i;
+		indel_num = base->getTotalIndelNum();
+		clip_num = base->getTotalClipNum();
+		total_cov = base->getTotalCovNum();
+		ratio = (double)(indel_num + clip_num) / total_cov;
+		if(ratio>=HIGH_INDEL_CLIP_RATIO_THRES) total ++;
+		if(ratio>=SECOND_INDEL_CLIP_RATIO_THRES) total2 ++;
+	}
+
+	ratio = (double)total2 / arr_size * 100;
+
+	base_num_vec.push_back(total);
+	base_num_vec.push_back(ratio);
+
+	return base_num_vec;
 }
 
 

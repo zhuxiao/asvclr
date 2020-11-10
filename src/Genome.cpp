@@ -579,7 +579,7 @@ int Genome::processAssembleWork(){
 	num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
 	if(num_threads_work<1) num_threads_work = 1;
 
-	cout << "num_threads_work=" << num_threads_work << endl;
+	cout << "Local assemble is processed using " << num_threads_work << "  concurrent works" << endl;
 
 //	hts_tpool *p = hts_tpool_init(paras->num_threads);
 //	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
@@ -781,6 +781,7 @@ void Genome::recallIndelsFromTRA(){
 										reg->call_success_status = true;
 										reg->short_sv_flag = false;
 										reg->zero_cov_flag = false;
+										reg->aln_seg_end_flag = false;
 
 										ref_dist = reg->endLocalRefPos - reg->startLocalRefPos + 1;
 										query_dist = reg->endQueryPos - reg->startQueryPos + 1;
@@ -1302,7 +1303,7 @@ vector<int32_t> Genome::computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, 
 }
 
 // get the missing region in the mated clipping region: [0]-blat_aln_id, [1]-start_aln_seg_id, [2]-end_aln_seg_id
-vector<int32_t> Genome::getMateTraReg(size_t query_id, size_t start_query_pos, size_t end_query_pos, varCand *var_cand_tmp){
+vector<int32_t> Genome::getMateTraReg(int32_t query_id, int32_t start_query_pos, int32_t end_query_pos, varCand *var_cand_tmp){
 	vector<int32_t> mate_idx_vec;
 	size_t i, aln_orient, start_pos_tmp, end_pos_tmp, start_mate_query_pos, end_mate_query_pos;
 	int32_t j, blat_aln_idx, start_seg_idx, end_seg_idx;
@@ -1966,6 +1967,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				reg->call_success_status = false;
 				reg->short_sv_flag = false;
 				reg->zero_cov_flag = false;
+				reg->aln_seg_end_flag = false;
 
 				var_cand_tmp->varVec.push_back(reg);
 
@@ -2048,6 +2050,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				reg->call_success_status = false;
 				reg->short_sv_flag = false;
 				reg->zero_cov_flag = false;
+				reg->aln_seg_end_flag = false;
 
 				var_cand_tmp->varVec.push_back(reg);
 
@@ -2703,7 +2706,7 @@ void Genome::computeVarNumStatCall(){
 		}
 	}
 
-	total = num_ins + num_del + num_inv + num_dup + num_tra;
+	total = num_unc + num_ins + num_del + num_inv + num_dup + num_tra;
 
 	cout << "############## Brief statistics for variants call ##############" << endl;
 	cout << "There are " << total << " variants in total:" << endl;
@@ -2712,7 +2715,7 @@ void Genome::computeVarNumStatCall(){
 	cout << "\t" << "tandem duplications: " << num_dup << endl;
 	cout << "\t" << "inversions: " << num_inv << endl;
 	cout << "\t" << "translocations: " << num_tra << endl;
-	//cout << "\t" << "unresolved: " << num_unc << endl;
+	cout << "\t" << "uncertain: " << num_unc << endl;
 
 	infile.close();
 }
@@ -2724,7 +2727,9 @@ size_t Genome::getSVTypeSingleLine(string &line){
 
 	str_vec = split(line, "\t");
 	str_tmp = str_vec.at(3);
-	if(str_tmp.compare("INS")==0 or str_tmp.compare("insertion")==0){
+	if(str_tmp.compare("UNC")==0 or str_tmp.compare("uncertain")==0 or str_tmp.compare("UNCERTAIN")==0){
+		sv_type = VAR_UNC;
+	}else if(str_tmp.compare("INS")==0 or str_tmp.compare("insertion")==0){
 		sv_type = VAR_INS;
 	}else if(str_tmp.compare("DEL")==0 or str_tmp.compare("deletion")==0){
 		sv_type = VAR_DEL;
