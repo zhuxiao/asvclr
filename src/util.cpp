@@ -6,6 +6,7 @@
 #include <htslib/thread_pool.h>
 
 #include "LocalAssembly.h"
+#include "covLoader.h"
 #include "util.h"
 
 // string split function
@@ -1713,13 +1714,454 @@ vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_s
 		if(ratio>=SECOND_INDEL_CLIP_RATIO_THRES) total2 ++;
 	}
 
-	ratio = (double)total2 / arr_size * 100;
+	ratio = (double)total2 / arr_size;
 
 	base_num_vec.push_back(total);
 	base_num_vec.push_back(ratio);
 
 	return base_num_vec;
 }
+
+vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln){
+	vector<mismatchReg_t*> misReg_vec;	// all the mismatch regions including gap regions
+	int64_t ref_pos, local_ref_pos, query_pos, tmp, startMisRefPos, endMisRefPos, startMisLocalRefPos, endMisLocalRefPos, startMisQueryPos, endMisQueryPos;
+	int32_t i, j, start_aln_idx, start_check_idx, end_check_idx, mis_reg_size, begin_mismatch_aln_idx, end_mismatch_aln_idx;
+	string ctgseq_aln, midseq_aln, refseq_aln;
+	mismatchReg_t *mis_reg, *mis_reg2;
+	reg_t *reg;
+	bool gap_flag, extend_flag, flag;
+	int16_t mis_loc_flag;	// -1 for unused, 0 for gap in query, 1 for gap in reference, 2 for mismatch
+
+	if(local_aln->reg==NULL or local_aln->start_aln_idx_var==-1 or local_aln->end_aln_idx_var==-1) return misReg_vec;
+
+	ctgseq_aln = local_aln->alignResultVec[0];
+	midseq_aln = local_aln->alignResultVec[1];
+	refseq_aln = local_aln->alignResultVec[2];
+
+	// compute refPos and queryPos at start_aln_idx
+	start_check_idx = local_aln->start_aln_idx_var - EXT_SIZE_CHK_VAR_LOC;
+	end_check_idx = local_aln->end_aln_idx_var + EXT_SIZE_CHK_VAR_LOC;
+	if(start_check_idx<0) start_check_idx = 0;
+	if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
+	extend_flag = false;
+
+	reg = local_aln->reg;
+	ref_pos = reg->startRefPos;
+	local_ref_pos = reg->startLocalRefPos;
+	query_pos = reg->startQueryPos;
+
+	// initialize the start positions
+	start_aln_idx = local_aln->start_aln_idx_var;
+	if(ctgseq_aln[start_aln_idx]=='-'){ // gap in query
+		query_pos --;
+		while(ctgseq_aln[start_aln_idx]=='-' and start_aln_idx>0){
+			ref_pos --;
+			local_ref_pos --;
+			start_aln_idx --;
+		}
+	}else if(refseq_aln[start_aln_idx]=='-'){ // gap in reference
+		while(refseq_aln[start_aln_idx]=='-' and start_aln_idx>0){
+			query_pos --;
+			start_aln_idx --;
+		}
+		ref_pos --;
+		local_ref_pos --;
+	}
+
+	for(i=start_aln_idx; i>=start_check_idx; i--){
+		if(midseq_aln[i]==' '){ // mismatch including gap
+			if(ctgseq_aln[i]=='-'){ // gap in query
+				ref_pos --;
+				local_ref_pos --;
+			}else if(refseq_aln[i]=='-'){ // gap in reference
+				query_pos --;
+			}else{ // mismatch
+				query_pos --;
+				ref_pos --;
+				local_ref_pos --;
+			}
+
+			if(i==end_check_idx and extend_flag==false){
+				end_check_idx -= EXT_SIZE_CHK_VAR_LOC;
+				if(end_check_idx<0) end_check_idx = 0;
+				extend_flag = true;
+				//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
+			}
+		}else{ // match
+			if(extend_flag) break;
+
+			query_pos --;
+			ref_pos --;
+			local_ref_pos --;
+		}
+	}
+	if(i>=start_check_idx) {
+		start_check_idx = i;
+	}else{ // adjust to correct value
+		start_check_idx = i + 1;
+		query_pos ++;
+		ref_pos ++;
+		local_ref_pos ++;
+	}
+
+	startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
+	begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
+	mis_reg_size = 0;
+	gap_flag = extend_flag = false;
+	mis_loc_flag = -1;
+	for(i=start_check_idx; i<=end_check_idx; i++){
+		if(midseq_aln[i]==' '){ // mismatch including gap
+			if(begin_mismatch_aln_idx==-1){
+				begin_mismatch_aln_idx = i;
+				startMisRefPos = ref_pos;
+				startMisLocalRefPos = local_ref_pos;
+				startMisQueryPos = query_pos;
+
+				if(ctgseq_aln[i]=='-'){ // gap in query
+					mis_loc_flag = 0;
+				}else if(refseq_aln[i]=='-'){ // gap in reference
+					mis_loc_flag = 1;
+				}else{ // mismatch
+					mis_loc_flag = 2;
+				}
+				mis_reg_size = 1;
+			}else{
+				mis_reg_size ++;
+			}
+
+			if(ctgseq_aln[i]=='-'){ // gap in query
+				ref_pos ++;
+				local_ref_pos ++;
+				gap_flag = true;
+			}else if(refseq_aln[i]=='-'){ // gap in reference
+				query_pos ++;
+				gap_flag = true;
+			}else{ // mismatch
+				query_pos ++;
+				ref_pos ++;
+				local_ref_pos ++;
+			}
+
+			if(i==end_check_idx){
+				if(extend_flag==false){
+					end_check_idx += EXT_SIZE_CHK_VAR_LOC;
+					if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
+					extend_flag = true;
+					//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
+				}else if(begin_mismatch_aln_idx!=-1){ // mismatch region not closed
+					end_check_idx += EXT_SIZE_CHK_VAR_LOC;
+					if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
+					//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
+				}
+			}
+		}else{ // match
+			if(begin_mismatch_aln_idx!=-1){
+				end_mismatch_aln_idx = i - 1;
+				switch(mis_loc_flag){
+					case 0:  // gap in query
+						endMisRefPos = ref_pos - 1;
+						endMisLocalRefPos = local_ref_pos - 1;
+						endMisQueryPos = query_pos;
+						break;
+					case 1:  // gap in reference
+						endMisRefPos = ref_pos;
+						endMisLocalRefPos = local_ref_pos;
+						endMisQueryPos = query_pos - 1;
+						break;
+					case 2:  // mismatch
+						endMisRefPos = ref_pos - 1;
+						endMisLocalRefPos = local_ref_pos - 1;
+						endMisQueryPos = query_pos - 1;
+						break;
+					default: // error
+						cerr << __func__ << ", line=" << __LINE__ << ", invalid mis_loc_flag: " << mis_loc_flag << ", error!" << endl;
+						exit(1);
+				}
+
+				mis_reg = new mismatchReg_t();
+				mis_reg->start_aln_idx = begin_mismatch_aln_idx;
+				mis_reg->end_aln_idx = end_mismatch_aln_idx;
+				mis_reg->reg_size = mis_reg_size;
+				mis_reg->startRefPos = startMisRefPos;
+				mis_reg->endRefPos = endMisRefPos;
+				mis_reg->startLocalRefPos = startMisLocalRefPos;
+				mis_reg->endLocalRefPos = endMisLocalRefPos;
+				mis_reg->startQueryPos = startMisQueryPos;
+				mis_reg->endQueryPos = endMisQueryPos;
+				mis_reg->valid_flag = true;
+				mis_reg->gap_flag = gap_flag;
+				misReg_vec.push_back(mis_reg);
+
+				begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
+				startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
+				mis_reg_size = 0;
+				mis_loc_flag = -1;
+
+				if(extend_flag) break;
+			}
+			if(extend_flag) break;
+
+			query_pos ++;
+			ref_pos ++;
+			local_ref_pos ++;
+			gap_flag = false;
+		}
+	}
+
+	// sort
+	for(i=0; i<(int32_t)misReg_vec.size(); i++){
+		mis_reg = misReg_vec.at(i);
+		for(j=i+1; j<(int32_t)misReg_vec.size(); j++){
+			mis_reg2 = misReg_vec.at(j);
+			if(mis_reg->start_aln_idx>mis_reg2->start_aln_idx){ // exchange
+				tmp = mis_reg->start_aln_idx; mis_reg->start_aln_idx = mis_reg2->start_aln_idx; mis_reg2->start_aln_idx = tmp;
+				tmp = mis_reg->end_aln_idx; mis_reg->end_aln_idx = mis_reg2->end_aln_idx; mis_reg2->end_aln_idx = tmp;
+				tmp = mis_reg->reg_size; mis_reg->reg_size = mis_reg2->reg_size; mis_reg2->reg_size = tmp;
+				tmp = mis_reg->startRefPos; mis_reg->startRefPos = mis_reg2->startRefPos; mis_reg2->startRefPos = tmp;
+				tmp = mis_reg->endRefPos; mis_reg->endRefPos = mis_reg2->endRefPos; mis_reg2->endRefPos = tmp;
+				tmp = mis_reg->startLocalRefPos; mis_reg->startLocalRefPos = mis_reg2->startLocalRefPos; mis_reg2->startLocalRefPos = tmp;
+				tmp = mis_reg->endLocalRefPos; mis_reg->endLocalRefPos = mis_reg2->endLocalRefPos; mis_reg2->endLocalRefPos = tmp;
+				tmp = mis_reg->startQueryPos; mis_reg->startQueryPos = mis_reg2->startQueryPos; mis_reg2->startQueryPos = tmp;
+				tmp = mis_reg->endQueryPos; mis_reg->endQueryPos = mis_reg2->endQueryPos; mis_reg2->endQueryPos = tmp;
+				flag = mis_reg->valid_flag; mis_reg->valid_flag = mis_reg2->valid_flag; mis_reg2->valid_flag = flag;
+				flag = mis_reg->gap_flag; mis_reg->gap_flag = mis_reg2->gap_flag; mis_reg2->gap_flag = flag;
+			}
+		}
+	}
+
+	return misReg_vec;
+}
+
+void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai){
+	size_t m, start_ref_pos, end_ref_pos, chrlen_tmp;
+	int32_t i, j, start_check_idx, end_check_idx;
+	string chrname_tmp, ctgseq_aln, refseq_aln, query_substr, subject_substr, substr, substr_gap;
+	mismatchReg_t *mis_reg, *mis_reg0, *mis_reg2, *tmp_mis_reg;
+	char ch_left, ch_right;
+	bool flag, large_neighbor_dist_flag, high_con_ratio_flag, disagree_flag;
+	vector<bam1_t*> alnDataVector;
+	Base *start_base, *end_base;
+
+	if(misReg_vec.empty()) return;
+
+	if(local_aln->reg) chrname_tmp = local_aln->reg->chrname;
+	else if(local_aln->cand_reg) chrname_tmp = local_aln->cand_reg->chrname;
+	else return;
+	chrlen_tmp = faidx_seq_len(fai, chrname_tmp.c_str()); // get the reference length
+
+	start_ref_pos = misReg_vec.at(0)->startRefPos - EXT_SIZE_CHK_VAR_LOC;
+	end_ref_pos = misReg_vec.at(misReg_vec.size()-1)->endRefPos + EXT_SIZE_CHK_VAR_LOC;
+	if(start_ref_pos<1) start_ref_pos = 1;
+	if(end_ref_pos>chrlen_tmp) end_ref_pos = chrlen_tmp;
+
+	// load align data
+	alnDataLoader data_loader(chrname_tmp, start_ref_pos, end_ref_pos, inBamFile);
+	data_loader.loadAlnData(alnDataVector);
+
+	// load coverage
+	covLoader cov_loader(chrname_tmp, start_ref_pos, end_ref_pos, fai);
+	Base *baseArray = cov_loader.initBaseArray();
+	cov_loader.generateBaseCoverage(baseArray, alnDataVector);
+
+	ctgseq_aln = local_aln->alignResultVec[0];
+	refseq_aln = local_aln->alignResultVec[2];
+
+	// filter out short (e.g. <= 1 bp) mismatched polymer items
+	for(i=0; i<(int32_t)misReg_vec.size(); i++){
+		mis_reg = misReg_vec.at(i);
+		start_check_idx = mis_reg->start_aln_idx;
+		end_check_idx = mis_reg->end_aln_idx;
+
+		// determine whether the base contains many insertions or deletions
+		start_base = baseArray + mis_reg->startRefPos - start_ref_pos;
+		end_base = baseArray + mis_reg->endRefPos - start_ref_pos;
+		high_con_ratio_flag = disagree_flag = false;
+
+		if(((start_base->max_con_type==BAM_CINS and start_base->maxConIndelEventRatio>=MIN_HIGH_CONSENSUS_INS_RATIO) or (start_base->max_con_type==BAM_CDEL and start_base->maxConIndelEventRatio>=MIN_HIGH_CONSENSUS_DEL_RATIO)) or ((end_base->max_con_type==BAM_CINS and end_base->maxConIndelEventRatio>=MIN_HIGH_CONSENSUS_INS_RATIO) or (end_base->max_con_type==BAM_CDEL and end_base->maxConIndelEventRatio>=MIN_HIGH_CONSENSUS_DEL_RATIO)))
+			high_con_ratio_flag = true;
+		if(start_base->isDisagreeBase() or end_base->isDisagreeBase())
+			disagree_flag = true;
+
+		if(high_con_ratio_flag or disagree_flag) continue; // skip below operations
+
+		if(mis_reg->gap_flag){
+			query_substr = ctgseq_aln.substr(start_check_idx, end_check_idx-start_check_idx+1);
+			subject_substr = refseq_aln.substr(start_check_idx, end_check_idx-start_check_idx+1);
+
+			// check polymer
+			if(query_substr.find("-")!=string::npos){ // gap in query
+				substr_gap = query_substr;
+				substr = subject_substr;
+				ch_left = refseq_aln.at(start_check_idx-1);
+				ch_right = refseq_aln.at(end_check_idx+1);
+			}else{ // gap in subject
+				substr = query_substr;
+				substr_gap = subject_substr;
+				ch_left = ctgseq_aln.at(start_check_idx-1);
+				ch_right = ctgseq_aln.at(end_check_idx+1);
+			}
+
+			flag = isPolymerSeq(substr);
+			if(flag){ // check
+				if(high_con_ratio_flag==false and disagree_flag==false and (substr.at(0)==ch_left or substr.at(substr.size()-1)==ch_right) and substr.size()<MIN_VALID_POLYMER_SIZE)
+					mis_reg->valid_flag = false;
+			}
+		}
+
+		// further to check the distance of its neighbors
+		large_neighbor_dist_flag = false;
+		if(mis_reg->valid_flag and mis_reg->reg_size<=MAX_SHORT_MIS_REG_SIZE){
+			if(i==0){ // first item
+				mis_reg2 = NULL;
+				for(m=i+1; m<misReg_vec.size(); m++){ // search right side
+					tmp_mis_reg = misReg_vec.at(m);
+					if(tmp_mis_reg->valid_flag){
+						mis_reg2 = tmp_mis_reg;
+						break;
+					}
+				}
+				if(mis_reg2==NULL or (mis_reg2->start_aln_idx-mis_reg->end_aln_idx>MIN_ADJACENT_REG_DIST))
+					large_neighbor_dist_flag = true;
+			}else if(i==(int32_t)misReg_vec.size()-1){ // last item
+				mis_reg0 = NULL;
+				for(j=i-1; j>=0; j--){ // search left side
+					tmp_mis_reg = misReg_vec.at(j);
+					if(tmp_mis_reg->valid_flag){
+						mis_reg0 = tmp_mis_reg;
+						break;
+					}
+				}
+				if(mis_reg0==NULL or (mis_reg->start_aln_idx-mis_reg0->end_aln_idx>MIN_ADJACENT_REG_DIST))
+					large_neighbor_dist_flag = true;
+			}else{ // middle items
+				mis_reg0 = NULL;
+				for(j=i-1; j>=0; j--){ // search left side
+					tmp_mis_reg = misReg_vec.at(j);
+					if(tmp_mis_reg->valid_flag){
+						mis_reg0 = tmp_mis_reg;
+						break;
+					}
+				}
+				mis_reg2 = NULL;
+				for(m=i+1; m<misReg_vec.size(); m++){ // search right side
+					tmp_mis_reg = misReg_vec.at(m);
+					if(tmp_mis_reg->valid_flag){
+						mis_reg2 = tmp_mis_reg;
+						break;
+					}
+				}
+				if((mis_reg0==NULL or (mis_reg->start_aln_idx-mis_reg0->end_aln_idx>MIN_ADJACENT_REG_DIST)) and (mis_reg2==NULL or (mis_reg2->start_aln_idx-mis_reg->end_aln_idx>MIN_ADJACENT_REG_DIST)))
+					large_neighbor_dist_flag = true;
+			}
+
+			if(large_neighbor_dist_flag==true and high_con_ratio_flag==false and disagree_flag==false)
+				mis_reg->valid_flag = false;
+		}
+	}
+
+	// remove invalid items
+	for(m=0; m<misReg_vec.size(); ){
+		mis_reg = misReg_vec.at(m);
+		if(mis_reg->valid_flag==false){
+			delete mis_reg;
+			misReg_vec.erase(misReg_vec.begin()+m);
+		}else m++;
+	}
+
+	// release memory
+	data_loader.freeAlnData(alnDataVector);
+	cov_loader.freeBaseArray(baseArray);
+}
+
+void adjustVarLocByMismatchRegs(reg_t *reg, vector<mismatchReg_t*> &misReg_vec, int32_t start_aln_idx_var, int32_t end_aln_idx_var){
+	int32_t i, max_reg_idx, maxValue, secMax_reg_idx, secMaxValue, left_reg_idx, right_reg_idx;
+	mismatchReg_t *mis_reg, *mis_reg2;
+
+	// get maximum and second maximum mismatch region
+	max_reg_idx = secMax_reg_idx = -1;
+	maxValue = secMaxValue = 0;
+	for(i=0; i<(int32_t)misReg_vec.size(); i++){
+		mis_reg = misReg_vec.at(i);
+		if(mis_reg->reg_size>maxValue){
+			max_reg_idx = i;
+			maxValue = mis_reg->reg_size;
+		}
+		if(mis_reg->reg_size>=secMaxValue){
+			secMax_reg_idx = i;
+			secMaxValue = mis_reg->reg_size;
+		}
+	}
+
+	// check its neighbors
+	if(max_reg_idx!=-1){
+		left_reg_idx = right_reg_idx = -1;
+
+		// left side extend
+		mis_reg = misReg_vec.at(max_reg_idx);
+		for(i=max_reg_idx-1; i>=0; i--){
+			mis_reg2 = misReg_vec.at(i);
+			if((mis_reg->start_aln_idx-mis_reg2->end_aln_idx<=MIN_ADJACENT_REG_DIST) or (mis_reg->start_aln_idx>=end_aln_idx_var and mis_reg2->end_aln_idx<=start_aln_idx_var)){ // distance less than threshold
+				left_reg_idx = i;
+				mis_reg = mis_reg2;
+				mis_reg2 = NULL;
+			}else break;
+		}
+		if(left_reg_idx==-1) left_reg_idx = max_reg_idx;
+
+		// right side extend
+		mis_reg = misReg_vec.at(max_reg_idx);
+		for(i=max_reg_idx+1; i<(int32_t)misReg_vec.size(); i++){
+			mis_reg2 = misReg_vec.at(i);
+			if((mis_reg2->start_aln_idx-mis_reg->end_aln_idx<=MIN_ADJACENT_REG_DIST) or (mis_reg->end_aln_idx<=start_aln_idx_var and mis_reg2->start_aln_idx>=end_aln_idx_var)){ // distance less than threshold
+				right_reg_idx = i;
+				mis_reg = mis_reg2;
+				mis_reg2 = NULL;
+			}else break;
+		}
+		if(right_reg_idx==-1) right_reg_idx = max_reg_idx;
+
+		mis_reg = misReg_vec.at(left_reg_idx);
+		mis_reg2 = misReg_vec.at(right_reg_idx);
+		reg->startRefPos = mis_reg->startRefPos;
+		reg->endRefPos = mis_reg2->endRefPos;
+		reg->startLocalRefPos = mis_reg->startLocalRefPos;
+		reg->endLocalRefPos = mis_reg2->endLocalRefPos;
+		reg->startQueryPos = mis_reg->startQueryPos;
+		reg->endQueryPos = mis_reg2->endQueryPos;
+	}
+}
+
+void releaseMismatchRegVec(vector<mismatchReg_t*> &misReg_vec){
+	// release memory
+	for(size_t i=0; i<misReg_vec.size(); i++) delete misReg_vec.at(i);
+	vector<mismatchReg_t*>().swap(misReg_vec);
+}
+
+mismatchReg_t *getMismatchReg(int32_t aln_idx, vector<mismatchReg_t*> &misReg_vec){
+	mismatchReg_t *mis_item_ret = NULL, *mis_item;
+	for(size_t i=0; i<misReg_vec.size(); i++){
+		mis_item = misReg_vec.at(i);
+		if(mis_item->valid_flag){
+			if(aln_idx>=mis_item->start_aln_idx and aln_idx<=mis_item->end_aln_idx){
+				mis_item_ret = mis_item;
+				break;
+			}
+		}
+	}
+	return mis_item_ret;
+}
+
+bool isPolymerSeq(string &seq){
+	bool flag = true;
+	for(size_t m=1; m<seq.size(); m++){
+		if(seq.at(m-1)!=seq.at(m)){
+			flag = false;
+			break;
+		}
+	}
+	return flag;
+}
+
 
 
 Time::Time() {

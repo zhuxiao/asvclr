@@ -28,10 +28,11 @@ using namespace std;
 
 #define VAR_ALN_EXTEND_SIZE					1000	// 200
 #define SHORT_VAR_ALN_CHECK_EXTEND_SIZE		30	// 20
-#define MIN_MISMATCH_NUM_SHORT_VAR_CALL		2
+#define MIN_MISMATCH_NUM_SHORT_VAR_CALL		1	// 2
 #define MIN_DISAGR_NUM_SHORT_VAR_CALL		1
 
 #define MIN_HIGH_INDEL_BASE_RATIO			0.4
+#define IGNORE_POLYMER_RATIO_THRES			0.6	// polymer flag will be ignored if ratio >= threshold
 
 #define MATCH_SCORE							2
 #define MISMATCH_SCORE						-2
@@ -49,6 +50,9 @@ using namespace std;
 #define SIMILARITY_THRES_INV				(0.9)	// to be parameterized
 
 #define EXT_SIZE_CHK_VAR_LOC				100
+
+#define MIN_VALID_POLYMER_SIZE				3
+#define MAX_SHORT_MIS_REG_SIZE				1
 
 //#define MIN_REF_DIST_DUP_NUM_EST			1000
 
@@ -126,9 +130,9 @@ class varCand {
 		void adjustVarLoc(localAln_t *local_aln);
 		//void confirmVarLoc(localAln_t *local_aln);
 		void confirmShortVar(localAln_t *local_aln);
-		int32_t getMismatchNumAln(vector<string> &alignResultVec, int32_t start_check_idx, int32_t end_check_idx);
+		vector<int32_t> getMismatchNumAln(string &mid_seq, int32_t start_check_idx, int32_t end_check_idx, vector<mismatchReg_t*> &misReg_vec, int32_t min_match_misReg_size);
 		//int32_t getDisagreeNum(Base *baseArray, int32_t arr_size);
-		int32_t computeHighIndelBaseNum(Base *baseArray, int32_t arr_size, float threshold);
+		int32_t computeHighIndelBaseNum(Base *baseArray, int32_t arr_size, float threshold, float polymer_ignore_ratio_thres);
 		void adjustVarLocShortVar(localAln_t *local_aln);
 		int32_t getAdjustedStartAlnIdxVar(localAln_t *local_aln);
 		int32_t getAdjustedEndAlnIdxVar(localAln_t *local_aln);
@@ -141,7 +145,7 @@ class varCand {
 		void computeVarType(reg_t *reg);
 		void updateVarVec(vector<vector<reg_t*>> &regVec, vector<reg_t*> &foundRegVec, vector<reg_t*> &varVec);
 		vector<int32_t> computeDisagreeNumAndHighIndelBaseNumAndMarginDist(string &chrname, size_t startRefPos, size_t endRefPos, int32_t query_id, size_t startQueryPos, size_t endQueryPos, size_t aln_orient, string &inBamFile, faidx_t *fai);
-		vector<int32_t> computeVarMargins(Base *baseArray, int32_t arr_size, float threshold);
+		vector<int32_t> computeVarMargins(Base *baseArray, int32_t arr_size, float threshold, float polymer_ignore_ratio_thres);
 		vector<int32_t> confirmVarMargins(int32_t left_dist, int32_t right_dist, string &chrname, size_t startRefPos, size_t endRefPos, int32_t query_id, size_t startQueryPos, size_t endQueryPos, size_t aln_orient, faidx_t *fai);
 		int32_t getEndShiftLenFromNumVec(vector<int32_t> &numVec, size_t end_flag);
 		void computeVarRegLoc(reg_t *reg, reg_t *reg_tmp);

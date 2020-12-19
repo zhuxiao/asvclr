@@ -110,6 +110,8 @@ class Block{
 		void blockGenerateLocalAssembleWorkOpt_Indel();
 		void blockGenerateLocalAssembleWorkOpt_ClipReg();
 		void saveSV2File();
+		vector<simpleReg_t*> computeLimitRegsForAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+		void generateAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &sub_limit_reg_vec_work, bool clip_reg_flag);
 		bool getPrevAssembledDoneFlag(string &contigfilename, bool clipReg_flag);
 		bool getPrevAssembledDoneFlag2(string &contigfilename, vector<varCand*> *assembled_varcand_vec);
 		bool getPrevAssembledDoneFlag2(string &contigfilename, vector<string> &assembled_filename_vec);

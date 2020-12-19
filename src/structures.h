@@ -115,6 +115,10 @@ typedef struct{
 	int32_t start_aln_idx_var, end_aln_idx_var;
 }localAln_t;
 
-
+typedef struct{
+	int32_t start_aln_idx, end_aln_idx, reg_size;
+	int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
+	bool gap_flag, valid_flag;
+}mismatchReg_t;
 
 #endif /* SRC_STRUCTURES_H_ */

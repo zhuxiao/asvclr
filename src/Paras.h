@@ -15,13 +15,16 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"0.7.2"
+#define PROG_VERSION				"0.8.0"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
 #define SNV_EST_OP					2
 
 #define LARGE_INDEL_SIZE_FACTOR		3
+
+#define MD_MISMATCH   				10
+#define BASE_INDEL_CON_UNUSED		(-1)
 
 
 // default parameter values
@@ -43,8 +46,8 @@ using namespace std;
 
 #define MAX_REG_SUM_SIZE_EST		500000
 
-#define ASSEMBLY_SUCCESS			"ASS_SUCCESS"
-#define ASSEMBLY_FAILURE			"ASS_FAILURE"
+#define ASSEMBLY_SUCCESS			"ASM_SUCCESS"
+#define ASSEMBLY_FAILURE			"ASM_FAILURE"
 #define ALIGN_SUCCESS				"ALN_SUCCESS"
 #define ALIGN_FAILURE				"ALN_FAILURE"
 #define CALL_SUCCESS				"CALL_SUCCESS"
@@ -68,6 +71,9 @@ using namespace std;
 #define MAX_ULTRA_HIGH_COV_THRES	300		// maximal coverage threshold for ultra-high coverage
 
 #define MIN_ADJACENT_REG_DIST		50
+
+#define MIN_HIGH_CONSENSUS_INS_RATIO		0.3f
+#define MIN_HIGH_CONSENSUS_DEL_RATIO		0.5f	// 0.4
 
 
 // program parameters

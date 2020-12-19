@@ -10,7 +10,6 @@
 
 using namespace std;
 
-#define MD_MISMATCH   				10
 
 class covLoader {
 	public:
@@ -25,23 +24,25 @@ class covLoader {
 		virtual ~covLoader();
 		Base *initBaseArray();
 		void freeBaseArray(Base *baseArray);
-		void generateBaseCoverage(Base *baseArr, vector<bam1_t*> alnDataVector);
+		void generateBaseCoverage(Base *baseArr, vector<bam1_t*> &alnDataVector);
 
 	private:
 		int assignRefBase(Base *baseArray, faidx_t *fai);
+		void assignPolymerFlag(Base *baseArray);
 		vector<struct alnSeg*> generateAlnSegs(bam1_t* b);
-		struct alnSeg* allocateAlnSeg(size_t startRpos, size_t startQpos, size_t seglen, size_t opFlag, string seg_MD);
-		void destroyAlnSegs(vector<struct alnSeg*> alnSegs);
+		struct alnSeg* allocateAlnSeg(size_t startRpos, size_t startQpos, size_t seglen, size_t opFlag, string &seg_MD);
+		void destroyAlnSegs(vector<struct alnSeg*> &alnSegs);
 		vector<struct MD_seg*> extractMDSegs(bam1_t* b);
 		struct MD_seg* allocateMDSeg(string& seg, size_t opflag);
-		void destroyMDSeg(vector<struct MD_seg*> segs_MD);
-		int updateBaseInfo(Base *baseArr, vector<struct alnSeg*> alnSegs);
+		void destroyMDSeg(vector<struct MD_seg*> &segs_MD);
+		int updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs);
 		void updateBaseCovInfo(Base *baseArr);
 		void computeDelNumFromDelVec(Base *baseArr);
+		void computeConIndelEventRatio(Base *baseArr);
 
 		// testing functions
-		void outputAlnSegs(vector<struct alnSeg*> alnSegs);
-		void outputMDSeg(vector<struct MD_seg*> segs_MD);
+		void outputAlnSegs(vector<struct alnSeg*> &alnSegs);
+		void outputMDSeg(vector<struct MD_seg*> &segs_MD);
 		bool haveOpflagCigar(bam1_t* b, size_t opfalg);
 };
 

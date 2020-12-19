@@ -579,7 +579,10 @@ int Genome::processAssembleWork(){
 	num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
 	if(num_threads_work<1) num_threads_work = 1;
 
-	cout << "Local assemble is processed using " << num_threads_work << "  concurrent works" << endl;
+	if(paras->num_threads_per_assem_work==0)
+		cout << "Local assemble will be processed using " << num_threads_work << " concurrent works, and each work will use the default number of threads of assembler" << endl;
+	else
+		cout << "Local assemble will be processed using " << num_threads_work << " concurrent works, and each work will be limited to " << paras->num_threads_per_assem_work << " threads" << endl;
 
 //	hts_tpool *p = hts_tpool_init(paras->num_threads);
 //	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
@@ -762,7 +765,8 @@ void Genome::recallIndelsFromTRA(){
 								if(segIdx_start!=-1 and segIdx_end!=-1){
 									seg1 = blat_aln->aln_segs.at(segIdx_start);
 									seg2 = blat_aln->aln_segs.at(segIdx_end);
-									overlap_flag = isOverlappedPos(var_cand->leftClipRefPos, var_cand->rightClipRefPos, seg1->ref_end, seg2->ref_start);
+									//overlap_flag = isOverlappedPos(var_cand->leftClipRefPos, var_cand->rightClipRefPos, seg1->ref_end, seg2->ref_start);
+									overlap_flag = isOverlappedPos(var_cand->leftClipRefPos-CLIP_END_EXTEND_SIZE, var_cand->rightClipRefPos+CLIP_END_EXTEND_SIZE, seg1->ref_end-CLIP_END_EXTEND_SIZE, seg2->ref_start+CLIP_END_EXTEND_SIZE);
 									if(overlap_flag){ // indel
 										var_cand->call_success = true;
 										var_cand->clip_reg_flag = false;
@@ -2352,7 +2356,7 @@ void Genome::saveTraCall2File(){
 				else line += "\t-";
 				//line += "\t" + clip_reg->right_var_cand_tra->chrname;
 				chrname_tmp = chrname_vec.at(1).size()>0 ? chrname_vec.at(1) : "-";
-				line += chrname_tmp;
+				line += "\t" + chrname_tmp;
 				if(clip_reg->leftClipPosTra2>0) line += "\t" + to_string(clip_reg->leftClipPosTra2);
 				else line += "\t-";
 				if(clip_reg->rightClipPosTra2>0) line += "\t" + to_string(clip_reg->rightClipPosTra2);

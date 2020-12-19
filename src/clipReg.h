@@ -14,7 +14,7 @@
 using namespace std;
 
 
-#define CLIP_END_EXTEND_SIZE				100
+#define CLIP_END_EXTEND_SIZE				300 // 100
 #define MIN_CLIP_END_SIZE					200	// 50
 
 #define MIN_CLIP_DIST_THRES					1000

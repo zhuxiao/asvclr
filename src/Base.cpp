@@ -18,8 +18,12 @@ void Base::init(){
 	coverage.idx_RefBase = -1;
 	coverage.num_max = -1;
 	coverage.idx_max = -1;
+	coverage.polymer_flag = false;
 
 	num_shortIns = num_shortdel = num_shortClip = del_num_from_del_vec = 0;
+	maxConIndelEventNum = 0;
+	max_con_type = BASE_INDEL_CON_UNUSED;
+	maxConIndelEventRatio = 0;
 }
 
 // destroy base, including insVector, delVector and clipVector
@@ -70,7 +74,7 @@ void Base::addClipEvent(clipEvent_t* clipE){
 
 // compute the maximal base and its count
 void Base::updateCovInfo(){
-	uint16_t i, maxIdx, maxNum, *cov_nums = coverage.num_bases;
+	uint32_t i, maxIdx, maxNum, *cov_nums = coverage.num_bases;
 	coverage.num_bases[5] = cov_nums[0] + cov_nums[1] + cov_nums[2] + cov_nums[3] + cov_nums[4];  // sum
 	// get max and count
 	maxIdx = 0; maxNum = cov_nums[0];
@@ -161,12 +165,37 @@ bool Base::isZeroCovBase(){
 }
 
 // determine whether the base is a high indel base
-bool Base::isHighIndelBase(float threshold){
+bool Base::isHighIndelBase(float threshold, float ignore_polymer_ratio_threshold){
 	bool flag = false;
 	int32_t indelNum;
+	double ratio;
 
-	indelNum = insVector.size() + delVector.size();
-	if(coverage.num_bases[5]>0 and (double)indelNum/coverage.num_bases[5]>=threshold)
+	//indelNum = insVector.size() + delVector.size();
+	indelNum = insVector.size() + del_num_from_del_vec;
+	ratio = (double)indelNum / coverage.num_bases[5];
+	//if(coverage.num_bases[5]>0 and (double)indelNum/coverage.num_bases[5]>=threshold){
+	if(coverage.num_bases[5]>0 and ((ratio>=threshold and coverage.polymer_flag==false) or (coverage.polymer_flag==true and ratio>=ignore_polymer_ratio_threshold)))
+		flag = true;
+	return flag;
+}
+
+// determine whether the base is a high consensus indel base
+bool Base::isHighConIndelBase(float threshold, float ignore_polymer_ratio_threshold){
+	bool flag = false, high_con_flag = false;
+
+	switch(max_con_type){
+		case BAM_CINS:
+			if(maxConIndelEventRatio>=MIN_HIGH_CONSENSUS_INS_RATIO) high_con_flag = true;
+			break;
+		case BAM_CDEL:
+			if(maxConIndelEventRatio>=MIN_HIGH_CONSENSUS_DEL_RATIO) high_con_flag = true;
+			break;
+		case BASE_INDEL_CON_UNUSED:
+			break;
+		default: cerr << __func__ << ": unknown base max_con_type: " << max_con_type << endl; exit(1);
+	}
+
+	if(high_con_flag and isHighIndelBase(threshold, ignore_polymer_ratio_threshold))
 		flag = true;
 	return flag;
 }

@@ -1231,62 +1231,7 @@ void varCand::adjustAlnResult(localAln_t *local_aln){
 	string &mid_aln_seq = local_aln->alignResultVec.at(1);
 	string &subject_aln_seq = local_aln->alignResultVec.at(2);
 
-	// right side
-	gap_size = 0;
-	for(i=(int32_t)mid_aln_seq.size()-1; i>=0; i--){
-		if(mid_aln_seq.at(i)!='|'){ // gap or mismatch
-			if(gap_size==0)
-				gap_size = 1;
-
-			if(subject_aln_seq.at(i)=='-'){ // gap in subject
-				for(j=i-gap_size; j>=0; j--){
-					if(subject_aln_seq.at(j)!='-'){
-						baseMatchFlag = isBaseMatch(query_aln_seq.at(i), subject_aln_seq.at(j));
-						if(baseMatchFlag){ // exchange subject_aln_seq[i] and subject_aln_seq[j]
-							ch_tmp = subject_aln_seq.at(i);
-							subject_aln_seq.at(i) = subject_aln_seq.at(j);
-							subject_aln_seq.at(j) = ch_tmp;
-
-							mid_aln_seq.at(i) = '|';
-							baseMatchFlag2 = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(j));
-							if(baseMatchFlag2) mid_aln_seq.at(j) = '|';
-							else mid_aln_seq.at(j) = ' ';
-						}else{ // gap end
-							i -= gap_size -1;
-							gap_size = 0;
-						}
-						break;
-					}else
-						gap_size ++;
-				}
-			}else if(query_aln_seq.at(i)=='-'){  // gap in query
-				for(j=i-gap_size; j>=0; j--){
-					if(query_aln_seq.at(j)!='-'){
-						baseMatchFlag = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(i));
-						if(baseMatchFlag){ // exchange query_aln_seq[i] and query_aln_seq[j]
-							ch_tmp = query_aln_seq.at(i);
-							query_aln_seq.at(i) = query_aln_seq.at(j);
-							query_aln_seq.at(j) = ch_tmp;
-
-							mid_aln_seq.at(i) = '|';
-							baseMatchFlag2 = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(j));
-							if(baseMatchFlag2) mid_aln_seq.at(j) = '|';
-							else mid_aln_seq.at(j) = ' ';
-						}else{ // gap end
-							i -= gap_size -1;
-							gap_size = 0;
-						}
-						break;
-					}else
-						gap_size ++;
-				}
-			}else{ // mismatch
-				gap_size = 0;
-			}
-		}
-	}
-
-	// left side
+	// align to left side
 	gap_size = 0;
 	for(i=0; i<(int32_t)mid_aln_seq.size(); i++){
 		if(mid_aln_seq.at(i)!='|'){ // gap or mismatch
@@ -1329,6 +1274,61 @@ void varCand::adjustAlnResult(localAln_t *local_aln){
 							else mid_aln_seq.at(j) = ' ';
 						}else{ // gap end
 							i += gap_size -1;
+							gap_size = 0;
+						}
+						break;
+					}else
+						gap_size ++;
+				}
+			}else{ // mismatch
+				gap_size = 0;
+			}
+		}
+	}
+
+	// align to right side
+	gap_size = 0;
+	for(i=(int32_t)mid_aln_seq.size()-1; i>=0; i--){
+		if(mid_aln_seq.at(i)!='|'){ // gap or mismatch
+			if(gap_size==0)
+				gap_size = 1;
+
+			if(subject_aln_seq.at(i)=='-'){ // gap in subject
+				for(j=i-gap_size; j>=0; j--){
+					if(subject_aln_seq.at(j)!='-'){
+						baseMatchFlag = isBaseMatch(query_aln_seq.at(i), subject_aln_seq.at(j));
+						if(baseMatchFlag){ // exchange subject_aln_seq[i] and subject_aln_seq[j]
+							ch_tmp = subject_aln_seq.at(i);
+							subject_aln_seq.at(i) = subject_aln_seq.at(j);
+							subject_aln_seq.at(j) = ch_tmp;
+
+							mid_aln_seq.at(i) = '|';
+							baseMatchFlag2 = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(j));
+							if(baseMatchFlag2) mid_aln_seq.at(j) = '|';
+							else mid_aln_seq.at(j) = ' ';
+						}else{ // gap end
+							i -= gap_size -1;
+							gap_size = 0;
+						}
+						break;
+					}else
+						gap_size ++;
+				}
+			}else if(query_aln_seq.at(i)=='-'){  // gap in query
+				for(j=i-gap_size; j>=0; j--){
+					if(query_aln_seq.at(j)!='-'){
+						baseMatchFlag = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(i));
+						if(baseMatchFlag){ // exchange query_aln_seq[i] and query_aln_seq[j]
+							ch_tmp = query_aln_seq.at(i);
+							query_aln_seq.at(i) = query_aln_seq.at(j);
+							query_aln_seq.at(j) = ch_tmp;
+
+							mid_aln_seq.at(i) = '|';
+							baseMatchFlag2 = isBaseMatch(query_aln_seq.at(j), subject_aln_seq.at(j));
+							if(baseMatchFlag2) mid_aln_seq.at(j) = '|';
+							else mid_aln_seq.at(j) = ' ';
+						}else{ // gap end
+							i -= gap_size -1;
 							gap_size = 0;
 						}
 						break;
@@ -1558,9 +1558,10 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 
 // confirm short variation
 void varCand::confirmShortVar(localAln_t *local_aln){
-	int32_t i, check_extend_size, start_check_idx, end_check_idx, startRefPos, endRefPos, mismatchNum_aln;
+	int32_t i, check_extend_size, start_check_idx, end_check_idx, startRefPos, endRefPos, mismatchNum_aln, size_match_misreg_num;
 	string refseq_aln;
-	vector<int32_t> numVec;
+	vector<int32_t> numVec, misNum_vec;
+	vector<mismatchReg_t*> misReg_vec;
 
 	if(local_aln->start_aln_idx_var!=-1 and local_aln->end_aln_idx_var!=-1){
 		check_extend_size = SHORT_VAR_ALN_CHECK_EXTEND_SIZE;
@@ -1583,39 +1584,71 @@ void varCand::confirmShortVar(localAln_t *local_aln){
 			if(refseq_aln[i]!='-')
 				endRefPos ++;
 
-		// compute the number of mismatched bases
-		mismatchNum_aln = getMismatchNumAln(local_aln->alignResultVec, start_check_idx, end_check_idx);
+		// extract mismatch regions and remove short items and short polymer items
+		misReg_vec = getMismatchRegVec(local_aln);
+		removeShortPolymerMismatchRegItems(local_aln, misReg_vec, inBamFile, fai);
+
+		// compute the number of mismatched bases excluding polymers
+		misNum_vec = getMismatchNumAln(local_aln->alignResultVec.at(1), start_check_idx, end_check_idx, misReg_vec, MIN_VALID_POLYMER_SIZE);
+		mismatchNum_aln = misNum_vec.at(0);
+		size_match_misreg_num = misNum_vec.at(1);
 
 		if(mismatchNum_aln>=MIN_MISMATCH_NUM_SHORT_VAR_CALL){
 			numVec = computeDisagreeNumAndHighIndelBaseNum(local_aln->reg->chrname, startRefPos, endRefPos, inBamFile, fai);
 
 			// confirm and update the information
-			if(numVec[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec[1]>0) // confirmed
+			if(numVec[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec[1]>0 or size_match_misreg_num>0) // confirmed
 				computeVarType(local_aln->reg);  // compute variant type
 		}
+
+		// release memory
+		releaseMismatchRegVec(misReg_vec);
 	}
 }
 
 // get the number of mismatched bases
-int32_t varCand::getMismatchNumAln(vector<string> &alignResultVec, int32_t start_check_idx, int32_t end_check_idx){
-	int32_t i, mismatchNum, len;
-	string check_str;
+vector<int32_t> varCand::getMismatchNumAln(string &mid_seq, int32_t start_check_idx, int32_t end_check_idx, vector<mismatchReg_t*> &misReg_vec, int32_t min_match_misReg_size){
+	int32_t i, j, mismatchNum, size_match_misreg_num;
+	mismatchReg_t *mismatch_reg, *mismatch_reg2;
+	vector<mismatchReg_t*> misReg_vec_tmp;
+	bool exist_flag;
+	vector<int32_t> misNum_vec;
 
-	mismatchNum = 0;
-	check_str = alignResultVec[1].substr(start_check_idx, end_check_idx-start_check_idx+1);
-	len = check_str.size();
-	for(i=0; i<len; i++)
-		if(check_str[i]!='|')
-			mismatchNum ++;
+	mismatchNum = size_match_misreg_num = 0;
+	for(i=start_check_idx; i<=end_check_idx; i++){
+		if(mid_seq[i]!='|'){
+			mismatch_reg = getMismatchReg(i, misReg_vec);
+			if(mismatch_reg){
+				mismatchNum ++;
+				if(mismatch_reg->reg_size>=min_match_misReg_size){
+					exist_flag = false;
+					for(j=0; j<(int32_t)misReg_vec_tmp.size(); j++){
+						mismatch_reg2 = misReg_vec_tmp.at(j);
+						if(mismatch_reg2==mismatch_reg){
+							exist_flag = true;
+							break;
+						}
+					}
+					if(exist_flag==false) {
+						misReg_vec_tmp.push_back(mismatch_reg);
+						size_match_misreg_num ++;
+					}
+				}
+			}
+		}
+	}
 
-	return mismatchNum;
+	misNum_vec.push_back(mismatchNum);
+	misNum_vec.push_back(size_match_misreg_num);
+
+	return misNum_vec;
 }
 
 // compute the number of high indel bases
-int32_t varCand::computeHighIndelBaseNum(Base *baseArray, int32_t arr_size, float threshold){
+int32_t varCand::computeHighIndelBaseNum(Base *baseArray, int32_t arr_size, float threshold, float polymer_ignore_ratio_thres){
 	int32_t num = 0;
 	for(int32_t i=0; i<arr_size; i++)
-		if(baseArray[i].isHighIndelBase(threshold))
+		if(baseArray[i].isHighConIndelBase(threshold, polymer_ignore_ratio_thres))
 			num ++;
 	return num;
 }
@@ -1908,13 +1941,13 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 					if(isOverlappedReg(reg, reg_tmp)==false){ // no overlap and add the variant region
 						updatedRegVec[i].push_back(reg);
 						processed_reg_vec.push_back(reg);
-					}else{ // overlap and try split the region
+					}else{ // overlap and try to split the region
 						// check left marginal regions
 						opID1 = -1;
 						if(reg->startRefPos==reg_tmp->startRefPos){
 							opID1 = 0;
 							numVec1.insert(numVec1.begin(), 6, 0);
-							startRefPos1 = endRefPos1 = startQueryPos1 = endQueryPos1 = 0; // will be not used
+							startRefPos1 = endRefPos1 = startQueryPos1 = endQueryPos1 = 0; // will not be used
 						}else if(reg->startRefPos<reg_tmp->startRefPos){
 							startRefPos1 = reg->startRefPos;
 							endRefPos1 = reg_tmp->startRefPos - 1;
@@ -2467,10 +2500,10 @@ vector<int32_t> varCand::computeDisagreeNumAndHighIndelBaseNum(string &chrname, 
 	disagreeNum = computeDisagreeNum(baseArray, endRefPos-startRefPos+1);
 
 	// compute the number of high indel bases
-	highIndelBaseNum = computeHighIndelBaseNum(baseArray, endRefPos-startRefPos+1, MIN_HIGH_INDEL_BASE_RATIO);
+	highIndelBaseNum = computeHighIndelBaseNum(baseArray, endRefPos-startRefPos+1, MIN_HIGH_INDEL_BASE_RATIO, IGNORE_POLYMER_RATIO_THRES);
 
 	// compute margins of variations
-	distVec = computeVarMargins(baseArray, endRefPos-startRefPos+1, MIN_HIGH_INDEL_BASE_RATIO);
+	distVec = computeVarMargins(baseArray, endRefPos-startRefPos+1, MIN_HIGH_INDEL_BASE_RATIO, IGNORE_POLYMER_RATIO_THRES);
 
 	// release the memory
 	data_loader.freeAlnData(alnDataVector);
@@ -2525,402 +2558,23 @@ void varCand::computeVarRegLoc(reg_t *reg, reg_t *cand_reg){
 
 // adjust variant locations according to alignment
 void varCand::adjustVarLoc(localAln_t *local_aln){
-	struct misRegNode{
-		int32_t start_aln_idx, end_aln_idx, reg_size;
-		int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
-		bool gap_flag;
-	};
-	int64_t ref_pos, local_ref_pos, query_pos, tmp, startMisRefPos, endMisRefPos, startMisLocalRefPos, endMisLocalRefPos, startMisQueryPos, endMisQueryPos;
-	int32_t i, j, start_check_idx, end_check_idx, mis_reg_size, begin_mismatch_aln_idx, end_mismatch_aln_idx, max_reg_idx, maxValue, left_reg_idx, right_reg_idx;
-	string ctgseq_aln, midseq_aln, refseq_aln;
-	vector<struct misRegNode*> misReg_vec;	// all the mismatch regions including gap regions
-	struct misRegNode* mis_reg, *mis_reg2;
-	reg_t *reg;
-	bool extend_flag;
+	vector<mismatchReg_t*> misReg_vec;	// all the mismatch regions including gap regions
 
-	if(local_aln->start_aln_idx_var==-1 or local_aln->end_aln_idx_var==-1) return;
+	// get mismatch regions including gaps according to alignments
+	misReg_vec = getMismatchRegVec(local_aln);
 
-	ctgseq_aln = local_aln->alignResultVec[0];
-	midseq_aln = local_aln->alignResultVec[1];
-	refseq_aln = local_aln->alignResultVec[2];
+	// filter out short (e.g. <= 1 bp) mismatched polymer items
+	removeShortPolymerMismatchRegItems(local_aln, misReg_vec, inBamFile, fai);
 
-	// compute refPos and queryPos at start_aln_idx
-	start_check_idx = local_aln->start_aln_idx_var - EXT_SIZE_CHK_VAR_LOC;
-	end_check_idx = local_aln->end_aln_idx_var + EXT_SIZE_CHK_VAR_LOC;
-	if(start_check_idx<0) start_check_idx = 0;
-	if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
-	extend_flag = false;
-
-	reg = local_aln->reg;
-	ref_pos = reg->startRefPos;
-	local_ref_pos = reg->startLocalRefPos;
-	query_pos = reg->startQueryPos;
-	for(i=local_aln->start_aln_idx_var; i>=start_check_idx; i--){
-		if(midseq_aln[i]==' '){ // mismatch including gap
-//			if(end_mismatch_aln_idx==-1){
-//				end_mismatch_aln_idx = i;
-//				endMisRefPos = ref_pos;
-//				endMisLocalRefPos = local_ref_pos;
-//				endMisQueryPos = query_pos;
-//				mis_reg_size = 1;
-//			}else{
-//				mis_reg_size ++;
-//			}
-
-			if(ctgseq_aln[i]=='-'){ // gap in query
-				ref_pos --;
-				local_ref_pos --;
-			}else if(refseq_aln[i]=='-'){ // gap in reference
-				query_pos --;
-			}else{ // mismatch
-				query_pos --;
-				ref_pos --;
-				local_ref_pos --;
-			}
-
-			if(i==end_check_idx and extend_flag==false){
-				end_check_idx -= EXT_SIZE_CHK_VAR_LOC;
-				if(end_check_idx<0) end_check_idx = 0;
-				extend_flag = true;
-				//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
-			}
-		}else{ // match
-//			if(end_mismatch_aln_idx!=-1){
-//				begin_mismatch_aln_idx = i + 1;
-//				startMisRefPos = ref_pos;
-//				startMisLocalRefPos = local_ref_pos;
-//				startMisQueryPos = query_pos;
-//
-//				mis_reg = new struct misRegNode();
-//				mis_reg->start_aln_idx = begin_mismatch_aln_idx;
-//				mis_reg->end_aln_idx = end_mismatch_aln_idx;
-//				mis_reg->reg_size = mis_reg_size;
-//				mis_reg->startRefPos = startMisRefPos;
-//				mis_reg->endRefPos = endMisRefPos;
-//				mis_reg->startLocalRefPos = startMisLocalRefPos;
-//				mis_reg->endLocalRefPos = endMisLocalRefPos;
-//				mis_reg->startQueryPos = startMisQueryPos;
-//				mis_reg->endQueryPos = endMisQueryPos;
-//				misReg_vec.push_back(mis_reg);
-//
-//				begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-//				startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
-//				mis_reg_size = 0;
-//
-//				if(extend_flag) break;
-//			}
-			if(extend_flag) break;
-
-			query_pos --;
-			ref_pos --;
-			local_ref_pos --;
-		}
-	}
-	start_check_idx = i;
-
-	startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
-	begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-	mis_reg_size = 0;
-	for(i=start_check_idx; i<=end_check_idx; i++){
-		if(midseq_aln[i]==' '){ // mismatch including gap
-			if(begin_mismatch_aln_idx==-1){
-				begin_mismatch_aln_idx = i;
-				startMisRefPos = ref_pos;
-				startMisLocalRefPos = local_ref_pos;
-				startMisQueryPos = query_pos;
-				mis_reg_size = 1;
-			}else{
-				mis_reg_size ++;
-			}
-
-			if(ctgseq_aln[i]=='-'){ // gap in query
-				ref_pos ++;
-				local_ref_pos ++;
-			}else if(refseq_aln[i]=='-'){ // gap in reference
-				query_pos ++;
-			}else{ // mismatch
-				query_pos ++;
-				ref_pos ++;
-				local_ref_pos ++;
-			}
-
-			if(i==end_check_idx){
-				if(extend_flag==false){
-					end_check_idx += EXT_SIZE_CHK_VAR_LOC;
-					if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
-					extend_flag = true;
-					//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
-				}else if(begin_mismatch_aln_idx!=-1){ // mismatch region not closed
-					end_check_idx += EXT_SIZE_CHK_VAR_LOC;
-					if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
-					//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
-				}
-			}
-		}else{ // match
-			if(begin_mismatch_aln_idx!=-1){
-				end_mismatch_aln_idx = i - 1;
-				endMisRefPos = ref_pos;
-				endMisLocalRefPos = local_ref_pos;
-				endMisQueryPos = query_pos;
-
-				mis_reg = new struct misRegNode();
-				mis_reg->start_aln_idx = begin_mismatch_aln_idx;
-				mis_reg->end_aln_idx = end_mismatch_aln_idx;
-				mis_reg->reg_size = mis_reg_size;
-				mis_reg->startRefPos = startMisRefPos;
-				mis_reg->endRefPos = endMisRefPos;
-				mis_reg->startLocalRefPos = startMisLocalRefPos;
-				mis_reg->endLocalRefPos = endMisLocalRefPos;
-				mis_reg->startQueryPos = startMisQueryPos;
-				mis_reg->endQueryPos = endMisQueryPos;
-				misReg_vec.push_back(mis_reg);
-
-				begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-				startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
-				mis_reg_size = 0;
-
-				if(extend_flag) break;
-			}
-			if(extend_flag) break;
-
-			query_pos ++;
-			ref_pos ++;
-			local_ref_pos ++;
-		}
-	}
-
-/*
-	// check left side
-	startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
-	begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-	mis_reg_size = 0;
-
-	start_check_idx = local_aln->start_aln_idx_var;
-	end_check_idx = start_check_idx - EXT_SIZE_CHK_VAR_LOC;
-	if(end_check_idx<0) end_check_idx = 0;
-	extend_flag = false;
-
-	reg = local_aln->reg;
-	ref_pos = reg->startRefPos;
-	local_ref_pos = reg->startLocalRefPos;
-	query_pos = reg->startQueryPos;
-	for(i=start_check_idx; i>=end_check_idx; i--){
-		if(midseq_aln[i]==' '){ // mismatch including gap
-			if(end_mismatch_aln_idx==-1){
-				end_mismatch_aln_idx = i;
-				endMisRefPos = ref_pos;
-				endMisLocalRefPos = local_ref_pos;
-				endMisQueryPos = query_pos;
-				mis_reg_size = 1;
-			}else{
-				mis_reg_size ++;
-			}
-
-			if(ctgseq_aln[i]=='-'){ // gap in query
-				ref_pos --;
-				local_ref_pos --;
-			}else if(refseq_aln[i]=='-'){ // gap in reference
-				query_pos --;
-			}else{ // mismatch
-				query_pos --;
-				ref_pos --;
-				local_ref_pos --;
-			}
-
-			if(i==end_check_idx and extend_flag==false){
-				end_check_idx -= EXT_SIZE_CHK_VAR_LOC;
-				if(end_check_idx<0) end_check_idx = 0;
-				extend_flag = true;
-				//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
-			}
-		}else{ // match
-			if(end_mismatch_aln_idx!=-1){
-				begin_mismatch_aln_idx = i + 1;
-				startMisRefPos = ref_pos;
-				startMisLocalRefPos = local_ref_pos;
-				startMisQueryPos = query_pos;
-
-				mis_reg = new struct misRegNode();
-				mis_reg->start_aln_idx = begin_mismatch_aln_idx;
-				mis_reg->end_aln_idx = end_mismatch_aln_idx;
-				mis_reg->reg_size = mis_reg_size;
-				mis_reg->startRefPos = startMisRefPos;
-				mis_reg->endRefPos = endMisRefPos;
-				mis_reg->startLocalRefPos = startMisLocalRefPos;
-				mis_reg->endLocalRefPos = endMisLocalRefPos;
-				mis_reg->startQueryPos = startMisQueryPos;
-				mis_reg->endQueryPos = endMisQueryPos;
-				misReg_vec.push_back(mis_reg);
-
-				begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-				startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
-				mis_reg_size = 0;
-
-				if(extend_flag) break;
-			}
-
-			query_pos --;
-			ref_pos --;
-			local_ref_pos --;
-		}
-	}
-
-	// check right side
-	startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
-	begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-	mis_reg_size = 0;
-
-	start_check_idx = local_aln->end_aln_idx_var;
-	end_check_idx = start_check_idx + EXT_SIZE_CHK_VAR_LOC;
-	if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
-	extend_flag = false;
-
-	ref_pos = reg->endRefPos;
-	local_ref_pos = reg->endLocalRefPos;
-	query_pos = reg->endQueryPos;
-	for(i=start_check_idx; i<=end_check_idx; i++){
-		if(midseq_aln[i]==' '){ // mismatch including gap
-			if(begin_mismatch_aln_idx==-1){
-				begin_mismatch_aln_idx = i;
-				startMisRefPos = ref_pos;
-				startMisLocalRefPos = local_ref_pos;
-				startMisQueryPos = query_pos;
-				mis_reg_size = 1;
-			}else{
-				mis_reg_size ++;
-			}
-
-			if(ctgseq_aln[i]=='-'){ // gap in query
-				ref_pos ++;
-				local_ref_pos ++;
-			}else if(refseq_aln[i]=='-'){ // gap in reference
-				query_pos ++;
-			}else{ // mismatch
-				query_pos ++;
-				ref_pos ++;
-				local_ref_pos ++;
-			}
-
-			if(i==end_check_idx){
-				if(extend_flag==false){
-					end_check_idx += EXT_SIZE_CHK_VAR_LOC;
-					if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
-					extend_flag = true;
-					//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
-				}else if(begin_mismatch_aln_idx!=-1){ // mismatch region not closed
-					end_check_idx += EXT_SIZE_CHK_VAR_LOC;
-					if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
-					//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
-				}
-			}
-		}else{ // match
-			if(begin_mismatch_aln_idx!=-1){
-				end_mismatch_aln_idx = i - 1;
-				endMisRefPos = ref_pos;
-				endMisLocalRefPos = local_ref_pos;
-				endMisQueryPos = query_pos;
-
-				mis_reg = new struct misRegNode();
-				mis_reg->start_aln_idx = begin_mismatch_aln_idx;
-				mis_reg->end_aln_idx = end_mismatch_aln_idx;
-				mis_reg->reg_size = mis_reg_size;
-				mis_reg->startRefPos = startMisRefPos;
-				mis_reg->endRefPos = endMisRefPos;
-				mis_reg->startLocalRefPos = startMisLocalRefPos;
-				mis_reg->endLocalRefPos = endMisLocalRefPos;
-				mis_reg->startQueryPos = startMisQueryPos;
-				mis_reg->endQueryPos = endMisQueryPos;
-				misReg_vec.push_back(mis_reg);
-
-				begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-				startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
-				mis_reg_size = 0;
-
-				if(extend_flag) break;
-			}
-
-			query_pos ++;
-			ref_pos ++;
-			local_ref_pos ++;
-		}
-	}
-*/
-
-	// sort
-	for(i=0; i<(int32_t)misReg_vec.size(); i++){
-		mis_reg = misReg_vec.at(i);
-		for(j=i+1; j<(int32_t)misReg_vec.size(); j++){
-			mis_reg2 = misReg_vec.at(j);
-			if(mis_reg->start_aln_idx>mis_reg2->start_aln_idx){ // exchange
-				tmp = mis_reg->start_aln_idx; mis_reg->start_aln_idx = mis_reg2->start_aln_idx; mis_reg2->start_aln_idx = tmp;
-				tmp = mis_reg->end_aln_idx; mis_reg->end_aln_idx = mis_reg2->end_aln_idx; mis_reg2->end_aln_idx = tmp;
-				tmp = mis_reg->reg_size; mis_reg->reg_size = mis_reg2->reg_size; mis_reg2->reg_size = tmp;
-				tmp = mis_reg->startRefPos; mis_reg->startRefPos = mis_reg2->startRefPos; mis_reg2->startRefPos = tmp;
-				tmp = mis_reg->endRefPos; mis_reg->endRefPos = mis_reg2->endRefPos; mis_reg2->endRefPos = tmp;
-				tmp = mis_reg->startLocalRefPos; mis_reg->startLocalRefPos = mis_reg2->startLocalRefPos; mis_reg2->startLocalRefPos = tmp;
-				tmp = mis_reg->endLocalRefPos; mis_reg->endLocalRefPos = mis_reg2->endLocalRefPos; mis_reg2->endLocalRefPos = tmp;
-				tmp = mis_reg->startQueryPos; mis_reg->startQueryPos = mis_reg2->startQueryPos; mis_reg2->startQueryPos = tmp;
-				tmp = mis_reg->endQueryPos; mis_reg->endQueryPos = mis_reg2->endQueryPos; mis_reg2->endQueryPos = tmp;
-			}
-		}
-	}
-
-	// get maximum mismatch region
-	max_reg_idx = -1;
-	maxValue = 0;
-	for(i=0; i<(int32_t)misReg_vec.size(); i++){
-		mis_reg = misReg_vec.at(i);
-		if(mis_reg->reg_size>maxValue){
-			max_reg_idx = i;
-			maxValue = mis_reg->reg_size;
-		}
-	}
-
-	// check its neighbors
-	if(max_reg_idx!=-1){
-		left_reg_idx = right_reg_idx = -1;
-
-		// left side extend
-		mis_reg = misReg_vec.at(max_reg_idx);
-		for(i=max_reg_idx-1; i>=0; i--){
-			mis_reg2 = misReg_vec.at(i);
-			if((mis_reg->start_aln_idx-mis_reg2->end_aln_idx<=MIN_ADJACENT_REG_DIST) or (mis_reg->start_aln_idx>=local_aln->end_aln_idx_var and mis_reg2->end_aln_idx<=local_aln->start_aln_idx_var)){ // distance less than threshold
-				left_reg_idx = i;
-				mis_reg = mis_reg2;
-				mis_reg2 = NULL;
-			}else break;
-		}
-		if(left_reg_idx==-1) left_reg_idx = max_reg_idx;
-
-		// right side extend
-		mis_reg = misReg_vec.at(max_reg_idx);
-		for(i=max_reg_idx+1; i<(int32_t)misReg_vec.size()-1; i++){
-			mis_reg2 = misReg_vec.at(i);
-			if((mis_reg2->start_aln_idx-mis_reg->end_aln_idx<=MIN_ADJACENT_REG_DIST) or (mis_reg->end_aln_idx<=local_aln->start_aln_idx_var and mis_reg2->start_aln_idx>=local_aln->end_aln_idx_var)){ // distance less than threshold
-				right_reg_idx = i;
-				mis_reg = mis_reg2;
-				mis_reg2 = NULL;
-			}else break;
-		}
-		if(right_reg_idx==-1) right_reg_idx = max_reg_idx;
-
-		mis_reg = misReg_vec.at(left_reg_idx);
-		mis_reg2 = misReg_vec.at(right_reg_idx);
-		reg->startRefPos = mis_reg->startRefPos;
-		reg->endRefPos = mis_reg2->endRefPos;
-		reg->startLocalRefPos = mis_reg->startLocalRefPos;
-		reg->endLocalRefPos = mis_reg2->endLocalRefPos;
-		reg->startQueryPos = mis_reg->startQueryPos;
-		reg->endQueryPos = mis_reg2->endQueryPos;
-	}
+	// adjust variant locations according to mismatch regions
+	adjustVarLocByMismatchRegs(local_aln->reg, misReg_vec, local_aln->start_aln_idx_var, local_aln->end_aln_idx_var);
 
 	// release memory
-	for(j=0; j<(int32_t)misReg_vec.size(); j++) delete misReg_vec.at(j);
-	vector<struct misRegNode*>().swap(misReg_vec);
+	releaseMismatchRegVec(misReg_vec);
 }
 
 // compute margins of variations
-vector<int32_t> varCand::computeVarMargins(Base *baseArray, int32_t arr_size, float threshold){
+vector<int32_t> varCand::computeVarMargins(Base *baseArray, int32_t arr_size, float threshold, float polymer_ignore_ratio_thres){
 	vector<int32_t> distVec;
 	int32_t i, j, leftDist, rightDist, discorNum;
 
@@ -2929,7 +2583,7 @@ vector<int32_t> varCand::computeVarMargins(Base *baseArray, int32_t arr_size, fl
 	discorNum = 0;
 	for(i=0; i<arr_size; i++){
 		//if(!baseArray[i].isDisagreeBase() and !baseArray[i].isHighIndelBase(threshold))
-		if((!baseArray[i].isDisagreeBase() and !baseArray[i].isHighIndelBase(threshold)) or baseArray[i].isMatchToRef())
+		if((!baseArray[i].isDisagreeBase() and !baseArray[i].isHighIndelBase(threshold, polymer_ignore_ratio_thres)) or baseArray[i].isMatchToRef())
 			leftDist ++;
 		else{
 			discorNum ++;
@@ -2942,7 +2596,7 @@ vector<int32_t> varCand::computeVarMargins(Base *baseArray, int32_t arr_size, fl
 	rightDist = 0;
 	discorNum = 0;
 	for(j=arr_size-1; j>i; j--){
-		if((!baseArray[j].isDisagreeBase() and !baseArray[j].isHighIndelBase(threshold)) or baseArray[j].isMatchToRef())
+		if((!baseArray[j].isDisagreeBase() and !baseArray[j].isHighIndelBase(threshold, polymer_ignore_ratio_thres)) or baseArray[j].isMatchToRef())
 			rightDist ++;
 		else{
 			discorNum ++;
@@ -3394,7 +3048,6 @@ void varCand::callVariantsAlnSegEnd(){
 						reg->call_success_status = true;
 						reg->aln_seg_end_flag = true;
 					}
-
 				}
 			}
 		}
@@ -3420,7 +3073,7 @@ vector<double> varCand::computeDisagreeNumAndHighIndelBaseNumAndClipNum(string &
 	disagreeNum = computeDisagreeNum(baseArray, endRefPos-startRefPos+1);
 
 	// compute the number of high indel bases
-	highIndelBaseNum = computeHighIndelBaseNum(baseArray, endRefPos-startRefPos+1, MIN_HIGH_INDEL_BASE_RATIO);
+	highIndelBaseNum = computeHighIndelBaseNum(baseArray, endRefPos-startRefPos+1, MIN_HIGH_INDEL_BASE_RATIO, IGNORE_POLYMER_RATIO_THRES);
 
 	// compute the number of high ratio indel bases
 	clipNum_vec = getTotalHighIndelClipRatioBaseNum(baseArray, endRefPos-startRefPos+1);

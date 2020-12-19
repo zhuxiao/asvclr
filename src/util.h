@@ -86,7 +86,12 @@ vector<simpleReg_t*> extractSimpleRegsByStr(string &regs_str);
 string getLimitRegStr(vector<simpleReg_t*> &limit_reg_vec);
 void createDir(string &dirname);
 vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_size);
-
+vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln);
+void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai);
+void adjustVarLocByMismatchRegs(reg_t *reg, vector<mismatchReg_t*> &misReg_vec, int32_t start_aln_idx_var, int32_t end_aln_idx_var);
+void releaseMismatchRegVec(vector<mismatchReg_t*> &misReg_vec);
+mismatchReg_t *getMismatchReg(int32_t aln_idx, vector<mismatchReg_t*> &misReg_vec);
+bool isPolymerSeq(string &seq);
 
 class Time{
 	private:

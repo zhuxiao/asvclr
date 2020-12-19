@@ -1,11 +1,12 @@
 #include "covLoader.h"
+#include "util.h"
 
 covLoader::covLoader(string &chrname, size_t startPos, size_t endPos, faidx_t *fai) {
 	this->chrname = chrname;
 	this->startPos = startPos;
 	this->endPos = endPos;
 	this->fai = fai;
-	min_ins_size_filt =	min_del_size_filt = 0;
+	min_ins_size_filt = min_del_size_filt = 0;
 }
 
 covLoader::covLoader(string &chrname, size_t startPos, size_t endPos, faidx_t *fai, size_t min_ins_size_filt, size_t min_del_size_filt) {
@@ -29,6 +30,7 @@ Base *covLoader::initBaseArray(){
 	}
 	// assign the ref base index in base coverage
 	assignRefBase(baseArray, fai);
+	assignPolymerFlag(baseArray);
 	return baseArray;
 }
 
@@ -88,8 +90,31 @@ int covLoader::assignRefBase(Base *baseArray, faidx_t *fai){
 	return 0;
 }
 
+// assign polymer flag of bases
+void covLoader::assignPolymerFlag(Base *baseArray){
+	Base *base, *left_base, *right_base;
+	int64_t i, len = endPos - startPos + 1;
+	for(i=0; i<len; i++){
+		base = baseArray + i;
+		if(i>0 and i<len-1){ // inner items
+			left_base = baseArray + i - 1;
+			right_base = baseArray + i + 1;
+			if(left_base->coverage.refBase==base->coverage.refBase or right_base->coverage.refBase==base->coverage.refBase)
+				base->coverage.polymer_flag = true;
+		}else if(i==0 and i<len-1){ // first item
+			right_base = baseArray + i + 1;
+			if(right_base->coverage.refBase==base->coverage.refBase)
+				base->coverage.polymer_flag = true;
+		}else if(i>0 and i==len-1){ // last item
+			left_base = baseArray + i - 1;
+			if(left_base->coverage.refBase==base->coverage.refBase)
+				base->coverage.polymer_flag = true;
+		}
+	}
+}
+
 // assign base coverage
-void covLoader::generateBaseCoverage(Base *baseArr, vector<bam1_t*> alnDataVector){
+void covLoader::generateBaseCoverage(Base *baseArr, vector<bam1_t*> &alnDataVector){
 	vector<struct alnSeg*> alnSegs;
 	vector<bam1_t*>::iterator aln;
 	//string qname;
@@ -108,6 +133,9 @@ void covLoader::generateBaseCoverage(Base *baseArr, vector<bam1_t*> alnDataVecto
 
 	// compute number of deletions
 	computeDelNumFromDelVec(baseArr);
+
+	// compute consensus indel events
+	computeConIndelEventRatio(baseArr);
 }
 
 // generate the alignment segments
@@ -118,7 +146,7 @@ vector<struct alnSeg*> covLoader::generateAlnSegs(bam1_t* b){
 
 	uint32_t *c, op, i = 0, j = 0, startRpos, startQpos;
 	int32_t k, tmp_cigar_len, tmp_MD_len, common_len;  // common_len: used only for match flag
-	string ins_str;
+	string ins_str, str_tmp;
 
 	startRpos = b->core.pos + 1;  // 1-based
 	startQpos = 1;
@@ -144,8 +172,10 @@ vector<struct alnSeg*> covLoader::generateAlnSegs(bam1_t* b){
 					// change the mismatched reference base to query base
 					seg_MD->seg = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos-1)];
 					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, MD_MISMATCH, seg_MD->seg));
-				}else
-					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CMATCH, ""));
+				}else{
+					str_tmp = "";
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CMATCH, str_tmp));
+				}
 
 				startRpos += common_len;
 				startQpos += common_len;
@@ -193,7 +223,8 @@ vector<struct alnSeg*> covLoader::generateAlnSegs(bam1_t* b){
 				break;
 			case BAM_CSOFT_CLIP:
 			case BAM_CHARD_CLIP:
-				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, op, to_string(tmp_cigar_len)));
+				str_tmp = to_string(tmp_cigar_len);
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, op, str_tmp));
 				if(op==BAM_CSOFT_CLIP) startQpos += tmp_cigar_len;
 				if(++i<b->core.n_cigar){
 					op = bam_cigar_op(c[i]);
@@ -214,7 +245,7 @@ vector<struct alnSeg*> covLoader::generateAlnSegs(bam1_t* b){
 	return alnSegs;
 }
 
-struct alnSeg* covLoader::allocateAlnSeg(size_t startRpos, size_t startQpos, size_t seglen, size_t opflag, string seg_MD){
+struct alnSeg* covLoader::allocateAlnSeg(size_t startRpos, size_t startQpos, size_t seglen, size_t opflag, string &seg_MD){
 	struct alnSeg* seg = new struct alnSeg;
 	if(!seg){
 		cerr << __func__ << ": cannot allocate memory" << endl;
@@ -229,7 +260,7 @@ struct alnSeg* covLoader::allocateAlnSeg(size_t startRpos, size_t startQpos, siz
 }
 
 // release the alignment segments
-void covLoader::destroyAlnSegs(vector<struct alnSeg*> alnSegs){
+void covLoader::destroyAlnSegs(vector<struct alnSeg*> &alnSegs){
 	vector<struct alnSeg*>::iterator seg;
 	for(seg=alnSegs.begin(); seg!=alnSegs.end(); seg++) delete *seg;
 	vector<struct alnSeg*>().swap(alnSegs);
@@ -292,14 +323,14 @@ struct MD_seg* covLoader::allocateMDSeg(string& seg, size_t opflag){
 }
 
 // destroy MD seg vector
-void covLoader::destroyMDSeg(vector<struct MD_seg*> segs_MD){
+void covLoader::destroyMDSeg(vector<struct MD_seg*> &segs_MD){
 	vector<struct MD_seg*>::iterator seg;
 	for(seg=segs_MD.begin(); seg!=segs_MD.end(); seg++) delete *seg;
 	vector<struct MD_seg*>().swap(segs_MD);
 }
 
 // update the block base array information according to read alignments
-int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> alnSegs){
+int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 	baseCoverage_t *cover;
 	size_t pos, tmp_endPos, misbase;
 	int32_t idx, endflag;
@@ -418,8 +449,76 @@ void covLoader::computeDelNumFromDelVec(Base *baseArr){
 	}
 }
 
+// compute consensus indel event ratio
+void covLoader::computeConIndelEventRatio(Base *baseArr){
+	struct indelCountNode{
+		indelEvent_t *indel_item;
+		uint32_t count;
+	};
+
+	size_t i, j, pos, total_cov, maxValue, maxValue_ins, num_del, max_con_type;
+	Base *base;
+	insEvent_t *ins_event;
+	vector<struct indelCountNode*> insCount_vec;
+	vector<delEvent_t*> del_vec;
+	bool polymer_flag1, polymer_flag2;
+	struct indelCountNode *ins_count, *indel_count_item;
+
+	for(pos=startPos; pos<=endPos; pos++){
+		// insertions
+		base = baseArr + pos - startPos;
+		for(i=0; i<base->insVector.size(); i++){
+			ins_event = base->insVector.at(i);
+			indel_count_item = NULL;
+			for(j=0; j<insCount_vec.size(); j++){
+				ins_count = insCount_vec.at(j);
+				if(ins_event->seq.compare(ins_count->indel_item->seq)==0){ // identical
+					indel_count_item = ins_count;
+					break;
+				}else{ // check polymer
+					polymer_flag1 = isPolymerSeq(ins_event->seq);
+					polymer_flag2 = isPolymerSeq(ins_count->indel_item->seq);
+					if(polymer_flag1 and polymer_flag2 and ins_event->seq.at(0)==ins_count->indel_item->seq.at(0)){
+						indel_count_item = ins_count;
+						break;
+					}
+				}
+			}
+			if(indel_count_item){ // found
+				indel_count_item->count ++;
+			}else{ // not found, then create it
+				indel_count_item = new struct indelCountNode();
+				indel_count_item->indel_item = ins_event;
+				indel_count_item->count = 1;
+				insCount_vec.push_back(indel_count_item);
+			}
+		}
+
+		// compute maximum and total count
+		maxValue_ins = 0;
+		for(i=0; i<insCount_vec.size(); i++){
+			ins_count = insCount_vec.at(i);
+			if(ins_count->count>maxValue_ins) maxValue_ins = ins_count->count;
+		}
+		num_del = base->del_num_from_del_vec + base->num_shortdel;
+
+		if(maxValue_ins==0 and num_del==0) { maxValue = 0; max_con_type = BASE_INDEL_CON_UNUSED; } // unused flag
+		else if(maxValue_ins>num_del) { maxValue = maxValue_ins; max_con_type = BAM_CINS; }  // insertion majority
+		else { maxValue = num_del; max_con_type = BAM_CDEL; }  // deletion majority
+		base->maxConIndelEventNum = maxValue;
+		base->max_con_type = max_con_type;
+		total_cov = base->getTotalCovNum() + num_del;  // coverage and shadow coverage
+		if(total_cov>0) base->maxConIndelEventRatio = (float)maxValue / total_cov;
+		else base->maxConIndelEventRatio = 0;
+
+		// release items
+		for(j=0; j<insCount_vec.size(); j++) delete insCount_vec.at(j);
+		insCount_vec.clear();
+	}
+}
+
 // output the aln seg items
-void covLoader::outputAlnSegs(vector<struct alnSeg*> alnSegs){
+void covLoader::outputAlnSegs(vector<struct alnSeg*> &alnSegs){
 	size_t i;
 	vector<struct alnSeg*>::iterator seg;
 	cout << "count: " << alnSegs.size() << endl;
@@ -430,7 +529,7 @@ void covLoader::outputAlnSegs(vector<struct alnSeg*> alnSegs){
 }
 
 // output the MD seg items
-void covLoader::outputMDSeg(vector<struct MD_seg*> segs_MD){
+void covLoader::outputMDSeg(vector<struct MD_seg*> &segs_MD){
 	size_t i;
 	vector<struct MD_seg*>::iterator seg;
 	cout << "count: " << segs_MD.size() << endl;

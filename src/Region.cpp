@@ -417,7 +417,7 @@ void Region::detectIndelReg(){
 	int64_t i = startMidPartPos - subRegSize;
 	if(i<minRPos) i = minRPos;
 	while(i<endMidPartPos){
-//		if(i>5889400)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
+//		if(i>7163000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
 //			cout << i << endl;
 
 		reg = getIndelReg(i);
@@ -433,10 +433,10 @@ void Region::detectIndelReg(){
 // get the indel region given the start checking chromosome position
 reg_t* Region::getIndelReg(int64_t startCheckPos){
 	reg_t *reg = NULL;
-	int64_t i, checkPos, reg_size1, reg_size2, num1, num3, num4, extendSize;
+	int32_t reg_size1, reg_size2, num1, num3, num4, extendSize, high_con_indel_base_num;
 	vector<double> num_vec;
 	double high_indel_clip_ratio;
-	int64_t startPos1, endPos1, startPos2;
+	int64_t i, checkPos, startPos1, endPos1, startPos2;
 	int64_t startPos_indel = -1, endPos_indel = -1;
 	bool indel_beg_flag, indel_end_flag;
 
@@ -523,7 +523,8 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 		}
 		// allocate the indel region
 		if(indel_beg_flag and indel_end_flag){
-			if(endPos_indel-startPos_indel+1>=(int32_t)paras->min_sv_size_usr){
+			high_con_indel_base_num = getHighConIndelNum(startPos_indel, endPos_indel, MIN_HIGH_INDEL_BASE_RATIO, IGNORE_POLYMER_RATIO_THRES);
+			if(endPos_indel-startPos_indel+1>=(int32_t)paras->min_sv_size_usr or high_con_indel_base_num>0){
 				num1 = getDisZeroCovNum(startPos_indel, endPos_indel);
 				//num2 = getMismatchBasesAround(startPos_indel, endPos_indel);
 				num3 = getLargeIndelBaseNum(startPos_indel, endPos_indel);
@@ -615,6 +616,17 @@ int32_t Region::getLargeIndelNum(int64_t startPos, int64_t endPos){
 		large_indel_num += regBaseArr[i-startRPos].getLargeIndelNum(paras->large_indel_size_thres);
 	}
 	return large_indel_num;
+}
+
+// get the number of bases with high consensus indels
+int32_t Region::getHighConIndelNum(int64_t startPos, int64_t endPos, float threshold, float polymer_ignore_ratio_thres){
+	int64_t i, high_con_indel_base_num = 0;
+	bool flag;
+	for(i=startPos; i<=endPos; i++){
+		flag = regBaseArr[i-startRPos].isHighConIndelBase(threshold, polymer_ignore_ratio_thres);
+		if(flag) high_con_indel_base_num ++;
+	}
+	return high_con_indel_base_num;
 }
 
 // determine the dif type for indel candidate

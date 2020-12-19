@@ -314,7 +314,7 @@ int Block::computeBlockBaseInfo(){
 
 int Block::outputCovFile(){
 	string out_file_str = workdir + "/" + outCovFile;
-	uint16_t *num_baseArr;
+	uint32_t *num_baseArr;
 	ofstream ofile(out_file_str);
 
 	mkdir(workdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -883,15 +883,10 @@ void Block::blockGenerateLocalAssembleWorkOpt(){
 // generate local assemble work for indel regions
 void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
 	int32_t i, j, k, beg_reg_id, end_reg_id, tmp_reg_id;
-	size_t n, m;
 	int32_t begPos, tmp_Pos;
 	vector<reg_t*> varVec;
 	string readsfilename, contigfilename, refseqfilename, tmpdir;
-	bool assem_done_flag, flag, flag_tmp;
-	assembleWork_opt *assem_work_opt;
-	vector<simpleReg_t*> sub_limit_reg_vec_work, sub_limit_reg_vec_tmp;
-	simpleReg_t *simple_reg, *simple_reg2;
-	int64_t start_pos, end_pos;
+	vector<simpleReg_t*> sub_limit_reg_vec_work;
 
 	i = 0;
 	while(i<(int32_t)indelVector.size()){
@@ -913,70 +908,13 @@ void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
 			else end_reg_id = beg_reg_id;
 		}
 
-		// generate reads file names and contig file names
-		start_pos = indelVector[beg_reg_id]->startRefPos;
-		end_pos = indelVector[end_reg_id]->endRefPos;
-		readsfilename = out_dir_assemble + "/" + "reads_" + chrname + "_" + to_string(start_pos) + "-" + to_string(end_pos) + ".fq";
-		contigfilename = out_dir_assemble + "/" + "contig_" + chrname + "_" + to_string(start_pos) + "-" + to_string(end_pos) + ".fa";
-		refseqfilename = out_dir_assemble + "/" + "refseq_" + chrname + "_" + to_string(start_pos) + "-" + to_string(end_pos) + ".fa";
-		tmpdir = out_dir_assemble + "/" + "tmp_" + chrname + "_" + to_string(start_pos) + "-" + to_string(end_pos);
+		varVec.clear();
+		for(k=beg_reg_id; k<=end_reg_id; k++) varVec.push_back(indelVector[k]);
 
-		//cout << __LINE__ << ": " << refseqfilename << endl;
-
-//		if(refseqfilename.compare("output_test_limit_reg_20200807/output_chr2/2_assemble/chr2/refseq_chr2_150855083-150860121.fa")==0){
-//			cout << __LINE__ << ": " << refseqfilename << endl;
-//		}
-
-		flag = true;
-		sub_limit_reg_vec_work.clear();
-		if(paras->limit_reg_process_flag) {
-			// check reg1 and reg2
-			//sub_limit_reg_vec_tmp = getSimpleRegs(chrname, start_pos, end_pos, paras->limit_reg_vec);
-			sub_limit_reg_vec_tmp = getOverlappedSimpleRegs(chrname, start_pos, end_pos, paras->limit_reg_vec);
-			for(n=0; n<sub_limit_reg_vec_tmp.size(); n++){
-				simple_reg = sub_limit_reg_vec_tmp.at(n);
-				flag_tmp = true;
-				for(m=0; m<sub_limit_reg_vec_work.size(); m++){
-					simple_reg2 = sub_limit_reg_vec_work.at(m);
-					if(simple_reg==simple_reg2){
-						flag_tmp = false;
-						break;
-					}
-				}
-				if(flag_tmp) sub_limit_reg_vec_work.push_back(simple_reg);
-			}
-
-			if(sub_limit_reg_vec_work.size()==0) flag = false;
-		}
-
-		if(flag){
-			// check previously assembled information before assembly
-			assem_done_flag = getPrevAssembledDoneFlag(contigfilename, false);
-			if(assem_done_flag==false){
-				for(k=beg_reg_id; k<=end_reg_id; k++) varVec.push_back(indelVector[k]);
-
-	//			pthread_mutex_lock(&mutex_print);
-	//			cout << "################### " << readsfilename << ", len=" << indelVector[end_reg_id]->endRefPos-indelVector[beg_reg_id]->startRefPos << endl;
-	//			pthread_mutex_unlock(&mutex_print);
-
-				assem_work_opt = allocateAssemWorkOpt(chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, false, paras->limit_reg_process_flag, sub_limit_reg_vec_work);
-				if(assem_work_opt){
-					pthread_mutex_lock(&mutex_assem_work);
-					paras->assem_work_vec.push_back(assem_work_opt);
-					paras->assemble_reg_work_total ++;
-					pthread_mutex_unlock(&mutex_assem_work);
-				}else{
-					cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
-					exit(1);
-				}
-				varVec.clear();
-
-				//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, chrname, paras->inBamFile, fai, *var_cand_indel_file);
-			}else{
-				pthread_mutex_lock(&mutex_assem_work);
-				paras->assemble_reg_preDone_num ++;
-				pthread_mutex_unlock(&mutex_assem_work);
-			}
+		// check limit process regions
+		sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+		if(sub_limit_reg_vec_work.size()>0){
+			generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, false);
 		}
 
 		i = end_reg_id + 1;
@@ -989,47 +927,24 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 	vector<reg_t*> varVec;
 	string readsfilename, contigfilename, refseqfilename, tmpdir;
 	mateClipReg_t *clip_reg;
-	bool generate_new_flag, assem_done_flag, flag, flag_tmp;
-	reg_t *reg1, *reg2, *reg3, *reg4, *reg;
+	bool generate_new_flag;
+	reg_t *reg1, *reg2, *reg3, *reg4;
 	string reg_str;
-	size_t j, k, m, start_pos, end_pos;
-	assembleWork_opt *assem_work_opt;
-	vector<simpleReg_t*> sub_limit_reg_vec_work, sub_limit_reg_vec_tmp;
-	simpleReg_t *simple_reg, *simple_reg2;
+	size_t start_pos, end_pos;
+	vector<simpleReg_t*> sub_limit_reg_vec_work;
 
 	for(i=0; i<(int32_t)mateClipRegVector.size(); i++){
 		clip_reg = mateClipRegVector.at(i);
 		if(clip_reg->leftClipRegNum==1 and clip_reg->rightClipRegNum==1){
 			reg1 = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
 			reg2 = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
+			varVec.clear();
+			varVec.push_back(reg1);
+			varVec.push_back(reg2);
 
 			// check limit process regions
-			flag = true;
-			sub_limit_reg_vec_work.clear();
-			if(paras->limit_reg_process_flag) {
-				// check reg1 and reg2
-				for(j=0; j<2; j++){
-					if(j==0) reg = reg1;
-					else reg = reg2;
-					//sub_limit_reg_vec_tmp = getSimpleRegs(reg->chrname, reg->startRefPos, reg->endRefPos, paras->limit_reg_vec);
-					sub_limit_reg_vec_tmp = getOverlappedSimpleRegs(reg->chrname, reg->startRefPos, reg->endRefPos, paras->limit_reg_vec);
-					for(k=0; k<sub_limit_reg_vec_tmp.size(); k++){
-						simple_reg = sub_limit_reg_vec_tmp.at(k);
-						flag_tmp = true;
-						for(m=0; m<sub_limit_reg_vec_work.size(); m++){
-							simple_reg2 = sub_limit_reg_vec_work.at(m);
-							if(simple_reg==simple_reg2){
-								flag_tmp = false;
-								break;
-							}
-						}
-						if(flag_tmp) sub_limit_reg_vec_work.push_back(simple_reg);
-					}
-				}
-				if(sub_limit_reg_vec_work.size()==0) flag = false;
-			}
-
-			if(flag){
+			sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+			if(sub_limit_reg_vec_work.size()>0){
 				generate_new_flag = false;
 				if(clip_reg->reg_mated_flag and reg1->chrname.compare(reg2->chrname)==0){
 					reg_len = reg2->startRefPos - reg1->startRefPos;
@@ -1038,114 +953,20 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 						generate_new_flag = true;
 				}
 				if(generate_new_flag){
-					// construct the variant region
-					readsfilename = out_dir_assemble  + "/" + "clipReg_reads_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fq";
-					contigfilename = out_dir_assemble  + "/" + "clipReg_contig_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fa";
-					refseqfilename = out_dir_assemble  + "/" + "clipReg_refseq_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fa";
-					tmpdir = out_dir_assemble + "/" + "tmp_clipReg_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg2->endRefPos);
-
-					// check previously assembled information before assembly
-					assem_done_flag = getPrevAssembledDoneFlag(contigfilename, true);
-					if(assem_done_flag==false){
-						varVec.push_back(reg1);
-						varVec.push_back(reg2);
-
-	//					pthread_mutex_lock(&mutex_print);
-	//					cout << "=================== " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
-	//					pthread_mutex_unlock(&mutex_print);
-
-						assem_work_opt = allocateAssemWorkOpt(reg1->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true, paras->limit_reg_process_flag, sub_limit_reg_vec_work);
-						if(assem_work_opt){
-							pthread_mutex_lock(&mutex_assem_work);
-							paras->assem_work_vec.push_back(assem_work_opt);
-							paras->assemble_reg_work_total ++;
-							pthread_mutex_unlock(&mutex_assem_work);
-						}else{
-							cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
-							exit(1);
-						}
-						varVec.clear();
-
-						//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
-					}else{
-						pthread_mutex_lock(&mutex_assem_work);
-						paras->assemble_reg_preDone_num ++;
-						pthread_mutex_unlock(&mutex_assem_work);
-					}
-
+					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 				}else{
 					// assemble reg1
 					if(reg1){
-						// construct the variant region
-						readsfilename = out_dir_assemble  + "/" + "clipReg_reads_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg1->endRefPos) + ".fq";
-						contigfilename = out_dir_assemble  + "/" + "clipReg_contig_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg1->endRefPos) + ".fa";
-						refseqfilename = out_dir_assemble  + "/" + "clipReg_refseq_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg1->endRefPos) + ".fa";
-						tmpdir = out_dir_assemble + "/" + "tmp_clipReg_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg1->endRefPos);
-
-						// check previously assembled information before assembly
-						assem_done_flag = getPrevAssembledDoneFlag(contigfilename, true);
-						if(assem_done_flag==false){
-							varVec.push_back(reg1);
-
-	//						pthread_mutex_lock(&mutex_print);
-	//						cout << "------------------- left region: " << readsfilename << ", len=" << reg1->endRefPos-reg1->startRefPos << endl;
-	//						pthread_mutex_unlock(&mutex_print);
-
-							assem_work_opt = allocateAssemWorkOpt(reg1->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true, paras->limit_reg_process_flag, sub_limit_reg_vec_work);
-							if(assem_work_opt){
-								pthread_mutex_lock(&mutex_assem_work);
-								paras->assem_work_vec.push_back(assem_work_opt);
-								paras->assemble_reg_work_total ++;
-								pthread_mutex_unlock(&mutex_assem_work);
-							}else{
-								cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
-								exit(1);
-							}
-							varVec.clear();
-
-							//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
-						}else{
-							pthread_mutex_lock(&mutex_assem_work);
-							paras->assemble_reg_preDone_num ++;
-							pthread_mutex_unlock(&mutex_assem_work);
-						}
+						varVec.clear();
+						varVec.push_back(reg1);
+						generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 					}
 
 					// assemble reg2
 					if(reg2){
-						// construct the variant region
-						readsfilename = out_dir_assemble  + "/" + "clipReg_reads_" + reg2->chrname + "_" + to_string(reg2->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fq";
-						contigfilename = out_dir_assemble  + "/" + "clipReg_contig_" + reg2->chrname + "_" + to_string(reg2->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fa";
-						refseqfilename = out_dir_assemble  + "/" + "clipReg_refseq_" + reg2->chrname + "_" + to_string(reg2->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fa";
-						tmpdir = out_dir_assemble + "/" + "tmp_clipReg_" + reg2->chrname + "_" + to_string(reg2->startRefPos) + "-" + to_string(reg2->endRefPos);
-
-						// check previously assembled information before assembly
-						assem_done_flag = getPrevAssembledDoneFlag(contigfilename, true);
-						if(assem_done_flag==false){
-							varVec.push_back(reg2);
-
-	//						pthread_mutex_lock(&mutex_print);
-	//						cout << "------------------- right region: " << readsfilename << ", len=" << reg2->endRefPos-reg2->startRefPos << endl;
-	//						pthread_mutex_unlock(&mutex_print);
-
-							assem_work_opt = allocateAssemWorkOpt(reg2->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true, paras->limit_reg_process_flag, sub_limit_reg_vec_work);
-							if(assem_work_opt){
-								pthread_mutex_lock(&mutex_assem_work);
-								paras->assem_work_vec.push_back(assem_work_opt);
-								paras->assemble_reg_work_total ++;
-								pthread_mutex_unlock(&mutex_assem_work);
-							}else{
-								cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
-								exit(1);
-							}
-							varVec.clear();
-
-							//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg2->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
-						}else{
-							pthread_mutex_lock(&mutex_assem_work);
-							paras->assemble_reg_preDone_num ++;
-							pthread_mutex_unlock(&mutex_assem_work);
-						}
+						varVec.clear();
+						varVec.push_back(reg2);
+						generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 					}
 				}
 			}
@@ -1154,37 +975,14 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 			reg2 = clip_reg->leftClipReg2;
 			reg3 = clip_reg->rightClipReg;
 			reg4 = clip_reg->rightClipReg2;
+			varVec.clear();
+			varVec.push_back(reg1);
+			varVec.push_back(reg2);
+			varVec.push_back(reg3);
+			varVec.push_back(reg4);
 
-			// check limit process regions
-			flag = true;
-			sub_limit_reg_vec_work.clear();
-			if(paras->limit_reg_process_flag) {
-				// check reg1, reg2, reg3 and reg4
-				for(j=0; j<4; j++){
-					if(j==0) reg = reg1;
-					else if(j==1) reg = reg2;
-					else if(j==2) reg = reg3;
-					else reg = reg4;
-
-					//sub_limit_reg_vec_tmp = getSimpleRegs(reg->chrname, reg->startRefPos, reg->endRefPos, paras->limit_reg_vec);
-					sub_limit_reg_vec_tmp = getOverlappedSimpleRegs(reg->chrname, reg->startRefPos, reg->endRefPos, paras->limit_reg_vec);
-					for(k=0; k<sub_limit_reg_vec_tmp.size(); k++){
-						simple_reg = sub_limit_reg_vec_tmp.at(k);
-						flag_tmp = true;
-						for(m=0; m<sub_limit_reg_vec_work.size(); m++){
-							simple_reg2 = sub_limit_reg_vec_work.at(m);
-							if(simple_reg==simple_reg2){
-								flag_tmp = false;
-								break;
-							}
-						}
-						if(flag_tmp) sub_limit_reg_vec_work.push_back(simple_reg);
-					}
-				}
-				if(sub_limit_reg_vec_work.size()==0) flag = false;
-			}
-
-			if(flag){
+			sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+			if(sub_limit_reg_vec_work.size()>0){
 				generate_new_flag = false;
 				if(clip_reg->reg_mated_flag and reg1->chrname.compare(reg2->chrname)==0 and reg3->chrname.compare(reg4->chrname)==0 and reg1->chrname.compare(reg4->chrname)==0){
 					start_pos = reg1->startRefPos;
@@ -1197,217 +995,147 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 				}
 
 				if(generate_new_flag){
-					// construct the variant region
-					readsfilename = out_dir_assemble  + "/" + "clipReg_reads_" + reg1->chrname + "_" + to_string(start_pos) + "-" + to_string(end_pos) + ".fq";
-					contigfilename = out_dir_assemble  + "/" + "clipReg_contig_" + reg1->chrname + "_" + to_string(start_pos) + "-" + to_string(end_pos) + ".fa";
-					refseqfilename = out_dir_assemble  + "/" + "clipReg_refseq_" + reg1->chrname + "_" + to_string(start_pos) + "-" + to_string(end_pos) + ".fa";
-					tmpdir = out_dir_assemble + "/" + "tmp_clipReg_" + reg1->chrname + "_" + to_string(start_pos) + "-" + to_string(end_pos);
-
-					// check previously assembled information before assembly
-					assem_done_flag = getPrevAssembledDoneFlag(contigfilename, true);
-					if(assem_done_flag==false){
-						varVec.push_back(reg1);
-						varVec.push_back(reg2);
-						varVec.push_back(reg3);
-						varVec.push_back(reg4);
-
-	//					pthread_mutex_lock(&mutex_print);
-	//					cout << "=================== " << readsfilename << ", len=" << reg4->endRefPos-reg1->startRefPos << endl;
-	//					pthread_mutex_unlock(&mutex_print);
-
-						assem_work_opt = allocateAssemWorkOpt(reg1->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true, paras->limit_reg_process_flag, sub_limit_reg_vec_work);
-						if(assem_work_opt){
-							pthread_mutex_lock(&mutex_assem_work);
-							paras->assem_work_vec.push_back(assem_work_opt);
-							paras->assemble_reg_work_total ++;
-							pthread_mutex_unlock(&mutex_assem_work);
-						}else{
-							cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
-							exit(1);
-						}
-						varVec.clear();
-
-						//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
-					}else{
-						pthread_mutex_lock(&mutex_assem_work);
-						paras->assemble_reg_preDone_num ++;
-						pthread_mutex_unlock(&mutex_assem_work);
-					}
+					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 				}else{
-
 					// assemble left regions
-					reg1 = clip_reg->leftClipReg;
-					reg2 = clip_reg->leftClipReg2;
-
-	//				generate_new_flag = false;
-	//				if(clip_reg->reg_mated_flag and reg1->chrname.compare(reg2->chrname)==0){
-	//					reg_len = reg2->startRefPos - reg1->startRefPos;
-	//					if(reg_len<0) reg_len = -reg_len;
-	//					if(reg_len<(int32_t)paras->maxClipRegSize)
-	//						generate_new_flag = true;
-	//				}
-
-	//				if(generate_new_flag){
-						// construct the variant region
-						readsfilename = out_dir_assemble  + "/" + "clipReg_reads_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fq";
-						contigfilename = out_dir_assemble  + "/" + "clipReg_contig_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fa";
-						refseqfilename = out_dir_assemble  + "/" + "clipReg_refseq_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fa";
-						tmpdir = out_dir_assemble + "/" + "tmp_clipReg_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg2->endRefPos);
-
-						// check previously assembled information before assembly
-						assem_done_flag = getPrevAssembledDoneFlag(contigfilename, true);
-						if(assem_done_flag==false){
-							varVec.push_back(reg1);
-							varVec.push_back(reg2);
-
-	//						pthread_mutex_lock(&mutex_print);
-	//						cout << "-=-=-=-=-=-=-=-=-=- left region: " << readsfilename << ", len=" << reg2->endRefPos-reg1->startRefPos << endl;
-	//						pthread_mutex_unlock(&mutex_print);
-
-							assem_work_opt = allocateAssemWorkOpt(reg1->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true, paras->limit_reg_process_flag, sub_limit_reg_vec_work);
-							if(assem_work_opt){
-								pthread_mutex_lock(&mutex_assem_work);
-								paras->assem_work_vec.push_back(assem_work_opt);
-								paras->assemble_reg_work_total ++;
-								pthread_mutex_unlock(&mutex_assem_work);
-							}else{
-								cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
-								exit(1);
-							}
-							varVec.clear();
-
-							//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
-						}else{
-							pthread_mutex_lock(&mutex_assem_work);
-							paras->assemble_reg_preDone_num ++;
-							pthread_mutex_unlock(&mutex_assem_work);
-						}
-	//				}else{
-	//					// assemble reg1
-	//					if(reg1){
-	//						// construct the variant region
-	//						readsfilename = out_dir_assemble  + "/" + "clipReg_reads_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg1->endRefPos) + ".fq";
-	//						contigfilename = out_dir_assemble  + "/" + "clipReg_contig_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg1->endRefPos) + ".fa";
-	//						refseqfilename = out_dir_assemble  + "/" + "clipReg_refseq_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg1->endRefPos) + ".fa";
-	//						tmpdir = out_dir_assemble + "/" + "tmp_clipReg_" + reg1->chrname + "_" + to_string(reg1->startRefPos) + "-" + to_string(reg1->endRefPos);
-	//
-	//						varVec.push_back(reg1);
-	//
-	//						pthread_mutex_lock(&mutex_print);
-	//						cout << "------------------- left region 1: " << readsfilename << ", len=" << reg1->endRefPos-reg1->startRefPos << endl;
-	//						pthread_mutex_unlock(&mutex_print);
-	//
-	//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg1->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
-	//					}
-	//
-	//					// assemble reg2
-	//					if(reg2){
-	//						// construct the variant region
-	//						readsfilename = out_dir_assemble  + "/" + "clipReg_reads_" + reg2->chrname + "_" + to_string(reg2->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fq";
-	//						contigfilename = out_dir_assemble  + "/" + "clipReg_contig_" + reg2->chrname + "_" + to_string(reg2->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fa";
-	//						refseqfilename = out_dir_assemble  + "/" + "clipReg_refseq_" + reg2->chrname + "_" + to_string(reg2->startRefPos) + "-" + to_string(reg2->endRefPos) + ".fa";
-	//						tmpdir = out_dir_assemble + "/" + "tmp_clipReg_" + reg2->chrname + "_" + to_string(reg2->startRefPos) + "-" + to_string(reg2->endRefPos);
-	//
-	//						varVec.push_back(reg2);
-	//
-	//						pthread_mutex_lock(&mutex_print);
-	//						cout << "------------------- left region 2: " << readsfilename << ", len=" << reg2->endRefPos-reg2->startRefPos << endl;
-	//						pthread_mutex_unlock(&mutex_print);
-	//
-	//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg2->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
-	//					}
-	//				}
+					varVec.clear();
+					varVec.push_back(clip_reg->leftClipReg);
+					varVec.push_back(clip_reg->leftClipReg2);
+					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 
 					// assemble right regions
-					reg3 = clip_reg->rightClipReg;
-					reg4 = clip_reg->rightClipReg2;
-
-	//				generate_new_flag = false;
-	//				if(clip_reg->reg_mated_flag and reg3->chrname.compare(reg4->chrname)==0){
-	//					reg_len = reg4->startRefPos - reg3->startRefPos;
-	//					if(reg_len<0) reg_len = -reg_len;
-	//					if(reg_len<(int32_t)paras->maxClipRegSize)
-	//						generate_new_flag = true;
-	//				}
-
-	//				if(generate_new_flag){
-						// construct the variant region
-						readsfilename = out_dir_assemble  + "/" + "clipReg_reads_" + reg3->chrname + "_" + to_string(reg3->startRefPos) + "-" + to_string(reg4->endRefPos) + ".fq";
-						contigfilename = out_dir_assemble  + "/" + "clipReg_contig_" + reg3->chrname + "_" + to_string(reg3->startRefPos) + "-" + to_string(reg4->endRefPos) + ".fa";
-						refseqfilename = out_dir_assemble  + "/" + "clipReg_refseq_" + reg3->chrname + "_" + to_string(reg3->startRefPos) + "-" + to_string(reg4->endRefPos) + ".fa";
-						tmpdir = out_dir_assemble + "/" + "tmp_clipReg_" + reg3->chrname + "_" + to_string(reg3->startRefPos) + "-" + to_string(reg4->endRefPos);
-
-						// check previously assembled information before assembly
-						assem_done_flag = getPrevAssembledDoneFlag(contigfilename, true);
-						if(assem_done_flag==false){
-							varVec.push_back(reg3);
-							varVec.push_back(reg4);
-
-	//						pthread_mutex_lock(&mutex_print);
-	//						cout << "-=-=-=-=-=-=-=-=-=- right region: " << readsfilename << ", len=" << reg4->endRefPos-reg3->startRefPos << endl;
-	//						pthread_mutex_unlock(&mutex_print);
-
-							assem_work_opt = allocateAssemWorkOpt(reg3->chrname, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, true, paras->limit_reg_process_flag, sub_limit_reg_vec_work);
-							if(assem_work_opt){
-								pthread_mutex_lock(&mutex_assem_work);
-								paras->assem_work_vec.push_back(assem_work_opt);
-								paras->assemble_reg_work_total ++;
-								pthread_mutex_unlock(&mutex_assem_work);
-							}else{
-								cerr << __func__ << ", line=" << __LINE__ << ": cannot open allocate memory, error!" << endl;
-								exit(1);
-							}
-							varVec.clear();
-
-							//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
-						}else{
-							pthread_mutex_lock(&mutex_assem_work);
-							paras->assemble_reg_preDone_num ++;
-							pthread_mutex_unlock(&mutex_assem_work);
-						}
-	//				}else{
-	//					// assemble reg3
-	//					if(reg3){
-	//						// construct the variant region
-	//						readsfilename = out_dir_assemble  + "/" + "clipReg_reads_" + reg3->chrname + "_" + to_string(reg3->startRefPos) + "-" + to_string(reg3->endRefPos) + ".fq";
-	//						contigfilename = out_dir_assemble  + "/" + "clipReg_contig_" + reg3->chrname + "_" + to_string(reg3->startRefPos) + "-" + to_string(reg3->endRefPos) + ".fa";
-	//						refseqfilename = out_dir_assemble  + "/" + "clipReg_refseq_" + reg3->chrname + "_" + to_string(reg3->startRefPos) + "-" + to_string(reg3->endRefPos) + ".fa";
-	//						tmpdir = out_dir_assemble + "/" + "tmp_clipReg_" + reg3->chrname + "_" + to_string(reg3->startRefPos) + "-" + to_string(reg3->endRefPos);
-	//
-	//						varVec.push_back(reg3);
-	//
-	//						pthread_mutex_lock(&mutex_print);
-	//						cout << "------------------- right region 3: " << readsfilename << ", len=" << reg3->endRefPos-reg3->startRefPos << endl;
-	//						pthread_mutex_unlock(&mutex_print);
-	//
-	//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
-	//					}
-	//
-	//					// assemble reg4
-	//					if(reg4){
-	//						// construct the variant region
-	//						readsfilename = out_dir_assemble  + "/" + "clipReg_reads_" + reg4->chrname + "_" + to_string(reg4->startRefPos) + "-" + to_string(reg4->endRefPos) + ".fq";
-	//						contigfilename = out_dir_assemble  + "/" + "clipReg_contig_" + reg4->chrname + "_" + to_string(reg4->startRefPos) + "-" + to_string(reg4->endRefPos) + ".fa";
-	//						refseqfilename = out_dir_assemble  + "/" + "clipReg_refseq_" + reg4->chrname + "_" + to_string(reg4->startRefPos) + "-" + to_string(reg4->endRefPos) + ".fa";
-	//						tmpdir = out_dir_assemble + "/" + "tmp_clipReg_" + reg4->chrname + "_" + to_string(reg4->startRefPos) + "-" + to_string(reg4->endRefPos);
-	//
-	//						varVec.push_back(reg4);
-	//
-	//						pthread_mutex_lock(&mutex_print);
-	//						cout << "------------------- right region 4: " << readsfilename << ", len=" << reg4->endRefPos-reg4->startRefPos << endl;
-	//						pthread_mutex_unlock(&mutex_print);
-	//
-	//						performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg4->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
-	//					}
-	//				}
+					varVec.clear();
+					varVec.push_back(clip_reg->rightClipReg);
+					varVec.push_back(clip_reg->rightClipReg2);
+					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 				}
 			}
 		}else{
 //			pthread_mutex_lock(&mutex_print);
 //			cout << "############ leftClipRegNum=" << clip_reg->leftClipRegNum << ", rightClipRegNum=" << clip_reg->rightClipRegNum << endl << endl;
 //			pthread_mutex_unlock(&mutex_print);
+
+			varVec.clear();
+			if(clip_reg->leftClipReg) varVec.push_back(clip_reg->leftClipReg);
+			if(clip_reg->leftClipReg2) varVec.push_back(clip_reg->leftClipReg2);
+			if(clip_reg->rightClipReg) varVec.push_back(clip_reg->rightClipReg);
+			if(clip_reg->rightClipReg2) varVec.push_back(clip_reg->rightClipReg2);
+
+			// check limit process regions
+			sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+			if(sub_limit_reg_vec_work.size()>0){
+				// assemble left regions
+				if(clip_reg->leftClipRegNum>=1){
+					varVec.clear();
+					if(clip_reg->leftClipReg) varVec.push_back(clip_reg->leftClipReg);
+					if(clip_reg->leftClipReg2) varVec.push_back(clip_reg->leftClipReg2);
+					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+				}
+
+				// assemble right regions
+				if(clip_reg->rightClipRegNum>=1){
+					varVec.clear();
+					if(clip_reg->rightClipReg) varVec.push_back(clip_reg->rightClipReg);
+					if(clip_reg->rightClipReg2) varVec.push_back(clip_reg->rightClipReg2);
+					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+				}
+			}
 		}
 	}
+}
+
+// compute limit process regions for local assemble work
+vector<simpleReg_t*> Block::computeLimitRegsForAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+	vector<simpleReg_t*> sub_limit_reg_vec_work, sub_limit_reg_vec_tmp;
+	simpleReg_t *simple_reg, *simple_reg2;
+	reg_t *reg;
+	bool flag;
+	size_t i, j, k;
+
+	// check limit process regions
+	sub_limit_reg_vec_work.clear();
+	if(limit_reg_process_flag){
+		// check reg1, reg2, reg3 and reg4
+		for(i=0; i<varVec.size(); i++){
+			reg = varVec.at(i);
+
+			if(reg){
+				//sub_limit_reg_vec_tmp = getSimpleRegs(reg->chrname, reg->startRefPos, reg->endRefPos, paras->limit_reg_vec);
+				sub_limit_reg_vec_tmp = getOverlappedSimpleRegs(reg->chrname, reg->startRefPos, reg->endRefPos, limit_reg_vec);
+				for(j=0; j<sub_limit_reg_vec_tmp.size(); j++){
+					simple_reg = sub_limit_reg_vec_tmp.at(j);
+					flag = true;
+					for(k=0; k<sub_limit_reg_vec_work.size(); k++){
+						simple_reg2 = sub_limit_reg_vec_work.at(k);
+						if(simple_reg==simple_reg2){
+							flag = false;
+							break;
+						}
+					}
+					if(flag) sub_limit_reg_vec_work.push_back(simple_reg);
+				}
+			}
+		}
+	}
+
+	return sub_limit_reg_vec_work;
+}
+
+// generate assemble work
+void Block::generateAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &sub_limit_reg_vec_work, bool clip_reg_flag){
+	size_t i;
+	int64_t minRefPos, maxRefPos;
+	reg_t *reg;
+	string chrname_tmp, readsfilename, contigfilename, refseqfilename, tmpdir, file_prefix_str;
+	bool assem_done_flag;
+	assembleWork_opt *assem_work_opt;
+
+	// get the minimum and maximum reference position
+	minRefPos = maxRefPos = -1;
+	if(varVec.size()>0){
+		reg = varVec.at(0);
+		minRefPos = reg->startRefPos;
+		maxRefPos = reg->endRefPos;
+		for(i=1; i<varVec.size(); i++){
+			reg = varVec.at(i);
+			if(minRefPos>reg->startRefPos) minRefPos = reg->startRefPos;
+			if(maxRefPos<reg->endRefPos) maxRefPos = reg->endRefPos;
+		}
+	}
+
+	if(clip_reg_flag==false) file_prefix_str = "";
+	else file_prefix_str = "clipReg_";
+
+	if(minRefPos!=-1 and maxRefPos!=-1){
+		// construct the variant region
+		chrname_tmp = varVec.at(0)->chrname;
+		readsfilename = out_dir_assemble  + "/" + file_prefix_str + "reads_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fq";
+		contigfilename = out_dir_assemble  + "/" + file_prefix_str + "contig_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
+		refseqfilename = out_dir_assemble  + "/" + file_prefix_str + "refseq_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
+		tmpdir = out_dir_assemble + "/" + "tmp_" + file_prefix_str + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos);
+
+		// check previously assembled information before assembly
+		assem_done_flag = getPrevAssembledDoneFlag(contigfilename, clip_reg_flag);
+		if(assem_done_flag==false){
+			assem_work_opt = allocateAssemWorkOpt(chrname_tmp, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, clip_reg_flag, limit_reg_process_flag, sub_limit_reg_vec_work);
+			if(assem_work_opt){
+				pthread_mutex_lock(&mutex_assem_work);
+				paras->assem_work_vec.push_back(assem_work_opt);
+				paras->assemble_reg_work_total ++;
+				pthread_mutex_unlock(&mutex_assem_work);
+			}else{
+				cerr << __func__ << ", line=" << __LINE__ << ": cannot create assemble work, error!" << endl;
+				exit(1);
+			}
+
+			//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
+		}else{
+			pthread_mutex_lock(&mutex_assem_work);
+			paras->assemble_reg_preDone_num ++;
+			pthread_mutex_unlock(&mutex_assem_work);
+		}
+	}
+	varVec.clear();
 }
 
 bool Block::getPrevAssembledDoneFlag(string &contigfilename, bool clipReg_flag){
@@ -1449,3 +1177,5 @@ bool Block::getPrevAssembledDoneFlag2(string &contigfilename, vector<string> &as
 	}
 	return flag;
 }
+
+
