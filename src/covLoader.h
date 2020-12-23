@@ -14,8 +14,9 @@ using namespace std;
 class covLoader {
 	public:
 		string chrname;
-		size_t startPos, endPos;
-		size_t min_ins_size_filt, min_del_size_filt;
+		int64_t startPos, endPos;
+		int32_t min_ins_size_filt, min_del_size_filt;
+		char left_ref_base, right_ref_base;
 		faidx_t *fai;
 
 	public:

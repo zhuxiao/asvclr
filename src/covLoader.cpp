@@ -7,6 +7,7 @@ covLoader::covLoader(string &chrname, size_t startPos, size_t endPos, faidx_t *f
 	this->endPos = endPos;
 	this->fai = fai;
 	min_ins_size_filt = min_del_size_filt = 0;
+	left_ref_base = right_ref_base = '-';
 }
 
 covLoader::covLoader(string &chrname, size_t startPos, size_t endPos, faidx_t *fai, size_t min_ins_size_filt, size_t min_del_size_filt) {
@@ -16,6 +17,7 @@ covLoader::covLoader(string &chrname, size_t startPos, size_t endPos, faidx_t *f
 	this->fai = fai;
 	this->min_ins_size_filt = min_ins_size_filt;
 	this->min_del_size_filt = min_del_size_filt;
+	left_ref_base = right_ref_base = '-';
 }
 
 covLoader::~covLoader() {
@@ -42,16 +44,30 @@ void covLoader::freeBaseArray(Base *baseArray){
 }
 
 int covLoader::assignRefBase(Base *baseArray, faidx_t *fai){
-	size_t pos;
+	int64_t pos, start_pos, end_pos, chrlen, left_ext_size, right_ext_size;
+
+	chrlen = faidx_seq_len(fai, chrname.c_str()); // get the reference length
+	if(startPos==1) { start_pos = startPos;	left_ext_size = 0; }	// first base is the left base
+	else { start_pos = startPos - 1; left_ext_size = 1; }
+	if(endPos==chrlen) { end_pos = endPos; right_ext_size = 0; }	// last base is the right base
+	else { end_pos = endPos + 1; right_ext_size = 1; }
+
 	// get the region sequence
-	string reg = chrname + ":" + to_string(startPos) + "-" + to_string(endPos);
+	string reg = chrname + ":" + to_string(start_pos) + "-" + to_string(end_pos);
 
 	RefSeqLoader refseq_loader(reg, fai);
 	refseq_loader.getRefSeq();
 
+	// assign the left and right base around the region
+	if(left_ext_size==1) left_ref_base = refseq_loader.refseq[0];
+	else left_ref_base = '-';
+	if(right_ext_size==1) right_ref_base = refseq_loader.refseq[refseq_loader.refseq_len-1];
+	else right_ref_base = '-';
+
+	// assign reference bases
 	pos = startPos;
-	for(int i=0; i<refseq_loader.refseq_len; i++){
-		switch(refseq_loader.refseq[i]){
+	for(int i=0; i<refseq_loader.refseq_len-left_ext_size-right_ext_size; i++){
+		switch(refseq_loader.refseq[i+left_ext_size]){
 			case 'A':
 			case 'a': baseArray[i].coverage.idx_RefBase = 0; break;
 			case 'C':
@@ -82,9 +98,9 @@ int covLoader::assignRefBase(Base *baseArray, faidx_t *fai){
 			case 'd':
 			case 'B':
 			case 'b': baseArray[i].coverage.idx_RefBase = 5; break;
-			default: cerr << __func__ << ": unknown base: " << refseq_loader.refseq[i] << " at location: " << chrname << ":" << pos << endl; exit(1);
+			default: cerr << __func__ << ": unknown base: " << refseq_loader.refseq[i+left_ext_size] << " at location: " << chrname << ":" << pos << endl; exit(1);
 		}
-		baseArray[i].coverage.refBase = refseq_loader.refseq[i];
+		baseArray[i].coverage.refBase = refseq_loader.refseq[i+left_ext_size];
 		pos ++;
 	}
 	return 0;
@@ -103,11 +119,11 @@ void covLoader::assignPolymerFlag(Base *baseArray){
 				base->coverage.polymer_flag = true;
 		}else if(i==0 and i<len-1){ // first item
 			right_base = baseArray + i + 1;
-			if(right_base->coverage.refBase==base->coverage.refBase)
+			if(right_base->coverage.refBase==base->coverage.refBase or base->coverage.refBase==left_ref_base)
 				base->coverage.polymer_flag = true;
 		}else if(i>0 and i==len-1){ // last item
 			left_base = baseArray + i - 1;
-			if(left_base->coverage.refBase==base->coverage.refBase)
+			if(left_base->coverage.refBase==base->coverage.refBase or base->coverage.refBase==right_ref_base)
 				base->coverage.polymer_flag = true;
 		}
 	}
@@ -332,7 +348,7 @@ void covLoader::destroyMDSeg(vector<struct MD_seg*> &segs_MD){
 // update the block base array information according to read alignments
 int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 	baseCoverage_t *cover;
-	size_t pos, tmp_endPos, misbase;
+	int64_t pos, tmp_endPos, misbase;
 	int32_t idx, endflag;
 	vector<struct alnSeg*>::iterator seg;
 
@@ -420,7 +436,7 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 
 // update the coverage information for each base in this block
 void covLoader::updateBaseCovInfo(Base *baseArr){
-	size_t pos;
+	int64_t pos;
 	for(pos=startPos; pos<=endPos; pos++){
 		baseArr[pos-startPos].insVector.shrink_to_fit();
 		baseArr[pos-startPos].delVector.shrink_to_fit();
@@ -434,13 +450,13 @@ void covLoader::computeDelNumFromDelVec(Base *baseArr){
 	Base *base;
 	delEvent_t *del_event;
 
-	size_t pos, pos_tmp, len;
+	int64_t j, pos, pos_tmp, len;
 	for(pos=startPos; pos<=endPos; pos++){
 		base = baseArr + pos - startPos;
 		for(size_t i=0; i<base->delVector.size(); i++){
 			del_event = base->delVector.at(i);
 			len = del_event->seq.size();
-			for(size_t j=0; j<len; j++) {
+			for(j=0; j<len; j++) {
 				pos_tmp = pos + j;
 				if(pos_tmp<=endPos) baseArr[pos_tmp-startPos].del_num_from_del_vec ++;
 				else break;
@@ -456,7 +472,8 @@ void covLoader::computeConIndelEventRatio(Base *baseArr){
 		uint32_t count;
 	};
 
-	size_t i, j, pos, total_cov, maxValue, maxValue_ins, num_del, max_con_type;
+	size_t i, j;
+	int64_t pos, total_cov, maxValue, maxValue_ins, num_del, max_con_type;
 	Base *base;
 	insEvent_t *ins_event;
 	vector<struct indelCountNode*> insCount_vec;

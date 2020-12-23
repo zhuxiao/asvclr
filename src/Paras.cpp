@@ -115,18 +115,21 @@ int Paras::checkBamFile(){
 		switch (ret) {
 			case 0:
 				break;
+			case -1:
+				cerr << __func__ << ", error occurred while opening " << inBamFile << endl;
+				exit(-1);
 			case -2:
 				cerr << __func__ << ", failed to open " << inBamFile << endl;
-				break;
+				exit(-2);
 			case -3:
 				cerr << __func__ << inBamFile << " is in a format that cannot be usefully indexed" << endl;
-				break;
+				exit(-3);
 			case -4:
 				cerr << __func__ << ", failed to create or write index" << endl;
-				break;
+				exit(-4);
 			default:
 				cerr << __func__ << ", failed to create index for " << inBamFile << endl;
-				break;
+				exit(1);
 		}
 	}else{
 		ret = 0;
@@ -211,6 +214,8 @@ int Paras::parseDetectParas(int argc, char **argv){
 		showDetectUsage();
 		return 1;
 	}
+
+	delete_reads_flag = true;
 
 	opt = argc - optind; // the reference and BAM file on the command line
 	if(opt>=2) {

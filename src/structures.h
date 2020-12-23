@@ -40,7 +40,7 @@ typedef struct{
 
 //from covLoader.h
 struct alnSeg{
-	size_t startRpos, startQpos;
+	int64_t startRpos, startQpos;
 	size_t seglen: 26, opflag : 6;
 	string seg_MD;
 };
