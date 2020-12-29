@@ -57,9 +57,6 @@ int main(int argc, char **argv) {
 		time.printSubCmdElapsedTime();
 	}
 
-	// save results in VCF file format
-	//genome.saveResultVCF();
-
 	time.printOverallElapsedTime();
 
 	return 0;

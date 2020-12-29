@@ -60,7 +60,7 @@ class Block{
 		ofstream *var_cand_indel_file, *misAln_reg_file, *var_cand_clipReg_file;
 
 	public:
-		Block(string chrname, size_t chrlen, size_t startPos, size_t endPos, faidx_t *fai, Paras *paras);
+		Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai, Paras *paras);
 		virtual ~Block();
 		void setOutputDir(string& out_dir_detect_prefix, string& out_dir_assemble_prefix, string& out_dir_call_prefix);
 		void setLimitRegs(vector<simpleReg_t*> &sub_limit_reg_vec);

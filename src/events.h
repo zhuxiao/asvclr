@@ -19,6 +19,31 @@ using namespace std;
 #define VAR_INV_TRA			7	// inverted translocation
 #define VAR_MIX				10	// mixed variation
 
+#define VAR_UNC_STR				"UNC"	// uncertain
+#define VAR_INS_STR				"INS"	// insertion
+#define VAR_DEL_STR				"DEL"	// deletion
+#define VAR_DUP_STR				"DUP"	// duplication
+#define VAR_INV_STR				"INV"	// inversion
+#define VAR_TRA_STR				"TRA"	// translocation
+#define VAR_BND_STR				"BND"	// translocation
+#define VAR_INV_TRA_STR			"INV_TRA"	// inverted translocation
+#define VAR_MIX_STR				"MIX"	// mixed variation
+
+#define VAR_UNC_STR1			"uncertain"	// uncertain
+#define VAR_INS_STR1			"insertion"	// insertion
+#define VAR_DEL_STR1			"deletion"	// deletion
+#define VAR_DUP_STR1			"duplication"	// duplication
+#define VAR_INV_STR1			"inversion"	// inversion
+#define VAR_TRA_STR1			"translocation"	// translocation
+
+#define VAR_UNC_STR2			"UNCERTAIN"	// UNCERTAIN
+#define VAR_INS_STR2			"INSERTION"	// INSERTION
+#define VAR_DEL_STR2			"DELETION"	// DELETION
+#define VAR_DUP_STR2			"DUPLICATION"	// DUPLICATION
+#define VAR_INV_STR2			"INVERSION"	// INVERSION
+#define VAR_TRA_STR2			"TRANSLOCATION"	// TRANSLOCATION
+
+
 #define CTG_END_SKIP_SIZE		1000
 
 // base coverage structure

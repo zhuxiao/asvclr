@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"0.8.1"
+#define PROG_VERSION				"0.8.2"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -67,6 +67,7 @@ using namespace std;
 #define NUM_THREADS_PER_ASSEM_WORK	0  // 0: unspecify the limited number of threads for each Canu work
 
 #define OUT_DIR						"output"
+#define SAMPLE_DEFAULT				"SAMPLE"
 
 #define MAX_ULTRA_HIGH_COV_THRES	300		// maximal coverage threshold for ultra-high coverage
 
@@ -81,7 +82,7 @@ class Paras
 {
 	public:
 		// user/system defined parameters
-		string command, refFile, inBamFile, outFilePrefix; //, canu_version;
+		string command, refFile, inBamFile, outFilePrefix, sample; //, canu_version;
 		string outDir;
 		string out_dir_detect = "1_candidates";    // "1_candidates"
 		string out_dir_assemble = "2_assemble";  // "2_assemble"

@@ -11,11 +11,11 @@ pthread_mutex_t mutex_write_misAln = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_assem_work = PTHREAD_MUTEX_INITIALIZER;
 
 // Constructor with parameters
-Block::Block(string chrname, size_t chrlen, size_t startPos, size_t endPos, faidx_t *fai,  Paras *paras){
+Block::Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai,  Paras *paras){
 	string chrname_tmp;
 	this->paras =  paras;
 	this->chrname = chrname;
-	this->chrlen = chrlen;
+	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get the reference length;
 	this->startPos = startPos;
 	this->endPos = endPos;
 	this->fai = fai;
@@ -887,6 +887,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
 	vector<reg_t*> varVec;
 	string readsfilename, contigfilename, refseqfilename, tmpdir;
 	vector<simpleReg_t*> sub_limit_reg_vec_work;
+	bool generate_flag;
 
 	i = 0;
 	while(i<(int32_t)indelVector.size()){
@@ -912,10 +913,13 @@ void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
 		for(k=beg_reg_id; k<=end_reg_id; k++) varVec.push_back(indelVector[k]);
 
 		// check limit process regions
-		sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
-		if(sub_limit_reg_vec_work.size()>0){
-			generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, false);
+		generate_flag = true;
+		if(paras->limit_reg_process_flag){
+			sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+			if(sub_limit_reg_vec_work.empty()) generate_flag = false;
 		}
+		if(generate_flag)
+			generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, false);
 
 		i = end_reg_id + 1;
 	}
@@ -927,7 +931,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 	vector<reg_t*> varVec;
 	string readsfilename, contigfilename, refseqfilename, tmpdir;
 	mateClipReg_t *clip_reg;
-	bool generate_new_flag;
+	bool generate_new_flag, generate_flag;
 	reg_t *reg1, *reg2, *reg3, *reg4;
 	string reg_str;
 	size_t start_pos, end_pos;
@@ -943,8 +947,12 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 			varVec.push_back(reg2);
 
 			// check limit process regions
-			sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
-			if(sub_limit_reg_vec_work.size()>0){
+			generate_flag = true;
+			if(paras->limit_reg_process_flag){
+				sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+				if(sub_limit_reg_vec_work.empty()) generate_flag = false;
+			}
+			if(generate_flag){
 				generate_new_flag = false;
 				if(clip_reg->reg_mated_flag and reg1->chrname.compare(reg2->chrname)==0){
 					reg_len = reg2->startRefPos - reg1->startRefPos;
@@ -981,8 +989,13 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 			varVec.push_back(reg3);
 			varVec.push_back(reg4);
 
-			sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
-			if(sub_limit_reg_vec_work.size()>0){
+			// check limit process regions
+			generate_flag = true;
+			if(paras->limit_reg_process_flag){
+				sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+				if(sub_limit_reg_vec_work.empty()) generate_flag = false;
+			}
+			if(generate_flag){
 				generate_new_flag = false;
 				if(clip_reg->reg_mated_flag and reg1->chrname.compare(reg2->chrname)==0 and reg3->chrname.compare(reg4->chrname)==0 and reg1->chrname.compare(reg4->chrname)==0){
 					start_pos = reg1->startRefPos;
@@ -1022,7 +1035,11 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 			if(clip_reg->rightClipReg2) varVec.push_back(clip_reg->rightClipReg2);
 
 			// check limit process regions
-			sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+			generate_flag = true;
+			if(paras->limit_reg_process_flag){
+				sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+				if(sub_limit_reg_vec_work.empty()) generate_flag = false;
+			}
 			if(sub_limit_reg_vec_work.size()>0){
 				// assemble left regions
 				if(clip_reg->leftClipRegNum>=1){

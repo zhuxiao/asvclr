@@ -3873,13 +3873,13 @@ void varCand::printSV(){
 	for(j=0; j<varVec.size(); j++){
 		reg = varVec[j];
 		switch(reg->var_type){
-			case VAR_UNC: sv_type = "UNCERTAIN"; break;
-			case VAR_INS: sv_type = "INS"; break;
-			case VAR_DEL: sv_type = "DEL"; break;
-			case VAR_DUP: sv_type = "DUP"; break;
-			case VAR_INV: sv_type = "INV"; break;
-			case VAR_TRA: sv_type = "TRA"; break;
-			default: sv_type = "MIX"; break;
+			case VAR_UNC: sv_type = VAR_UNC_STR; break;
+			case VAR_INS: sv_type = VAR_INS_STR; break;
+			case VAR_DEL: sv_type = VAR_DEL_STR; break;
+			case VAR_DUP: sv_type = VAR_DUP_STR; break;
+			case VAR_INV: sv_type = VAR_INV_STR; break;
+			case VAR_TRA: sv_type = VAR_TRA_STR; break;
+			default: sv_type = VAR_MIX_STR; break;
 		}
 		line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + reg->refseq + "\t" + reg->altseq + "\t" + sv_type;
 		if(reg->var_type==VAR_INS or reg->var_type==VAR_DEL or reg->var_type==VAR_DUP)

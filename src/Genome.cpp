@@ -64,6 +64,7 @@ void Genome::init(){
 	out_filename_result_clipReg = out_dir_result + "/" + result_prefix + "genome_clipReg.bed";
 	out_filename_result_tra = out_dir_result + "/" + result_prefix + "genome_TRA.bedpe";
 	out_filename_result_vars = out_dir_result + "/" + result_prefix + "genome_variants.bed";
+	out_filename_result_vars_vcf = out_dir_result + "/" + result_prefix + "genome_variants.vcf";
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
 	limit_reg_filename = out_dir_detect + "/" + paras->limit_reg_filename;
@@ -229,11 +230,6 @@ void Genome::sortChromes(vector<Chrome*> &chr_vec, vector<Chrome*> &chr_vec_tmp)
 	}
 
 	vector<Chrome*>().swap(chr_vec_tmp);	// delete all items
-
-//	for(i=0; i<chr_vec.size(); i++){
-//		chr = chr_vec.at(i);
-//		cout << "[" << i << "]: " << chr->chrname << ", chrlen=" << chr->chrlen << endl;
-//	}
 
 	free(selected_flag_array);
 }
@@ -535,7 +531,7 @@ int Genome::genomeLocalAssemble(){
 	//outputAssemWorkOptToFile_debug(paras->assem_work_vec);
 
 	// begin assemble
-	if(paras->assem_work_vec.size()) cout << "[" << time.getTime() << "]: start local assemble..." << endl;
+	if(!paras->assem_work_vec.empty()) cout << "[" << time.getTime() << "]: start local assemble..." << endl;
 	processAssembleWork();
 
 	computeVarNumStatAssemble(); // compute statistics for assemble command
@@ -576,6 +572,8 @@ int Genome::processAssembleWork(){
 	ofstream *var_cand_file;
 	size_t num_threads_work, num_work, num_work_per_ten_percent;
 
+	if(paras->assem_work_vec.empty()) return 0;  // no assemble work, then return directly
+
 	num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
 	if(num_threads_work<1) num_threads_work = 1;
 
@@ -584,8 +582,6 @@ int Genome::processAssembleWork(){
 	else
 		cout << "Local assemble will be processed using " << num_threads_work << " concurrent works, and each work will be limited to " << paras->num_threads_per_assem_work << " threads" << endl;
 
-//	hts_tpool *p = hts_tpool_init(paras->num_threads);
-//	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
 	hts_tpool *p = hts_tpool_init(num_threads_work);
 	hts_tpool_process *q = hts_tpool_process_init(p, num_threads_work*2, 1);
 
@@ -679,6 +675,9 @@ int Genome::genomeCall(){
 	cout << "6666666666666" << endl;
 	cout << "[" << time.getTime() << "]: merge call result... " << endl;
 	mergeCallResult();
+
+	// save results in VCF file format
+	saveResultVCF();
 
 	// compute statistics for call command
 	cout << "[" << time.getTime() << "]: compute variant NUMBER statistics... " << endl;
@@ -2419,11 +2418,8 @@ void Genome::mergeCallResult(){
 
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->process_block_num)
-		{
-			copySingleFile(chr->out_filename_call_indel, out_file_indel); // indel
-			copySingleFile(chr->out_filename_call_clipReg, out_file_clipReg); // clip_reg
-		}
+		copySingleFile(chr->out_filename_call_indel, out_file_indel); // indel
+		copySingleFile(chr->out_filename_call_clipReg, out_file_clipReg); // clip_reg
 	}
 	out_file_indel.close();
 	out_file_clipReg.close();
@@ -2440,52 +2436,38 @@ void Genome::mergeCallResult(){
 
 // save results in VCF file format for detect command
 void Genome::saveResultVCF(){
-	string outIndelFile, outSnvFile;
-
-	cout << "Output results to file ..." << endl;
-
-	// initialize the output filenames
-	if(paras->outFilePrefix.size()>0) {
-		outIndelFile = out_dir_call + "/" + paras->outFilePrefix + "_INDEL.vcf";
-		outSnvFile = out_dir_call + "/" + paras->outFilePrefix + "_SNV.vcf";
-	}else {
-		outIndelFile = out_dir_call + "/" + "INDEL.vcf";
-		outSnvFile = out_dir_call + "/" + "SNV.vcf";
-	}
-
 	// save results
-	//saveIndelVCFDetect(out_filename_detect_indel, outIndelFile);
-	//saveSnvVCFDetect(out_filename_detect_snv, outSnvFile);
+	cout << "Output results to VCF file ..." << endl;
+	saveResultToVCF(out_filename_result_vars, out_filename_result_vars_vcf);
 }
 
 // save results in VCF file format for detect command
-void Genome::saveResultVCFDetect(){
-	string outIndelFile, outSnvFile;
-
-	cout << "Output results to file ..." << endl;
-
-	// initialize the output filenames
-	if(paras->outFilePrefix.size()>0) {
-		outIndelFile = out_dir_detect + "/" + paras->outFilePrefix + "_INDEL.vcf";
-		outSnvFile = out_dir_detect + "/" + paras->outFilePrefix + "_SNV.vcf";
-	}else {
-		outIndelFile = out_dir_detect + "/" + "INDEL.vcf";
-		outSnvFile = out_dir_detect + "/" + "SNV.vcf";
-	}
-
-	// save results
-	saveIndelVCFDetect(out_filename_detect_indel, outIndelFile);
-	saveSnvVCFDetect(out_filename_detect_snv, outSnvFile);
-}
+//void Genome::saveResultVCFDetect(){
+//	string outIndelFile, outSnvFile;
+//
+//	cout << "Output results to file ..." << endl;
+//
+//	// initialize the output filenames
+//	if(paras->outFilePrefix.size()>0) {
+//		outIndelFile = out_dir_detect + "/" + paras->outFilePrefix + "_INDEL.vcf";
+//		outSnvFile = out_dir_detect + "/" + paras->outFilePrefix + "_SNV.vcf";
+//	}else {
+//		outIndelFile = out_dir_detect + "/" + "INDEL.vcf";
+//		outSnvFile = out_dir_detect + "/" + "SNV.vcf";
+//	}
+//
+//	// save results
+//	saveIndelVCFDetect(out_filename_detect_indel, outIndelFile);
+//	saveSnvVCFDetect(out_filename_detect_snv, outSnvFile);
+//}
 
 // save indel in VCF file format for detect command
-void Genome::saveIndelVCFDetect(string &in, string &out_vcf){
-	string line, data_vcf, ref, reg;
+void Genome::saveResultToVCF(string &in, string &out_vcf){
+	string line, line_vcf, chr, start_pos, id, ref, alt, qual, filter, info, format, format_val, sample, reg;
+	string chr2, end_pos, sv_type, sv_len, dup_num, blat_inner;
 	ifstream infile;
 	ofstream outfile;
 	vector<string> str_vec;
-	char *seq;
-	int seq_len;
 
 	// open files
 	infile.open(in);
@@ -2501,77 +2483,122 @@ void Genome::saveIndelVCFDetect(string &in, string &out_vcf){
 	}
 
 	// save VCF header
-	saveVCFHeader(outfile);
+	saveVCFHeader(outfile, paras->sample);
 
 	// save results
 	while(getline(infile, line))
-		if(line.size()>0){
+		if(line.size()>0 and line.at(0)!='#'){	// skip header
 			str_vec = split(line, "\t");
-			data_vcf = str_vec[0] + "\t" + str_vec[1] + "\t."; // CHROM, POS, ID
 
-			reg = str_vec[0] + ":" + str_vec[1] + "-" + str_vec[2];
-			seq = fai_fetch(fai, reg.c_str(), &seq_len);
-			data_vcf += "\t" + (string)seq + "\t."; // REF, ALT
+			//line_vcf = str_vec.at(0) + "\t" + str_vec.at(1) + "\t."; // CHROM, POS, ID
+			//reg = str_vec[0] + ":" + str_vec[1] + "-" + str_vec[2];
+			//seq = fai_fetch(fai, reg.c_str(), &seq_len);
 
-			// QUAL, FILTER, INFO0, FORMAT ........
+			if(str_vec.size()<=MAX_BED_COLS_NUM){ // INS, DEL, DUP, INV, MIX
+				chr = str_vec.at(0);		// CHROM
+				start_pos = str_vec.at(1);	// POS
+				id = ".";					// ID
+				ref = str_vec.at(6);		// REF
+				alt = str_vec.at(7);		// ALT
+				qual = ".";					// QUAL
+				filter = "PASS";			// FILTER
 
+				chr2 = chr;
+				end_pos = str_vec.at(2);
+				sv_type = str_vec.at(3);
+				sv_len = str_vec.at(4);
+				info = "CHR2=" + chr2 + ";END=" + end_pos + ";SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len;	// INFO: CHR2=chr2;END=end;SVTYPE=sv_type;SVLEN=sv_len
+				if(sv_type.compare(VAR_DUP_STR)==0 or sv_type.compare(VAR_DUP_STR1)==0) { // DUPNUM=dup_num
+					dup_num = str_vec.at(5);
+					info += ";DUPNUM=" + dup_num;
+				}
+				if(str_vec.size()==MAX_BED_COLS_NUM){
+					blat_inner = "BLATINNER";
+					info += ";" + blat_inner;
+				}
 
-			outfile << data_vcf << endl;
+				format = "GT";		// FORMAT and the values
+				format_val = "./.";
 
-			free(seq);
+			}else{	// TRA, BND, MIX
+				chr = str_vec.at(0);		// CHROM
+				start_pos = str_vec.at(1);	// POS
+				id = ".";					// ID
+				ref = ".";					// REF
+				alt = ".";					// ALT
+
+				qual = ".";					// QUAL
+				filter = "PASS";			// FILTER
+
+				chr2 = str_vec.at(3);
+				end_pos = str_vec.at(4);
+				sv_type = str_vec.at(6);
+				sv_len = "False";
+				info = "CHR2=" + chr2 + ";END=" + end_pos + ";SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len;	// INFO: CHR2=chr2;END=end;SVTYPE=sv_type;SVLEN=sv_len
+
+				format = "GT";		// FORMAT and the values
+				format_val = "./.";
+
+			}
+
+			line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
+
+			outfile << line_vcf << endl;
+
+			//free(seq);
 		}
 	infile.close();
 	outfile.close();
 }
 
-// save SNV in VCF file format for detect command
-void Genome::saveSnvVCFDetect(string &in, string &out_vcf){
-	string line, data_vcf, ref, reg;
-	ifstream infile;
-	ofstream outfile;
-	vector<string> str_vec;
-	char *seq;
-	int seq_len;
-
-	// open files
-	infile.open(in);
-	if(!infile.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << in << endl;
-		exit(1);
-	}
-
-	outfile.open(out_vcf);
-	if(!outfile.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_vcf << endl;
-		exit(1);
-	}
-
-	// save VCF header
-	saveVCFHeader(outfile);
-
-	// save results
-	while(getline(infile, line))
-		if(line.size()>0){
-			str_vec = split(line, "\t");
-			data_vcf = str_vec[0] + "\t" + str_vec[1] + "\t."; // CHROM, POS, ID
-
-			reg = str_vec[0] + ":" + str_vec[1] + "-" + str_vec[1];
-			seq = fai_fetch(fai, reg.c_str(), &seq_len);
-			data_vcf += "\t" + (string)seq + "\t."; // REF, ALT
-
-			// QUAL, FILTER, INFO0, FORMAT ........
-
-
-			outfile << data_vcf << endl;
-
-			free(seq);
-		}
-	infile.close();
-	outfile.close();
-}
+//// save SNV in VCF file format for detect command
+//void Genome::saveSnvVCFToFile(string &in, string &out_vcf){
+//	string line, data_vcf, ref, reg;
+//	ifstream infile;
+//	ofstream outfile;
+//	vector<string> str_vec;
+//	char *seq;
+//	int seq_len;
+//
+//	// open files
+//	infile.open(in);
+//	if(!infile.is_open()){
+//		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << in << endl;
+//		exit(1);
+//	}
+//
+//	outfile.open(out_vcf);
+//	if(!outfile.is_open()){
+//		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_vcf << endl;
+//		exit(1);
+//	}
+//
+//	// save VCF header
+//	saveVCFHeader(outfile);
+//
+//	// save results
+//	while(getline(infile, line))
+//		if(line.size()>0){
+//			str_vec = split(line, "\t");
+//			data_vcf = str_vec[0] + "\t" + str_vec[1] + "\t."; // CHROM, POS, ID
+//
+//			reg = str_vec[0] + ":" + str_vec[1] + "-" + str_vec[1];
+//			seq = fai_fetch(fai, reg.c_str(), &seq_len);
+//			data_vcf += "\t" + (string)seq + "\t."; // REF, ALT
+//
+//			// QUAL, FILTER, INFO, FORMAT ........
+//
+//
+//			outfile << data_vcf << endl;
+//
+//			free(seq);
+//		}
+//	infile.close();
+//	outfile.close();
+//}
 
 // save VCF header
-void Genome::saveVCFHeader(ofstream &fp){
+void Genome::saveVCFHeader(ofstream &fp, string &sample_str){
 	time_t rawtime;
 	struct tm *timeinfo;
 	char buffer [128];
@@ -2583,13 +2610,38 @@ void Genome::saveVCFHeader(ofstream &fp){
 
 	fp << "##fileformat=VCFv4.2" << endl;
 	fp << "##fileDate=" << buffer << endl;
-	fp << "##source=" << PROG_NAME << "V" << PROG_VERSION << endl;
+	fp << "##source=" << PROG_NAME << "_v" << PROG_VERSION << endl;
 	fp << "##reference=" << paras->refFile << endl;
+
+	saveVCFContigHeader(fp);	// contigs information
+
+	fp << "##phasing=None" << endl;
+	fp << "##ALT=<ID=INS,Description=\"Insertion\">" << endl;
+	fp << "##ALT=<ID=DEL,Description=\"Deletion\">" << endl;
+	fp << "##ALT=<ID=DUP,Description=\"Duplication\">" << endl;
+	fp << "##ALT=<ID=INV,Description=\"Inversion\">" << endl;
+	fp << "##ALT=<ID=INVDUP,Description=\"Inverted DUP with unknown boundaries\">" << endl;
+	fp << "##ALT=<ID=TRA,Description=\"Translocation\">" << endl;
+	fp << "##ALT=<ID=BND,Description=\"Breakend\">" << endl;
+	fp << "##INFO=<ID=CHR2,Number=1,Type=String,Description=\"Chromosome for END coordinate in case of a translocation\">" << endl;
+	fp << "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant\">" << endl;
+	fp << "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">" << endl;
+	fp << "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Length of the SV\">" << endl;
+	fp << "##INFO=<ID=DUPNUM,Number=1,Type=Integer,Description=\"Copy number of DUP\">" << endl;
+	fp << "##INFO=<ID=BLATINNER,Number=1,Type=Flag,Description=\"variants called from inner parts of BLAT align segment\">" << endl;
 	fp << "##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of Samples With Data\">" << endl;
 	fp << "##FILTER=<ID=q10,Description=\"Quality below 10\">" << endl;
 	fp << "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">" << endl;
-	fp << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT" << endl;
+	fp << "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t" << sample_str << endl;
+}
 
+// save VCF contig header
+void Genome::saveVCFContigHeader(ofstream &fp){
+	Chrome *chr;
+	for(size_t i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		fp << "##contig=<ID=" << chr->chrname << ",length=" << chr->chrlen << ">" << endl;
+	}
 }
 
 // compute the statistics for 'detect' command
@@ -2731,19 +2783,19 @@ size_t Genome::getSVTypeSingleLine(string &line){
 
 	str_vec = split(line, "\t");
 	str_tmp = str_vec.at(3);
-	if(str_tmp.compare("UNC")==0 or str_tmp.compare("uncertain")==0 or str_tmp.compare("UNCERTAIN")==0){
+	if(str_tmp.compare(VAR_UNC_STR)==0 or str_tmp.compare(VAR_UNC_STR1)==0 or str_tmp.compare(VAR_UNC_STR2)==0){
 		sv_type = VAR_UNC;
-	}else if(str_tmp.compare("INS")==0 or str_tmp.compare("insertion")==0){
+	}else if(str_tmp.compare(VAR_INS_STR)==0 or str_tmp.compare(VAR_INS_STR1)==0 or str_tmp.compare(VAR_INS_STR2)==0){
 		sv_type = VAR_INS;
-	}else if(str_tmp.compare("DEL")==0 or str_tmp.compare("deletion")==0){
+	}else if(str_tmp.compare(VAR_DEL_STR)==0 or str_tmp.compare(VAR_DEL_STR1)==0 or str_tmp.compare(VAR_DEL_STR2)==0){
 		sv_type = VAR_DEL;
-	}else if(str_tmp.compare("DUP")==0 or str_tmp.compare("duplication")==0){
+	}else if(str_tmp.compare(VAR_DUP_STR)==0 or str_tmp.compare(VAR_DUP_STR1)==0 or str_tmp.compare(VAR_DUP_STR2)==0){
 		sv_type = VAR_DUP;
-	}else if(str_tmp.compare("INV")==0 or str_tmp.compare("inversion")==0){
+	}else if(str_tmp.compare(VAR_INV_STR)==0 or str_tmp.compare(VAR_INV_STR1)==0 or str_tmp.compare(VAR_INV_STR2)==0){
 		sv_type = VAR_INV;
 	}else{
-		if(str_vec.size()>=8 and (str_vec.at(6).compare("TRA")==0 or str_vec.at(6).compare("translocation")==0 or str_vec.at(6).compare("BND")==0)){
-			if(str_vec.at(6).compare("TRA")==0 or str_vec.at(6).compare("translocation")==0) sv_type = VAR_TRA;
+		if(str_vec.size()>MAX_BED_COLS_NUM and (str_vec.at(6).compare(VAR_TRA_STR)==0 or str_vec.at(6).compare(VAR_TRA_STR1)==0 or str_vec.at(6).compare(VAR_BND_STR)==0)){
+			if(str_vec.at(6).compare(VAR_TRA_STR)==0 or str_vec.at(6).compare(VAR_TRA_STR1)==0) sv_type = VAR_TRA;
 			else sv_type = VAR_BND;
 		}else{
 			sv_type = VAR_MIX;

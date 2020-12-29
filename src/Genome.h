@@ -13,6 +13,7 @@
 using namespace std;
 
 #define MIN_VALID_TRA_RATIO			(0.95f)
+#define MAX_BED_COLS_NUM			9		//	maximum column number of BED file
 
 
 class Genome{
@@ -27,7 +28,7 @@ class Genome{
 		string out_dir, out_dir_detect, out_dir_assemble, out_dir_call, out_dir_tra, out_dir_result;
 
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
-		string out_filename_result_snv, out_filename_result_indel, out_filename_result_clipReg, out_filename_result_tra, out_filename_result_vars;
+		string out_filename_result_snv, out_filename_result_indel, out_filename_result_clipReg, out_filename_result_tra, out_filename_result_vars, out_filename_result_vars_vcf;
 
 		string limit_reg_filename;
 
@@ -45,7 +46,6 @@ class Genome{
 		int genomeLocalAssemble();
 		int genomeCall();
 		void estimateSVSizeNum();
-		void saveResultVCFDetect();
 		void saveResultVCF();
 
 	private:
@@ -99,11 +99,11 @@ class Genome{
 		void saveTraCall2File();
 		//void removeFPs();
 		void mergeCallResult();
-		void saveIndelVCFDetect(string &in, string &out_vcf);
-		void saveSnvVCFDetect(string &in, string &out_vcf);
-		void saveIndelVCF(string &in, string &out_vcf);
-		void saveSnvVCF(string &in, string &out_vcf);
-		void saveVCFHeader(ofstream &fp);
+		void saveResultToVCF(string &in, string &out_vcf);
+		//void saveIndelVCF(string &in, string &out_vcf);
+		//void saveSnvVCF(string &in, string &out_vcf);
+		void saveVCFHeader(ofstream &fp, string &sample_str);
+		void saveVCFContigHeader(ofstream &fp);
 
 		// output statistics
 		void computeVarNumStatDetect();

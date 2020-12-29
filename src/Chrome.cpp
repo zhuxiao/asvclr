@@ -108,7 +108,7 @@ int Chrome::generateChrBlocks(){
 			if(sub_limit_reg_vec.size()==0) block_process_flag = false;
 		}
 
-		block_tmp = allocateBlock(chrname, chrlen, begPos, endPos, fai, headIgnFlag, tailIgnFlag, block_process_flag);
+		block_tmp = allocateBlock(chrname, begPos, endPos, fai, headIgnFlag, tailIgnFlag, block_process_flag);
 		block_tmp->setOutputDir(out_dir_detect, out_dir_assemble, out_dir_call);
 		if(sub_limit_reg_vec.size()) block_tmp->setLimitRegs(sub_limit_reg_vec);
 		blockVector.push_back(block_tmp);
@@ -124,8 +124,8 @@ int Chrome::generateChrBlocks(){
 }
 
 // allocate the memory for one block
-Block *Chrome::allocateBlock(string& chrname, size_t chrlen, int startPos, int endPos, faidx_t *fai, bool headIgnFlag, bool tailIgnFlag, bool block_process_flag){
-	Block *block_tmp = new Block(chrname, chrlen, startPos, endPos, fai, paras);
+Block *Chrome::allocateBlock(string& chrname, int64_t startPos, int64_t endPos, faidx_t *fai, bool headIgnFlag, bool tailIgnFlag, bool block_process_flag){
+	Block *block_tmp = new Block(chrname, startPos, endPos, fai, paras);
 	if(!block_tmp){
 		cerr << "Chrome: cannot allocate memory" << endl;
 		exit(1);
@@ -246,7 +246,7 @@ void Chrome::chrFillDataEst(size_t op_est){
 
 		if(flag){ // valid region
 			//cout << "Est region: " << chrname << ":" << begPos << "-" << endPos << endl;
-			block_tmp = allocateBlock(chrname, chrlen, begPos, endPos, fai, false, false, true);
+			block_tmp = allocateBlock(chrname, begPos, endPos, fai, false, false, true);
 			// fill the data
 			block_tmp->blockFillDataEst(op_est);
 			delete block_tmp;
@@ -1993,7 +1993,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("output_test_limit_reg_20200807/output_chr1/3_call/chr1/blat_chr1_8698843-8707116.sim4")==0)
+		//if(var_cand->alnfilename.compare("output_test_limit_reg_20200807/output_chr1/3_call/chr1/blat_chr1_6997047-7004096.sim4")==0)
 		{
 			//cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();
@@ -3049,13 +3049,13 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 			if(reg->call_success_status){
 				file_id = 0;
 				switch(reg->var_type){
-					case VAR_UNC: sv_type = "UNC"; break;
-					case VAR_INS: sv_type = "INS"; break;
-					case VAR_DEL: sv_type = "DEL"; break;
-					case VAR_DUP: sv_type = "DUP"; file_id = 1; break;
-					case VAR_INV: sv_type = "INV"; file_id = 1; break;
-					case VAR_TRA: sv_type = "TRA"; file_id = 1; break;
-					default: sv_type = "MIX"; break;
+					case VAR_UNC: sv_type = VAR_UNC_STR; break;
+					case VAR_INS: sv_type = VAR_INS_STR; break;
+					case VAR_DEL: sv_type = VAR_DEL_STR; break;
+					case VAR_DUP: sv_type = VAR_DUP_STR; file_id = 1; break;
+					case VAR_INV: sv_type = VAR_INV_STR; file_id = 1; break;
+					case VAR_TRA: sv_type = VAR_TRA_STR; file_id = 1; break;
+					default: sv_type = VAR_MIX_STR; break;
 				}
 				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
 				if(reg->var_type!=VAR_TRA)
@@ -3096,13 +3096,13 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 				if(reg->call_success_status){
 					file_id = 0;
 					switch(reg->var_type){
-						case VAR_UNC: sv_type = "UNCERTAIN"; break;
-						case VAR_INS: sv_type = "INS"; break;
-						case VAR_DEL: sv_type = "DEL"; break;
-						case VAR_DUP: sv_type = "DUP"; file_id = 1; break;
-						case VAR_INV: sv_type = "INV"; file_id = 1; break;
-						case VAR_TRA: sv_type = "TRA"; file_id = 1; break;
-						default: sv_type = "MIX"; break;
+						case VAR_UNC: sv_type = VAR_UNC_STR; break;
+						case VAR_INS: sv_type = VAR_INS_STR; break;
+						case VAR_DEL: sv_type = VAR_DEL_STR; break;
+						case VAR_DUP: sv_type = VAR_DUP_STR; file_id = 1; break;
+						case VAR_INV: sv_type = VAR_INV_STR; file_id = 1; break;
+						case VAR_TRA: sv_type = VAR_TRA_STR; file_id = 1; break;
+						default: sv_type = VAR_MIX_STR; break;
 					}
 					line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
 					if(reg->var_type!=VAR_TRA)
@@ -3138,13 +3138,13 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 			if(var_cand->call_success){
 				file_id = 1;
 				switch(reg->var_type){
-					case VAR_UNC: sv_type = "UNCERTAIN"; break;
-					case VAR_INS: sv_type = "INS"; file_id = 0; break;
-					case VAR_DEL: sv_type = "DEL"; file_id = 0; break;
-					case VAR_DUP: sv_type = "DUP"; break;
-					case VAR_INV: sv_type = "INV"; break;
-					case VAR_TRA: sv_type = "TRA"; break;
-					default: sv_type = "MIX"; break;
+					case VAR_UNC: sv_type = VAR_UNC_STR; break;
+					case VAR_INS: sv_type = VAR_INS_STR; file_id = 0; break;
+					case VAR_DEL: sv_type = VAR_DEL_STR; file_id = 0; break;
+					case VAR_DUP: sv_type = VAR_DUP_STR; break;
+					case VAR_INV: sv_type = VAR_INV_STR; break;
+					case VAR_TRA: sv_type = VAR_TRA_STR; break;
+					default: sv_type = VAR_MIX_STR; break;
 				}
 
 				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;

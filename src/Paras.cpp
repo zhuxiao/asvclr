@@ -30,6 +30,7 @@ void Paras::init(){
 	inBamFile = "";
 	outFilePrefix = "";
 	outDir = OUT_DIR;
+	sample = SAMPLE_DEFAULT;
 	num_threads = 0;
 
 	min_ins_size_filt = 0;
