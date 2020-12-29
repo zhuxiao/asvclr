@@ -1,8 +1,8 @@
 # ASVCLR
-Accurate Structural Variation Caller for Long Reads
+Accurate Structural Variant Caller for Long Reads
 
 -------------------
-ASVCLR is an accurate Structural Variation Caller for Long Reads, such as PacBio sequencing and Oxford Nanopore sequencing. ASVCLR can detect both short indels (e.g. <50 bp) and long structural varitions (e.g. >=50 bp), such as tandem duplications, inversions and translocations, and producing fewer false positives with high precise variant margins.  
+ASVCLR is an accurate Structural Variant Caller for Long Reads, such as PacBio sequencing and Oxford Nanopore sequencing. ASVCLR can detect both short indels (e.g. <50 bp) and long structural varitions (e.g. >=50 bp), such as tandem duplications, inversions and translocations, and producing fewer false positives with high precise variant margins.  
 
 ## Prerequisites
 ASVCLR depends on the following libraries and tools:
@@ -37,7 +37,7 @@ $ asvclr all -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
 Program: ASVCLR (Accurate Structural Variant Caller for Long Reads)
-Version: 0.8.1 (using htslib 1.9)
+Version: 0.8.2 (using htslib 1.9)
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -75,7 +75,7 @@ Besides, the overall help information can be shown as below:
 ```sh
 $ asvclr
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.8.1 (using htslib 1.9)
+Version: 0.8.2 (using htslib 1.9)
 
 Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -120,7 +120,7 @@ And the help information are shown below:
 ```sh
 $ asvclr detect
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.8.1 (using htslib 1.9)
+Version: 0.8.2 (using htslib 1.9)
 
 Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -156,7 +156,7 @@ And the help information are shown below:
 ```sh
 $ asvclr assemble
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.8.1 (using htslib 1.9)
+Version: 0.8.2 (using htslib 1.9)
 
 Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>
 
@@ -199,7 +199,7 @@ And the help information are shown below:
 ```sh
 $ asvclr call
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.8.1 (using htslib 1.9)
+Version: 0.8.2 (using htslib 1.9)
 
 Usage: asvclr call [options] <REF_FILE> <BAM_FILE>
 
