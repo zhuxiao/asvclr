@@ -954,7 +954,7 @@ aln_seg_t* varCand::getAlnSeg(reg_t *reg, int64_t *blat_aln_id){
 
 // extend the align segments if the seed segment is short (<1kb)
 void varCand::computeExtendAlnSegs(localAln_t *local_aln){
-	size_t i;
+	size_t i, seglen1, seglen2;
 	blat_aln_t *blat_aln;
 	aln_seg_t *aln_seg, *aln_seg1, *aln_seg2, *start_seg_extend, *end_seg_extend;
 	int64_t startRefPos_extend, endRefPos_extend, chrlen_tmp;
@@ -978,13 +978,18 @@ void varCand::computeExtendAlnSegs(localAln_t *local_aln){
 				for(i=0; i<blat_aln->aln_segs.size(); i++){
 					aln_seg1 = blat_aln->aln_segs.at(i);
 					aln_seg2 = blat_aln->aln_segs.at(i+1);
-					if((startRefPos_extend>=aln_seg1->ref_start and startRefPos_extend<=aln_seg1->ref_end) or (startRefPos_extend>=aln_seg1->ref_end and startRefPos_extend<=aln_seg2->ref_start)){
-						start_seg_extend = aln_seg1;
-						break;
-					}else if(startRefPos_extend>=aln_seg2->ref_start and startRefPos_extend<=aln_seg2->ref_end){
-						start_seg_extend = aln_seg2;
-						break;
+					seglen1 = aln_seg1->ref_end - aln_seg1->ref_start + 1;
+					seglen2 = aln_seg2->ref_end - aln_seg2->ref_start + 1;
+					if(seglen1>=MIN_VALID_BLAT_SEG_SIZE and seglen2>=MIN_VALID_BLAT_SEG_SIZE){
+						if((startRefPos_extend>=aln_seg1->ref_start and startRefPos_extend<=aln_seg1->ref_end) or (startRefPos_extend>=aln_seg1->ref_end and startRefPos_extend<=aln_seg2->ref_start)){
+							start_seg_extend = aln_seg1;
+							break;
+						}else if(startRefPos_extend>=aln_seg2->ref_start and startRefPos_extend<=aln_seg2->ref_end){
+							start_seg_extend = aln_seg2;
+							break;
+						}
 					}
+					if(aln_seg2==aln_seg) break;
 				}
 			}
 			if(aln_seg->ref_end+VAR_ALN_EXTEND_SIZE>=blat_aln->aln_segs.at(blat_aln->aln_segs.size()-1)->ref_end)
@@ -993,13 +998,18 @@ void varCand::computeExtendAlnSegs(localAln_t *local_aln){
 				for(i=blat_aln->aln_segs.size()-1; i>0; i--){
 					aln_seg1 = blat_aln->aln_segs.at(i-1);
 					aln_seg2 = blat_aln->aln_segs.at(i);
-					if(endRefPos_extend>=aln_seg1->ref_start and endRefPos_extend<=aln_seg1->ref_end){
-						end_seg_extend = aln_seg1;
-						break;
-					}else if((endRefPos_extend>=aln_seg1->ref_end and endRefPos_extend<=aln_seg2->ref_start) or (endRefPos_extend>=aln_seg2->ref_start and endRefPos_extend<=aln_seg2->ref_end)){
-						end_seg_extend = aln_seg2;
-						break;
+					seglen1 = aln_seg1->ref_end - aln_seg1->ref_start + 1;
+					seglen2 = aln_seg2->ref_end - aln_seg2->ref_start + 1;
+					if(seglen1>=MIN_VALID_BLAT_SEG_SIZE and seglen2>=MIN_VALID_BLAT_SEG_SIZE){
+						if(endRefPos_extend>=aln_seg1->ref_start and endRefPos_extend<=aln_seg1->ref_end){
+							end_seg_extend = aln_seg1;
+							break;
+						}else if((endRefPos_extend>=aln_seg1->ref_end and endRefPos_extend<=aln_seg2->ref_start) or (endRefPos_extend>=aln_seg2->ref_start and endRefPos_extend<=aln_seg2->ref_end)){
+							end_seg_extend = aln_seg2;
+							break;
+						}
 					}
+					if(aln_seg1==aln_seg) break;
 				}
 			}
 		}
@@ -1021,7 +1031,7 @@ void varCand::computeLocalLocsAlnShortVar(localAln_t *local_aln){
 	end_seg_extend = local_aln->end_seg_extend;
 	blat_aln = blat_aln_vec.at(local_aln->blat_aln_id);
 
-	if(start_seg_extend==NULL and end_seg_extend==NULL){ // no extension on both sides
+	if(start_seg_extend==NULL or end_seg_extend==NULL){ // not two extensions on both sides
 		if(aln_seg->ref_start+VAR_ALN_EXTEND_SIZE<reg->startRefPos)
 			left_dist = reg->startRefPos - aln_seg->ref_start - VAR_ALN_EXTEND_SIZE;
 		else
@@ -1049,7 +1059,7 @@ void varCand::computeLocalLocsAlnShortVar(localAln_t *local_aln){
 //			local_aln->startQueryPos = querylen - local_aln->endQueryPos + 1;
 //			local_aln->endQueryPos = querylen - tmp_pos + 1;
 //		}
-	}else{ // an extension on both sides
+	}else{ // two extensions on both sides
 		if(start_seg_extend->ref_start+VAR_ALN_EXTEND_SIZE<aln_seg->ref_start)
 			left_dist = aln_seg->ref_start - start_seg_extend->ref_start - VAR_ALN_EXTEND_SIZE;
 		else
@@ -2963,6 +2973,8 @@ void varCand::callVariantsAlnSegEnd(){
 	bool fully_contained_flag, exist_flag;
 	int32_t disagreeNum, highIndelBaseNum, highIndelClipBaseNum;
 	double high_indel_clip_ratio;
+
+	if(assem_success==false or align_success==false) return;	// skip failed items
 
 	// load query names
 	FastaSeqLoader fa_loader(ctgfilename);

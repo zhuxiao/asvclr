@@ -1993,7 +1993,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("output_test_limit_reg_20200807/output_chr1/3_call/chr1/blat_chr1_6997047-7004096.sim4")==0)
+		//if(var_cand->alnfilename.compare("output_20201229/3_call/chr1/blat_chr1_146663904-146673915.sim4")==0)
 		{
 			//cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();
