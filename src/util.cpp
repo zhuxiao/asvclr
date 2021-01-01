@@ -1933,7 +1933,8 @@ vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln){
 }
 
 void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai){
-	size_t m, start_ref_pos, end_ref_pos, chrlen_tmp;
+	size_t m;
+	int64_t start_ref_pos, end_ref_pos, chrlen_tmp;
 	int32_t i, j, start_check_idx, end_check_idx;
 	string chrname_tmp, ctgseq_aln, refseq_aln, query_substr, subject_substr, substr, substr_gap;
 	mismatchReg_t *mis_reg, *mis_reg0, *mis_reg2, *tmp_mis_reg;

@@ -651,7 +651,7 @@ int Genome::genomeCall(){
 	// call variants
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->process_block_num)
+		//if(chr->chrname.compare("chr2")==0)
 		{
 			chr->chrLoadDataCall();
 			chr->chrCall();

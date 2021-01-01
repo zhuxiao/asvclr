@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
 		cout << "[" << time.getTime() << "]: call variants ..." << endl;
 
 		// call variants
-		paras.slideSize = paras.assemSlideSize;
+		paras.slideSize = paras.assemSlideSize;	// update slide size
 		genome.genomeCall();
 
 		cout << "[" << time.getTime() << "]: call variants finished." << endl;

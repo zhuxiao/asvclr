@@ -1705,8 +1705,8 @@ int32_t varCand::getAdjustedStartAlnIdxVar(localAln_t *local_aln){
 		if(maxCheckIdx>=(int32_t)midseq_aln.size()) maxCheckIdx = midseq_aln.size() - 1;
 
 		// slide to match position
-		while(midseq_aln.at(minCheckIdx)!='|') { minCheckIdx--; if(minCheckIdx<=0) break; }
-		while(midseq_aln.at(maxCheckIdx)!='|') { maxCheckIdx++; if(maxCheckIdx>=(int32_t)midseq_aln.size()-1) break; }
+		if(minCheckIdx>0) while(midseq_aln.at(minCheckIdx)!='|') { minCheckIdx--; if(minCheckIdx<=0) break; }
+		if(maxCheckIdx<(int32_t)midseq_aln.size()-1) while(midseq_aln.at(maxCheckIdx)!='|') { maxCheckIdx++; if(maxCheckIdx>=(int32_t)midseq_aln.size()-1) break; }
 
 		for(i=local_aln->start_aln_idx_var; i>=minCheckIdx; i--)
 			if(midseq_aln[i]!='|')
@@ -1735,8 +1735,8 @@ int32_t varCand::getAdjustedEndAlnIdxVar(localAln_t *local_aln){
 	if(maxCheckIdx>=(int32_t)midseq_aln.size()) maxCheckIdx = midseq_aln.size() - 1;
 
 	// slide to match position
-	while(midseq_aln.at(minCheckIdx)!='|') { minCheckIdx--; if(minCheckIdx<=0) break; }
-	while(midseq_aln.at(maxCheckIdx)!='|') { maxCheckIdx++; if(maxCheckIdx>=(int32_t)midseq_aln.size()-1) break; }
+	if(minCheckIdx>0) while(midseq_aln.at(minCheckIdx)!='|') { minCheckIdx--; if(minCheckIdx<=0) break; }
+	if(maxCheckIdx<(int32_t)midseq_aln.size()-1) while(midseq_aln.at(maxCheckIdx)!='|') { maxCheckIdx++; if(maxCheckIdx>=(int32_t)midseq_aln.size()-1) break; }
 
 	maxMismatchIdx = -1;
 	for(i=local_aln->end_aln_idx_var; i<=maxCheckIdx; i++)
