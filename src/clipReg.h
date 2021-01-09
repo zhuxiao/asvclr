@@ -38,16 +38,16 @@ using namespace std;
 
 typedef struct{
 	reg_t *leftClipReg, *rightClipReg;
-	size_t leftClipPosNum, rightClipPosNum;
-	size_t leftMeanClipPos, rightMeanClipPos;
+	int32_t leftClipPosNum, rightClipPosNum;
+	int64_t leftMeanClipPos, rightMeanClipPos;
 
 	reg_t *leftClipReg2, *rightClipReg2;
-	size_t leftClipPosNum2, rightClipPosNum2;
-	size_t leftMeanClipPos2, rightMeanClipPos2;
+	int32_t leftClipPosNum2, rightClipPosNum2;
+	int64_t leftMeanClipPos2, rightMeanClipPos2;
 
-	size_t leftClipRegNum, rightClipRegNum;
+	int8_t leftClipRegNum, rightClipRegNum;
 
-	size_t sv_type, dup_num;
+	int32_t sv_type:8, dup_num:24;
 	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag;
 	varCand *var_cand, *left_var_cand_tra, *right_var_cand_tra;  // TRA
 	string chrname_leftTra1, chrname_rightTra1, chrname_leftTra2, chrname_rightTra2;
@@ -59,7 +59,7 @@ class clipReg {
 	public:
 		Paras *paras;
 		string chrname, inBamFile;
-		size_t chrlen, startRefPos, endRefPos;
+		int64_t chrlen, startRefPos, endRefPos;
 		faidx_t *fai;
 
 		mateClipReg_t mate_clip_reg;
@@ -72,7 +72,7 @@ class clipReg {
 
 
 	public:
-		clipReg(string &chrname, size_t startRefPos, size_t endRefPos, size_t chrlen, string &inBamFile, faidx_t *fai, Paras *paras);
+		clipReg(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, faidx_t *fai, Paras *paras);
 		virtual ~clipReg();
 		void computeMateClipReg();
 

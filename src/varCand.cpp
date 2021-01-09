@@ -820,6 +820,7 @@ void varCand::callShortVariants(){
 						local_aln->startRefPos = local_aln->endRefPos = -1;
 						local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
 						local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
+						local_aln->chrlen = faidx_seq_len(fai, local_aln->reg->chrname.c_str()); // get the reference length
 
 						// extend the align segments if the given segment is short (<1kb)
 						if(aln_seg->ref_end-aln_seg->ref_start<MIN_AVER_SIZE_ALN_SEG)
@@ -957,13 +958,13 @@ void varCand::computeExtendAlnSegs(localAln_t *local_aln){
 	size_t i, seglen1, seglen2;
 	blat_aln_t *blat_aln;
 	aln_seg_t *aln_seg, *aln_seg1, *aln_seg2, *start_seg_extend, *end_seg_extend;
-	int64_t startRefPos_extend, endRefPos_extend, chrlen_tmp;
+	int64_t startRefPos_extend, endRefPos_extend, chrlen_tmp, dist;
 
 	start_seg_extend = end_seg_extend = NULL;
 	if(local_aln->blat_aln_id!=-1 and local_aln->aln_seg and local_aln->reg){
 		blat_aln = blat_aln_vec.at(local_aln->blat_aln_id);
 		aln_seg = local_aln->aln_seg;
-		chrlen_tmp = faidx_seq_len(fai, local_aln->reg->chrname.c_str()); // get the reference length
+		chrlen_tmp = local_aln->chrlen;
 
 		startRefPos_extend = aln_seg->ref_start - VAR_ALN_EXTEND_SIZE;
 		endRefPos_extend = aln_seg->ref_end + VAR_ALN_EXTEND_SIZE;
@@ -980,7 +981,8 @@ void varCand::computeExtendAlnSegs(localAln_t *local_aln){
 					aln_seg2 = blat_aln->aln_segs.at(i+1);
 					seglen1 = aln_seg1->ref_end - aln_seg1->ref_start + 1;
 					seglen2 = aln_seg2->ref_end - aln_seg2->ref_start + 1;
-					if(seglen1>=MIN_VALID_BLAT_SEG_SIZE and seglen2>=MIN_VALID_BLAT_SEG_SIZE){
+					dist = aln_seg2->ref_start - aln_seg1->ref_end;
+					if(seglen1>=MIN_AVER_SIZE_ALN_SEG and seglen2>=MIN_AVER_SIZE_ALN_SEG and dist<=MIN_AVER_SIZE_ALN_SEG){
 						if((startRefPos_extend>=aln_seg1->ref_start and startRefPos_extend<=aln_seg1->ref_end) or (startRefPos_extend>=aln_seg1->ref_end and startRefPos_extend<=aln_seg2->ref_start)){
 							start_seg_extend = aln_seg1;
 							break;
@@ -1000,7 +1002,8 @@ void varCand::computeExtendAlnSegs(localAln_t *local_aln){
 					aln_seg2 = blat_aln->aln_segs.at(i);
 					seglen1 = aln_seg1->ref_end - aln_seg1->ref_start + 1;
 					seglen2 = aln_seg2->ref_end - aln_seg2->ref_start + 1;
-					if(seglen1>=MIN_VALID_BLAT_SEG_SIZE and seglen2>=MIN_VALID_BLAT_SEG_SIZE){
+					dist = aln_seg2->ref_start - aln_seg1->ref_end;
+					if(seglen1>=MIN_AVER_SIZE_ALN_SEG and seglen2>=MIN_AVER_SIZE_ALN_SEG and dist<=MIN_AVER_SIZE_ALN_SEG){
 						if(endRefPos_extend>=aln_seg1->ref_start and endRefPos_extend<=aln_seg1->ref_end){
 							end_seg_extend = aln_seg1;
 							break;
@@ -1568,12 +1571,14 @@ void varCand::computeVarLoc(localAln_t *local_aln){
 
 // confirm short variation
 void varCand::confirmShortVar(localAln_t *local_aln){
-	int32_t i, check_extend_size, start_check_idx, end_check_idx, startRefPos, endRefPos, mismatchNum_aln, size_match_misreg_num;
+	int32_t i, chrlen_tmp, check_extend_size, start_check_idx, end_check_idx, startRefPos, endRefPos, mismatchNum_aln, size_match_misreg_num;
 	string refseq_aln;
 	vector<int32_t> numVec, misNum_vec;
 	vector<mismatchReg_t*> misReg_vec;
 
 	if(local_aln->start_aln_idx_var!=-1 and local_aln->end_aln_idx_var!=-1){
+		chrlen_tmp = local_aln->chrlen;
+
 		check_extend_size = SHORT_VAR_ALN_CHECK_EXTEND_SIZE;
 		start_check_idx = local_aln->start_aln_idx_var - check_extend_size;
 		end_check_idx = local_aln->end_aln_idx_var + check_extend_size;
@@ -1582,7 +1587,7 @@ void varCand::confirmShortVar(localAln_t *local_aln){
 		if(end_check_idx>=local_aln->overlapLen)
 			end_check_idx = local_aln->overlapLen;
 
-		// compute the refPos
+		// compute the start and end reference positions
 		refseq_aln = local_aln->alignResultVec[2];
 		startRefPos = local_aln->reg->startRefPos;
 		for(i=local_aln->start_aln_idx_var; i>=start_check_idx; i--)
@@ -1593,6 +1598,7 @@ void varCand::confirmShortVar(localAln_t *local_aln){
 		for(i=local_aln->end_aln_idx_var; i<=end_check_idx; i++)
 			if(refseq_aln[i]!='-')
 				endRefPos ++;
+		if(endRefPos>chrlen_tmp) endRefPos = chrlen_tmp;
 
 		// extract mismatch regions and remove short items and short polymer items
 		misReg_vec = getMismatchRegVec(local_aln);
@@ -1796,7 +1802,7 @@ void varCand::adjustRightLocShortVar(localAln_t *local_aln, int32_t newEndAlnIdx
 	refPos = local_aln->reg->endRefPos;
 	localRefPos = local_aln->reg->endLocalRefPos;
 
-	if(newEndAlnIdx<local_aln->start_aln_idx_var){
+	if(newEndAlnIdx<local_aln->end_aln_idx_var){
 		for(i=local_aln->end_aln_idx_var; i>=newEndAlnIdx; i--){
 			if(ctgseq_aln[i]!='-') queryPos --;
 			if(refseq_aln[i]!='-') { refPos --; localRefPos --; }
@@ -2540,6 +2546,7 @@ void varCand::computeVarRegLoc(reg_t *reg, reg_t *cand_reg){
 	local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
 	local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
 	local_aln->start_aln_idx_var = local_aln->end_aln_idx_var = -1;
+	local_aln->chrlen = faidx_seq_len(fai, local_aln->reg->chrname.c_str()); // get the reference length
 	computeLocalLocsAln(local_aln);
 
 	// get align sequences
@@ -2889,6 +2896,7 @@ void varCand::distinguishShortDupInvFromIndels(){
 						local_aln->startRefPos = local_aln->endRefPos = -1;
 						local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
 						local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
+						local_aln->chrlen = 0;
 
 						// get local sequences
 						FastaSeqLoader refseqloader(refseqfilename);
@@ -3317,6 +3325,7 @@ void varCand::determineClipRegInvType(){
 					local_aln->startRefPos = local_aln->endRefPos = -1;
 					local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
 					local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
+					local_aln->chrlen = 0;
 
 					// get local sequences
 					FastaSeqLoader refseqloader(refseqfilename);
@@ -3606,6 +3615,7 @@ vector<size_t> varCand::computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln
 				local_aln->startRefPos = local_aln->endRefPos = -1;
 				local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
 				local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
+				local_aln->chrlen = 0;
 
 				// get sub local sequence
 				local_aln->refseq = refseq.substr(localRefPos_start-1, subseq_len);
@@ -3724,6 +3734,7 @@ vector<size_t> varCand::computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, al
 				local_aln->startRefPos = local_aln->endRefPos = -1;
 				local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
 				local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
+				local_aln->chrlen = 0;
 
 				local_aln->refseq = refseq.substr(localRefPos_start-1, subseq_len);
 				local_aln->ctgseq = queryseq.substr(queryPos_start-1, subseq_len);
@@ -3832,6 +3843,7 @@ vector<size_t> varCand::computeQueryClipPosDup(blat_aln_t *blat_aln, int32_t cli
 		local_aln->startRefPos = local_aln->endRefPos = -1;
 		local_aln->startLocalRefPos = local_aln->startQueryPos = local_aln->endLocalRefPos = local_aln->endQueryPos = -1;
 		local_aln->queryLeftShiftLen = local_aln->queryRightShiftLen = local_aln->localRefLeftShiftLen = local_aln->localRefRightShiftLen = -1;
+		local_aln->chrlen = 0;
 
 		sub_refseq_len = sub_queryseq_len = 400; // MIN_AVER_SIZE_ALN_SEG;
 		if(localRefPos_start-1+sub_refseq_len>(int32_t)refseq.size()) sub_refseq_len = refseq.size() - (localRefPos_start - 1);

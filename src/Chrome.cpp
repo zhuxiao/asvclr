@@ -307,8 +307,9 @@ int Chrome::chrDetect_st(){
 
 // multiple threads
 int Chrome::chrDetect_mt(){
+	int32_t i;
 	MultiThread mt[paras->num_threads];
-	for(size_t i=0; i<paras->num_threads; i++){
+	for(i=0; i<paras->num_threads; i++){
 		mt[i].setNumThreads(paras->num_threads);
 		mt[i].setBlockVec(&blockVector);
 		mt[i].setUserThreadID(i);
@@ -317,7 +318,7 @@ int Chrome::chrDetect_mt(){
 			exit(1);
 		}
 	}
-	for(size_t i=0; i<paras->num_threads; i++){
+	for(i=0; i<paras->num_threads; i++){
 		if(!mt[i].join()){
 			cerr << __func__ << ", line=" << __LINE__ << ": unable to join, error!" << endl;
 			exit(1);
@@ -391,7 +392,7 @@ void Chrome::chrComputeMateClipReg(){
 
 				//cout << "[" << time.getTime() << "], [" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
-				clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, chrlen, paras->inBamFile, fai, paras);
+				clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, paras->inBamFile, fai, paras);
 				clip_reg.computeMateClipReg();
 
 				processClipRegs(i, clip_processed_flag_vec, clip_reg.mate_clip_reg, reg);
@@ -1890,8 +1891,9 @@ int Chrome::chrGenerateLocalAssembleWorkOpt_st(){
 
 // generate local assembly work for chrome using multiple threads
 int Chrome::chrGenerateLocalAssembleWorkOpt_mt(){
+	int32_t i;
 	MultiThread mt[paras->num_threads];
-	for(size_t i=0; i<paras->num_threads; i++){
+	for(i=0; i<paras->num_threads; i++){
 		mt[i].setNumThreads(paras->num_threads);
 		mt[i].setBlockVec(&blockVector);
 		mt[i].setUserThreadID(i);
@@ -1900,7 +1902,7 @@ int Chrome::chrGenerateLocalAssembleWorkOpt_mt(){
 			exit(1);
 		}
 	}
-	for(size_t i=0; i<paras->num_threads; i++){
+	for(i=0; i<paras->num_threads; i++){
 		if(!mt[i].join()){
 			cerr << __func__ << ", line=" << __LINE__ << ": unable to join, error!" << endl;
 			exit(1);
@@ -1993,7 +1995,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("output_20210101/3_call/chr2/blat_chr2_1-6074.sim4")==0)
+		//if(var_cand->alnfilename.compare("output_v0.8.1_hg19_20201223/3_call/chr6_ssto_hap7/blat_chr6_ssto_hap7_4922901-4928566.sim4")==0)
 		//if(i>=4000)
 		{
 			//cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
@@ -2004,8 +2006,9 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 
 // call variants for chrome using multiple threads
 void Chrome::chrCall_mt(){
+	int32_t i;
 	MultiThread mt[paras->num_threads];
-	for(size_t i=0; i<paras->num_threads; i++){
+	for(i=0; i<paras->num_threads; i++){
 		mt[i].setNumThreads(paras->num_threads);
 		mt[i].setVarCandVec(&var_cand_vec, &var_cand_clipReg_vec);
 		mt[i].setUserThreadID(i);
@@ -2014,7 +2017,7 @@ void Chrome::chrCall_mt(){
 			exit(1);
 		}
 	}
-	for(size_t i=0; i<paras->num_threads; i++){
+	for(i=0; i<paras->num_threads; i++){
 		if(!mt[i].join()){
 			cerr << __func__ << ", line=" << __LINE__ << ": unable to join, error!" << endl;
 			exit(1);

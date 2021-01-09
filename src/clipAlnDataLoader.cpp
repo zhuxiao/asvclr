@@ -213,16 +213,16 @@ double clipAlnDataLoader::computeCompensationCoefficient(size_t startRefPos, siz
 void clipAlnDataLoader::fillClipAlnDataBySATag(vector<clipAlnData_t*> &clipAlnDataVector){
 	size_t i, j;
 	clipAlnData_t *clip_aln;
-	uint8_t *ciger_int;
+	uint8_t *cigar_int;
 	string cigar_str, aln_seg_info_str;
 	vector<string> aln_seg_vec;
 
 	for(i=0; i<clipAlnDataVector.size(); i++){
 		clip_aln = clipAlnDataVector.at(i);
 		if(clip_aln->SA_tag_flag==false){
-			ciger_int = bam_aux_get(clip_aln->bam, "SA"); // SA
-			if(ciger_int) {
-				cigar_str = bam_aux2Z(ciger_int);
+			cigar_int = bam_aux_get(clip_aln->bam, "SA"); // SA
+			if(cigar_int) {
+				cigar_str = bam_aux2Z(cigar_int);
 
 				aln_seg_vec = split(cigar_str, ";");
 				for(j=0; j<aln_seg_vec.size(); j++){

@@ -387,15 +387,14 @@ vector<string> LocalAssembly::getQuerySeqWithSoftClipSeqs(clipAlnData_t* clip_al
 vector<string> LocalAssembly::joinQueryAlnSegs(vector<clipAlnData_t*> &query_aln_segs){
 	string qseq, qual, qseq_result, qual_result, gap_seq, gap_qual;
 	vector<string> query_seq_qual_vec;
-	size_t i, join_orient, seq_len;
 	uint8_t *seq_int, *qual_int;
-	int32_t j, left_most_idx, overlap_size, gap_size, startQueryPos, endQueryPos;
+	int32_t j, join_orient, seq_len, left_most_idx, overlap_size, gap_size, startQueryPos, endQueryPos;
 	clipAlnData_t *clip_aln, *pre_clip_aln;
 
 	pre_clip_aln = NULL; join_orient = ALN_PLUS_ORIENT;
 	startQueryPos = endQueryPos = -1;
 	qseq_result = qual_result = "";
-	for(i=0; i<query_aln_segs.size(); i++){
+	for(size_t i=0; i<query_aln_segs.size(); i++){
 		// get left most segment
 		left_most_idx = getLeftMostAlnSeg(query_aln_segs);
 		if(left_most_idx!=-1){
@@ -477,7 +476,7 @@ vector<string> LocalAssembly::joinQueryAlnSegs(vector<clipAlnData_t*> &query_aln
 
 int32_t LocalAssembly::getLeftMostAlnSeg(vector<clipAlnData_t*> &query_aln_segs){
 	int32_t left_most_idx;
-	size_t minPos;
+	int64_t minPos;
 	clipAlnData_t *clip_aln;
 
 	left_most_idx = -1;

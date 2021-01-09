@@ -651,7 +651,7 @@ int Genome::genomeCall(){
 	// call variants
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("chr2")==0)
+		//if(chr->chrname.compare("chr6_ssto_hap7")==0)
 		{
 			chr->chrLoadDataCall();
 			chr->chrCall();
@@ -677,7 +677,7 @@ int Genome::genomeCall(){
 	mergeCallResult();
 
 	// save results in VCF file format
-	saveResultVCF();
+	//saveResultVCF();
 
 	// compute statistics for call command
 	cout << "[" << time.getTime() << "]: compute variant NUMBER statistics... " << endl;
@@ -1088,8 +1088,9 @@ void Genome::blatAlnTra_st(vector<blatAlnTra*> *blat_aln_tra_vec){
 }
 
 void Genome::blatAlnTra_mt(vector<blatAlnTra*> *blat_aln_tra_vec){
+	int32_t i;
 	MultiThread mt[paras->num_threads];
-	for(size_t i=0; i<paras->num_threads; i++){
+	for(i=0; i<paras->num_threads; i++){
 		mt[i].setNumThreads(paras->num_threads);
 		mt[i].setBlatAlnTraVec(blat_aln_tra_vec);
 		mt[i].setUserThreadID(i);
@@ -1098,7 +1099,7 @@ void Genome::blatAlnTra_mt(vector<blatAlnTra*> *blat_aln_tra_vec){
 			exit(1);
 		}
 	}
-	for(size_t i=0; i<paras->num_threads; i++){
+	for(i=0; i<paras->num_threads; i++){
 		if(!mt[i].join()){
 			cerr << __func__ << ", line=" << __LINE__ << ": unable to join, error!" << endl;
 			exit(1);
@@ -2494,7 +2495,7 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 			//reg = str_vec[0] + ":" + str_vec[1] + "-" + str_vec[2];
 			//seq = fai_fetch(fai, reg.c_str(), &seq_len);
 
-			if(str_vec.size()<=MAX_BED_COLS_NUM){ // INS, DEL, DUP, INV, MIX
+			if(str_vec.size()<=MAX_BED_COLS_NUM){ // INS, DEL, DUP, INV, MIX, UNC
 				chr = str_vec.at(0);		// CHROM
 				start_pos = str_vec.at(1);	// POS
 				id = ".";					// ID
@@ -2507,6 +2508,7 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 				end_pos = str_vec.at(2);
 				sv_type = str_vec.at(3);
 				sv_len = str_vec.at(4);
+				if(sv_type.compare(VAR_UNC_STR)==0 or sv_type.compare(VAR_UNC_STR1)==0 or sv_type.compare(VAR_UNC_STR2)==0) ref = alt = "."; // UNC
 				info = "CHR2=" + chr2 + ";END=" + end_pos + ";SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len;	// INFO: CHR2=chr2;END=end;SVTYPE=sv_type;SVLEN=sv_len
 				if(sv_type.compare(VAR_DUP_STR)==0 or sv_type.compare(VAR_DUP_STR1)==0) { // DUPNUM=dup_num
 					dup_num = str_vec.at(5);
@@ -2522,7 +2524,8 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 
 			}else{	// TRA, BND, MIX
 				chr = str_vec.at(0);		// CHROM
-				start_pos = str_vec.at(1);	// POS
+				if(str_vec.at(1).compare("-")==0) start_pos = str_vec.at(2); // POS
+				else start_pos = str_vec.at(1);
 				id = ".";					// ID
 				ref = ".";					// REF
 				alt = ".";					// ALT
@@ -2531,7 +2534,8 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 				filter = "PASS";			// FILTER
 
 				chr2 = str_vec.at(3);
-				end_pos = str_vec.at(4);
+				if(str_vec.at(4).compare("-")==0) end_pos = str_vec.at(5);
+				else end_pos = str_vec.at(4);
 				sv_type = str_vec.at(6);
 				sv_len = "False";
 				info = "CHR2=" + chr2 + ";END=" + end_pos + ";SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len;	// INFO: CHR2=chr2;END=end;SVTYPE=sv_type;SVLEN=sv_len
@@ -2608,26 +2612,29 @@ void Genome::saveVCFHeader(ofstream &fp, string &sample_str){
 	timeinfo = localtime (&rawtime);
 	strftime(buffer, sizeof(buffer), "%Y%m%d", timeinfo);
 
-	fp << "##fileformat=VCFv4.2" << endl;
+	fp << "##fileformat=VCFv" << VCF_VERSION << endl;
 	fp << "##fileDate=" << buffer << endl;
 	fp << "##source=" << PROG_NAME << "_v" << PROG_VERSION << endl;
 	fp << "##reference=" << paras->refFile << endl;
+	fp << "##PG=" << paras->pg_cmd_str << endl;
 
 	saveVCFContigHeader(fp);	// contigs information
 
 	fp << "##phasing=None" << endl;
-	fp << "##ALT=<ID=INS,Description=\"Insertion\">" << endl;
-	fp << "##ALT=<ID=DEL,Description=\"Deletion\">" << endl;
-	fp << "##ALT=<ID=DUP,Description=\"Duplication\">" << endl;
-	fp << "##ALT=<ID=INV,Description=\"Inversion\">" << endl;
-	fp << "##ALT=<ID=INVDUP,Description=\"Inverted DUP with unknown boundaries\">" << endl;
-	fp << "##ALT=<ID=TRA,Description=\"Translocation\">" << endl;
-	fp << "##ALT=<ID=BND,Description=\"Breakend\">" << endl;
+//	fp << "##ALT=<ID=INS,Description=\"Insertion\">" << endl;
+//	fp << "##ALT=<ID=DEL,Description=\"Deletion\">" << endl;
+//	fp << "##ALT=<ID=DUP,Description=\"Duplication\">" << endl;
+//	fp << "##ALT=<ID=INV,Description=\"Inversion\">" << endl;
+//	fp << "##ALT=<ID=INVDUP,Description=\"Inverted DUP with unknown boundaries\">" << endl;
+//	fp << "##ALT=<ID=TRA,Description=\"Translocation\">" << endl;
+//	fp << "##ALT=<ID=BND,Description=\"Breakend\">" << endl;
 	fp << "##INFO=<ID=CHR2,Number=1,Type=String,Description=\"Chromosome for END coordinate in case of a translocation\">" << endl;
-	fp << "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant\">" << endl;
+	fp << "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant described in this record\">" << endl;
 	fp << "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">" << endl;
-	fp << "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Length of the SV\">" << endl;
+	fp << "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Difference in length between REF and ALT alleles\">" << endl;
 	fp << "##INFO=<ID=DUPNUM,Number=1,Type=Integer,Description=\"Copy number of DUP\">" << endl;
+	fp << "##INFO=<ID=MATEID,Number=.,Type=String,Description=\"ID of mate breakends\">" << endl;
+	fp << "##INFO=<ID=MATEDIST,Number=1,Type=Integer,Description=\"Distance to the mate breakend for mates on the same contig\">" << endl;
 	fp << "##INFO=<ID=BLATINNER,Number=1,Type=Flag,Description=\"variants called from inner parts of BLAT align segment\">" << endl;
 	fp << "##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of Samples With Data\">" << endl;
 	fp << "##FILTER=<ID=q10,Description=\"Quality below 10\">" << endl;

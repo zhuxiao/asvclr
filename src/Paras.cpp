@@ -31,6 +31,7 @@ void Paras::init(){
 	outFilePrefix = "";
 	outDir = OUT_DIR;
 	sample = SAMPLE_DEFAULT;
+	pg_cmd_str = "";
 	num_threads = 0;
 
 	min_ins_size_filt = 0;
@@ -145,32 +146,42 @@ int Paras::checkBamFile(){
 int Paras::parseParas(int argc, char **argv){
 	if (argc < 2) { showUsage(); return 1; }
 
-    if (strcmp(argv[1], "-h") == 0 or strcmp(argv[1], "help") == 0 or strcmp(argv[1], "--help") == 0) {
-        if (argc == 2) { showUsage(); exit(0); }
-        argv++;
-        argc = 2;
-    }
+	if (strcmp(argv[1], "-h") == 0 or strcmp(argv[1], "help") == 0 or strcmp(argv[1], "--help") == 0) {
+		if (argc == 2) { showUsage(); exit(0); }
+		argv++;
+		argc = 2;
+	}
 
-    if (strcmp(argv[1], "detect")==0){
-    	if(argc==2){ showDetectUsage(); exit(0); }
-    	command = "detect";
-    	return parseDetectParas(argc-1, argv+1);
-    }else if(strcmp(argv[1], "assemble")==0){
-    	if(argc==2){ showAssembleUsage(); exit(0); }
-    	command = "assemble";
-    	return parseAssembleParas(argc-1, argv+1);
-    }else if(strcmp(argv[1], "call")==0){
-    	if(argc==2){ showCallUsage(); exit(0); }
-    	command = "call";
-    	return parseCallParas(argc-1, argv+1);
-    }else if(strcmp(argv[1], "all")==0){
-    	if(argc==2){ showAllUsage(); exit(0); }
-    	command = "all";
-    	return parseAllParas(argc-1, argv+1);
-    }else{
-    	cerr << "Error: invalid command " << argv[1] << endl << endl;
-    	showUsage(); return 1;
-    }
+	// save program command line
+	pg_cmd_str = getPgCmd(argc, argv);
+
+	if (strcmp(argv[1], "detect")==0){
+		if(argc==2){ showDetectUsage(); exit(0); }
+		command = "detect";
+		return parseDetectParas(argc-1, argv+1);
+	}else if(strcmp(argv[1], "assemble")==0){
+		if(argc==2){ showAssembleUsage(); exit(0); }
+		command = "assemble";
+		return parseAssembleParas(argc-1, argv+1);
+	}else if(strcmp(argv[1], "call")==0){
+		if(argc==2){ showCallUsage(); exit(0); }
+		command = "call";
+		return parseCallParas(argc-1, argv+1);
+	}else if(strcmp(argv[1], "all")==0){
+		if(argc==2){ showAllUsage(); exit(0); }
+		command = "all";
+		return parseAllParas(argc-1, argv+1);
+	}else{
+		cerr << "Error: invalid command " << argv[1] << endl << endl;
+		showUsage(); return 1;
+	}
+}
+
+// get program command string
+string Paras::getPgCmd(int argc, char **argv){
+	string pg_cmd_str = argv[0];
+	for(int i=1; i<argc; i++) pg_cmd_str = pg_cmd_str + " " + argv[i];
+	return pg_cmd_str;
 }
 
 // parse the parameters for detect command
@@ -276,7 +287,7 @@ int Paras::parseAssembleParas(int argc, char **argv){
 	load_from_file_flag = true;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 
-	if(num_threads*num_threads_per_assem_work>(size_t)sysconf(_SC_NPROCESSORS_ONLN)){ // warning
+	if(num_threads*num_threads_per_assem_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
 		cout << "Warning: the user-specified total number of concurrent assemble work is " << num_threads << ", and the user-specified number of threads for each assemble work is " << num_threads_per_assem_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
 	}
 
@@ -415,7 +426,7 @@ int Paras::parseAllParas(int argc, char **argv){
 	load_from_file_flag = false;
 	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 
-	if(num_threads*num_threads_per_assem_work>(size_t)sysconf(_SC_NPROCESSORS_ONLN)){ // warning
+	if(num_threads*num_threads_per_assem_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
 		cout << "Warning: the user-specified total number of concurrent assemble work is " << num_threads << ", and the user-specified number of threads for each assemble work is " << num_threads_per_assem_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
 	}
 
@@ -637,7 +648,7 @@ void Paras::outputEstParas(string info){
 
 // initialize the estimation auxiliary data
 void Paras::initEst(){
-	size_t i;
+	int32_t i;
 	for(i=0; i<AUX_ARR_SIZE; i++) insSizeEstArr[i] = 0;
 	for(i=0; i<AUX_ARR_SIZE; i++) delSizeEstArr[i] = 0;
 	for(i=0; i<AUX_ARR_SIZE; i++) clipSizeEstArr[i] = 0;
@@ -688,8 +699,8 @@ void Paras::estimate(size_t op_est){
 }
 
 // estimate single parameter
-size_t Paras::estimateSinglePara(size_t *arr, size_t n, double threshold, size_t min_val){
-	size_t i, total, val = 1;
+int64_t Paras::estimateSinglePara(int64_t *arr, int32_t n, double threshold, int32_t min_val){
+	int64_t i, total, val = 1;
 	double total1;
 
 	for(i=0, total=0; i<AUX_ARR_SIZE; i++) total += arr[i];

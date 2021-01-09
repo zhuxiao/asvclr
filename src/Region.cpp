@@ -385,8 +385,8 @@ bool Region::haveMuchShortIndelsAround(int64_t startCheckPos, int64_t endCheckPo
 	for(int64_t i=startCheckPos; i<=endCheckPos; i++){
 		base = regBaseArr + i - startRPos;
 		//if(base->insVector.size()>=paras->min_ins_num_filt or base->delVector.size()>=paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
-		if(base->insVector.size()>=paras->min_ins_num_filt or base->del_num_from_del_vec>=(int32_t)paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
-			or base->num_shortIns>=(int32_t)paras->min_ins_num_filt or base->num_shortdel>=(int32_t)paras->min_del_num_filt or base->num_shortClip>=(int32_t)paras->min_clip_num_filt
+		if(base->insVector.size()>=(size_t)paras->min_ins_num_filt or base->del_num_from_del_vec>=paras->min_del_num_filt or base->clipVector.size()>=(size_t)paras->min_clip_num_filt
+			or base->num_shortIns>=paras->min_ins_num_filt or base->num_shortdel>=paras->min_del_num_filt or base->num_shortClip>=paras->min_clip_num_filt
 			/*or base->getLargerInsNum(paras->min_ins_size_filt)>0 or base->getLargerDelNum(paras->min_del_size_filt)>0 or base->getLargerClipNum(paras->min_clip_size_filt)>0*/){
 			flag = true;
 			break;
@@ -547,7 +547,7 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 bool Region::haveNoAbSigs(Base *base, int64_t pos){
 	if(base->isDisagreeBase())
 		if(find(snvVector.begin(), snvVector.end(), pos)==snvVector.end()) return false;
-	if(base->isZeroCovBase() or base->insVector.size()>=paras->min_ins_num_filt or base->del_num_from_del_vec>=(int32_t)paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
+	if(base->isZeroCovBase() or base->insVector.size()>=(size_t)paras->min_ins_num_filt or base->del_num_from_del_vec>=paras->min_del_num_filt or base->clipVector.size()>=(size_t)paras->min_clip_num_filt
 	//if(base->isZeroCovBase() or base->insVector.size()>=paras->min_ins_num_filt or base->delVector.size()>=paras->min_del_num_filt or base->clipVector.size()>=paras->min_clip_num_filt
 		//or base->num_shortIns>=paras->min_ins_num_filt or base->num_shortdel>=paras->min_del_num_filt or base->num_shortClip>=paras->min_clip_num_filt
 		/*or base->getLargerInsNum(paras->min_ins_size_filt)>0 or base->getLargerDelNum(paras->min_del_size_filt)>0 or base->getLargerClipNum(paras->min_clip_size_filt)>0*/)
