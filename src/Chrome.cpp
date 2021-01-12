@@ -220,15 +220,14 @@ void Chrome::chrFillDataEst(size_t op_est){
 	char *seq;
 	bool flag;
 
-	if(chrlen>=MIN_CHR_SIZE_EST){ // minimal chromosome size 50kb
+	if(chrlen>=MIN_CHR_SIZE_EST){ // minimal chromosome size 60kb
 		pos = chrlen / 2;
-		while(pos<chrlen-(MIN_CHR_SIZE_EST-MIN_CHR_SIZE_EST)/2){
+		while(pos<chrlen-MIN_CHR_SIZE_EST/2){
 			flag = true;
 
-			// construct a block with a 10kb size
+			// construct a block with a 20kb size
 			begPos = pos - BLOCK_SIZE_EST/2;
 			endPos = begPos + BLOCK_SIZE_EST - 1;
-
 			reg = chrname + ":" + to_string(begPos) + "-" + to_string(endPos);
 			seq = fai_fetch(fai, reg.c_str(), &seq_len);
 			for(i=0; i<seq_len; i++){
@@ -387,8 +386,8 @@ void Chrome::chrComputeMateClipReg(){
 	for(i=0; i<clipRegVector.size(); i++){
 		//if(i==3180)
 		{
-			reg = clipRegVector.at(i);
 			if(clip_processed_flag_vec.at(i)==false){
+				reg = clipRegVector.at(i);
 
 				//cout << "[" << time.getTime() << "], [" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
@@ -1996,7 +1995,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
 		//if(var_cand->alnfilename.compare("output_v0.8.1_hg19_20201223/3_call/chr6_ssto_hap7/blat_chr6_ssto_hap7_4922901-4928566.sim4")==0)
-		//if(i>=4000)
+		//if(i>=375)
 		{
 			//cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();

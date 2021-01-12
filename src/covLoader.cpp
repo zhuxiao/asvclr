@@ -1,16 +1,17 @@
 #include "covLoader.h"
 #include "util.h"
 
-covLoader::covLoader(string &chrname, size_t startPos, size_t endPos, faidx_t *fai) {
+covLoader::covLoader(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai) {
 	this->chrname = chrname;
 	this->startPos = startPos;
 	this->endPos = endPos;
 	this->fai = fai;
 	min_ins_size_filt = min_del_size_filt = 0;
 	left_ref_base = right_ref_base = '-';
+	bam_type = BAM_INVALID;
 }
 
-covLoader::covLoader(string &chrname, size_t startPos, size_t endPos, faidx_t *fai, size_t min_ins_size_filt, size_t min_del_size_filt) {
+covLoader::covLoader(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, int32_t min_ins_size_filt, int32_t min_del_size_filt) {
 	this->chrname = chrname;
 	this->startPos = startPos;
 	this->endPos = endPos;
@@ -18,6 +19,7 @@ covLoader::covLoader(string &chrname, size_t startPos, size_t endPos, faidx_t *f
 	this->min_ins_size_filt = min_ins_size_filt;
 	this->min_del_size_filt = min_del_size_filt;
 	left_ref_base = right_ref_base = '-';
+	bam_type = BAM_INVALID;
 }
 
 covLoader::~covLoader() {
@@ -132,18 +134,45 @@ void covLoader::assignPolymerFlag(Base *baseArray){
 // assign base coverage
 void covLoader::generateBaseCoverage(Base *baseArr, vector<bam1_t*> &alnDataVector){
 	vector<struct alnSeg*> alnSegs;
-	vector<bam1_t*>::iterator aln;
-	//string qname;
-	for(aln=alnDataVector.begin(); aln!=alnDataVector.end(); aln++)
-		if(!((*aln)->core.flag & BAM_FUNMAP)){ // aligned
-			//qname = bam_get_qname(*aln);
-			//if(qname.compare("cc7f944e_142691_4447")==0){
-			//	cout << qname << endl;
-			//}
-			alnSegs = generateAlnSegs(*aln); // generate align segments
+	bam1_t *b;
+//	string qname,qname_com;
+
+	if(alnDataVector.empty()) return; // tolerate zero coverage regions
+
+	bam_type = getBamType(alnDataVector.at(0));
+	if(bam_type==BAM_INVALID){
+		cerr << __func__ << ": unknown bam type, error!" << endl;
+		exit(1);
+	}
+	for(size_t i=0; i<alnDataVector.size(); i++){
+		b = alnDataVector.at(i);
+		if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+//			qname = bam_get_qname(b);
+//			cin>>qname_com;
+//			qname_com = "b219a8ba_98667_6199";
+//			if(qname.compare(qname_com)==0)
+//				cout << qname << endl;
+//			else continue;
+
+			switch(bam_type){
+				case BAM_CIGAR_NO_DIFF_MD:
+					alnSegs = generateAlnSegs(b);
+					break;
+				case BAM_CIGAR_NO_DIFF_NO_MD:
+				case BAM_CIGAR_DIFF_MD:
+				case BAM_CIGAR_DIFF_NO_MD:
+					alnSegs = generateAlnSegs_no_MD(b, baseArr);
+					break;
+				default:
+					cerr << __func__ << ": unknown bam type, error!" << endl;
+					exit(1);
+			}// generate align segments
+
 			updateBaseInfo(baseArr, alnSegs); // update base information
 			destroyAlnSegs(alnSegs);
+
 		}
+	}
 
 	updateBaseCovInfo(baseArr);
 
@@ -258,10 +287,123 @@ vector<struct alnSeg*> covLoader::generateAlnSegs(bam1_t* b){
 		}
 	}
 	destroyMDSeg(segs_MD);
+
 	return alnSegs;
 }
 
-struct alnSeg* covLoader::allocateAlnSeg(size_t startRpos, size_t startQpos, size_t seglen, size_t opflag, string &seg_MD){
+vector<struct alnSeg*>covLoader::generateAlnSegs_no_MD(bam1_t* b, Base* BaseArr){
+	vector<struct alnSeg*> alnSegs;
+	uint32_t *c, op, i = 0,startRpos, startQpos;
+	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx;
+	char queBase, ref;
+	string ins_str, str_tmp, diff, del;
+
+	startRpos = b->core.pos + 1;  // 1-based
+	startQpos = 1;
+
+	c = bam_get_cigar(b);  // CIGAR
+	op = bam_cigar_op(c[i]);
+	tmp_cigar_len = bam_cigar_oplen(c[i]);
+	string qname = bam_get_qname(b);
+
+	while(i<b->core.n_cigar){
+		switch(op){
+			case BAM_CMATCH:
+				mis_idx = -1;
+				for(k=0; k<tmp_cigar_len; k++){
+					if(startRpos+k>=startPos and startRpos+k<=endPos){
+						queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+						ref = BaseArr[startRpos+k-startPos].coverage.refBase;
+						if(isBaseMatch(queBase,ref)==false){
+							if(mis_idx==-1) {
+								startmatch_idx = 0;
+								endmatch_idx = k;//
+								str_tmp = "";
+								alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, endmatch_idx, BAM_CMATCH, str_tmp));
+							}else {
+								startmatch_idx = mis_idx;
+								endmatch_idx = k - 1;
+								str_tmp = "";
+								alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx, endmatch_idx-startmatch_idx, BAM_CMATCH, str_tmp));
+							}
+							diff = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+							alnSegs.push_back(allocateAlnSeg(startRpos+k, startQpos+k, 1, MD_MISMATCH, diff));
+							mis_idx = k;
+						}
+					}
+				}
+				if(mis_idx==-1){
+					str_tmp = "";
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CMATCH, str_tmp));
+				}else {
+					startmatch_idx = mis_idx;
+					str_tmp = "";
+					alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx+1, tmp_cigar_len-startmatch_idx-1, BAM_CMATCH, str_tmp));
+				}
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CINS:
+				// add alnSeg item
+				ins_str = "";
+				for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
+				startQpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+
+				break;
+			case BAM_CDEL:
+				// add alnSeg item
+				del = "";
+				for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];//something wrong?
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CSOFT_CLIP:
+			case BAM_CHARD_CLIP:
+				str_tmp = to_string(tmp_cigar_len);
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, op, str_tmp));
+				if(op==BAM_CSOFT_CLIP) startQpos += tmp_cigar_len;
+				if(++i<b->core.n_cigar){
+					op = bam_cigar_op(c[i]);
+					tmp_cigar_len = bam_cigar_oplen(c[i]);
+				}
+				break;
+			case BAM_CEQUAL:
+				str_tmp = "";
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CEQUAL, str_tmp));
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CDIFF:
+				diff = "";
+				for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDIFF, diff));
+
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CREF_SKIP: // unexpected events
+			case BAM_CPAD:
+			case BAM_CBACK:
+			default:
+				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
+				exit(1);
+		}
+	}
+	return alnSegs;
+}
+
+struct alnSeg* covLoader::allocateAlnSeg(int64_t startRpos, int64_t startQpos, int32_t seglen, uint32_t opflag, string &seg_MD){
 	struct alnSeg* seg = new struct alnSeg;
 	if(!seg){
 		cerr << __func__ << ": cannot allocate memory" << endl;
@@ -281,6 +423,52 @@ void covLoader::destroyAlnSegs(vector<struct alnSeg*> &alnSegs){
 	for(seg=alnSegs.begin(); seg!=alnSegs.end(); seg++) delete *seg;
 	vector<struct alnSeg*>().swap(alnSegs);
 }
+
+//estimate the kind of bamfile
+int covLoader::getBamType(bam1_t *b){
+	uint32_t *c, op,i;
+	uint8_t *flag;
+	flag = bam_aux_get(b,"MD");
+	if ( flag ){
+		for(i=0; i<b->core.n_cigar; i++){
+			c = bam_get_cigar(b);  // CIGAR
+			op = bam_cigar_op(c[i]);
+			if(op == BAM_CMATCH){
+				//cout<<"there are MD flag and CMATCH in the bam file"<<endl;
+				return BAM_CIGAR_NO_DIFF_MD;
+			}
+		}
+		for(i=0; i<b->core.n_cigar; i++){
+			c = bam_get_cigar(b);  // CIGAR
+			op = bam_cigar_op(c[i]);
+			if(op == BAM_CEQUAL || op == BAM_CDIFF){
+				//cout<<"there are MD flag and CDIFF in the bam file"<<endl;
+				return BAM_CIGAR_DIFF_MD;
+			}
+		}
+	}else {
+		for(i=0; i<b->core.n_cigar; i++){
+			c = bam_get_cigar(b);  // CIGAR
+			op = bam_cigar_op(c[i]);
+			if(op == BAM_CMATCH){
+				//cout<<"there is no MD flag but having CMATCH in the bam file"<<endl;
+				return BAM_CIGAR_NO_DIFF_NO_MD;
+			}
+		}
+		for(i=0; i<b->core.n_cigar; i++){
+			c = bam_get_cigar(b);  // CIGAR
+			op = bam_cigar_op(c[i]);
+			if(op == BAM_CEQUAL || op == BAM_CDIFF){
+				//cout<<"there is no MD flag but having CDIFF in the bam file"<<endl;
+				return BAM_CIGAR_DIFF_NO_MD;
+			}
+		}
+	}
+
+	cout<<"invalid bam file"<<endl;
+	return BAM_INVALID;
+}
+
 
 // get the MD segs
 vector<struct MD_seg*> covLoader::extractMDSegs(bam1_t* b){
@@ -320,7 +508,7 @@ vector<struct MD_seg*> covLoader::extractMDSegs(bam1_t* b){
 }
 
 // allocate MD seg node
-struct MD_seg* covLoader::allocateMDSeg(string& seg, size_t opflag){
+struct MD_seg* covLoader::allocateMDSeg(string& seg, uint32_t opflag){
 	struct MD_seg* seg_MD = new struct MD_seg;
 	if(!seg_MD){
 		cerr << __func__ << ": cannot allocate memory" << endl;
@@ -355,8 +543,9 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 	for(seg=alnSegs.begin(); seg!=alnSegs.end(); seg++){
 		switch((*seg)->opflag){
 			case BAM_CMATCH:
+				if((*seg)->startRpos>=startPos and (*seg)->startRpos<=endPos){
 					tmp_endPos = (*seg)->startRpos + (*seg)->seglen - 1;
-					for(pos=(*seg)->startRpos; pos<=tmp_endPos; pos++)
+					for(pos=(*seg)->startRpos; pos<=tmp_endPos; pos++){
 						if(pos>=startPos and pos<=endPos){
 							cover = &(baseArr[pos-startPos].coverage);
 							if(cover->idx_RefBase>=0 and cover->idx_RefBase<=4)
@@ -367,11 +556,13 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 								exit(1);
 							}
 						}
-					break;
+					}
+				}
+				break;
 			case MD_MISMATCH:  // single base mismatch
 					if((*seg)->startRpos>=startPos and (*seg)->startRpos<=endPos){
 						cover = &(baseArr[(*seg)->startRpos-startPos].coverage);
-						misbase = (*seg)->seg_MD.c_str()[0];
+						misbase = (*seg)->seg_MD.at(0);
 						switch(misbase){
 							case 'a':
 							case 'A': idx = 0; break;
@@ -419,10 +610,57 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 					baseArr[(*seg)->startRpos-startPos].addClipEvent(allocateClipEvent((*seg)->startRpos, (*seg)->opflag, endflag, (*seg)->seg_MD));
 				}
 				break;
+			case BAM_CEQUAL:
+				if((*seg)->startRpos>=startPos and (*seg)->startRpos<=endPos){
+					tmp_endPos = (*seg)->startRpos + (*seg)->seglen - 1;
+					for(pos=(*seg)->startRpos; pos<=tmp_endPos; pos++){
+						if(pos>=startPos and pos<=endPos){
+							cover = &(baseArr[pos-startPos].coverage);
+							if(cover->idx_RefBase>=0 and cover->idx_RefBase<=4)
+								cover->num_bases[cover->idx_RefBase] ++;
+							else{
+								cerr << __func__ << ", line=" << __LINE__ << ": invalid idx_RefBase " << cover->idx_RefBase << endl;
+								outputAlnSegs(alnSegs);
+								exit(1);
+							}
+						}
+					}
+				}
+				break;
+			case BAM_CDIFF:
+				if((*seg)->startRpos>=startPos and (*seg)->startRpos<=endPos){
+					tmp_endPos = (*seg)->startRpos + (*seg)->seglen - 1;
+					for(pos=(*seg)->startRpos; pos<=tmp_endPos; pos++){
+						if(pos>=startPos and pos<=endPos){
+							cover = &(baseArr[pos-startPos].coverage);
+							misbase = (*seg)->seg_MD.at(pos-(*seg)->startRpos);
+							switch(misbase){
+								case 'a':
+								case 'A': idx = 0; break;
+								case 'c':
+								case 'C': idx = 1; break;
+								case 'g':
+								case 'G': idx = 2; break;
+								case 't':
+								case 'T': idx = 3; break;
+								case 'n':
+								case 'N': idx = 4; break;
+								default:
+									cerr << __func__ << ", line=" << __LINE__ << ": invalid base " << int(misbase) << endl;
+									exit(1);
+							}
+							if(idx!=cover->idx_RefBase) cover->num_bases[idx] ++;
+							else if(idx==4) cover->num_bases[idx] ++;   // tolerate the mismatched base 'N'
+							else{
+								cerr << __func__ << ", line=" << __LINE__ << ": invalid array idx=" << idx << endl;
+								exit(1);
+							}
+						}
+					}
+				}
+				break;
 			case BAM_CREF_SKIP:  // unexpected events
 			case BAM_CPAD:
-			case BAM_CEQUAL:
-			case BAM_CDIFF:
 			case BAM_CBACK:
 				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << (*seg)->opflag << endl;
 				exit(1);
@@ -431,6 +669,7 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 				break;
 		}
 	}
+
 	return 0;
 }
 
@@ -555,7 +794,7 @@ void covLoader::outputMDSeg(vector<struct MD_seg*> &segs_MD){
 }
 
 // determine whether the alignment have the given cigar flag
-bool covLoader::haveOpflagCigar(bam1_t* b, size_t opfalg){
+bool covLoader::haveOpflagCigar(bam1_t* b, uint32_t opfalg){
 	bool flag = false;
 	uint32_t i, *c, op;
 

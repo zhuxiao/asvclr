@@ -651,7 +651,7 @@ int Genome::genomeCall(){
 	// call variants
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("chr6_ssto_hap7")==0)
+		//if(chr->chrname.compare("chr3")==0)
 		{
 			chr->chrLoadDataCall();
 			chr->chrCall();
@@ -2343,9 +2343,9 @@ void Genome::saveTraCall2File(){
 		for(j=0; j<mate_clipReg_vec.size(); j++){
 			clip_reg = mate_clipReg_vec.at(j);
 			if(clip_reg->valid_flag and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA and (clip_reg->leftClipPosTra1>0 or clip_reg->rightClipPosTra1>0) and (clip_reg->leftClipPosTra2>0 or clip_reg->rightClipPosTra2>0)){
-				if(clip_reg->left_var_cand_tra==NULL or clip_reg->right_var_cand_tra==NULL){
-					cout << "i=" << i << ", j=" << j << endl;
-				}
+//				if(clip_reg->left_var_cand_tra==NULL or clip_reg->right_var_cand_tra==NULL){
+//					cout << "i=" << i << ", j=" << j << endl;
+//				}
 				//line = clip_reg->left_var_cand_tra->chrname;
 				//line = clip_reg->chrname_leftTra1.size()>0 ? clip_reg->chrname_leftTra1 : "-";
 				chrname_vec = getLeftRightPartChrname(clip_reg);

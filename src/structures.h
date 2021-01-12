@@ -13,8 +13,8 @@ using namespace std;
 typedef struct{
 	bam1_t *bam;
 	string queryname, chrname;
-	int64_t startRefPos, endRefPos;
-	int32_t querylen, aln_orient, startQueryPos, endQueryPos, leftClipSize, rightClipSize;
+	int64_t startRefPos, endRefPos:60, aln_orient:4;
+	int32_t querylen, startQueryPos, endQueryPos, leftClipSize, rightClipSize;
 	bool leftHardClippedFlag, rightHardClippedFlag;
 	bool left_clip_checked_flag, right_clip_checked_flag, query_checked_flag, SA_tag_flag;
 }clipAlnData_t;
@@ -22,10 +22,11 @@ typedef struct{
 // from Region.h
 typedef struct{
 	string chrname;
-	int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
+	int64_t startRefPos, endRefPos;
+	int32_t startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos, sv_len, dup_num;
 	//int64_t ref_len, local_ref_len, query_len;
-	int32_t var_type, aln_orient, dup_num;
-	int32_t query_id, sv_len, blat_aln_id;
+	int8_t var_type, aln_orient;
+	int16_t query_id, blat_aln_id;
 	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
 	string refseq, altseq;
 	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag;
@@ -34,23 +35,24 @@ typedef struct{
 // from clipReg.h
 typedef struct{
 	string chrname;
-	int64_t clipRefPos;
-	int32_t clipLocalRefPos, clipQueryPos:24, aln_orient:8;
+	int64_t clipRefPos:60, clip_end:4;
+	int32_t clipLocalRefPos, clipQueryPos:28, aln_orient:4;
 	clipAlnData_t *clip_aln, *left_clip_aln, *right_clip_aln;
 	bool same_orient_flag;  // true: ++, --; false: -+, +-
+	bool self_overlap_flag;
 }clipPos_t;
 
 
 //from covLoader.h
 struct alnSeg{
 	int64_t startRpos, startQpos;
-	size_t seglen: 26, opflag : 6;
+	int32_t seglen: 26, opflag : 6;
 	string seg_MD;
 };
 //from covLoader.h
 struct MD_seg{
 	string seg;
-	size_t seglen: 26, opflag: 6;
+	int32_t seglen: 26, opflag: 6;
 };
 
 // Genome.h

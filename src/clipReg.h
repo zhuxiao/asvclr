@@ -65,8 +65,8 @@ class clipReg {
 		mateClipReg_t mate_clip_reg;
 
 		vector<clipAlnData_t*> clipAlnDataVector;
-		vector<clipPos_t> leftClipPosVector, rightClipPosVector;
-		vector<clipPos_t> leftClipPosVector2, rightClipPosVector2;
+		vector<clipPos_t*> leftClipPosVector, rightClipPosVector;
+		vector<clipPos_t*> leftClipPosVector2, rightClipPosVector2;
 
 		// deal with ultra-high coverage region
 
@@ -78,6 +78,7 @@ class clipReg {
 
 	private:
 		void destroyClipAlnDataVector();
+		void destroyClipPosVec(vector<clipPos_t*> &clipPosVec);
 		void fillClipAlnDataVectorWithSATag();
 		void removeNonclipItems();
 		bool isValidClipReg();
@@ -86,17 +87,17 @@ class clipReg {
 		vector<clipAlnData_t*> getQueryClipAlnSegs(string &queryname, vector<clipAlnData_t*> &clipAlnDataVector);
 		vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs);
 		void sortClipPos();
-		void sortClipPosSingleVec(vector<clipPos_t> &leftClipPosVector);
+		void sortClipPosSingleVec(vector<clipPos_t*> &leftClipPosVector);
 		void splitClipPosVec();
 		void removeFakeClips();
-		void removeFakeClipsDifferentChrSingleVec(vector<clipPos_t> &clipPosVector);
-		void removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t> &clipPosVector);
-		void removeFakeClipsLowCov(vector<clipPos_t> &clipPosVector, size_t min_clip_reads_num);
+		void removeFakeClipsDifferentChrSingleVec(vector<clipPos_t*> &clipPosVector);
+		void removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &clipPosVector);
+		void removeFakeClipsLowCov(vector<clipPos_t*> &clipPosVector, int32_t min_clip_reads_num);
 		void computeClipRegs();
-		reg_t* computeClipRegSingleVec(vector<clipPos_t> &clipPosVector);
-		int32_t getItemIdxClipPosVec(clipPos_t &item, vector<clipPos_t> &vec);
+		reg_t* computeClipRegSingleVec(vector<clipPos_t*> &clipPosVector);
+		int32_t getItemIdxClipPosVec(clipPos_t *item, vector<clipPos_t*> &vec);
 		void removeFalseOverlappedMateClipReg();
-		size_t computeMeanClipPos(vector<clipPos_t> &clipPosVector);
+		size_t computeMeanClipPos(vector<clipPos_t*> &clipPosVector);
 		void removeFPClipSingleEnd(mateClipReg_t &mate_clip_reg);
 		void checkLocOrder(mateClipReg_t &mate_clip_reg);
 		void computeVarTypeClipReg(mateClipReg_t &mate_clip_reg, string &inBamFile);
@@ -112,7 +113,7 @@ class clipReg {
 		size_t extractVarType(size_t dup_type_num, size_t inv_type_num, size_t tra_type_num, size_t min_reads_thres);
 		size_t computeDupNumClipReg(vector<size_t> &dup_num_vec);
 		void printClipVecs();
-		void printSingleClipVec(vector<clipPos_t> &clip_pos_vec);
+		void printSingleClipVec(vector<clipPos_t*> &clip_pos_vec);
 		void printResultClipRegs();
 };
 
