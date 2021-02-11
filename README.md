@@ -32,12 +32,12 @@ And the binary file `asvclr` will be output into the folder `bin` in this packag
 
 Simply, ASVCLR can be run by typing the `all` command:
 ```sh
-$ asvclr all -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr all -t 14 hg38.fa hg38_ngmlr_sorted.bam
 ```
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
 Program: ASVCLR (Accurate Structural Variant Caller for Long Reads)
-Version: 0.8.6 (using htslib 1.9)
+Version: 0.8.7 (using htslib 1.9)
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -52,9 +52,11 @@ Options:
      -b INT       block size [1000000]
      -s INT       detect slide size [500]
      -S INT       assemble slide size [10000]
-     -m INT       minimal SV size to detect [2]
+     -m INT       minimal SV size to report [2]
+     -v INT       maximal SV size to report [50000]
      -n INT       minimal clipping reads supporting a SV [7]
-     -c INT       maximal clipping region size [10000]
+     -e INT       minimal clipping end size [200]. Clipping events
+                  with size smaller than threshold will be ignored
      -x FLOAT     expected sampling coverage for local assemble [30.0], 
                   0 for no coverage sampling
      -o STR       output directory [output]
@@ -75,7 +77,7 @@ Besides, the overall help information can be shown as below:
 ```sh
 $ asvclr
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.8.6 (using htslib 1.9)
+Version: 0.8.7 (using htslib 1.9)
 
 Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -99,9 +101,9 @@ Commands:
 Alternatively, there are three steps to run ASVCLR: `detect`, `assemble` and `call`.
 
 ```sh
-$ asvclr detect -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
-$ asvclr assemble -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
-$ asvclr call -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr detect -t 14 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr assemble -t 14 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr call -t 14 hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 The reference and an sorted BAM file will be the input of ASVCLR, and the variants stored in the BED file format and translocations in BEDPE file format will be generated as the output.
@@ -112,7 +114,7 @@ The reference and an sorted BAM file will be the input of ASVCLR, and the varian
 Structural variant regions will be detected according to variant signatures. These regions includes insertions, deletions, duplications, inversions and translocations.
 
 ```sh
-$ asvclr detect -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr detect -t 14 hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 And the help information are shown below:
@@ -120,7 +122,7 @@ And the help information are shown below:
 ```sh
 $ asvclr detect
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.8.6 (using htslib 1.9)
+Version: 0.8.7 (using htslib 1.9)
 
 Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -133,9 +135,12 @@ Description:
 Options: 
      -b INT       block size [1000000]
      -s INT       detect slide size [500]
-     -m INT       minimal SV size to detect [2]
+     -m INT       minimal SV size to report [2]
+     -v INT       maximal SV size to report [50000]
+                  Variants with size smaller than threshold will be ignored
      -n INT       minimal clipping reads supporting a SV [7]
-     -c INT       maximal clipping region size to detect [10000]
+     -e INT       minimal clipping end size [200]. Clipping events
+                  with size smaller than threshold will be ignored
      -o STR       output directory [output]
      -p STR       prefix of output result files [null]
      -t INT       number of concurrent work [1]
@@ -148,7 +153,7 @@ Options:
 Perform local assembly for the detected variant regions using Canu, and extract the corresponding local reference.
 
 ```sh
-$ asvclr assemble -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr assemble -t 14 hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 And the help information are shown below:
@@ -156,7 +161,7 @@ And the help information are shown below:
 ```sh
 $ asvclr assemble
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.8.6 (using htslib 1.9)
+Version: 0.8.7 (using htslib 1.9)
 
 Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>
 
@@ -167,7 +172,10 @@ Description:
 Options: 
      -b INT       block size [1000000]
      -S INT       assemble slide size [10000]
-     -c INT       maximal clipping region size [10000]
+     -v INT       maximal SV size to report [50000]
+                  Variants with size smaller than threshold will be ignored
+     -e INT       minimal clipping end size [200]. Clipping events
+                  with size smaller than threshold will be ignored
      -x FLOAT     expected sampling coverage for local assemble [30.0], 
                   0 for no coverage sampling
      -o STR       output directory [output]
@@ -191,7 +199,7 @@ Note that:
 Align the assembly result (contigs) to its local reference using BLAT to generate the sim4 formated alignments, and call each type variations using the BLAT alignments.
 
 ```sh
-$ asvclr call -t 14 -c 20000 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr call -t 14 hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 And the help information are shown below:
@@ -199,7 +207,7 @@ And the help information are shown below:
 ```sh
 $ asvclr call
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.8.6 (using htslib 1.9)
+Version: 0.8.7 (using htslib 1.9)
 
 Usage: asvclr call [options] <REF_FILE> <BAM_FILE>
 
@@ -210,7 +218,10 @@ Description:
 Options: 
      -b INT       block size [1000000]
      -S INT       assemble slide size used in 'assemble' command [10000]
-     -c INT       maximal clipping region size [10000]
+     -v INT       maximal SV size to report [50000]
+                  Variants with size smaller than threshold will be ignored
+     -e INT       minimal clipping end size [200]. Clipping events
+                  with size smaller than threshold will be ignored
      -o STR       output directory [output]
      -p STR       prefix of output result files [null]
      -t INT       number of concurrent work [1]
