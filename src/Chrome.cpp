@@ -384,7 +384,7 @@ void Chrome::chrComputeMateClipReg(){
 
 	// compute the mate flag for duplications and inversions
 	for(i=0; i<clipRegVector.size(); i++){
-		//if(i==3180)
+		//if(i>=35)
 		{
 			if(clip_processed_flag_vec.at(i)==false){
 				reg = clipRegVector.at(i);
@@ -756,7 +756,7 @@ void Chrome::removeFPClipRegsDupInv(){
 				if(reg->chrname.compare(reg2->chrname)==0){  // same chrome
 					dist = reg2->startRefPos - reg->startRefPos;
 					if(dist<0) dist = -dist;
-					if(dist>(int32_t)paras->maxClipRegSize) mate_clip_reg->valid_flag = false;
+					if(dist>paras->maxVarRegSize) mate_clip_reg->valid_flag = false;
 					if(reg->startRefPos>reg2->endRefPos) mate_clip_reg->valid_flag = false;
 				} // different chrome
 			}
@@ -1994,10 +1994,10 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("output_v0.8.1_hg19_20201223/3_call/chr6_ssto_hap7/blat_chr6_ssto_hap7_4922901-4928566.sim4")==0)
+		//if(var_cand->alnfilename.compare("output_dup_20210204_tmp/3_call/chr1/blat_contig_chr1_51403-51939.sim4")==0)
 		//if(i>=375)
 		{
-			//cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
+			cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();
 		}
 	}

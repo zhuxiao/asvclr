@@ -34,7 +34,7 @@ class LocalAssembly {
 	public:
 		string chrname, readsfilename, contigfilename, refseqfilename, tmpdir, inBamFile; // canu_version;
 		int64_t chrlen, assembly_extend_size, startRefPos_assembly, endRefPos_assembly;
-		size_t num_threads_per_assem_work;
+		int32_t num_threads_per_assem_work, minClipEndSize;
 		bool assem_success_preDone_flag;
 
 		// limit process regions
@@ -54,7 +54,7 @@ class LocalAssembly {
 		vector<clipAlnData_t*> clipAlnDataVector;
 
 	public:
-		LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag);
+		LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag, int32_t minClipEndSize);
 		virtual ~LocalAssembly();
 		void extractRefseq();
 		void extractReadsDataFromBAM();
@@ -71,7 +71,6 @@ class LocalAssembly {
 		void samplingReads(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val, double compensation_coefficient);
 		void samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val);
 		void saveSampledReads(string &readsfilename, vector<struct fqSeqNode*> &fq_seq_vec);
-		vector<clipAlnData_t*> getQueryClipAlnSegs(string &queryname, vector<clipAlnData_t*> &clipAlnDataVector);
 		int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &clipAlnDataVector);
 		void markHardClipSegs(size_t idx, vector<clipAlnData_t*> &query_aln_segs);
 		vector<string> getQuerySeqWithSoftClipSeqs(clipAlnData_t* clip_aln);

@@ -1280,7 +1280,7 @@ void* processSingleAssembleWork(void *arg){
 	for(i=0; i<assem_work_opt->arr_size; i++) varVec.push_back(assem_work_opt->var_array[i]);
 	for(i=0; i<assem_work_opt->limit_reg_array_size; i++) sub_limit_reg_vec.push_back(assem_work_opt->limit_reg_array[i]);
 
-	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->delete_reads_flag, assem_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
+	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->delete_reads_flag, assem_work->minClipEndSize, assem_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
 	// release memory
 	sub_limit_reg_vec.clear();
@@ -1310,9 +1310,9 @@ void* processSingleAssembleWork(void *arg){
 }
 
 
-void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag, int32_t minClipEndSize, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, 0, expected_cov_assemble, delete_reads_flag);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, 0, expected_cov_assemble, delete_reads_flag, minClipEndSize);
 
 	local_assembly.setLimitRegs(limit_reg_process_flag, limit_reg_vec);
 	if(local_assembly.assem_success_preDone_flag==false){
@@ -1558,6 +1558,7 @@ simpleReg_t* allocateSimpleReg(string &simple_reg_str){
 			if(pos_vec.size()==2){
 				pos1 = stoi(pos_vec.at(0));
 				pos2 = stoi(pos_vec.at(1));
+				if(pos1>pos2) goto fail;
 			}else goto fail;
 		}else goto fail;
 	}else goto fail;
@@ -1570,7 +1571,7 @@ simpleReg_t* allocateSimpleReg(string &simple_reg_str){
 	return simple_reg;
 
 fail:
-	cout << "Skipped invalid region: " << simple_reg_str << endl;
+	cout << "Error: Invalid region: " << simple_reg_str << endl;
 	return NULL;
 }
 
@@ -2163,6 +2164,129 @@ bool isPolymerSeq(string &seq){
 	return flag;
 }
 
+// get query clip align segments
+vector<clipAlnData_t*> getQueryClipAlnSegs(string &queryname, vector<clipAlnData_t*> &clipAlnDataVector){
+	vector<clipAlnData_t*> query_aln_segs;
+	for(size_t i=0; i<clipAlnDataVector.size(); i++)
+		if(clipAlnDataVector.at(i)->query_checked_flag==false and clipAlnDataVector.at(i)->queryname==queryname)
+			query_aln_segs.push_back(clipAlnDataVector.at(i));
+	return query_aln_segs;
+}
+
+bool isQuerySelfOverlap(vector<clipAlnData_t*> &query_aln_segs, int32_t maxVarRegSize){
+	bool flag;
+	clipAlnData_t *clip_aln1, *clip_aln2;
+
+	flag = false;
+	for(size_t i=0; i<query_aln_segs.size()-1; i++){
+		clip_aln1 = query_aln_segs.at(i);
+		for(size_t j=i+1; j<query_aln_segs.size(); j++){
+			clip_aln2 = query_aln_segs.at(j);
+			flag = isSegSelfOverlap(clip_aln1, clip_aln2, maxVarRegSize);
+			if(flag) break;
+		}
+		if(flag) break;
+	}
+
+	return flag;
+}
+
+bool isSegSelfOverlap(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, int32_t maxVarRegSize){
+	bool flag = false;
+	int32_t overlap_size;
+
+	if(clip_aln1->chrname.compare(clip_aln2->chrname)==0){
+		if(isOverlappedPos(clip_aln1->startRefPos, clip_aln1->endRefPos, clip_aln2->startRefPos, clip_aln2->endRefPos)){
+			overlap_size = getOverlapSize(clip_aln1->startRefPos, clip_aln1->endRefPos, clip_aln2->startRefPos, clip_aln2->endRefPos);
+			if(overlap_size>=MIN_QUERY_SELF_OVERLAP_SIZE)
+				flag = true;
+		}else if(clip_aln2->startRefPos<clip_aln1->endRefPos){
+			overlap_size = getOverlapSize(clip_aln1->startRefPos, clip_aln1->endRefPos, clip_aln2->startRefPos, clip_aln2->endRefPos);
+			if(overlap_size>=-maxVarRegSize)
+				flag = true;
+		}
+	}
+
+	return flag;
+}
+
+// get adjacent clip segment according to query positions
+vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize){
+	clipAlnData_t *clip_aln, *clip_aln_based, *clip_aln_other_end;
+	int32_t clip_pos_based, dist, min_dist, idx_min_dist, end_flag;
+	int32_t qpos_increase_direction; // -1 for unused, 0 for increase, 1 for decrease
+	vector<int32_t> adjClipAlnSegInfo; // [0]: array index of minimal distance; [1]: segment end flag
+
+	clip_aln_based = query_aln_segs.at(arr_idx);
+	qpos_increase_direction = -1;
+	if(clip_end_flag==LEFT_END) {
+		clip_pos_based = clip_aln_based->startQueryPos;
+		clip_aln_other_end = clip_aln_based->right_aln;
+		if(clip_aln_based->aln_orient==ALN_PLUS_ORIENT)
+			qpos_increase_direction = 1; // decrease direction
+		else
+			qpos_increase_direction = 0; // increase direction
+	}else {
+		clip_pos_based = clip_aln_based->endQueryPos;
+		clip_aln_other_end = clip_aln_based->left_aln;
+		if(clip_aln_based->aln_orient==ALN_PLUS_ORIENT)
+			qpos_increase_direction = 0; // increase direction
+		else
+			qpos_increase_direction = 1; // decrease direction
+	}
+
+	min_dist = INT_MAX;
+	idx_min_dist = -1;
+	end_flag = -1;
+	for(size_t i=0; i<query_aln_segs.size(); i++){
+		if(i!=(size_t)arr_idx){
+			clip_aln = query_aln_segs.at(i);
+			// left end
+			if(clip_aln->left_clip_checked_flag==false and clip_aln->leftClipSize>=minClipEndSize){
+				dist = clip_aln->startQueryPos - clip_pos_based;
+				if(dist<0) dist = -dist;
+				if(dist<min_dist) {
+					min_dist = dist;
+					idx_min_dist = i;
+					end_flag = LEFT_END;
+				}
+			}
+			// right end
+			if(clip_aln->right_clip_checked_flag==false and clip_aln->rightClipSize>=minClipEndSize){
+				dist = clip_aln->endQueryPos - clip_pos_based;
+				if(dist<0) dist = -dist;
+				if(dist<min_dist) {
+					min_dist = dist;
+					idx_min_dist = i;
+					end_flag = RIGHT_END;
+				}
+			}
+		}
+	}
+
+	// confirm
+	if(idx_min_dist!=-1){
+		clip_aln = query_aln_segs.at(idx_min_dist);
+		if(clip_aln==clip_aln_other_end){ // invalid if two ends of a item point to the same other item
+			idx_min_dist = end_flag = -1;
+		}else{
+			// make sure the increase_direction of the position is consist with the clipping segments
+			if(qpos_increase_direction==0){ // increase direction
+				if((clip_aln->aln_orient==ALN_PLUS_ORIENT and clip_aln->endQueryPos<clip_pos_based) or (clip_aln->aln_orient==ALN_MINUS_ORIENT and clip_aln->startQueryPos<clip_pos_based))
+					idx_min_dist = end_flag = -1;
+			}else{ // decrease direction
+				if((clip_aln->aln_orient==ALN_PLUS_ORIENT and clip_aln->startQueryPos>clip_pos_based) or (clip_aln->aln_orient==ALN_MINUS_ORIENT and clip_aln->endQueryPos>clip_pos_based))
+					idx_min_dist = end_flag = -1;
+			}
+		}
+	}
+
+	// save to vector
+	adjClipAlnSegInfo.push_back(idx_min_dist);
+	adjClipAlnSegInfo.push_back(end_flag);
+
+	return adjClipAlnSegInfo;
+}
 
 
 Time::Time() {

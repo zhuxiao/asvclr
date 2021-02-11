@@ -10,13 +10,15 @@
 using namespace std;
 
 // from clipAlnDataLoader.h
-typedef struct{
+typedef struct clipAlnData_node{
 	bam1_t *bam;
 	string queryname, chrname;
 	int64_t startRefPos, endRefPos:60, aln_orient:4;
 	int32_t querylen, startQueryPos, endQueryPos, leftClipSize, rightClipSize;
+	int32_t ref_dist, query_dist;
 	bool leftHardClippedFlag, rightHardClippedFlag;
 	bool left_clip_checked_flag, right_clip_checked_flag, query_checked_flag, SA_tag_flag;
+	struct clipAlnData_node *left_aln, *right_aln;
 }clipAlnData_t;
 
 // from Region.h
@@ -37,7 +39,7 @@ typedef struct{
 	string chrname;
 	int64_t clipRefPos:60, clip_end:4;
 	int32_t clipLocalRefPos, clipQueryPos:28, aln_orient:4;
-	clipAlnData_t *clip_aln, *left_clip_aln, *right_clip_aln;
+	clipAlnData_t *clip_aln;
 	bool same_orient_flag;  // true: ++, --; false: -+, +-
 	bool self_overlap_flag;
 }clipPos_t;
@@ -83,7 +85,7 @@ typedef struct {
 	int32_t work_id, num_work, num_work_per_ten_percent;  // 'work_id' starts from 1
 	int32_t *p_assemble_reg_workDone_num;   // pointer to the global variable which was declared in Paras.h
 	pthread_mutex_t *p_mtx_assemble_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
-	int32_t num_threads_per_assem_work;
+	int32_t num_threads_per_assem_work, minClipEndSize;
 
 	string inBamFile;
 	faidx_t *fai;

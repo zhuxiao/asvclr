@@ -78,7 +78,7 @@ class Chrome{
 		void saveChrBlocksToFile();
 		void chrFillDataEst(size_t op_est);
 		int chrDetect();
-		void removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec);;
+		void removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec);
 		void chrMergeDetectResultToFile();
 		void loadPrevAssembledInfo();
 		void chrLoadDataAssemble();

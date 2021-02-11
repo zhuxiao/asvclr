@@ -127,7 +127,6 @@ bool varCand::getBlatAlnDoneFlag(){
 }
 
 
-
 // call variants according to BLAT alignment
 void varCand::callVariants(){
 	if(sv_type!=VAR_TRA){

@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"0.8.6"
+#define PROG_VERSION				"0.8.7"
 #define VCF_VERSION					"4.2"
 
 #define SIZE_EST_OP					0
@@ -39,7 +39,7 @@ using namespace std;
 
 #define MIN_CLIP_READS_NUM_THRES	7
 
-#define MAX_CLIP_REG_SIZE			20000
+#define MAX_VAR_REG_SIZE			50000
 
 #define SIZE_PERCENTILE_EST			0.95
 #define NUM_PERCENTILE_EST			0.99995
@@ -100,7 +100,7 @@ class Paras
 		bool limit_reg_process_flag = false;	// true for limit regions; default is false for disable limit regions (i.e. process all regions)
 		string limit_reg_filename = "limit_regions.bed";
 
-		int32_t maxClipRegSize;
+		int32_t maxVarRegSize, minClipEndSize;
 
 		int64_t mean_read_len, total_read_num_est;
 		int32_t reg_sum_size_est, max_reg_sum_size_est;

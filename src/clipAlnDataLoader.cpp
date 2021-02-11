@@ -2,11 +2,12 @@
 #include "clipAlnDataLoader.h"
 #include "util.h"
 
-clipAlnDataLoader::clipAlnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile) {
+clipAlnDataLoader::clipAlnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile, int32_t minClipEndSize) {
 	this->chrname = chrname;
 	this->startRefPos = startRefPos;
 	this->endRefPos = endRefPos;
 	this->inBamFile = inBamFile;
+	this->minClipEndSize = minClipEndSize;
 }
 
 clipAlnDataLoader::~clipAlnDataLoader() {
@@ -51,11 +52,13 @@ void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVecto
 void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector){
 	loadClipAlnData(clipAlnDataVector);
 	fillClipAlnDataBySATag(clipAlnDataVector);
+	addAdjacentInfo(clipAlnDataVector); // order clipping segments
 }
 
 void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov){
 	loadClipAlnData(clipAlnDataVector, max_ultra_high_cov);
 	fillClipAlnDataBySATag(clipAlnDataVector);
+	addAdjacentInfo(clipAlnDataVector); // order clipping segments
 }
 
 clipAlnData_t* clipAlnDataLoader::generateClipAlnData(bam1_t* b, bam_hdr_t *header){
@@ -68,6 +71,7 @@ clipAlnData_t* clipAlnDataLoader::generateClipAlnData(bam1_t* b, bam_hdr_t *head
 	clip_aln->chrname = header->target_name[b->core.tid];
 	clip_aln->startRefPos = b->core.pos + 1;
 	clip_aln->endRefPos = bam_endpos(b);
+	clip_aln->left_aln = clip_aln->right_aln = NULL;
 
 	c = bam_get_cigar(b);  // CIGAR
 	// left clip
@@ -108,6 +112,10 @@ clipAlnData_t* clipAlnDataLoader::generateClipAlnData(bam1_t* b, bam_hdr_t *head
 		clip_aln->startQueryPos = clip_aln->querylen - clip_aln->leftClipSize;
 		clip_aln->endQueryPos = clip_aln->rightClipSize + 1;
 	}
+
+	clip_aln->ref_dist = clip_aln->endRefPos - clip_aln->startRefPos + 1;
+	if(clip_aln->aln_orient==ALN_PLUS_ORIENT) clip_aln->query_dist = clip_aln->endQueryPos - clip_aln->startQueryPos + 1;
+	else clip_aln->query_dist = clip_aln->startQueryPos - clip_aln->endQueryPos + 1;
 
 	clip_aln->query_checked_flag = false;
 	clip_aln->left_clip_checked_flag = false;
@@ -223,7 +231,6 @@ void clipAlnDataLoader::fillClipAlnDataBySATag(vector<clipAlnData_t*> &clipAlnDa
 			cigar_int = bam_aux_get(clip_aln->bam, "SA"); // SA
 			if(cigar_int) {
 				cigar_str = bam_aux2Z(cigar_int);
-
 				aln_seg_vec = split(cigar_str, ";");
 				for(j=0; j<aln_seg_vec.size(); j++){
 					aln_seg_info_str = aln_seg_vec.at(j);
@@ -240,7 +247,7 @@ void clipAlnDataLoader::fillClipAlnDataBySATag(vector<clipAlnData_t*> &clipAlnDa
 
 // add new SA item to clipAlnDataVector
 clipAlnData_t* clipAlnDataLoader::addNewSAItemToClipAlnDataVec(string &queryname, string &aln_seg_info_str, vector<clipAlnData_t*> &clipAlnDataVector){
-	clipAlnData_t clip_aln_tmp, *clip_aln = NULL, *clip_aln_new;
+	clipAlnData_t clip_aln_tmp, *clip_aln = NULL, *clip_aln_new = NULL;
 	size_t i;
 	bool new_flag;
 
@@ -268,14 +275,18 @@ clipAlnData_t* clipAlnDataLoader::addNewSAItemToClipAlnDataVec(string &queryname
 		clip_aln_new->endQueryPos = clip_aln_tmp.endQueryPos;
 		clip_aln_new->leftClipSize = clip_aln_tmp.leftClipSize;
 		clip_aln_new->rightClipSize = clip_aln_tmp.rightClipSize;
+		clip_aln_new->ref_dist = clip_aln_tmp.endRefPos - clip_aln_tmp.startRefPos + 1;
+		if(clip_aln_new->aln_orient==ALN_PLUS_ORIENT) clip_aln_new->query_dist = clip_aln_tmp.endQueryPos - clip_aln_tmp.startQueryPos + 1;
+		else clip_aln_new->query_dist = clip_aln_tmp.startQueryPos - clip_aln_tmp.endQueryPos + 1;
 		clip_aln_new->left_clip_checked_flag = false;
 		clip_aln_new->right_clip_checked_flag = false;
 		clip_aln_new->query_checked_flag = false;
 		clip_aln_new->SA_tag_flag = true;
+		clip_aln_new->left_aln = clip_aln_new->right_aln = NULL;
 		clipAlnDataVector.push_back(clip_aln_new);
 	}
 
-	return clip_aln;
+	return clip_aln_new;
 }
 
 // parse cigar string
@@ -371,4 +382,103 @@ void clipAlnDataLoader::freeClipAlnData(vector<clipAlnData_t*> &clipAlnDataVecto
 		delete clipAlnDataVector.at(i);
 	}
 	vector<clipAlnData_t*>().swap(clipAlnDataVector);
+}
+
+// add adjacent info of align segments
+void clipAlnDataLoader::addAdjacentInfo(vector<clipAlnData_t*> &clipAlnDataVector){
+	size_t i;
+	string queryname;
+	vector<clipAlnData_t*> query_aln_segs;
+	clipAlnData_t *clip_aln_seg;
+
+	for(i=0; i<clipAlnDataVector.size(); i++){
+		queryname = clipAlnDataVector.at(i)->queryname;
+		query_aln_segs = getQueryClipAlnSegs(queryname, clipAlnDataVector);  // get query clip align segments
+
+		// order clipping segments
+		orderClipAlnSegsSingleQuery(query_aln_segs);
+	}
+
+	// reset flags
+	for(i=0; i<clipAlnDataVector.size(); i++){
+		clip_aln_seg = clipAlnDataVector.at(i);
+		clip_aln_seg->left_clip_checked_flag = clip_aln_seg->right_clip_checked_flag = false;
+	}
+}
+
+// order clipping segments
+void clipAlnDataLoader::orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &query_aln_vec){
+	size_t i;
+	int32_t clip_end_flag, mate_arr_idx, mate_clip_end_flag;
+	bool valid_query_end_flag;
+	clipAlnData_t *clip_aln_seg, *mate_clip_aln_seg;
+	vector<int32_t> adjClipAlnSegInfo;
+
+	for(i=0; i<query_aln_vec.size(); i++){
+		clip_aln_seg = query_aln_vec.at(i);
+
+		// clipping at right end
+		if(clip_aln_seg->right_clip_checked_flag==false){
+			valid_query_end_flag = false;
+			clip_end_flag = -1;
+			if(clip_aln_seg->rightClipSize>=minClipEndSize){
+				valid_query_end_flag = true;
+				clip_end_flag = RIGHT_END;
+			}
+
+			if(valid_query_end_flag){
+				// deal with the mate clip end
+				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize);
+				mate_arr_idx = adjClipAlnSegInfo.at(0);
+				mate_clip_end_flag = adjClipAlnSegInfo.at(1);
+				if(mate_arr_idx!=-1){ // mated
+					mate_clip_aln_seg = query_aln_vec.at(mate_arr_idx);
+					clip_aln_seg->right_aln = mate_clip_aln_seg;
+					if(mate_clip_end_flag==LEFT_END and mate_clip_aln_seg->left_clip_checked_flag==false){ // mate at left end
+						mate_clip_aln_seg->left_aln = clip_aln_seg;
+						mate_clip_aln_seg->left_clip_checked_flag = true;
+					}else if(mate_clip_end_flag==RIGHT_END and mate_clip_aln_seg->right_clip_checked_flag==false){  // mate at right end
+						mate_clip_aln_seg->right_aln = clip_aln_seg;
+						mate_clip_aln_seg->right_clip_checked_flag = true;
+					}else {
+						cerr << __func__ << ": invalid mate_clip_end_flag=" << mate_clip_end_flag << endl;
+						exit(1);
+					}
+				}
+			}
+			clip_aln_seg->right_clip_checked_flag = true;
+		}
+
+		// clipping at left end
+		if(clip_aln_seg->left_clip_checked_flag==false){
+			valid_query_end_flag = false;
+			clip_end_flag = -1;
+			if(clip_aln_seg->leftClipSize>=minClipEndSize){
+				valid_query_end_flag = true;
+				clip_end_flag = LEFT_END;
+			}
+
+			if(valid_query_end_flag){
+				// deal with the mate clip end
+				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize);
+				mate_arr_idx = adjClipAlnSegInfo.at(0);
+				mate_clip_end_flag = adjClipAlnSegInfo.at(1);
+				if(mate_arr_idx!=-1){ // mated
+					mate_clip_aln_seg = query_aln_vec.at(mate_arr_idx);
+					clip_aln_seg->left_aln = mate_clip_aln_seg;
+					if(mate_clip_end_flag==LEFT_END and mate_clip_aln_seg->left_clip_checked_flag==false){ // mate at left end
+						mate_clip_aln_seg->left_aln = clip_aln_seg;
+						mate_clip_aln_seg->left_clip_checked_flag = true;
+					}else if(mate_clip_end_flag==RIGHT_END and mate_clip_aln_seg->right_clip_checked_flag==false){  // mate at right end
+						mate_clip_aln_seg->right_aln = clip_aln_seg;
+						mate_clip_aln_seg->right_clip_checked_flag = true;
+					}else {
+						cerr << __func__ << ": invalid mate_clip_end_flag=" << mate_clip_end_flag << endl;
+						exit(1);
+					}
+				}
+			}
+			clip_aln_seg->left_clip_checked_flag = true;
+		}
+	}
 }

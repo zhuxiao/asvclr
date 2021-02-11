@@ -477,7 +477,7 @@ void Genome::saveDetectResultToFile(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->process_block_num>0) chr->chrMergeDetectResultToFile();
+		chr->chrMergeDetectResultToFile();
 	}
 }
 
@@ -607,6 +607,7 @@ int Genome::processAssembleWork(){
 		assem_work->p_assemble_reg_workDone_num = &(paras->assemble_reg_workDone_num);
 		assem_work->p_mtx_assemble_reg_workDone_num = &(paras->mtx_assemble_reg_workDone_num);
 		assem_work->num_threads_per_assem_work = paras->num_threads_per_assem_work;
+		assem_work->minClipEndSize = paras->minClipEndSize;
 		assem_work->inBamFile = paras->inBamFile;
 		assem_work->fai = fai;
 		assem_work->var_cand_file = var_cand_file;
@@ -1832,7 +1833,7 @@ mateClipReg_t* Genome::getNearDistedClipReg(mateClipReg_t *clip_reg_given, vecto
 				if(dist3<dist4) min_dist2 = dist3;
 				else min_dist2 = dist4;
 
-				if(min_dist1<(int32_t)paras->maxClipRegSize and min_dist2<(int32_t)paras->maxClipRegSize){
+				if(min_dist1<paras->maxVarRegSize and min_dist2<paras->maxVarRegSize){
 					len_ratio = (double)min_dist1 / min_dist2;
 					if(len_ratio>1-CLIP_DIFF_LEN_RATIO_SV and len_ratio<1+CLIP_DIFF_LEN_RATIO_SV){
 						clip_reg_ret = clip_reg;
@@ -2117,7 +2118,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 // perform local assembly
 void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->delete_reads_flag);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->delete_reads_flag, paras->minClipEndSize);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();

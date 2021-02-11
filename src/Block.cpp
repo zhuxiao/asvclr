@@ -957,7 +957,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 				if(clip_reg->reg_mated_flag and reg1->chrname.compare(reg2->chrname)==0){
 					reg_len = reg2->startRefPos - reg1->startRefPos;
 					if(reg_len<0) reg_len = -reg_len;
-					if(reg_len<(int32_t)paras->maxClipRegSize)
+					if(reg_len<paras->maxVarRegSize)
 						generate_new_flag = true;
 				}
 				if(generate_new_flag){
@@ -1003,7 +1003,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 
 					reg_len = end_pos - start_pos;
 					if(reg_len<0) reg_len = -reg_len;
-					if(reg_len<(int32_t)paras->maxClipRegSize)
+					if(reg_len<paras->maxVarRegSize)
 						generate_new_flag = true;
 				}
 
@@ -1144,8 +1144,6 @@ void Block::generateAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_
 				cerr << __func__ << ", line=" << __LINE__ << ": cannot create assemble work, error!" << endl;
 				exit(1);
 			}
-
-			//performLocalAssembly(readsfilename, contigfilename, refseqfilename, tmpdir, varVec, reg3->chrname, paras->inBamFile, fai, *var_cand_clipReg_file);
 		}else{
 			pthread_mutex_lock(&mutex_assem_work);
 			paras->assemble_reg_preDone_num ++;

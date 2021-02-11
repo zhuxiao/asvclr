@@ -191,19 +191,21 @@ int Paras::parseDetectParas(int argc, char **argv){
 	slideSize = SLIDESIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
-	maxClipRegSize = MAX_CLIP_REG_SIZE;
+	maxVarRegSize = MAX_VAR_REG_SIZE;
+	minClipEndSize = MIN_CLIP_END_SIZE;
 	mask_val = MASK_VAL_DEFAULT;
 	outDir = OUT_DIR;
 	simpleReg_t *simple_reg;
 	string simple_reg_str;
 
-	while( (opt = getopt(argc, argv, ":b:s:c:o:p:t:M:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:s:m:v:e:o:p:t:M:h")) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
+			case 'v': maxVarRegSize = stoi(optarg); break;
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
-			case 'c': maxClipRegSize = stoi(optarg); break;
+			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
@@ -238,6 +240,11 @@ int Paras::parseDetectParas(int argc, char **argv){
 			simple_reg_str = argv[i];
 			simple_reg = allocateSimpleReg(simple_reg_str);
 			if(simple_reg) limit_reg_vec.push_back(simple_reg);
+			else{
+				cout << "Error: Please specify the correct genomic regions to be processed." << endl << endl;
+				showDetectUsage();
+				return 1;
+			}
 		}
 		if(limit_reg_vec.size()) limit_reg_process_flag = true;
 	}else{
@@ -257,20 +264,22 @@ int Paras::parseAssembleParas(int argc, char **argv){
 	assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
-	maxClipRegSize = MAX_CLIP_REG_SIZE;
+	maxVarRegSize = MAX_VAR_REG_SIZE;
+	minClipEndSize = MIN_CLIP_END_SIZE;
 	mask_val = MASK_VAL_DEFAULT;
 	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
 	delete_reads_val = 1;
 	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
 	outDir = OUT_DIR;
 
-	while( (opt = getopt(argc, argv, ":b:S:m:n:c:x:o:p:t:T:M:R:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:S:m:v:n:e:x:o:p:t:T:M:R:h")) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
+			case 'v': maxVarRegSize = stoi(optarg); break;
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
-			case 'c': maxClipRegSize = stoi(optarg); break;
+			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'x': expected_cov_assemble = stod(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
@@ -329,18 +338,20 @@ int Paras::parseCallParas(int argc, char **argv){
 	assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
-	maxClipRegSize = MAX_CLIP_REG_SIZE;
+	maxVarRegSize = MAX_VAR_REG_SIZE;
+	minClipEndSize = MIN_CLIP_END_SIZE;
 	mask_val = MASK_VAL_DEFAULT;
 	delete_reads_val = 1;
 	outDir = OUT_DIR;
 
-	while( (opt = getopt(argc, argv, ":b:S:m:n:c:o:p:t:M:R:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:S:m:v:n:e:o:p:t:M:R:h")) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
+			case 'v': maxVarRegSize = stoi(optarg); break;
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
-			case 'c': maxClipRegSize = stoi(optarg); break;
+			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
@@ -393,7 +404,8 @@ int Paras::parseAllParas(int argc, char **argv){
 	assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
-	maxClipRegSize = MAX_CLIP_REG_SIZE;
+	maxVarRegSize = MAX_VAR_REG_SIZE;
+	minClipEndSize = MIN_CLIP_END_SIZE;
 	mask_val = MASK_VAL_DEFAULT;
 	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
 	delete_reads_val = 1;
@@ -402,14 +414,15 @@ int Paras::parseAllParas(int argc, char **argv){
 	simpleReg_t *simple_reg;
 	string simple_reg_str;
 
-	while( (opt = getopt(argc, argv, ":b:s:S:m:n:c:x:o:p:t:T:M:R:h")) != -1 ){
+	while( (opt = getopt(argc, argv, ":b:s:S:m:v:n:e:x:o:p:t:T:M:R:h")) != -1 ){
 		switch(opt){
 			case 'b': assemSlideSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
 			case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
+			case 'v': maxVarRegSize = stoi(optarg); break;
 			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
-			case 'c': maxClipRegSize = stoi(optarg); break;
+			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'x': expected_cov_assemble = stod(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
@@ -456,6 +469,11 @@ int Paras::parseAllParas(int argc, char **argv){
 			simple_reg_str = argv[i];
 			simple_reg = allocateSimpleReg(simple_reg_str);
 			if(simple_reg) limit_reg_vec.push_back(simple_reg);
+			else{
+				cout << "Error: Please specify the correct genomic regions to be processed." << endl << endl;
+				showAllUsage();
+				return 1;
+			}
 		}
 		if(limit_reg_vec.size()) limit_reg_process_flag = true;
 	}else{
@@ -509,9 +527,12 @@ void Paras::showDetectUsage(){
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -s INT       detect slide size [500]" << endl;
-	cout << "     -m INT       minimal SV size to detect [2]" << endl;
+	cout << "     -m INT       minimal SV size to report [2]" << endl;
+	cout << "     -v INT       maximal SV size to report [" << MAX_VAR_REG_SIZE << "]." << endl;
+	cout << "                  Variants with size smaller than threshold will be ignored" << endl;
 	cout << "     -n INT       minimal clipping reads supporting a SV [7]" << endl;
-	cout << "     -c INT       maximal clipping region size to detect [10000]" << endl;
+	cout << "     -e INT       minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
+	cout << "                  with size smaller than threshold will be ignored" << endl;
 	//cout << "     -r FILE      limit reference regions to process [null]: CHR|CHR:START-END" << endl;
 	cout << "     -o DIR       output directory [output]" << endl;
 	cout << "     -p STR       prefix of output result files [null]" << endl;
@@ -533,7 +554,10 @@ void Paras::showAssembleUsage(){
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -S INT       assemble slide size [10000]" << endl;
-	cout << "     -c INT       maximal clipping region size [10000]" << endl;
+	cout << "     -v INT       maximal SV size to report [" << MAX_VAR_REG_SIZE << "]" << endl;
+	cout << "                  Variants with size smaller than threshold will be ignored" << endl;
+	cout << "     -e INT       minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
+	cout << "                  with size smaller than threshold will be ignored" << endl;
 	cout << "     -x FLOAT     expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
 	cout << "                  0 for no coverage sampling" << endl;
 	cout << "     -o DIR       output directory [output]" << endl;
@@ -561,7 +585,10 @@ void Paras::showCallUsage(){
 	cout << "Options: " << endl;
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -S INT       assemble slide size used in 'assemble' command [10000]" << endl;
-	cout << "     -c INT       maximal clipping region size [10000]" << endl;
+	cout << "     -v INT       maximal SV size to report [" << MAX_VAR_REG_SIZE << "]" << endl;
+	cout << "                  Variants with size smaller than threshold will be ignored" << endl;
+	cout << "     -e INT       minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
+	cout << "                  with size smaller than threshold will be ignored" << endl;
 	cout << "     -o DIR       output directory [output]" << endl;
 	cout << "     -p STR       prefix of output result files [null]" << endl;
 	cout << "     -t INT       number of concurrent work [1]" << endl;
@@ -588,9 +615,12 @@ void Paras::showAllUsage(){
 	cout << "     -b INT       block size [1000000]" << endl;
 	cout << "     -s INT       detect slide size [500]" << endl;
 	cout << "     -S INT       assemble slide size [10000]" << endl;
-	cout << "     -m INT       minimal SV size to detect [2]" << endl;
+	cout << "     -m INT       minimal SV size to report [2]" << endl;
+	cout << "     -v INT       maximal SV size to report [" << MAX_VAR_REG_SIZE << "]" << endl;
+	cout << "                  Variants with size smaller than threshold will be ignored" << endl;
 	cout << "     -n INT       minimal clipping reads supporting a SV [7]" << endl;
-	cout << "     -c INT       maximal clipping region size [10000]" << endl;
+	cout << "     -e INT       minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
+	cout << "                  with size smaller than threshold will be ignored" << endl;
 	cout << "     -x FLOAT     expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
 	cout << "                  0 for no coverage sampling" << endl;
 	cout << "     -o DIR       output directory [output]" << endl;
@@ -620,7 +650,9 @@ void Paras::outputParas(){
 	cout << "Clipping number supporting SV: " << minClipReadsNumSupportSV << endl;
 	cout << "Block size: " << blockSize << " bp" << endl;
 	cout << "Slide size: " << slideSize << " bp" << endl;
-	cout << "Maximal clipping region size: " << maxClipRegSize << " bp" << endl;
+	cout << "Minimal SV size to report: " << min_sv_size_usr << " bp" << endl;
+	cout << "Maximal SV size to report: " << maxVarRegSize << " bp" << endl;
+	cout << "Minimal clipping end size: " << minClipEndSize << " bp" << endl;
 	cout << "Expected sampling coverage: " << expected_cov_assemble << endl;
 	cout << "Number of concurrent works: " << num_threads << endl;
 	cout << "Limited number of threads for each assemble work: " << num_threads_per_assem_work << endl;

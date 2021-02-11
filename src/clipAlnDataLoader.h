@@ -9,10 +9,11 @@ using namespace std;
 class clipAlnDataLoader {
 	public:
 		string chrname, inBamFile;
-		size_t startRefPos, endRefPos;
+		int64_t startRefPos, endRefPos;
+		int32_t minClipEndSize;
 
 	public:
-		clipAlnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile);
+		clipAlnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile, int32_t minClipEndSize);
 		virtual ~clipAlnDataLoader();
 		void loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov);
@@ -30,6 +31,8 @@ class clipAlnDataLoader {
 		clipAlnData_t* addNewSAItemToClipAlnDataVec(string &queryname, string &aln_seg_info_str, vector<clipAlnData_t*> &clipAlnDataVector);
 		void parseSingleAlnStrSA(clipAlnData_t &clip_aln_ret, string &aln_seg_info_str);
 		bool isSameClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2);
+		void addAdjacentInfo(vector<clipAlnData_t*> &clipAlnDataVector);
+		void orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &query_aln_vec);
 };
 
 #endif /* SRC_CLIPALNDATALOADER_H_ */

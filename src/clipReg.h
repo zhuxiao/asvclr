@@ -16,8 +16,11 @@ using namespace std;
 
 #define CLIP_END_EXTEND_SIZE				300 // 100
 #define MIN_CLIP_END_SIZE					200	// 50
+#define MIN_ALN_SIZE_SAME_ORIENT			200
+#define MIN_ALN_SIZE_DIFF_ORIENT			50
 
 #define MIN_CLIP_DIST_THRES					1000
+#define GROUP_DIST_THRES					1000
 
 #define LONGER_NON_SA_SEG_NUM_THRES			3  // to be parameterized
 #define LONGER_NON_SA_SEG_RATIO_THRES		(0.1f)
@@ -31,20 +34,15 @@ using namespace std;
 #define RIGHT_END							1
 
 #define MIN_QUERY_SELF_OVERLAP_SIZE			100		// 100
-//#define MAX_SAME_REG_THRES_SAME_ORIENT		5000	// 500, use paras.maxClipRegSize instead
+//#define MAX_SAME_REG_THRES_SAME_ORIENT		5000	// 500, use paras.maxVarRegSize instead
 
 #define MAX_DIST_SAME_CLIP_END				100000
 
 
 typedef struct{
-	reg_t *leftClipReg, *rightClipReg;
-	int32_t leftClipPosNum, rightClipPosNum;
-	int64_t leftMeanClipPos, rightMeanClipPos;
-
-	reg_t *leftClipReg2, *rightClipReg2;
-	int32_t leftClipPosNum2, rightClipPosNum2;
-	int64_t leftMeanClipPos2, rightMeanClipPos2;
-
+	reg_t *leftClipReg, *leftClipReg2, *rightClipReg, *rightClipReg2;
+	int32_t leftClipPosNum, leftClipPosNum2, rightClipPosNum, rightClipPosNum2;
+	int64_t leftMeanClipPos, leftMeanClipPos2, rightMeanClipPos, rightMeanClipPos2;
 	int8_t leftClipRegNum, rightClipRegNum;
 
 	int32_t sv_type:8, dup_num:24;
@@ -60,6 +58,7 @@ class clipReg {
 		Paras *paras;
 		string chrname, inBamFile;
 		int64_t chrlen, startRefPos, endRefPos;
+		int32_t minClipEndSize, maxVarRegSize, minAlnSize_same_orient, minAlnSize_diff_orient;
 		faidx_t *fai;
 
 		mateClipReg_t mate_clip_reg;
@@ -84,14 +83,14 @@ class clipReg {
 		bool isValidClipReg();
 		void computeMateAlnClipReg();
 		void extractClipPosVec();
-		vector<clipAlnData_t*> getQueryClipAlnSegs(string &queryname, vector<clipAlnData_t*> &clipAlnDataVector);
-		vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs);
+		void splitClipPosVec();
+		int32_t getClipPosVecId(clipAlnData_t *clip_aln, int32_t clip_end);
+		clipPos_t* getClipPosItemFromSingleVec(clipAlnData_t *clip_aln, int32_t clip_end, vector<clipPos_t*> &clip_pos_vec);
 		void sortClipPos();
 		void sortClipPosSingleVec(vector<clipPos_t*> &leftClipPosVector);
-		void splitClipPosVec();
 		void removeFakeClips();
 		void removeFakeClipsDifferentChrSingleVec(vector<clipPos_t*> &clipPosVector);
-		void removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &clipPosVector);
+		void removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &clipPosVector, string &vec_name);
 		void removeFakeClipsLowCov(vector<clipPos_t*> &clipPosVector, int32_t min_clip_reads_num);
 		void computeClipRegs();
 		reg_t* computeClipRegSingleVec(vector<clipPos_t*> &clipPosVector);
@@ -104,15 +103,15 @@ class clipReg {
 		void resetClipCheckFlag(vector<clipAlnData_t*> &clipAlnDataVector);
 		bool isSameChrome(vector<clipAlnData_t*> &query_aln_segs);
 		bool isSameOrient(vector<clipAlnData_t*> &query_aln_segs);
-		bool isQuerySelfOverlap(vector<clipAlnData_t*> &query_aln_segs);
-		bool isSegSelfOverlap(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2);
+//		bool isQuerySelfOverlap(vector<clipAlnData_t*> &query_aln_segs);
+//		bool isSegSelfOverlap(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2);
 		bool isSameAlnReg(vector<clipAlnData_t*> &query_aln_segs);
 		void sortQueryAlnSegs(vector<clipAlnData_t*> &query_aln_segs);
 		bool isAdjacentClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, size_t dist_thres);
 		bool containCompleteDup(vector<clipAlnData_t*> &query_aln_segs, mateClipReg_t &mate_clip_reg);
 		size_t extractVarType(size_t dup_type_num, size_t inv_type_num, size_t tra_type_num, size_t min_reads_thres);
 		size_t computeDupNumClipReg(vector<size_t> &dup_num_vec);
-		void printClipVecs();
+		void printClipVecs(string head_info);
 		void printSingleClipVec(vector<clipPos_t*> &clip_pos_vec);
 		void printResultClipRegs();
 };

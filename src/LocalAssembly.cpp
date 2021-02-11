@@ -3,7 +3,7 @@
 
 pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 
-LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag){
+LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag, int32_t minClipEndSize){
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
 	this->readsfilename = preprocessPipeChar(readsfilename);
@@ -11,6 +11,7 @@ LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, stri
 	this->refseqfilename = preprocessPipeChar(refseqfilename);
 	this->tmpdir = preprocessPipeChar(tmpdir);
 	this->num_threads_per_assem_work = num_threads_per_assem_work;
+	this->minClipEndSize = minClipEndSize;
 	this->varVec = varVec;
 	this->fai = fai;
 	this->inBamFile = inBamFile;
@@ -115,7 +116,7 @@ void LocalAssembly::extractReadsDataFromBAM(){
 	if(endRefPos_assembly>chrlen) endRefPos_assembly = chrlen;
 
 	// load the aligned reads data
-	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_assembly, endRefPos_assembly, inBamFile);
+	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_assembly, endRefPos_assembly, inBamFile, minClipEndSize);
 	data_loader.loadClipAlnData(clipAlnDataVector);
 
 	//cout << "start_pos_assembly=" << startRefPos_assembly << ", end_pos_assembly=" << endRefPos_assembly << ", clipAlnDataVector.size=" << clipAlnDataVector.size() << endl;
@@ -297,15 +298,6 @@ void LocalAssembly::saveSampledReads(string &readsfilename, vector<struct fqSeqN
 	outfile.close();
 
 	//cout <<"\t" << readsfilename << ": clip_aln_data_size=" << clipAlnDataVector.size() << ", reads_num=" << fq_seq_vec.size() << ", selected_num=" << selected_num << "; ref_size=" << endRefPos_assembly-startRefPos_assembly+1 << ", total_bases_original=" << total_bases_original << ", local_cov_original=" << local_cov_original << ", sampled_cov=" << sampled_cov << endl;
-}
-
-// get query clip align segments
-vector<clipAlnData_t*> LocalAssembly::getQueryClipAlnSegs(string &queryname, vector<clipAlnData_t*> &clipAlnDataVector){
-	vector<clipAlnData_t*> query_aln_segs;
-	for(size_t i=0; i<clipAlnDataVector.size(); i++)
-		if(clipAlnDataVector.at(i)->query_checked_flag==false and clipAlnDataVector.at(i)->queryname==queryname)
-			query_aln_segs.push_back(clipAlnDataVector.at(i));
-	return query_aln_segs;
 }
 
 // get the non hard-clip align item

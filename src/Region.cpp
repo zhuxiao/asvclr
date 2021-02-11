@@ -732,7 +732,7 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 //			for(j=startPos_tmp; j<=endPos_tmp; j++){
 //				clip_vec = regBaseArr[j-startRPos].clipVector;
 //				for(k=0; k<clip_vec.size(); k++){
-//					if(stoi(clip_vec.at(k)->seq)>=MIN_CLIP_END_SIZE)
+//					if(stoi(clip_vec.at(k)->seq)>=paras->minClipEndSize)
 //						clip_num ++;
 //				}
 //			}
@@ -764,7 +764,7 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 //			for(j=startPos_tmp; j<=endPos_tmp; j++){
 //				clip_vec = regBaseArr[j-startRPos].clipVector;
 //				for(k=0; k<clip_vec.size(); k++){
-//					if(stoi(clip_vec.at(k)->seq)>=MIN_CLIP_END_SIZE)
+//					if(stoi(clip_vec.at(k)->seq)>=paras->minClipEndSize)
 //						clip_num ++;
 //				}
 //			}
@@ -810,8 +810,8 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 //							or (startPos_tmp>=clip_aln->startRefPos and startPos_tmp<=clip_aln->endRefPos)
 //							or (endPos_tmp>=clip_aln->startRefPos and endPos_tmp<=clip_aln->endRefPos)){ // overlap
 //							total_reads_num ++;
-//							if((clip_aln->leftClipSize>=MIN_CLIP_END_SIZE and clip_aln->startRefPos>=startPos_tmp and clip_aln->startRefPos<=endPos_tmp)
-//								or (clip_aln->rightClipSize>=MIN_CLIP_END_SIZE and clip_aln->endRefPos>=startPos_tmp and clip_aln->endRefPos<=endPos_tmp))
+//							if((clip_aln->leftClipSize>=paras->minClipEndSize and clip_aln->startRefPos>=startPos_tmp and clip_aln->startRefPos<=endPos_tmp)
+//								or (clip_aln->rightClipSize>=paras->minClipEndSize and clip_aln->endRefPos>=startPos_tmp and clip_aln->endRefPos<=endPos_tmp))
 //								clip_num ++;
 //						}
 //					}
@@ -841,8 +841,8 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 //							or (startPos_tmp>=clip_aln->startRefPos and startPos_tmp<=clip_aln->endRefPos)
 //							or (endPos_tmp>=clip_aln->startRefPos and endPos_tmp<=clip_aln->endRefPos)){ // overlap
 //							total_reads_num ++;
-//							if((clip_aln->leftClipSize>=MIN_CLIP_END_SIZE and clip_aln->startRefPos>=startPos_tmp and clip_aln->startRefPos<=endPos_tmp)
-//								or (clip_aln->rightClipSize>=MIN_CLIP_END_SIZE and clip_aln->endRefPos>=startPos_tmp and clip_aln->endRefPos<=endPos_tmp))
+//							if((clip_aln->leftClipSize>=paras->minClipEndSize and clip_aln->startRefPos>=startPos_tmp and clip_aln->startRefPos<=endPos_tmp)
+//								or (clip_aln->rightClipSize>=paras->minClipEndSize and clip_aln->endRefPos>=startPos_tmp and clip_aln->endRefPos<=endPos_tmp))
 //								clip_num ++;
 //						}
 //					}
@@ -883,7 +883,7 @@ bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_t
 	for(i=startPos; i<=endPos; i++){
 		clip_vec = regBaseArr[i-startRPos].clipVector;
 		for(j=0; j<clip_vec.size(); j++){
-			if(stoi(clip_vec.at(j)->seq)>=MIN_CLIP_END_SIZE)
+			if(stoi(clip_vec.at(j)->seq)>=paras->minClipEndSize)
 				clip_num ++;
 		}
 	}
