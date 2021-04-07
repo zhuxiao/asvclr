@@ -2010,7 +2010,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 		//if(var_cand->alnfilename.compare("output_dup_20210204_tmp/3_call/chr1/blat_contig_chr1_51403-51939.sim4")==0)
 		//if(i>=375)
 		{
-			cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
+			//cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();
 		}
 	}
