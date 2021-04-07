@@ -2,7 +2,7 @@
 #include "clipAlnDataLoader.h"
 #include "util.h"
 
-clipAlnDataLoader::clipAlnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile, int32_t minClipEndSize) {
+clipAlnDataLoader::clipAlnDataLoader(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, int32_t minClipEndSize) {
 	this->chrname = chrname;
 	this->startRefPos = startRefPos;
 	this->endRefPos = endRefPos;

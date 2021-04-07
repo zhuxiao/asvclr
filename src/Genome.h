@@ -79,11 +79,11 @@ class Genome{
 		void blatAlnTra_st(vector<blatAlnTra*> *blat_aln_tra_vec);
 		void blatAlnTra_mt(vector<blatAlnTra*> *blat_aln_tra_vec);
 		varCand* constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp);
-		vector<int32_t> computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, mateClipReg_t *clip_reg);
+		vector<int32_t> computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, mateClipReg_t *clip_reg, int32_t round_num);
 		vector<int32_t> getMateTraReg(int32_t query_id, int32_t start_query_pos, int32_t end_query_pos, varCand *var_cand_tmp);
 		bool isValidTraReg(size_t start_query_pos, size_t end_query_pos, size_t start_mate_query_pos, size_t end_mate_query_pos);
 		vector<int32_t> computeTraClippingLoc(size_t query_clip_part_flag, varCand *var_cand, vector<int32_t> &aln_idx_vec, varCand *var_cand_tmp, vector<int32_t> &mate_aln_idx_vec);
-		bool computeTraCallSuccessFlag(vector<int32_t> &tra_loc_vec, vector<int32_t> &tra_loc_vec2, varCand *var_cand, varCand *var_cand_tmp,  mateClipReg_t *clip_reg);
+		bool computeTraCallSuccessFlag(vector<int32_t> &tra_loc_vec, vector<int32_t> &tra_loc_vec2, varCand *var_cand, varCand *var_cand_tmp,  mateClipReg_t *clip_reg, bool same_orient_flag, int32_t round_num);
 		void saveTraLoc2ClipReg(mateClipReg_t *clip_reg, vector<int32_t> &tra_loc_vec, varCand *var_cand, varCand *var_cand_tmp, size_t round_num);
 		void saveTraLoc2ClipRegForAlnFailure(mateClipReg_t *clip_reg);
 		void mergeCloseRangeTra();

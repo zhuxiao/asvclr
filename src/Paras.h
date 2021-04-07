@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"0.8.7"
+#define PROG_VERSION				"0.9.0"
 #define VCF_VERSION					"4.2"
 
 #define SIZE_EST_OP					0

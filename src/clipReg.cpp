@@ -19,6 +19,7 @@ clipReg::clipReg(string &chrname, int64_t startRefPos, int64_t endRefPos, string
 
 	if(this->startRefPos<1) this->startRefPos = 1;
 	if(this->endRefPos>chrlen) this->endRefPos = chrlen;
+	left_part_changed = right_part_changed = false;
 
 	mate_clip_reg.leftClipReg = mate_clip_reg.leftClipReg2 = mate_clip_reg.rightClipReg = mate_clip_reg.rightClipReg2 = NULL;
 	mate_clip_reg.leftClipRegNum = mate_clip_reg.rightClipRegNum = 0;
@@ -34,19 +35,22 @@ clipReg::clipReg(string &chrname, int64_t startRefPos, int64_t endRefPos, string
 }
 
 clipReg::~clipReg() {
-	if(!clipAlnDataVector.empty()) destroyClipAlnDataVector();
+	if(!clipAlnDataVector.empty()) destroyClipAlnDataVector(clipAlnDataVector);
+	if(!clipAlnDataVector2.empty()) destroyClipAlnDataVector(clipAlnDataVector2);
+	if(!rightClipAlnDataVector.empty()) destroyClipAlnDataVector(rightClipAlnDataVector);
+	if(!rightClipAlnDataVector2.empty()) destroyClipAlnDataVector(rightClipAlnDataVector2);
 	if(!leftClipPosVector.empty()) destroyClipPosVec(leftClipPosVector);
 	if(!leftClipPosVector2.empty()) destroyClipPosVec(leftClipPosVector2);
 	if(!rightClipPosVector.empty()) destroyClipPosVec(rightClipPosVector);
 	if(!rightClipPosVector2.empty()) destroyClipPosVec(rightClipPosVector2);
 }
 
-void clipReg::destroyClipAlnDataVector(){
-	for(size_t i=0; i<clipAlnDataVector.size(); i++){
-		bam_destroy1(clipAlnDataVector.at(i)->bam);
-		delete clipAlnDataVector.at(i);
+void clipReg::destroyClipAlnDataVector(vector<clipAlnData_t*> &clipAlnDataVec){
+	for(size_t i=0; i<clipAlnDataVec.size(); i++){
+		bam_destroy1(clipAlnDataVec.at(i)->bam);
+		delete clipAlnDataVec.at(i);
 	}
-	vector<clipAlnData_t*>().swap(clipAlnDataVector);
+	vector<clipAlnData_t*>().swap(clipAlnDataVec);
 }
 
 // destroy clipping position vector
@@ -74,8 +78,12 @@ void clipReg::fillClipAlnDataVectorWithSATag(){
 	clip_aln_data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, paras->max_ultra_high_cov);
 }
 
-// remove query having no clippings
 void clipReg::removeNonclipItems(){
+	removeNonclipItemsOp(clipAlnDataVector);
+}
+
+// remove query having no clippings
+void clipReg::removeNonclipItemsOp(vector<clipAlnData_t*> &clipAlnDataVector){
 	clipAlnData_t *clip_aln;
 	for(size_t i=0; i<clipAlnDataVector.size(); ){
 		clip_aln = clipAlnDataVector.at(i);
@@ -127,6 +135,8 @@ void clipReg::computeMateAlnClipReg(){
 
 	//printClipVecs("After split");  // print clips
 
+	appendClipPos();  // append clipping positions
+
 	sortClipPos(); // sort clips
 
 	//printClipVecs("After sort");  // print clips
@@ -157,6 +167,12 @@ void clipReg::extractClipPosVec(){
 		if(clipAlnDataVector.at(i)->query_checked_flag==false){
 			queryname = clipAlnDataVector.at(i)->queryname;
 			query_aln_segs = getQueryClipAlnSegs(queryname, clipAlnDataVector);  // get query clip align segments
+
+			if(query_aln_segs.size()>MAX_ALN_SEG_NUM_PER_READ_TRA) { // ignore reads of too many align segments
+				//cout << "clipReg: " << chrname << ":" << startRefPos << "-" << endRefPos << ", qname=" << queryname << ", align segment number=" << query_aln_segs.size() << endl;
+				continue;
+			}
+
 			for(j=0; j<query_aln_segs.size(); j++){
 				clip_aln_seg = query_aln_segs.at(j);
 				valid_query_end_flag = false;
@@ -264,13 +280,18 @@ void clipReg::extractClipPosVec(){
 
 void clipReg::splitClipPosVec(){
 	size_t i;
-	clipPos_t *clip_pos, *clip_pos2;
+	clipPos_t *clip_pos, *clip_pos2, *clip_pos3;
 	clipAlnData_t *left_aln, *left_aln2, *right_aln, *right_aln2;
 	bool mid_inner_flag, exist_flag;
-	int32_t vec_id;
+	int32_t vec_id, min_seg_size, end_flag;
 
 	for(i=0; i<leftClipPosVector.size(); ){
 		clip_pos = leftClipPosVector.at(i);
+
+//		if(clip_pos->clip_aln->queryname.compare("S2_2594")==0){
+//			cout << "line=" << __LINE__ << ", qname=" << clip_pos->clip_aln->queryname << endl;
+//		}
+
 		if(clip_pos->chrname.compare(chrname)==0){
 			if(clip_pos->clip_end==RIGHT_END){ // right end
 				if(clip_pos->clip_aln and ((clip_pos->same_orient_flag and clip_pos->clip_aln->ref_dist>=minAlnSize_same_orient)
@@ -343,6 +364,39 @@ void clipReg::splitClipPosVec(){
 										leftClipPosVector2.push_back(clip_pos2);
 									}
 								}
+							}
+						}
+
+						min_seg_size = (clip_pos->clip_aln->aln_orient==right_aln->aln_orient) ? minAlnSize_same_orient : minAlnSize_diff_orient;
+						// process the left end of right_aln, typically it should be in the third vector
+						if(right_aln->leftClipSize>=min_seg_size){
+							vec_id = getClipPosVecId(right_aln, LEFT_END);
+							if(vec_id==-1){ // not exist, then add it to the third vector
+								clip_pos2 = new clipPos_t();
+								clip_pos2->chrname = right_aln->chrname;
+								clip_pos2->clip_end = LEFT_END;
+								clip_pos2->clip_aln = right_aln;
+								clip_pos2->clipRefPos = right_aln->startRefPos;
+								if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) clip_pos2->same_orient_flag = true;
+								else clip_pos2->same_orient_flag = false;
+								clip_pos2->self_overlap_flag = isSegSelfOverlap(clip_pos->clip_aln, right_aln, maxVarRegSize);
+								rightClipPosVector.push_back(clip_pos2);
+							}
+						}
+
+						// process the right end of right_aln, typically should be in the fourth vector
+						if(right_aln->rightClipSize>=min_seg_size){
+							vec_id = getClipPosVecId(right_aln, RIGHT_END);
+							if(vec_id==-1){ // not exist, then add it to the fourth vector
+								clip_pos2 = new clipPos_t();
+								clip_pos2->chrname = right_aln->chrname;
+								clip_pos2->clip_end = RIGHT_END;
+								clip_pos2->clip_aln = right_aln;
+								clip_pos2->clipRefPos = right_aln->endRefPos;
+								if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) clip_pos2->same_orient_flag = true;
+								else clip_pos2->same_orient_flag = false;
+								clip_pos2->self_overlap_flag = isSegSelfOverlap(clip_pos->clip_aln, right_aln, maxVarRegSize);
+								rightClipPosVector2.push_back(clip_pos2);
 							}
 						}
 					}
@@ -420,11 +474,60 @@ void clipReg::splitClipPosVec(){
 								}
 							}
 						}
+
+						// process the right end of clip_aln, typically should be in the second vector
+						min_seg_size = (clip_pos->same_orient_flag) ? minAlnSize_same_orient : minAlnSize_diff_orient;
+						if(clip_pos->clip_aln->rightClipSize>=min_seg_size){
+							right_aln = clip_pos->clip_aln->right_aln;
+							vec_id = getClipPosVecId(clip_pos->clip_aln, RIGHT_END);
+							if(vec_id==-1){ // not exist, then add it to the second vector
+								clip_pos2 = new clipPos_t();
+								clip_pos2->chrname = clip_pos->clip_aln->chrname;
+								clip_pos2->clip_end = RIGHT_END;
+								clip_pos2->clip_aln = clip_pos->clip_aln;
+								clip_pos2->clipRefPos = clip_pos->clip_aln->endRefPos;
+								if(right_aln){
+									if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) clip_pos2->same_orient_flag = true;
+									else clip_pos2->same_orient_flag = false;
+									clip_pos2->self_overlap_flag = isSegSelfOverlap(clip_pos->clip_aln, right_aln, maxVarRegSize);
+								}else {
+									clip_pos2->same_orient_flag = clip_pos->same_orient_flag;
+									clip_pos2->self_overlap_flag = false;
+								}
+								leftClipPosVector2.push_back(clip_pos2);
+							}
+
+							// add the mate item of clip_pos2
+							if(right_aln){
+								if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) end_flag = LEFT_END;
+								else end_flag = RIGHT_END;
+								vec_id = getClipPosVecId(right_aln, end_flag);
+								if(vec_id==-1){ // not exist, then add it to the third or fourth vector
+									clip_pos3 = new clipPos_t();
+									clip_pos3->chrname = right_aln->chrname;
+									clip_pos3->clip_end = end_flag;
+									clip_pos3->clip_aln = right_aln;
+									clip_pos3->self_overlap_flag = isSegSelfOverlap(clip_pos->clip_aln, right_aln, maxVarRegSize);;
+									if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) {
+										clip_pos3->clipRefPos = right_aln->startRefPos;
+										clip_pos3->same_orient_flag = true;
+										rightClipPosVector2.push_back(clip_pos3);
+									}else {
+										clip_pos3->clipRefPos = right_aln->endRefPos;
+										clip_pos3->same_orient_flag = false;
+										rightClipPosVector.push_back(clip_pos3);
+									}
+								}
+							}
+						}
 					}
 				}
 			}
 			i++;
 		}else if(clip_pos->same_orient_flag==false){
+
+			cout << "=========== line=" << __LINE__ << ", clip_pos=" << clip_pos->clipRefPos << ", same_orient_flag=false, error!" << endl;
+
 			leftClipPosVector2.push_back(clip_pos);
 			leftClipPosVector.erase(leftClipPosVector.begin()+i);
 		}else i++;
@@ -432,7 +535,12 @@ void clipReg::splitClipPosVec(){
 
 	for(i=0; i<rightClipPosVector.size(); ){
 		clip_pos = rightClipPosVector.at(i);
-		if(clip_pos->chrname.compare(chrname)==0){
+
+//		if(clip_pos->clip_aln->queryname.compare("S1_13409")==0){
+//			cout << "line=" << __LINE__ << ", qname=" << clip_pos->clip_aln->queryname << endl;
+//		}
+
+		//if(clip_pos->chrname.compare(chrname)==0){
 			if(clip_pos->clip_end==RIGHT_END){ // right end
 				if(clip_pos->clip_aln and ((clip_pos->same_orient_flag and clip_pos->clip_aln->ref_dist>=minAlnSize_same_orient)
 						or (clip_pos->same_orient_flag==false and clip_pos->clip_aln->ref_dist>=minAlnSize_diff_orient))){
@@ -506,6 +614,40 @@ void clipReg::splitClipPosVec(){
 								}
 							}
 						}
+
+						min_seg_size = (clip_pos->clip_aln->aln_orient==right_aln->aln_orient) ? minAlnSize_same_orient : minAlnSize_diff_orient;
+						// process the left end of right_aln, typically it should be in the first vector
+						if(right_aln->leftClipSize>=min_seg_size){
+							vec_id = getClipPosVecId(right_aln, LEFT_END);
+							if(vec_id==-1){ // not exist, then add it to the first vector
+								clip_pos2 = new clipPos_t();
+								clip_pos2->chrname = right_aln->chrname;
+								clip_pos2->clip_end = LEFT_END;
+								clip_pos2->clip_aln = right_aln;
+								clip_pos2->clipRefPos = right_aln->startRefPos;
+								if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) clip_pos2->same_orient_flag = true;
+								else clip_pos2->same_orient_flag = false;
+								clip_pos2->self_overlap_flag = isSegSelfOverlap(clip_pos->clip_aln, right_aln, maxVarRegSize);
+								leftClipPosVector.push_back(clip_pos2);
+							}
+						}
+
+						// process the right end of right_aln, typically should be in the second vector
+						if(right_aln->rightClipSize>=min_seg_size){
+							vec_id = getClipPosVecId(right_aln, RIGHT_END);
+							if(vec_id==-1){ // not exist, then add it to the second vector
+								clip_pos2 = new clipPos_t();
+								clip_pos2->chrname = right_aln->chrname;
+								clip_pos2->clip_end = RIGHT_END;
+								clip_pos2->clip_aln = right_aln;
+								clip_pos2->clipRefPos = right_aln->endRefPos;
+								if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) clip_pos2->same_orient_flag = true;
+								else clip_pos2->same_orient_flag = false;
+								clip_pos2->self_overlap_flag = isSegSelfOverlap(clip_pos->clip_aln, right_aln, maxVarRegSize);
+								leftClipPosVector2.push_back(clip_pos2);
+							}
+						}
+
 					}
 				}
 			}else{ // left end
@@ -581,14 +723,61 @@ void clipReg::splitClipPosVec(){
 								}
 							}
 						}
+
+						min_seg_size = (clip_pos->same_orient_flag) ? minAlnSize_same_orient : minAlnSize_diff_orient;
+						// process the left end of right_aln, typically it should be in the fourth vector
+						if(clip_pos->clip_aln->rightClipSize>=min_seg_size){
+							right_aln = clip_pos->clip_aln->right_aln;
+							vec_id = getClipPosVecId(clip_pos->clip_aln, RIGHT_END);
+							if(vec_id==-1){ // not exist, then add it to the second vector
+								clip_pos2 = new clipPos_t();
+								clip_pos2->chrname = clip_pos->clip_aln->chrname;
+								clip_pos2->clip_end = RIGHT_END;
+								clip_pos2->clip_aln = clip_pos->clip_aln;
+								clip_pos2->clipRefPos = clip_pos->clip_aln->endRefPos;
+								if(right_aln){
+									if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) clip_pos2->same_orient_flag = true;
+									else clip_pos2->same_orient_flag = false;
+									clip_pos2->self_overlap_flag = isSegSelfOverlap(clip_pos->clip_aln, right_aln, maxVarRegSize);
+								}else {
+									clip_pos2->same_orient_flag = clip_pos->same_orient_flag;
+									clip_pos2->self_overlap_flag = false;
+								}
+								rightClipPosVector2.push_back(clip_pos2);
+							}
+
+							// add the mate item of clip_pos2
+							if(right_aln){
+								if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) end_flag = LEFT_END;
+								else end_flag = RIGHT_END;
+								vec_id = getClipPosVecId(right_aln, end_flag);
+								if(vec_id==-1){ // not exist, then add it to the first or second vector
+									clip_pos3 = new clipPos_t();
+									clip_pos3->chrname = right_aln->chrname;
+									clip_pos3->clip_end = end_flag;
+									clip_pos3->clip_aln = right_aln;
+									clip_pos3->self_overlap_flag = isSegSelfOverlap(clip_pos->clip_aln, right_aln, maxVarRegSize);
+									if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient){
+										clip_pos3->clipRefPos = right_aln->startRefPos;
+										clip_pos3->same_orient_flag = true;
+										leftClipPosVector2.push_back(clip_pos3);
+									}else{
+										clip_pos3->clipRefPos = right_aln->endRefPos;
+										clip_pos3->same_orient_flag = false;
+										leftClipPosVector.push_back(clip_pos3);
+									}
+								}
+							}
+						}
+
 					}
 				}
 			}
 			i++;
-		}else if(clip_pos->same_orient_flag==false){
-			rightClipPosVector2.push_back(clip_pos);
-			rightClipPosVector.erase(rightClipPosVector.begin()+i);
-		}else i++;
+//		}else if(clip_pos->same_orient_flag==false){
+//			rightClipPosVector2.push_back(clip_pos);
+//			rightClipPosVector.erase(rightClipPosVector.begin()+i);
+//		}else i++;
 	}
 }
 
@@ -621,12 +810,220 @@ clipPos_t* clipReg::getClipPosItemFromSingleVec(clipAlnData_t *clip_aln, int32_t
 	clipPos_t *clip_pos_ret = NULL, *clip_pos;
 	for(size_t i=0; i<clip_pos_vec.size(); i++){
 		clip_pos = clip_pos_vec.at(i);
-		if(clip_pos->clip_aln==clip_aln and clip_pos->clip_end==clip_end){
+		if(clip_pos->clip_aln==clip_aln and clip_pos->clip_end==clip_end){ // compare the pointer
+			clip_pos_ret = clip_pos;
+			break;
+		}else if(clip_pos->clip_aln->chrname.compare(clip_aln->chrname)==0 and clip_pos->clip_aln->queryname.compare(clip_aln->queryname)==0
+				and clip_pos->clip_aln->startRefPos==clip_aln->startRefPos and clip_pos->clip_aln->endRefPos==clip_aln->endRefPos and clip_pos->clip_end==clip_end){
+			// compare the content
 			clip_pos_ret = clip_pos;
 			break;
 		}
 	}
 	return clip_pos_ret;
+}
+
+// append clipping positions
+void clipReg::appendClipPos(){
+	//appendClipPosSingleVec(leftClipPosVector);
+	appendClipPosSingleVec(leftClipPosVector2, clipAlnDataVector2);
+	appendClipPosSingleVec(rightClipPosVector, rightClipAlnDataVector);
+	appendClipPosSingleVec(rightClipPosVector2, rightClipAlnDataVector2);
+}
+
+// append clipping positions for single vector
+void clipReg::appendClipPosSingleVec(vector<clipPos_t*> &clipPosVec, vector<clipAlnData_t*> &clipAlnDataVec){
+	//vector<clipAlnData_t*> clip_aln_data_vec;
+	int64_t meanClipPos, start_pos, end_pos, chr_len;
+	string chrname_max;
+	vector<string> clip_pos_str_vec;
+
+	if(clipPosVec.size()){
+		// construct the region
+		clip_pos_str_vec = getClipPosMaxOcc(clipPosVec);
+		if(clip_pos_str_vec.size()){
+			chrname_max = clip_pos_str_vec.at(0);
+			meanClipPos = stoi(clip_pos_str_vec.at(1));
+			start_pos = meanClipPos - CLIP_END_EXTEND_SIZE;
+			end_pos = meanClipPos + CLIP_END_EXTEND_SIZE;
+
+			chr_len = faidx_seq_len(fai, chrname_max.c_str()); // get the reference length
+			if(start_pos<1) start_pos = 1;
+			if(end_pos>chr_len) end_pos = chr_len;
+
+			// load the clipping data
+			clipAlnDataLoader clip_aln_data_loader(chrname_max, start_pos, end_pos, inBamFile, minClipEndSize);
+			clip_aln_data_loader.loadClipAlnDataWithSATag(clipAlnDataVec, paras->max_ultra_high_cov);
+			removeNonclipItemsOp(clipAlnDataVec);
+
+			// add clipping end at the specified region
+			addClipPosAtClipEnd(chrname_max, start_pos, end_pos, RIGHT_END, clipPosVec, clipAlnDataVec, clipAlnDataVector);
+			addClipPosAtClipEnd(chrname_max, start_pos, end_pos, LEFT_END, clipPosVec, clipAlnDataVec, clipAlnDataVector);
+		}
+	}
+}
+
+// get the clipping position of the maximum occurrence
+vector<string> clipReg::getClipPosMaxOcc(vector<clipPos_t*> &clipPosVec){
+	vector<string> clipPos_ret;
+
+	struct groupNode{
+		int32_t group_id, num;
+		double central, sum;
+		string chrname;
+	};
+
+	size_t i, j;
+	double dist, min_dist;
+	int32_t min_group_id;
+	vector<struct groupNode*> group_vec;
+	struct groupNode *group_item;
+	clipPos_t *clip_pos_item;
+
+	int64_t maxValue, secValue;
+	int32_t maxIdx, secIdx;
+
+	// extract groups
+	if(clipPosVec.size()>0){
+		for(i=0; i<clipPosVec.size(); i++){
+			clip_pos_item = clipPosVec.at(i);
+
+			// get the minimal distance
+			min_dist = INT_MAX;
+			min_group_id = -1;
+			for(j=0; j<group_vec.size(); j++){
+				group_item = group_vec.at(j);
+				if(group_item->chrname.compare(clip_pos_item->chrname)==0){
+					dist = clip_pos_item->clipRefPos - group_item->central;
+					if(dist<0) dist = -dist;
+					if(min_dist>dist) {
+						min_dist = dist;
+						min_group_id = j;
+					}
+				}
+			}
+
+			if(min_group_id==-1 or min_dist>GROUP_DIST_THRES){ // add a group
+				group_item = new struct groupNode();
+				group_item->group_id = group_vec.size();
+				group_item->central = group_item->sum = clip_pos_item->clipRefPos;
+				group_item->num = 1;
+				group_item->chrname = clip_pos_item->chrname;
+				group_vec.push_back(group_item);
+			}else{ // found the minimum
+				group_item = group_vec.at(min_group_id);
+				group_item->sum += clip_pos_item->clipRefPos;
+				group_item->num ++;
+				group_item->central = group_item->sum / group_item->num;
+			}
+		}
+
+		// get maximum item and second maximum item
+		maxIdx = secIdx = -1; maxValue = secValue = 0;
+		for(i=0; i<group_vec.size(); i++){
+			group_item = group_vec.at(i);
+			if(maxValue<group_item->num) { secIdx = maxIdx; secValue = maxValue; maxIdx = i; maxValue = group_item->num; }
+			else if(secValue<group_item->num) { secIdx = i; secValue = group_item->num; }
+		}
+
+		// return values
+		if(maxIdx>=0){
+			group_item = group_vec.at(maxIdx);
+			clipPos_ret.push_back(group_item->chrname);
+			maxValue = group_item->central;
+			clipPos_ret.push_back(to_string(maxValue));
+		}
+
+		for(i=0; i<group_vec.size(); i++) delete group_vec.at(i);
+		vector<struct groupNode*>().swap(group_vec);
+	}
+
+	return clipPos_ret;
+}
+
+// add clipping position at clipping end
+void clipReg::addClipPosAtClipEnd(string chrname_clip, int64_t start_pos, int64_t end_pos, int32_t clip_end, vector<clipPos_t*> &clipPosVec, vector<clipAlnData_t*> &clip_aln_data_vec, vector<clipAlnData_t*> &mainClipAlnDataVec){
+	size_t i;
+	int32_t vec_id;
+	clipAlnData_t *clip_aln, *clip_aln_tmp;
+	clipPos_t *clip_pos;
+
+	for(i=0; i<clip_aln_data_vec.size(); i++){
+		clip_aln = clip_aln_data_vec.at(i);
+		if(clip_aln->chrname.compare(chrname_clip)==0){
+			if(clip_end==RIGHT_END){ // right end
+				if(clip_aln->rightClipSize>=minClipEndSize and clip_aln->endRefPos>=start_pos and clip_aln->endRefPos<=end_pos){
+					vec_id = getClipPosVecId(clip_aln, clip_end);
+
+					// further to search the main clipping data vector
+					if(vec_id==-1){ // not exist, then add new item
+						clip_aln_tmp = getClipAlnItemFromMainVec(clip_aln, mainClipAlnDataVec);
+						if(clip_aln_tmp==NULL) {
+							clip_aln_tmp = clip_aln;
+							//cout << "xxxxxxxxxxx exist in main clipping data vector: " << clip_aln->chrname << ":" << clip_aln->startRefPos << "-" << clip_aln->endRefPos << endl;
+						}
+
+						clip_pos = new clipPos_t();
+						clip_pos->chrname = clip_aln_tmp->chrname;
+						clip_pos->clip_end = RIGHT_END;
+						clip_pos->clip_aln = clip_aln_tmp;
+						clip_pos->clipRefPos = clip_aln_tmp->endRefPos;
+						if(clip_aln_tmp->right_aln and clip_aln_tmp->aln_orient==clip_aln_tmp->right_aln->aln_orient) clip_pos->same_orient_flag = true;
+						else clip_pos->same_orient_flag = false;
+						clip_pos->self_overlap_flag = isSegSelfOverlap(clip_aln_tmp, clip_aln_tmp->right_aln, maxVarRegSize);
+						clipPosVec.push_back(clip_pos);
+
+						//cout << "------- Right clipping end: " << clip_pos->chrname << ":" << clip_pos->clipRefPos << endl;
+
+					}else{
+						//cout << "******** already exist, right clipping end: " << clip_aln->chrname << ":" << clip_aln->endRefPos << endl;
+					}
+				}
+			}else{ // left end
+				if(clip_aln->leftClipSize>=minClipEndSize and clip_aln->startRefPos>=start_pos and clip_aln->startRefPos<=end_pos){
+					vec_id = getClipPosVecId(clip_aln, clip_end);
+
+					// further to search the main clipping data vector
+					if(vec_id==-1){ // not exist, then add new item
+						clip_aln_tmp = getClipAlnItemFromMainVec(clip_aln, mainClipAlnDataVec);
+						if(clip_aln_tmp==NULL) {
+							clip_aln_tmp = clip_aln;
+							//cout << "xxxxxxxxxxx exist in main clipping data vector: " << clip_aln->chrname << ":" << clip_aln->startRefPos << "-" << clip_aln->endRefPos << endl;
+						}
+
+						clip_pos = new clipPos_t();
+						clip_pos->chrname = clip_aln->chrname;
+						clip_pos->clip_end = LEFT_END;
+						clip_pos->clip_aln = clip_aln;
+						clip_pos->clipRefPos = clip_aln->startRefPos;
+						if(clip_aln->left_aln and clip_aln->aln_orient==clip_aln->left_aln->aln_orient) clip_pos->same_orient_flag = true;
+						else clip_pos->same_orient_flag = false;
+						clip_pos->self_overlap_flag = isSegSelfOverlap(clip_aln, clip_aln->left_aln, maxVarRegSize);
+						clipPosVec.push_back(clip_pos);
+
+						//cout << "------- Left clipping end: " << clip_pos->chrname << ":" << clip_pos->clipRefPos << endl;
+					}else{
+						//cout << "******** already exist, left clipping end: " << clip_aln->chrname << ":" << clip_aln->startRefPos << endl;
+					}
+				}
+			}
+		}
+	}
+}
+
+// search the align item from vector
+clipAlnData_t* clipReg::getClipAlnItemFromMainVec(clipAlnData_t *clip_aln, vector<clipAlnData_t*> &mainClipAlnDataVec){
+	clipAlnData_t *clip_aln_ret = NULL, *clip_aln_tmp;
+
+	for(size_t i=0; i<mainClipAlnDataVec.size(); i++){
+		clip_aln_tmp = mainClipAlnDataVec.at(i);
+		if(clip_aln_tmp->chrname.compare(clip_aln->chrname)==0 and clip_aln_tmp->queryname.compare(clip_aln->queryname)==0 and clip_aln_tmp->startRefPos==clip_aln->startRefPos and clip_aln_tmp->endRefPos==clip_aln->endRefPos){
+			clip_aln_ret = clip_aln_tmp;
+			break;
+		}
+	}
+
+	return clip_aln_ret;
 }
 
 // sort clipping position items ascending
@@ -736,7 +1133,6 @@ void clipReg::removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &cli
 	size_t num, maxValue, secValue;
 	int32_t maxIdx, secIdx;
 	double sum, central_value, pre_central_value;
-	string tmp_str;
 
 	// extract groups
 	if(clipPosVector.size()>0){
@@ -814,10 +1210,236 @@ int32_t clipReg::getItemIdxClipPosVec(clipPos_t *item, vector<clipPos_t*> &vec){
 	return idx;
 }
 
+// compute single mate region for BND format
+string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, int32_t vec_id, string &chrname_clip, int64_t meanClipPos){
+	string mate_reg_str, left_mate_str, right_mate_str, vec_id_str, orient_str, BND_str, mate_clip_pos_str;
+	size_t i;
+	clipPos_t *clip_pos;
+	clipAlnData_t *clip_aln, *clip_aln2;
+	int32_t j, clip_end2, vec_id2, num_arr[4], orient_num_arr[2][4];
+	int32_t maxValue, maxIdx, support_num, cov_num;
+
+	if(clip_pos_vec.size()==0) return "";
+
+	// coverage of right end clipping position
+	cov_num = computeCovNumClipPos(chrname_clip, meanClipPos, RIGHT_END, fai, paras);
+
+	// initialization
+	support_num = 0;
+	for(j=0; j<4; j++) num_arr[j] = orient_num_arr[0][j] = orient_num_arr[1][j] = 0;
+
+	// right end
+	for(i=0; i<clip_pos_vec.size(); i++){
+		clip_pos = clip_pos_vec.at(i);
+		clip_aln = clip_pos->clip_aln;
+
+		// get the neighboring clipping segments 2+,3-;2-,3+;1-,0+;1+,0-
+		clip_aln2 = NULL;
+		clip_end2 = -1;
+		if(clip_pos->clip_end==RIGHT_END){ // right end
+			support_num ++;
+			clip_aln2 = clip_aln->right_aln;
+			if(clip_aln2){
+				if(clip_aln2->aln_orient==clip_aln->aln_orient) // same orient
+					clip_end2 = LEFT_END;
+				else // different orient
+					clip_end2 = RIGHT_END;
+			}
+		}
+
+		// get vector id
+		if(clip_aln2){
+			vec_id2 = getClipPosVecId(clip_aln2, clip_end2);
+			if(vec_id2!=-1){ // item exists
+				if(vec_id2!=vec_id){
+					num_arr[vec_id2] ++;
+					if(clip_end2==LEFT_END){ // same orient
+						orient_num_arr[0][vec_id2] ++;
+						BND_str = "N[" + clip_aln2->chrname + ":" + to_string(clip_aln2->startRefPos) + "[";
+						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->endRefPos << ", mate item: " << BND_str << endl;
+					}else { // different orient
+						orient_num_arr[1][vec_id2] ++;
+						BND_str = "N]" + clip_aln2->chrname + ":" + to_string(clip_aln2->endRefPos) + "]";
+						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->endRefPos << ", mate item: " << BND_str << endl;
+					}
+				}else{
+					//cerr << __func__ << ", line=" << __LINE__ <<  ": invalid same vector id, vec_id=" << vec_id << ", vec_id2=" << vec_id2 << ", clip_vec_size=" << clip_pos_vec.size() << ", error!" << endl;
+					//exit(1);
+				}
+			}
+		}
+	}
+
+//	cout << "Right end: id_nums[" << vec_id << "]: ";
+//	for(j=0; j<3; j++) cout << num_arr[j] << ", ";
+//	cout << num_arr[3] << endl;
+
+	// get the final vector id for right clipping end
+	maxValue = maxIdx = -1;
+	for(j=0; j<4; j++){
+		if(num_arr[j]>0 and num_arr[j]>maxValue) {
+			maxValue = num_arr[j];
+			maxIdx = j;
+		}
+	}
+	if(maxIdx!=-1){
+		//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", orient_nums=[" << orient_num_arr[0][maxIdx] << "," << orient_num_arr[1][maxIdx] << "]" << endl;
+
+		vec_id_str = to_string(maxIdx);
+		if(orient_num_arr[0][maxIdx]>orient_num_arr[1][maxIdx]){ // mate at left end
+			orient_str = "+";
+			mate_clip_pos_str = to_string(meanClipPos);
+		}else{ // mate at right end
+			orient_str = "-";
+			mate_clip_pos_str = to_string(meanClipPos-1);
+		}
+		if(support_num>cov_num) cov_num = support_num;
+		left_mate_str = vec_id_str + orient_str + "|" + mate_clip_pos_str + "|" + to_string(support_num) + "|" + to_string(cov_num);
+	}else
+		left_mate_str = "-";
+
+	// coverage of left end clipping position
+	cov_num = computeCovNumClipPos(chrname_clip, meanClipPos, LEFT_END, fai, paras);
+
+	// initialization
+	support_num = 0;
+	for(j=0; j<4; j++) num_arr[j] = orient_num_arr[0][j] = orient_num_arr[1][j] = 0;
+
+	// left end
+	for(i=0; i<clip_pos_vec.size(); i++){
+		clip_pos = clip_pos_vec.at(i);
+		clip_aln = clip_pos->clip_aln;
+
+		// get the neighboring clipping segments 2+|.|.|.,3-.;2-,3+;1-,0+;1+,0-
+		clip_aln2 = NULL;
+		clip_end2 = -1;
+		if(clip_pos->clip_end==LEFT_END){ // left end
+			support_num ++;
+			clip_aln2 = clip_aln->left_aln;
+			if(clip_aln2){
+				if(clip_aln2->aln_orient==clip_aln->aln_orient) // same orient
+					clip_end2 = RIGHT_END;
+				else // different orient
+					clip_end2 = LEFT_END;
+			}
+		}
+
+		// get vector id
+		if(clip_aln2){
+			vec_id2 = getClipPosVecId(clip_aln2, clip_end2);
+			if(vec_id2!=-1){ // item exists
+				if(vec_id2!=vec_id){
+					num_arr[vec_id2] ++;
+					if(clip_end2==RIGHT_END) { // same orient
+						orient_num_arr[0][vec_id2] ++;
+						BND_str = "]" + clip_aln2->chrname + ":" + to_string(clip_aln2->endRefPos) + "]N";
+						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->startRefPos << ", mate item: " << BND_str << endl;
+					}else{ // different orient
+						orient_num_arr[1][vec_id2] ++;
+						BND_str = "[" + clip_aln2->chrname + ":" + to_string(clip_aln2->startRefPos) + "[N";
+						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->startRefPos << ", mate item: " << BND_str << endl;
+					}
+				}else{
+					//cerr << __func__ << ", line=" << __LINE__ <<  ": invalid same vector id, vec_id=" << vec_id << ", vec_id2=" << vec_id2 << ", clip_vec_size=" << clip_pos_vec.size() << ", error!" << endl;
+					//exit(1);
+				}
+			}
+		}
+	}
+
+//	cout << "Left end: id_nums[" << vec_id << "]: ";
+//	for(j=0; j<3; j++) cout << num_arr[j] << ", ";
+//	cout << num_arr[3] << endl;
+
+	// get the final vector id for left clipping end
+	maxValue = maxIdx = -1;
+	for(j=0; j<4; j++){
+		if(num_arr[j]>0 and num_arr[j]>maxValue) {
+			maxValue = num_arr[j];
+			maxIdx = j;
+		}
+	}
+	if(maxIdx!=-1){
+		//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", orient_nums=[" << orient_num_arr[0][maxIdx] << "," << orient_num_arr[1][maxIdx] << "]" << endl;
+
+		vec_id_str = to_string(maxIdx);
+		if(orient_num_arr[0][maxIdx]>orient_num_arr[1][maxIdx]){ // mate at right end
+			orient_str =  "+";
+			mate_clip_pos_str = to_string(meanClipPos-1);
+		}else{ // mate at left end
+			orient_str =  "-";
+			mate_clip_pos_str = to_string(meanClipPos);
+		}
+		if(support_num>cov_num) cov_num = support_num;
+		right_mate_str = vec_id_str + orient_str + "|" + mate_clip_pos_str + "|" + to_string(support_num) + "|" + to_string(cov_num);
+	}else
+		right_mate_str = "-";
+
+	if(left_mate_str.compare("-")==0 and right_mate_str.compare("-")==0) mate_reg_str = "";
+	else mate_reg_str = left_mate_str + "," + right_mate_str;
+
+	//cout << mate_reg_str << endl;
+
+	return mate_reg_str;
+}
+
+// compute the coverage of a clipping position
+int32_t clipReg::computeCovNumClipPos(string &chrname, int64_t meanClipPos, int32_t clip_end, faidx_t *fai, Paras *paras){
+	int64_t start_pos, end_pos, chr_len, pos, maxValue, num;
+	Base *baseArray;
+	vector<bam1_t*> alnDataVector;
+	vector<bam1_t*>::iterator aln;
+
+	if(clip_end==RIGHT_END) {
+		start_pos = meanClipPos - CLIP_END_EXTEND_SIZE / 2;
+		end_pos = meanClipPos - 1;
+	}else{
+		start_pos = meanClipPos;
+		end_pos = meanClipPos + CLIP_END_EXTEND_SIZE / 2;
+	}
+	chr_len = faidx_seq_len(fai, chrname.c_str()); // get the reference length
+	if(start_pos<1) start_pos = 1;
+	if(end_pos>chr_len) end_pos = chr_len;
+
+	covLoader cov_loader(chrname, start_pos, end_pos, fai, paras->min_ins_size_filt, paras->min_del_size_filt);
+	baseArray = cov_loader.initBaseArray();
+	alnDataLoader data_loader(chrname, start_pos, end_pos, paras->inBamFile);
+	data_loader.loadAlnData(alnDataVector);
+
+	// generate the base coverage array
+	cov_loader.generateBaseCoverage(baseArray, alnDataVector);
+
+	//totalReadBeseNum = totalRefBaseNum = 0;
+	maxValue = 0;
+	for(pos=start_pos; pos<=end_pos; pos++){
+		// compute the meanCov excluding the gap regions
+		if(baseArray[pos-start_pos].coverage.idx_RefBase!=4){ // excluding 'N'
+//			totalReadBeseNum += baseArray[pos-start_pos].coverage.num_bases[5];
+//			totalRefBaseNum ++;
+			num = baseArray[pos-start_pos].coverage.num_bases[5];
+			if(maxValue<num) maxValue = num;
+		}
+	}
+//	if(totalRefBaseNum) mean_cov_num = (double)totalReadBeseNum/totalRefBaseNum;
+//	else mean_cov_num = 0;
+
+	// release memory
+	if(baseArray) { delete[] baseArray; baseArray = NULL; }
+	if(!alnDataVector.empty()){
+		for(aln=alnDataVector.begin(); aln!=alnDataVector.end(); aln++)
+			bam_destroy1(*aln);
+		vector<bam1_t*>().swap(alnDataVector);
+	}
+
+	return maxValue;
+}
+
 // compute the clip region
 void clipReg::computeClipRegs(){
 	reg_t *reg_tmp;
 	int64_t val_tmp;
+
+	for(size_t i=0; i<4; i++) mate_clip_reg.bnd_mate_reg_strs[i] = "-";
 
 	mate_clip_reg.leftClipReg = computeClipRegSingleVec(leftClipPosVector);
 	mate_clip_reg.leftClipReg2 = computeClipRegSingleVec(leftClipPosVector2);
@@ -829,6 +1451,15 @@ void clipReg::computeClipRegs(){
 		reg_tmp = mate_clip_reg.leftClipReg; mate_clip_reg.leftClipReg = mate_clip_reg.leftClipReg2; mate_clip_reg.leftClipReg2 = reg_tmp;
 		val_tmp = mate_clip_reg.leftMeanClipPos; mate_clip_reg.leftMeanClipPos = mate_clip_reg.leftMeanClipPos2; mate_clip_reg.leftMeanClipPos2 = val_tmp;
 		val_tmp = mate_clip_reg.leftClipPosNum; mate_clip_reg.leftClipPosNum = mate_clip_reg.leftClipPosNum2; mate_clip_reg.leftClipPosNum2 = val_tmp;
+		left_part_changed = true;
+	}
+	// compute mate regions for BND format
+	if(left_part_changed==false){
+		if(mate_clip_reg.leftClipReg) mate_clip_reg.bnd_mate_reg_strs[0] = computeMateSingleRegStrForBND(leftClipPosVector, 0, mate_clip_reg.leftClipReg->chrname, mate_clip_reg.leftMeanClipPos);
+		if(mate_clip_reg.leftClipReg2) mate_clip_reg.bnd_mate_reg_strs[1] = computeMateSingleRegStrForBND(leftClipPosVector2, 1, mate_clip_reg.leftClipReg2->chrname, mate_clip_reg.leftMeanClipPos2);
+	}else{
+		if(mate_clip_reg.leftClipReg) mate_clip_reg.bnd_mate_reg_strs[0] = computeMateSingleRegStrForBND(leftClipPosVector2, 0, mate_clip_reg.leftClipReg->chrname, mate_clip_reg.leftMeanClipPos);
+		if(mate_clip_reg.leftClipReg2) mate_clip_reg.bnd_mate_reg_strs[1] = computeMateSingleRegStrForBND(leftClipPosVector, 1, mate_clip_reg.leftClipReg2->chrname, mate_clip_reg.leftMeanClipPos2);
 	}
 
 	mate_clip_reg.rightClipReg = computeClipRegSingleVec(rightClipPosVector);
@@ -841,6 +1472,15 @@ void clipReg::computeClipRegs(){
 		reg_tmp = mate_clip_reg.rightClipReg; mate_clip_reg.rightClipReg = mate_clip_reg.rightClipReg2; mate_clip_reg.rightClipReg2 = reg_tmp;
 		val_tmp = mate_clip_reg.rightMeanClipPos; mate_clip_reg.rightMeanClipPos = mate_clip_reg.rightMeanClipPos2; mate_clip_reg.rightMeanClipPos2 = val_tmp;
 		val_tmp = mate_clip_reg.rightClipPosNum; mate_clip_reg.rightClipPosNum = mate_clip_reg.rightClipPosNum2; mate_clip_reg.rightClipPosNum2 = val_tmp;
+		right_part_changed = true;
+	}
+	// compute mate regions for BND format
+	if(left_part_changed==false){
+		if(mate_clip_reg.rightClipReg) mate_clip_reg.bnd_mate_reg_strs[2] = computeMateSingleRegStrForBND(rightClipPosVector, 2, mate_clip_reg.rightClipReg->chrname, mate_clip_reg.rightMeanClipPos);
+		if(mate_clip_reg.rightClipReg2) mate_clip_reg.bnd_mate_reg_strs[3] = computeMateSingleRegStrForBND(rightClipPosVector2, 3, mate_clip_reg.rightClipReg2->chrname, mate_clip_reg.rightMeanClipPos2);
+	}else{
+		if(mate_clip_reg.rightClipReg) mate_clip_reg.bnd_mate_reg_strs[2] = computeMateSingleRegStrForBND(rightClipPosVector2, 2, mate_clip_reg.rightClipReg->chrname, mate_clip_reg.rightMeanClipPos);
+		if(mate_clip_reg.rightClipReg2) mate_clip_reg.bnd_mate_reg_strs[3] = computeMateSingleRegStrForBND(rightClipPosVector, 3, mate_clip_reg.rightClipReg2->chrname, mate_clip_reg.rightMeanClipPos2);
 	}
 
 	mate_clip_reg.leftClipRegNum = 0;
@@ -852,6 +1492,7 @@ void clipReg::computeClipRegs(){
 
 	mate_clip_reg.var_cand = NULL;
 	mate_clip_reg.left_var_cand_tra = mate_clip_reg.right_var_cand_tra = NULL;
+	//for(int i=0; i<4; i++) mate_clip_reg.bnd_mate_reg_strs[i] = bnd_mate_reg_strs[i];
 
 	// remove FP region for single clip end
 	removeFPClipSingleEnd(mate_clip_reg);
@@ -1444,18 +2085,19 @@ void clipReg::printClipVecs(string head_info){
 void clipReg::printSingleClipVec(vector<clipPos_t*> &clip_pos_vec){
 	clipPos_t *clip_pos;
 	clipAlnData_t *left_clip_aln, *right_clip_aln;
-	string line, line2, clip_end_str, flag_str, flag_str2;
+	string line, line2, clip_end_str, flag_str, flag_str2, qname;
 	int32_t left_clip_size, right_clip_size;
 
 	for(size_t i=0; i<clip_pos_vec.size(); i++){
 		clip_pos = clip_pos_vec.at(i);
+		qname = clip_pos->clip_aln->queryname;
 		if(clip_pos->clip_end==LEFT_END) clip_end_str = "Left";
 		else clip_end_str = "Right";
 		if(clip_pos->same_orient_flag) flag_str = "1";
 		else flag_str = "0";
 		if(clip_pos->self_overlap_flag) flag_str2 = "1";
 		else flag_str2 = "0";
-		line = "\t[" + to_string(i) + "]: " + clip_pos->chrname + ":" + to_string(clip_pos->clipRefPos) + ", clipping end=" + clip_end_str + ", same_orient=" + flag_str + ", self overlap flag=" + flag_str2;
+		line = "\t[" + to_string(i) + "]: " + clip_pos->chrname + ":" + to_string(clip_pos->clipRefPos) + ", qname=" + qname + ", clipping end=" + clip_end_str + ", same_orient=" + flag_str + ", self overlap flag=" + flag_str2;
 		if(clip_pos->clip_aln) {
 			left_clip_size = clip_pos->clip_aln->leftClipSize;
 			right_clip_size = clip_pos->clip_aln->rightClipSize;

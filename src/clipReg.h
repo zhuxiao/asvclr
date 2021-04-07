@@ -10,6 +10,7 @@
 #include "structures.h"
 #include "alnDataLoader.h"
 #include "varCand.h"
+#include "covLoader.h"
 
 using namespace std;
 
@@ -38,6 +39,8 @@ using namespace std;
 
 #define MAX_DIST_SAME_CLIP_END				100000
 
+#define MAX_ALN_SEG_NUM_PER_READ_TRA		4
+
 
 typedef struct{
 	reg_t *leftClipReg, *leftClipReg2, *rightClipReg, *rightClipReg2;
@@ -48,9 +51,10 @@ typedef struct{
 	int32_t sv_type:8, dup_num:24;
 	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag;
 	varCand *var_cand, *left_var_cand_tra, *right_var_cand_tra;  // TRA
-	string chrname_leftTra1, chrname_rightTra1, chrname_leftTra2, chrname_rightTra2;
-	int32_t leftClipPosTra1, rightClipPosTra1, leftClipPosTra2, rightClipPosTra2;
+	string chrname_leftTra1, chrname_leftTra2, chrname_rightTra1, chrname_rightTra2;
+	int32_t leftClipPosTra1, leftClipPosTra2, rightClipPosTra1, rightClipPosTra2;
 	string refseq_tra, altseq_tra, refseq_tra2, altseq_tra2;
+	string bnd_mate_reg_strs[4]; // mate strings for BND format: mate_reg_id1|clip_loc1|sup_num1|cov1,mate_reg_id2|clip_loc2|sup_num2|cov2;......
 }mateClipReg_t;
 
 class clipReg {
@@ -63,9 +67,12 @@ class clipReg {
 
 		mateClipReg_t mate_clip_reg;
 
-		vector<clipAlnData_t*> clipAlnDataVector;
+		vector<clipAlnData_t*> clipAlnDataVector, clipAlnDataVector2, rightClipAlnDataVector, rightClipAlnDataVector2;
 		vector<clipPos_t*> leftClipPosVector, rightClipPosVector;
 		vector<clipPos_t*> leftClipPosVector2, rightClipPosVector2;
+		bool left_part_changed, right_part_changed;
+
+		//string bnd_mate_reg_strs[4]; // mate region strings for BND format
 
 		// deal with ultra-high coverage region
 
@@ -76,22 +83,30 @@ class clipReg {
 		void computeMateClipReg();
 
 	private:
-		void destroyClipAlnDataVector();
+		void destroyClipAlnDataVector(vector<clipAlnData_t*> &clipAlnDataVec);
 		void destroyClipPosVec(vector<clipPos_t*> &clipPosVec);
 		void fillClipAlnDataVectorWithSATag();
 		void removeNonclipItems();
+		void removeNonclipItemsOp(vector<clipAlnData_t*> &clipAlnDataVector);
 		bool isValidClipReg();
 		void computeMateAlnClipReg();
 		void extractClipPosVec();
 		void splitClipPosVec();
 		int32_t getClipPosVecId(clipAlnData_t *clip_aln, int32_t clip_end);
 		clipPos_t* getClipPosItemFromSingleVec(clipAlnData_t *clip_aln, int32_t clip_end, vector<clipPos_t*> &clip_pos_vec);
+		void appendClipPos();
+		void appendClipPosSingleVec(vector<clipPos_t*> &clipPosVec, vector<clipAlnData_t*> &clipAlnDataVec);
+		vector<string> getClipPosMaxOcc(vector<clipPos_t*> &clipPosVec);
+		void addClipPosAtClipEnd(string chrname_clip, int64_t start_pos, int64_t end_pos, int32_t clip_end, vector<clipPos_t*> &clipPosVec, vector<clipAlnData_t*> &clip_aln_data_vec, vector<clipAlnData_t*> &mainClipAlnDataVec);
+		clipAlnData_t* getClipAlnItemFromMainVec(clipAlnData_t *clip_aln, vector<clipAlnData_t*> &mainClipAlnDataVec);
 		void sortClipPos();
-		void sortClipPosSingleVec(vector<clipPos_t*> &leftClipPosVector);
+		void sortClipPosSingleVec(vector<clipPos_t*> &clipPosVector);
 		void removeFakeClips();
 		void removeFakeClipsDifferentChrSingleVec(vector<clipPos_t*> &clipPosVector);
 		void removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &clipPosVector, string &vec_name);
 		void removeFakeClipsLowCov(vector<clipPos_t*> &clipPosVector, int32_t min_clip_reads_num);
+		string computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, int32_t vec_id, string &chrname_clip, int64_t meanClipPos);
+		int32_t computeCovNumClipPos(string &chrname, int64_t meanClipPos, int32_t clip_end, faidx_t *fai, Paras *paras);
 		void computeClipRegs();
 		reg_t* computeClipRegSingleVec(vector<clipPos_t*> &clipPosVector);
 		int32_t getItemIdxClipPosVec(clipPos_t *item, vector<clipPos_t*> &vec);

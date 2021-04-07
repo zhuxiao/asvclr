@@ -179,8 +179,15 @@ int Paras::parseParas(int argc, char **argv){
 
 // get program command string
 string Paras::getPgCmd(int argc, char **argv){
-	string pg_cmd_str = argv[0];
+	string pg_cmd_str, tmp_str;
+	size_t found_idx;
+
+	tmp_str = argv[0];
+	if((found_idx=tmp_str.find_last_of("/"))!=string::npos)
+		pg_cmd_str = tmp_str.substr(found_idx+1);
+	else pg_cmd_str = tmp_str;
 	for(int i=1; i<argc; i++) pg_cmd_str = pg_cmd_str + " " + argv[i];
+
 	return pg_cmd_str;
 }
 

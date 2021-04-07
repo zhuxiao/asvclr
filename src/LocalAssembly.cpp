@@ -549,7 +549,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 			system(cmd4.c_str());  // remove temporary files
 
 			// try canu1.8, or 2.0
-			canu_cmd = "canu2.0 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio-raw " + readsfilename + " > /dev/null 2>&1";
+			canu_cmd = "canu2.0 -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio " + readsfilename + " > /dev/null 2>&1";
 			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 

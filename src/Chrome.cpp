@@ -460,6 +460,7 @@ void Chrome::processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, 
 			clip_reg_new->valid_flag = mate_clip_reg.valid_flag;
 			clip_reg_new->call_success_flag = false;
 			clip_reg_new->tra_rescue_success_flag = false;
+			for(i=0; i<4; i++) clip_reg_new->bnd_mate_reg_strs[i] = mate_clip_reg.bnd_mate_reg_strs[i];
 			mateClipRegVector.push_back(clip_reg_new);
 		}
 
@@ -1050,7 +1051,7 @@ bool Chrome::isSnvInClipReg(size_t pos, vector<mateClipReg_t*> &mate_clipReg_vec
 void Chrome::chrMergeDetectResultToFile(){
 	size_t i, j, pos;
 	ofstream out_file_snv, out_file_indel, out_file_clipReg;
-	string filename, line, var_type;
+	string filename, line, var_type, mate_str, tmp_str;
 	vector<reg_t*> indel_vec;
 	vector<size_t> snv_vec;
 	mateClipReg_t *mate_clip_reg;
@@ -1128,6 +1129,10 @@ void Chrome::chrMergeDetectResultToFile(){
 			line += "\t" + to_string(mate_clip_reg->dup_num);
 		else
 			line += "\t-";
+
+		mate_str = mate_clip_reg->bnd_mate_reg_strs[0];
+		for(j=1; j<4; j++) mate_str += ";" + mate_clip_reg->bnd_mate_reg_strs[j];
+		line += "\t" + mate_str;
 
 		line += "\t" + to_string(mate_clip_reg->leftClipPosNum) + "\t" + to_string(mate_clip_reg->leftClipPosNum2) + "\t" + to_string(mate_clip_reg->rightClipPosNum) + "\t" + to_string(mate_clip_reg->rightClipPosNum2);
 
@@ -1496,7 +1501,7 @@ void Chrome::chrLoadClipRegDataAssemble(){
 
 void Chrome::chrLoadMateClipRegDataOp(bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 	string line, chrname1, chrname2, chrname3, chrname4;
-	vector<string> str_vec;
+	vector<string> str_vec, bnd_mate_reg_str_vec;
 	ifstream infile;
 	reg_t *reg1, *reg2, *reg3, *reg4;
 	bool mate_flag, flag, flag1, flag2, flag3, flag4;
@@ -1583,11 +1588,18 @@ void Chrome::chrLoadMateClipRegDataOp(bool limit_reg_process_flag, vector<simple
 
 					if(str_vec.at(19).compare("-")!=0) { dup_num_tmp = stoi(str_vec.at(19)); }
 
+					// BND mate information
+					bnd_mate_reg_str_vec = split(str_vec.at(20), ";");
+					if(bnd_mate_reg_str_vec.size()!=4){
+						cerr << __func__ << ", line=" << __LINE__ << ": invalid number of bnd_mate_str_vec: " << bnd_mate_reg_str_vec.size() << ", which should be 4." << endl;
+						exit(1);
+					}
+
 					// support reads number information
-					rd_num_left = stoi(str_vec.at(20));
-					rd_num_left2 = stoi(str_vec.at(21));
-					rd_num_right = stoi(str_vec.at(22));
-					rd_num_right2 = stoi(str_vec.at(23));
+					rd_num_left = stoi(str_vec.at(21));
+					rd_num_left2 = stoi(str_vec.at(22));
+					rd_num_right = stoi(str_vec.at(23));
+					rd_num_right2 = stoi(str_vec.at(24));
 				}
 
 				mate_clip_reg = new mateClipReg_t();
@@ -1621,6 +1633,7 @@ void Chrome::chrLoadMateClipRegDataOp(bool limit_reg_process_flag, vector<simple
 				mate_clip_reg->chrname_leftTra1 = mate_clip_reg->chrname_rightTra1 = mate_clip_reg->chrname_leftTra2 = mate_clip_reg->chrname_rightTra2 = "";
 				mate_clip_reg->leftClipPosTra1 = mate_clip_reg->rightClipPosTra1 = mate_clip_reg->leftClipPosTra2 = mate_clip_reg->rightClipPosTra2 = -1;
 				mate_clip_reg->dup_num = dup_num_tmp;
+				for(int i=0; i<4; i++) mate_clip_reg->bnd_mate_reg_strs[i] = bnd_mate_reg_str_vec.at(i);
 				mateClipRegVector.push_back(mate_clip_reg);
 			}else{
 				if(reg1) delete reg1;
@@ -3069,10 +3082,17 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 					line += "\t" + to_string(reg->dup_num);
 				else
 					line += "\t-";
-				if(reg->var_type==VAR_UNC) line += "\t-\t-";
-				else line += "\t" + reg->refseq + "\t" + reg->altseq;
+
+				if(reg->refseq.size()) line += "\t" + reg->refseq;
+				else line += "\t-";
+				if(reg->altseq.size()) line += "\t" + reg->altseq;
+				else line += "\t-";
+//				if(reg->var_type==VAR_UNC) line += "\t-\t-";
+//				else line += "\t" + reg->refseq + "\t" + reg->altseq;
 
 				if(reg->short_sv_flag) line += "\tShortSV";
+
+				//cout << "line=" << __LINE__ << ": " << line << endl;
 
 //				if(reg->var_type==VAR_UNC){
 //					cout << "line=" << __LINE__ << ": " << line << ", short_sv_flag=" << reg->short_sv_flag << endl;
@@ -3116,13 +3136,18 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 						line += "\t" + to_string(reg->dup_num);
 					else
 						line += "\t-";
-					line += "\t" + reg->refseq + "\t" + reg->altseq;
+					if(reg->refseq.size()) line += "\t" + reg->refseq;
+					else line += "\t-";
+					if(reg->altseq.size()) line += "\t" + reg->altseq;
+					else line += "\t-";
 
 					if(reg->short_sv_flag) line += "\tShortSV";
 
 					if(reg->var_type==VAR_UNC){
 						cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
 					}
+
+					//cout << "line=" << __LINE__ << ": " << line << endl;
 
 //					line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
 //					if(reg->var_type==VAR_INS or reg->var_type==VAR_DEL)
@@ -3159,13 +3184,19 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 					line += "\t" + to_string(reg->dup_num);
 				else
 					line += "\t-";
-				line += "\t" + reg->refseq + "\t" + reg->altseq;
+				if(reg->refseq.size()) line += "\t" + reg->refseq;
+				else line += "\t-";
+				if(reg->altseq.size()) line += "\t" + reg->altseq;
+				else line += "\t-";
+				//line += "\t" + reg->refseq + "\t" + reg->altseq;
 
 				if(reg->short_sv_flag) line += "\tShortSV";
 
 				if(reg->var_type==VAR_UNC){
 					cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
 				}
+
+				//cout << "line=" << __LINE__ << ": " << line << endl;
 
 //				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
 //				if(reg->var_type==VAR_DUP)

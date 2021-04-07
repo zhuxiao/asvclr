@@ -15,7 +15,7 @@ Block::Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai,  Para
 	string chrname_tmp;
 	this->paras =  paras;
 	this->chrname = chrname;
-	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get the reference length;
+	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get the reference length
 	this->startPos = startPos;
 	this->endPos = endPos;
 	this->fai = fai;

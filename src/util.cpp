@@ -1177,7 +1177,7 @@ string getCallFileHeaderBed(){
 // get call file header line for INDEL which starts with '#'
 string getCallFileHeaderBedpe(){
 	string header_line;
-	header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tSVType\tSVLen1\tSVLen2\tRef1\tAlt1\tRef2\tAlt2";
+	header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tSVType\tSVLen1\tSVLen2\tMateReg\tRef1\tAlt1\tRef2\tAlt2";
 	return header_line;
 }
 
@@ -2195,15 +2195,17 @@ bool isSegSelfOverlap(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, int32_
 	bool flag = false;
 	int32_t overlap_size;
 
-	if(clip_aln1->chrname.compare(clip_aln2->chrname)==0){
-		if(isOverlappedPos(clip_aln1->startRefPos, clip_aln1->endRefPos, clip_aln2->startRefPos, clip_aln2->endRefPos)){
-			overlap_size = getOverlapSize(clip_aln1->startRefPos, clip_aln1->endRefPos, clip_aln2->startRefPos, clip_aln2->endRefPos);
-			if(overlap_size>=MIN_QUERY_SELF_OVERLAP_SIZE)
-				flag = true;
-		}else if(clip_aln2->startRefPos<clip_aln1->endRefPos){
-			overlap_size = getOverlapSize(clip_aln1->startRefPos, clip_aln1->endRefPos, clip_aln2->startRefPos, clip_aln2->endRefPos);
-			if(overlap_size>=-maxVarRegSize)
-				flag = true;
+	if(clip_aln1 and clip_aln2){
+		if(clip_aln1->chrname.compare(clip_aln2->chrname)==0){
+			if(isOverlappedPos(clip_aln1->startRefPos, clip_aln1->endRefPos, clip_aln2->startRefPos, clip_aln2->endRefPos)){
+				overlap_size = getOverlapSize(clip_aln1->startRefPos, clip_aln1->endRefPos, clip_aln2->startRefPos, clip_aln2->endRefPos);
+				if(overlap_size>=MIN_QUERY_SELF_OVERLAP_SIZE)
+					flag = true;
+			}else if(clip_aln2->startRefPos<clip_aln1->endRefPos){
+				overlap_size = getOverlapSize(clip_aln1->startRefPos, clip_aln1->endRefPos, clip_aln2->startRefPos, clip_aln2->endRefPos);
+				if(overlap_size>=-maxVarRegSize)
+					flag = true;
+			}
 		}
 	}
 
@@ -2286,6 +2288,225 @@ vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, ve
 	adjClipAlnSegInfo.push_back(end_flag);
 
 	return adjClipAlnSegInfo;
+}
+
+// generate BND items
+vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec, faidx_t *fai){
+	vector<BND_t*> bnd_vec;
+	vector<string> bnd_str_vec2, bnd_str_vec2_tmp, mate_str_vec, mate_str_vec2;
+	BND_t *bnd_item, *mate_bnd_item;
+	int64_t bnd_pos, mate_bnd_pos, mate_dist;
+	string bnd_id_str, mate_bnd_id_str, reg_str, mate_reg_str, mate_bnd_str, mate_bnd_str2, seq_str, seq2_str, support_num_str, cov_num_str;
+	string mate_reg_str2;
+	char *seq, *seq2, mate_orient_ch, mate_orient_ch2;
+	int32_t mate_reg_id, mate_reg_id2, mate_clip_end, sub_vec_id, mate_sub_vec_id, seq_len, seq_len2, support_num, cov_num, support_num2, cov_num2;
+	string id, ref, alt, qual, filter, info, format, format_val_str, sv_type, line_vcf;
+
+	if(reg_id<0 or reg_id>=4){
+		cerr << __func__ << ", line=" << __LINE__ << ": invalid region id: " << reg_id << ", which should be the intenger of [0,3], error." << endl;
+		exit(1);
+	}
+
+	if(tra_pos_arr[reg_id]!=-1 or bnd_str_vec.at(reg_id).compare("-")!=0) {
+		sub_vec_id = (clip_end + 1) % 2;
+		if(checked_arr[reg_id][sub_vec_id]==0){ // unprocessed, then process it
+			bnd_item = new struct BND_Node();
+			mate_bnd_item = new struct BND_Node();
+
+			if(clip_end==RIGHT_END) bnd_pos = tra_pos_arr[reg_id] - 1;   // POS
+			else bnd_pos = tra_pos_arr[reg_id];
+
+			reg_str = chrname1 + ":" + to_string(bnd_pos) + "-" + to_string(bnd_pos);
+			seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+			seq_str = seq;
+			free(seq);
+
+//			if(bnd_str_vec.at(reg_id).compare("-")!=0){
+				bnd_str_vec2 = split(bnd_str_vec.at(reg_id), ",");
+//			}else{
+//				cerr << __func__ << ", line=" << __LINE__ << ": invalid BND information:" << bnd_str_vec.at(reg_id) << endl;
+//				exit(1);
+//			}
+
+			mate_reg_str = bnd_str_vec2.at(sub_vec_id); // "2+|.|.|."
+			if(mate_reg_str.compare("-")!=0){
+				mate_str_vec = split(mate_reg_str, "|");
+				mate_reg_id = stoi(mate_str_vec.at(0).substr(0, 1));
+				mate_orient_ch = mate_str_vec.at(0).at(1);
+				support_num_str = mate_str_vec.at(2);
+				cov_num_str = mate_str_vec.at(3);
+				support_num = stoi(support_num_str);
+				cov_num = stoi(cov_num_str);
+
+				mate_bnd_pos = tra_pos_arr[mate_reg_id];
+				if(mate_bnd_pos==-1){
+					cout << chrname1 << ":" << bnd_pos << " <---> " << chrname2 << ":" << mate_bnd_pos << endl;
+				}
+
+				checked_arr[reg_id][sub_vec_id] = 1;
+				if(clip_end==RIGHT_END){ // right end
+					if(mate_orient_ch=='+'){ // same orient
+						mate_clip_end = LEFT_END;
+						reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+
+						seq2_str = seq2;
+						mate_bnd_str = seq_str + "[" + chrname2 + ":" + to_string(mate_bnd_pos) + "[";
+						mate_bnd_str2 = "]" + chrname1 + ":" + to_string(bnd_pos) + "]" + seq2_str;
+					}else{ // different orient
+						mate_clip_end = RIGHT_END;
+						mate_bnd_pos --;
+						reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+
+						seq2_str = seq2;
+						mate_bnd_str = seq_str + "]" + chrname2 + ":" + to_string(mate_bnd_pos) + "]";
+						mate_bnd_str2 =  "[" + chrname1 + ":" + to_string(bnd_pos) + "[" + seq2_str;
+					}
+				}else{ // left end
+					if(mate_orient_ch=='+'){ // same orient
+						mate_clip_end = RIGHT_END;
+						mate_bnd_pos --;
+						reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+
+						seq2_str = seq2;
+						mate_bnd_str = "]" + chrname2 + ":" + to_string(mate_bnd_pos) + "]" + seq_str;
+						mate_bnd_str2 = seq2_str + "[" + chrname1 + ":" + to_string(bnd_pos) + "[";
+						//checked_arr[mate_reg_id][0] = 1;
+					}else{ // different orient
+						mate_clip_end = LEFT_END;
+						reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+
+						seq2_str = seq2;
+						mate_bnd_str =  "[" + chrname2 + ":" + to_string(mate_bnd_pos) + "[" + seq_str;
+						mate_bnd_str2 = seq2_str + "[" + chrname1 + ":" + to_string(bnd_pos) + "[";
+						//checked_arr[mate_reg_id][1] = 1;
+					}
+				}
+				free(seq2);
+				mate_sub_vec_id = (mate_clip_end + 1) % 2;
+				if(checked_arr[mate_reg_id][mate_sub_vec_id]==0)
+					checked_arr[mate_reg_id][mate_sub_vec_id] = 1;
+				else{
+					cerr << __func__ << ", line=" << __LINE__ << ": the BND information " << mate_bnd_str << " should not be processed twice, error." << endl;
+					exit(1);
+				}
+
+				// mate coverage information
+				if(bnd_str_vec.at(mate_reg_id).compare("-")!=0){
+					bnd_str_vec2_tmp = split(bnd_str_vec.at(mate_reg_id), ",");
+				}else{
+					cerr << __func__ << ", line=" << __LINE__ << ": invalid BND information:" << bnd_str_vec.at(reg_id) << endl;
+					exit(1);
+				}
+
+				mate_reg_str2 = bnd_str_vec2_tmp.at(mate_sub_vec_id); // "0+|..|..|.."
+				if(mate_reg_str2.compare("-")!=0){
+					mate_str_vec2 = split(mate_reg_str2, "|");
+					mate_reg_id2 = stoi(mate_str_vec2.at(0).substr(0, 1));
+					mate_orient_ch2 = mate_str_vec2.at(0).at(1);
+					support_num2 = stoi(mate_str_vec.at(2));
+					cov_num2 = stoi(mate_str_vec.at(3));
+
+					if(mate_reg_id2!=reg_id){
+						cerr << __func__ << ", line=" << __LINE__ << ": two regions do not match, reg_id=" << reg_id << ", mate_reg_id2=" << mate_reg_id2 << ", error!" << endl;
+						exit(1);
+					}else if(mate_orient_ch2!=mate_orient_ch){
+						cerr << __func__ << ", line=" << __LINE__ << ": orientation of two regions do not match, mate_orient=" << mate_orient_ch << ", mate_orient2=" << mate_orient_ch2 << ", error!" << endl;
+						exit(1);
+					}
+				}else{
+					cerr << __func__ << ", line=" << __LINE__ << ": invalid BND information, error." << endl;
+					exit(1);
+				}
+
+				bnd_id_str = "BND." + chrname1 + ":" + to_string(bnd_pos) + "-" + chrname2 + ":" + to_string(mate_bnd_pos);
+				mate_bnd_id_str = "BND." + chrname2 + ":" + to_string(mate_bnd_pos) + "-" + chrname1 + ":" + to_string(bnd_pos);
+				mate_dist = -1;
+				if(chrname1.compare(chrname2)==0){
+					mate_dist = mate_bnd_pos - bnd_pos;
+					if(mate_dist<0) mate_dist = -mate_dist;
+				}
+
+				// bnd item
+				id = bnd_id_str;			// ID
+				ref = seq_str;					// REF
+				alt = mate_bnd_str;			// ALT
+				qual = ".";					// QUAL
+				filter = "PASS";			// FILTER
+
+				sv_type = VAR_BND_STR;
+				format = "GT:AD:DP";		// FORMAT and the values
+				format_val_str = "./.";
+				format_val_str += ":" + support_num_str + "," + to_string(cov_num-support_num);
+				format_val_str += ":" + cov_num_str;
+
+				info = "SVTYPE=" + sv_type + ";" + "MATEID=" + mate_bnd_id_str;	// INFO: SVTYPE=sv_type;MATEID=mate_bnd_id
+				if(chrname1.compare(chrname2)==0) info += ";MATEDIST=" + to_string(mate_dist);  // INFO: MATEDIST=mate_dist
+				line_vcf = chrname1 + "\t" + to_string(bnd_pos) + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val_str;
+
+				bnd_item->reg_id = reg_id;
+				bnd_item->clip_end = clip_end;
+				bnd_item->mate_reg_id = mate_reg_id;
+				bnd_item->mate_clip_end = mate_clip_end;
+				bnd_item->mate_orient_ch = mate_orient_ch;
+				bnd_item->chrname = chrname1;
+				bnd_item->mate_chrname = chrname2;
+				bnd_item->bnd_pos = bnd_pos;
+				bnd_item->mate_bnd_pos = mate_bnd_pos;
+				bnd_item->seq = seq_str;
+				bnd_item->bnd_str = mate_bnd_str;
+				bnd_item->vcf_line = line_vcf;
+				bnd_item->support_num = support_num;
+				bnd_item->mate_support_num = support_num2;
+				bnd_item->cov_num = cov_num;
+				bnd_item->mate_cov_num = cov_num2;
+				bnd_item->mate_node = mate_bnd_item;
+
+				// mate bnd item
+				id = mate_bnd_id_str;		// ID
+				ref = seq2_str;					// REF
+				alt = mate_bnd_str2;		// ALT
+				qual = ".";					// QUAL
+				filter = "PASS";			// FILTER
+
+				sv_type = VAR_BND_STR;
+				format = "GT:AD:DP";		// FORMAT and the values
+				format_val_str = "./.";
+				format_val_str += ":" + to_string(support_num2) + "," + to_string(cov_num2-support_num2);
+				format_val_str += ":" + to_string(cov_num2);
+
+				info = "SVTYPE=" + sv_type + ";" + "MATEID=" + bnd_id_str;	// INFO: SVTYPE=sv_type;MATEID=mate_bnd_id
+				if(chrname1.compare(chrname2)==0) info += ";MATEDIST=" + to_string(mate_dist);  // INFO: MATEDIST=mate_dist
+				line_vcf = chrname2 + "\t" + to_string(mate_bnd_pos) + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val_str;
+
+				mate_bnd_item->reg_id = mate_reg_id;
+				mate_bnd_item->clip_end = mate_clip_end;
+				mate_bnd_item->mate_reg_id = reg_id;
+				mate_bnd_item->mate_clip_end = clip_end;
+				mate_bnd_item->mate_orient_ch = mate_orient_ch;
+				mate_bnd_item->chrname = chrname2;
+				mate_bnd_item->mate_chrname = chrname1;
+				mate_bnd_item->bnd_pos = mate_bnd_pos;
+				mate_bnd_item->mate_bnd_pos = bnd_pos;
+				mate_bnd_item->seq = seq2_str;
+				mate_bnd_item->bnd_str = mate_bnd_str2;
+				mate_bnd_item->vcf_line = line_vcf;
+				mate_bnd_item->support_num = support_num2;
+				mate_bnd_item->mate_support_num = support_num;
+				mate_bnd_item->cov_num = cov_num2;
+				mate_bnd_item->mate_cov_num = cov_num;
+				mate_bnd_item->mate_node = bnd_item;
+
+				bnd_vec.push_back(bnd_item);
+				bnd_vec.push_back(mate_bnd_item);
+			}
+		}
+	}
+
+	return bnd_vec;
 }
 
 

@@ -25,7 +25,7 @@ typedef struct clipAlnData_node{
 typedef struct{
 	string chrname;
 	int64_t startRefPos, endRefPos;
-	int32_t startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos, sv_len, dup_num;
+	int32_t startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos, sv_len, dup_num; //, support_num, cov_num;
 	//int64_t ref_len, local_ref_len, query_len;
 	int8_t var_type, aln_orient;
 	int16_t query_id, blat_aln_id;
@@ -128,5 +128,17 @@ typedef struct{
 	int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
 	bool gap_flag, valid_flag;
 }mismatchReg_t;
+
+// from Genome.h
+typedef struct BND_Node{
+	string bnd_id;
+	int8_t reg_id, clip_end, mate_reg_id, mate_clip_end;
+	char mate_orient_ch;
+	string chrname, mate_chrname;
+	int64_t bnd_pos, mate_bnd_pos;
+	string seq, bnd_str, vcf_line;
+	int32_t support_num, mate_support_num, cov_num, mate_cov_num;
+	struct BND_Node *mate_node;
+}BND_t;
 
 #endif /* SRC_STRUCTURES_H_ */
