@@ -2670,7 +2670,7 @@ void Genome::saveResultVCF(){
 // save indel in VCF file format for detect command
 void Genome::saveResultToVCF(string &in, string &out_vcf){
 	string line, line_vcf, chr, start_pos, id, ref, alt, qual, filter, info, format, format_val, sample, reg;
-	string chr2, end_pos, sv_type, sv_len, dup_num, blat_inner;
+	string end_pos, sv_type, sv_len, dup_num, blat_inner;
 	ifstream infile;
 	ofstream outfile;
 	vector<string> str_vec;
@@ -2718,12 +2718,11 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 				qual = ".";					// QUAL
 				filter = "PASS";			// FILTER
 
-				chr2 = chr;
 				end_pos = str_vec.at(2);
 				sv_type = str_vec.at(3);
 				sv_len = str_vec.at(4);
 				if(sv_type.compare(VAR_UNC_STR)==0 or sv_type.compare(VAR_UNC_STR1)==0 or sv_type.compare(VAR_UNC_STR2)==0) ref = alt = "."; // UNC
-				info = "SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len + ";CHR2=" + chr2 + ";END=" + end_pos;	// INFO: SVTYPE=sv_type;SVLEN=sv_len;CHR2=chr2;END=end
+				info = "SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len + ";END=" + end_pos;	// INFO: SVTYPE=sv_type;SVLEN=sv_len;END=end
 				if(sv_type.compare(VAR_DUP_STR)==0 or sv_type.compare(VAR_DUP_STR1)==0) { // DUPNUM=dup_num
 					dup_num = str_vec.at(5);
 					info += ";DUPNUM=" + dup_num;
