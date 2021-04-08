@@ -2738,7 +2738,7 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 				line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
 				outfile << line_vcf << endl;
 
-			}else{	// TRA, BND, MIX
+			}else{	// TRA, MIX
 				if(str_vec.at(6).compare(VAR_TRA_STR)==0){ // TRA, then convert to BND
 
 					for(i=0; i<4; i++) { checked_arr[i][0] = checked_arr[i][1] = 0; } // initialize
@@ -2777,29 +2777,32 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 							}
 						}
 					}
-				}else{
-					chr = str_vec.at(0);		// CHROM
-					if(str_vec.at(1).compare("-")==0) start_pos = str_vec.at(2); // POS
-					else start_pos = str_vec.at(1);
-					id = ".";					// ID
-					ref = ".";					// REF
-					alt = ".";					// ALT
+				}else{ // MIX
 
-					qual = ".";					// QUAL
-					filter = "PASS";			// FILTER
+					cout << __func__ << ": unexpected variant item: " << line << ", skipped." << endl;
 
-					chr2 = str_vec.at(3);
-					if(str_vec.at(4).compare("-")==0) end_pos = str_vec.at(5);
-					else end_pos = str_vec.at(4);
-					sv_type = str_vec.at(6);
-					sv_len = "False";
-					info = "CHR2=" + chr2 + ";END=" + end_pos + ";SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len;	// INFO: CHR2=chr2;END=end;SVTYPE=sv_type;SVLEN=sv_len
-
-					format = "GT";		// FORMAT and the values
-					format_val = "./.";
-
-					line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
-					outfile << line_vcf << endl;
+//					chr = str_vec.at(0);		// CHROM
+//					if(str_vec.at(1).compare("-")==0) start_pos = str_vec.at(2); // POS
+//					else start_pos = str_vec.at(1);
+//					id = ".";					// ID
+//					ref = ".";					// REF
+//					alt = ".";					// ALT
+//
+//					qual = ".";					// QUAL
+//					filter = "PASS";			// FILTER
+//
+//					//chr2 = str_vec.at(3);
+//					if(str_vec.at(4).compare("-")==0) end_pos = str_vec.at(5);
+//					else end_pos = str_vec.at(4);
+//					sv_type = str_vec.at(6);
+//					sv_len = "False";
+//					info = "CHR2=" + chr2 + ";END=" + end_pos + ";SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len;	// INFO: CHR2=chr2;END=end;SVTYPE=sv_type;SVLEN=sv_len
+//
+//					format = "GT";		// FORMAT and the values
+//					format_val = "./.";
+//
+//					line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
+//					outfile << line_vcf << endl;
 				}
 			}
 
