@@ -317,7 +317,7 @@ The last 8 variant items corresponds to a translocation which locates between ch
 
 ### (2) BED/BEDPE file format
 
-Specifically, BED/BEDPE format consists of two different record types: BED format and BEDPE format. Insertions, deletions, inversions and duplications are stored in the BED file format, and translocations are saved in the BEDPE file format. The final variant results are saved in the BED/BEDPE file format and stored in the folder `4_results` in the output directory which can be specified with `-o` option.
+Variants also can be reported in BED/BEDPE file format in the output directory. Specifically, BED/BEDPE format consists of two different record types: BED format and BEDPE format. Insertions, deletions, inversions and duplications are stored in the BED file format, and translocations are saved in the BEDPE file format. The final variant results are saved in the BED/BEDPE file format and stored in the folder `4_results` in the output directory which can be specified with `-o` option.
 
 Insertions, deletions, inversions and duplications are recorded in BED file format which are encoded as 8 columns in ASVCLR, and these columns can be described as below:
 
