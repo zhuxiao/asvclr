@@ -23,7 +23,7 @@ using namespace std;
 #define MIN_CLIP_DIST_THRES					1000
 #define GROUP_DIST_THRES					1000
 
-#define LONGER_NON_SA_SEG_NUM_THRES			3  // to be parameterized
+#define LONGER_NON_SA_SEG_NUM_THRES			5  // to be parameterized
 #define LONGER_NON_SA_SEG_RATIO_THRES		(0.1f)
 //#define MIN_VALID_CLIP_POS_RATIO			0.7
 
@@ -39,8 +39,11 @@ using namespace std;
 
 #define MAX_DIST_SAME_CLIP_END				100000
 
-#define MAX_ALN_SEG_NUM_PER_READ_TRA		4
+#define MAX_ALN_SEG_NUM_PER_READ_TRA		4  // to be parameterized
+#define MAX_CLIP_REG_MERGE_DIST				50 // to be parameterized
+#define MAX_INNER_MISSING_IGNORE_SIZE		100
 
+#define MIN_CLIP_REG_MATED_RATIO			(0.3f)
 
 typedef struct{
 	reg_t *leftClipReg, *leftClipReg2, *rightClipReg, *rightClipReg2;
@@ -91,7 +94,12 @@ class clipReg {
 		bool isValidClipReg();
 		void computeMateAlnClipReg();
 		void extractClipPosVec();
+		int32_t getMinDistVecId(clipPos_t *clip_pos_item);
+		int32_t getMeanDistSingleVec(clipPos_t *clip_pos_item, vector<clipPos_t*> &clip_pos_vec);
+		clipPos_t* getClipPosSameAlnSeg(clipPos_t *clip_pos_item, vector<clipPos_t*> &clip_pos_vec);
 		void splitClipPosVec();
+		vector<clipPos_t*> getClipPosItemsByQueryname(string &queryname, vector<clipPos_t*> &clip_pos_vec);
+		clipPos_t* getMinDistClipPosItem(clipPos_t *clip_pos, vector<clipPos_t*> &clip_pos_vec);
 		int32_t getClipPosVecId(clipAlnData_t *clip_aln, int32_t clip_end);
 		clipPos_t* getClipPosItemFromSingleVec(clipAlnData_t *clip_aln, int32_t clip_end, vector<clipPos_t*> &clip_pos_vec);
 		void appendClipPos();
@@ -110,6 +118,9 @@ class clipReg {
 		void computeClipRegs();
 		reg_t* computeClipRegSingleVec(vector<clipPos_t*> &clipPosVector);
 		int32_t getItemIdxClipPosVec(clipPos_t *item, vector<clipPos_t*> &vec);
+		void removeBNDUnmatedClipRegs();
+		string getBNDMateRegStr(int32_t reg_idx, int32_t end_flag, string bnd_mate_reg_strs[4]);
+		vector<int32_t> getMateMateRegID(int32_t reg_idx, int32_t end_flag, string bnd_mate_reg_strs[4]);
 		void removeFalseOverlappedMateClipReg();
 		size_t computeMeanClipPos(vector<clipPos_t*> &clipPosVector);
 		void removeFPClipSingleEnd(mateClipReg_t &mate_clip_reg);

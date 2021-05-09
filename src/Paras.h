@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"0.9.0"
+#define PROG_VERSION				"0.10.0"
 #define VCF_VERSION					"4.2"
 
 #define SIZE_EST_OP					0
@@ -31,15 +31,17 @@ using namespace std;
 // default parameter values
 #define BLOCKSIZE  					1000000
 #define SLIDESIZE  					500
-#define ASSEM_SLIDE_SIZE			5000
 
 #define MIN_INDEL_EVENT_SIZE		2
 #define MIN_INDEL_EVENT_NUM			5
 #define MIN_SV_SIZE_USR				2
+#define MAX_SV_SIZE_USR				50000
 
-#define MIN_CLIP_READS_NUM_THRES	7
+//#define MIN_CLIP_READS_NUM_THRES	7
+#define MIN_SUPPORT_READS_NUM		7
 
 #define MAX_VAR_REG_SIZE			50000
+#define ASM_CHUNK_SIZE_INDEL		10000
 
 #define SIZE_PERCENTILE_EST			0.95
 #define NUM_PERCENTILE_EST			0.99995
@@ -62,13 +64,12 @@ using namespace std;
 #define LIMIT_REG_ALL_STR			"ALL"
 
 #define EXPECTED_COV_ASSEMBLE		30.0f
-#define MASK_VAL_DEFAULT			0
 
 #define NUM_PARTS_PROGRESS			50
 #define NUM_THREADS_PER_ASSEM_WORK	0  // 0: unspecify the limited number of threads for each Canu work
 
 #define OUT_DIR						"output"
-#define SAMPLE_DEFAULT				"SAMPLE"
+#define SAMPLE_DEFAULT				"sample"
 
 #define MAX_ULTRA_HIGH_COV_THRES	300		// maximal coverage threshold for ultra-high coverage
 
@@ -90,17 +91,17 @@ class Paras
 		string out_dir_call = "3_call";      // "3_call"
 		string out_dir_tra = out_dir_call + "/" + "tra";
 		string out_dir_result = "4_results";	// "4_results"
-		int32_t blockSize, slideSize, assemSlideSize, min_sv_size_usr, num_threads, large_indel_size_thres;
+		int32_t blockSize, slideSize, min_sv_size_usr, max_sv_size_usr, num_threads, large_indel_size_thres; // , assemSlideSize;
 		bool maskMisAlnRegFlag, load_from_file_flag;
 		size_t misAlnRegLenSum = 0;
-		int64_t minClipReadsNumSupportSV;
+		int64_t minReadsNumSupportSV; //, minClipReadsNumSupportSV;
 
 		// limit SV regions, item format: CHR | CHR:START-END
 		vector<simpleReg_t*> limit_reg_vec;
 		bool limit_reg_process_flag = false;	// true for limit regions; default is false for disable limit regions (i.e. process all regions)
 		string limit_reg_filename = "limit_regions.bed";
 
-		int32_t maxVarRegSize, minClipEndSize;
+		int32_t maxVarRegSize, minClipEndSize, assemChunkSize;
 
 		int64_t mean_read_len, total_read_num_est;
 		int32_t reg_sum_size_est, max_reg_sum_size_est;
@@ -126,9 +127,6 @@ class Paras
 		int16_t num_parts_progress, num_threads_per_assem_work;
 		pthread_mutex_t mtx_assemble_reg_workDone_num;
 
-		// previously assembled regions
-		vector<string> assembled_clipReg_filename_vec;
-
 	public:
 		Paras();
 		Paras(int argc, char **argv);
@@ -144,6 +142,7 @@ class Paras
 		int checkBamFile();
 		int parseParas(int argc, char **argv);
 		string getPgCmd(int argc, char **argv);
+		void showVersion();
 		int parseDetectParas(int argc, char **argv);
 		int parseAssembleParas(int argc, char **argv);
 		int parseCallParas(int argc, char **argv);
@@ -154,6 +153,7 @@ class Paras
 		void showCallUsage();
 		void showAllUsage();
 		int64_t estimateSinglePara(int64_t *arr, int32_t n, double threshold, int32_t min_val);
+		int parse_long_opt(int32_t option_index, const char *optarg, const struct option *lopts);
 };
 
 #endif /* SRC_PARAS_H_ */

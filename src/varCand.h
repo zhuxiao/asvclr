@@ -96,6 +96,7 @@ class varCand {
 		void setBlatVarcandFile(ofstream *blat_var_cand_file, vector<varCand*> *blat_aligned_info_vec);
 		void resetBlatVarcandFile();
 		vector<int32_t> computeDisagreeNumAndHighIndelBaseNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
+		void adjustVarLocSlightly();
 		void fillVarseq();
 		void loadBlatAlnData();
 		void destroyVarCand();

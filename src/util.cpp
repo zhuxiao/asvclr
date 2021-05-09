@@ -1224,6 +1224,29 @@ void destroyAssembleWorkOptVec(vector<assembleWork_opt*> &assem_work_vec){
 	vector<assembleWork_opt*>().swap(assem_work_vec);
 }
 
+void deleteItemFromAssemWorkVec(int32_t item_id, vector<assembleWork_opt*> &assem_work_vec){
+	if(item_id!=-1) {
+		releaseAssemWorkOpt(assem_work_vec.at(item_id));
+		assem_work_vec.erase(assem_work_vec.begin()+item_id);
+	}
+}
+
+// get assemble work id from vector
+int32_t getItemIDFromAssemWorkVec(string &contigfilename, vector<assembleWork_opt*> &assem_work_vec){
+	assembleWork_opt *assem_work_item;
+	int32_t vec_idx = -1;
+
+	for(size_t i=0; i<assem_work_vec.size(); i++){
+		assem_work_item = assem_work_vec.at(i);
+		if(assem_work_item->contigfilename.compare(contigfilename)==0){
+			vec_idx = i;
+			break;
+		}
+	}
+
+	return vec_idx;
+}
+
 //time canu1.8 -p assembly -d out_1.8 genomeSize=30000 -pacbio-raw clipReg_reads_hs37d5_21480275-21480297.fq
 void *doit_canu(void *arg) {
     char *cmd_job = (char *)arg;
@@ -1347,20 +1370,6 @@ void outputAssemWorkOptToFile_debug(vector<assembleWork_opt*> &assem_work_opt_ve
 	for(size_t i=0; i<assem_work_opt_vec.size(); i++){
 		assem_work_opt = assem_work_opt_vec.at(i);
 		outfile << assem_work_opt->refseqfilename << "\t" << assem_work_opt->contigfilename << "\t" << assem_work_opt->readsfilename << endl;
-
-		//cout << "assemble region [" << i << "]: " << assem_work_opt->readsfilename << endl;
-//		if(assem_work_opt->chrname.compare("chr2")==0 and (assem_work_opt->var_array[0]->startRefPos==148051825 or assem_work_opt->var_array[assem_work_opt->arr_size-1]->endRefPos==145138636))
-//		{
-//			cout << "assemble region [" << i << "]: " << assem_work_opt->readsfilename << endl;
-//			for(size_t j=0; j<assem_work_opt->arr_size; j++){
-//				reg = assem_work_opt->var_array[j];
-//				cout << "\t[" << j << "]" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
-//			}
-//		}
-//		for(size_t j=0; j<assem_work_opt->->arr_size; j++){
-//			reg = assem_work_opt->var_array[j];
-//			cout << "\t[" << j << "]" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
-//		}
 	}
 
 	outfile.close();
@@ -1688,7 +1697,7 @@ void createDir(string &dirname){
 	str_vec = split(dirname, "/");
 	dirname_tmp = str_vec.at(0);
 	for(size_t i=0; i<str_vec.size(); i++){
-		ret = mkdir(dirname_tmp.c_str(), S_IRWXU | S_IROTH);  // create the output directory
+		ret = mkdir(dirname_tmp.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create the output directory
 		if(ret==-1 and errno!=EEXIST){
 			cerr << __func__ << ", line=" << __LINE__ << ": cannot create directory: " << dirname_tmp << endl;
 			exit(1);
@@ -2507,6 +2516,21 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 	}
 
 	return bnd_vec;
+}
+
+// determine whether the variant is size satisfied
+bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr, int64_t max_sv_size_usr){
+	int64_t dif;
+	bool size_satisfy;
+
+	dif = query_dist - ref_dist;
+	if(dif<0) dif = -dif;
+
+	size_satisfy = false;
+	if((dif>=min_sv_size_usr and dif<=max_sv_size_usr) or (ref_dist>=min_sv_size_usr and ref_dist<=max_sv_size_usr) or (query_dist>=min_sv_size_usr and query_dist<=max_sv_size_usr))
+		size_satisfy = true;
+
+	return size_satisfy;
 }
 
 

@@ -33,6 +33,9 @@ void Paras::init(){
 	sample = SAMPLE_DEFAULT;
 	pg_cmd_str = "";
 	num_threads = 0;
+	delete_reads_flag = true;
+	maskMisAlnRegFlag = false;
+	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
 
 	min_ins_size_filt = 0;
 	min_del_size_filt = 0;
@@ -171,6 +174,9 @@ int Paras::parseParas(int argc, char **argv){
 		if(argc==2){ showAllUsage(); exit(0); }
 		command = "all";
 		return parseAllParas(argc-1, argv+1);
+	}else if (strcmp(argv[1], "--version") == 0 or strcmp(argv[1], "-v") == 0) {
+		showVersion();
+		exit(0);
 	}else{
 		cerr << "Error: invalid command " << argv[1] << endl << endl;
 		showUsage(); return 1;
@@ -191,52 +197,84 @@ string Paras::getPgCmd(int argc, char **argv){
 	return pg_cmd_str;
 }
 
+// show version
+void Paras::showVersion(){
+	cout << PROG_NAME << " " << PROG_VERSION << endl;
+	cout << "Using htslib " << hts_version() << endl;
+}
+
 // parse the parameters for detect command
 int Paras::parseDetectParas(int argc, char **argv){
-	int opt, threadNum_tmp = 1, mask_val;
+	int opt, threadNum_tmp = 0, option_index;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
-	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
-	maxVarRegSize = MAX_VAR_REG_SIZE;
+	max_sv_size_usr = MAX_SV_SIZE_USR;
+	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM;
+	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
-	mask_val = MASK_VAL_DEFAULT;
 	outDir = OUT_DIR;
 	simpleReg_t *simple_reg;
-	string simple_reg_str;
+	string simple_reg_str, opt_name_str;
 
-	while( (opt = getopt(argc, argv, ":b:s:m:v:e:o:p:t:M:h")) != -1 ){
+	static struct option lopts[] = {
+//		{ "daemon", no_argument, NULL, 'D' },
+//		{ "dir", required_argument, NULL, 'd' },
+//		{ "out", required_argument, NULL, 'o' },
+//		{ "log", required_argument, NULL, 'l' },
+		{ "sample", required_argument, NULL, 0 },
+		{ "mask-noisy-region", no_argument, NULL, 0 },
+		{ "version", no_argument, NULL, 'v' },
+		{ "help", no_argument, NULL, 'h' },
+		{ NULL, 0, NULL, 0 }
+	};
+
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:e:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
-			case 'v': maxVarRegSize = stoi(optarg); break;
-			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
+			case 'M': max_sv_size_usr = stoi(optarg); break;
+			case 'n': minReadsNumSupportSV = stoi(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
-			case 'M': mask_val = stoi(optarg); break;
+			case 'v': showVersion(); exit(0);
 			case 'h': showDetectUsage(); exit(0);
-			case '?': cout << "unknown option -" << (char)optopt << endl; exit(1);
-			case ':': cout << "the option -" << (char)optopt << " needs a value" << endl; exit(1);
+			case '?':
+				if(optopt) cout << "unknown option '-" << (char)optopt << "'" << endl;
+				else{ // Bad long option
+                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+                        cout << "unknown option '" << argv[optind-1] << "'" << endl;
+				}
+				exit(1);
+			case ':':
+				if(optopt) cout << "the option '-" << (char)optopt << "' needs a value" << endl;
+				else{
+                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+                        cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
+				}
+				exit(1);
+			case 0: // long options
+				if(parse_long_opt(option_index, optarg, lopts)!=0){
+					showDetectUsage();
+					return 1;
+				}
+				break;
+			default:
+				cout << "Error: please specify the correct options for 'detect' command" << endl;
+				showDetectUsage();
+				return 1;
 		}
 	}
 
 	load_from_file_flag = true;
-	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+	if(threadNum_tmp==0) num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+	maxVarRegSize = max_sv_size_usr;
 
 	outDir = deleteTailPathChar(outDir);
-
-	if(mask_val==1) maskMisAlnRegFlag = true;
-	else if(mask_val==0) maskMisAlnRegFlag = false;
-	else{
-		cout << "Error: Please specify the correct mask flag for mis-aligned regions using -M option." << endl << endl;
-		showDetectUsage();
-		return 1;
-	}
-
-	delete_reads_flag = true;
 
 	opt = argc - optind; // the reference and BAM file on the command line
 	if(opt>=2) {
@@ -265,64 +303,84 @@ int Paras::parseDetectParas(int argc, char **argv){
 
 // parse the parameters for assemble command
 int Paras::parseAssembleParas(int argc, char **argv){
-	int opt, threadNum_tmp = 1, mask_val, delete_reads_val;
+	int opt, threadNum_tmp = 0, option_index;
 	blockSize = BLOCKSIZE;
-	slideSize = ASSEM_SLIDE_SIZE;
-	assemSlideSize = ASSEM_SLIDE_SIZE;
+	slideSize = SLIDESIZE;
+	//assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
-	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
+	max_sv_size_usr = MAX_SV_SIZE_USR;
+	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM;
 	maxVarRegSize = MAX_VAR_REG_SIZE;
+	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
 	minClipEndSize = MIN_CLIP_END_SIZE;
-	mask_val = MASK_VAL_DEFAULT;
 	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
-	delete_reads_val = 1;
 	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
 	outDir = OUT_DIR;
 
-	while( (opt = getopt(argc, argv, ":b:S:m:v:n:e:x:o:p:t:T:M:R:h")) != -1 ){
+	static struct option lopts[] = {
+//		{ "daemon", no_argument, NULL, 'D' },
+//		{ "dir", required_argument, NULL, 'd' },
+//		{ "out", required_argument, NULL, 'o' },
+//		{ "log", required_argument, NULL, 'l' },
+//		{ "sample", required_argument, NULL, 0 },
+		{ "threads-per-assem-work", required_argument, NULL, 0 },
+		{ "assem-chunk-size", required_argument, NULL, 0 },
+		{ "version", no_argument, NULL, 'v' },
+		{ "help", no_argument, NULL, 'h' },
+		{ NULL, 0, NULL, 0 }
+	};
+
+	while( (opt = getopt_long(argc, argv, ":b:m:M:n:e:x:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
-			case 'S': assemSlideSize = stoi(optarg); break;
+			//case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
-			case 'v': maxVarRegSize = stoi(optarg); break;
-			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
+			case 'M': max_sv_size_usr = stoi(optarg); break;
+			case 'n': minReadsNumSupportSV = stoi(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'x': expected_cov_assemble = stod(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
-			case 'T': num_threads_per_assem_work = stoi(optarg); break;
-			case 'M': mask_val = stoi(optarg); break;
-			case 'R': delete_reads_val = stoi(optarg); break;
+			case 'v': showVersion(); exit(0);
 			case 'h': showAssembleUsage(); exit(0);
-			case '?': cout << "unknown option -" << (char)optopt << endl; exit(1);
-			case ':': cout << "the option -" << (char)optopt << " needs a value" << endl; exit(1);
+			case '?':
+				if(optopt) cout << "unknown option '-" << (char)optopt << "'" << endl;
+				else{ // Bad long option
+                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+                        cout << "unknown option '" << argv[optind-1] << "'" << endl;
+				}
+				exit(1);
+			case ':':
+				if(optopt) cout << "the option '-" << (char)optopt << "' needs a value" << endl;
+				else{
+                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+                        cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
+				}
+				exit(1);
+			case 0: // long options
+				if(parse_long_opt(option_index, optarg, lopts)!=0){
+					showAssembleUsage();
+					return 1;
+				}
+				break;
+			default:
+				cout << "Error: please specify the correct options for 'assemble' command" << endl;
+				showAssembleUsage();
+				return 1;
 		}
 	}
 
 	load_from_file_flag = true;
-	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+	if(threadNum_tmp==0) num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+	maxVarRegSize = max_sv_size_usr;
 
 	if(num_threads*num_threads_per_assem_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
 		cout << "Warning: the user-specified total number of concurrent assemble work is " << num_threads << ", and the user-specified number of threads for each assemble work is " << num_threads_per_assem_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
 	}
 
 	outDir = deleteTailPathChar(outDir);
-
-	if(mask_val==1) maskMisAlnRegFlag = true;
-	else if(mask_val==0) maskMisAlnRegFlag = false;
-	else{
-		cout << "Error: Please specify the correct mask flag for mis-aligned regions using -M option." << endl << endl;
-		showAssembleUsage();
-		return 1;
-	}
-	if(delete_reads_val==1) delete_reads_flag = true;
-	else if(delete_reads_val==0) delete_reads_flag = false;
-	else{
-		cout << "Error: Please specify the correct reads delete flag for local assembly using -R option." << endl << endl;
-		showAllUsage();
-		return 1;
-	}
 
 	opt = argc - optind; // the reference file and BAM file on the command line
 	if(opt>=2) {
@@ -339,56 +397,74 @@ int Paras::parseAssembleParas(int argc, char **argv){
 
 // parse the parameters for call command
 int Paras::parseCallParas(int argc, char **argv){
-	int opt, threadNum_tmp = 1, mask_val, delete_reads_val;
+	int opt, threadNum_tmp = 0, option_index;
 	blockSize = BLOCKSIZE;
-	slideSize = ASSEM_SLIDE_SIZE;
-	assemSlideSize = ASSEM_SLIDE_SIZE;
+	slideSize = SLIDESIZE;
+	//assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
-	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
-	maxVarRegSize = MAX_VAR_REG_SIZE;
+	max_sv_size_usr = MAX_SV_SIZE_USR;
+	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM;
+	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
-	mask_val = MASK_VAL_DEFAULT;
-	delete_reads_val = 1;
 	outDir = OUT_DIR;
 
-	while( (opt = getopt(argc, argv, ":b:S:m:v:n:e:o:p:t:M:R:h")) != -1 ){
+	static struct option lopts[] = {
+//		{ "daemon", no_argument, NULL, 'D' },
+//		{ "dir", required_argument, NULL, 'd' },
+//		{ "out", required_argument, NULL, 'o' },
+//		{ "log", required_argument, NULL, 'l' },
+//		{ "sample", required_argument, NULL, 0 },
+		{ "version", no_argument, NULL, 'v' },
+		{ "help", no_argument, NULL, 'h' },
+		{ NULL, 0, NULL, 0 }
+	};
+
+	while( (opt = getopt_long(argc, argv, ":b:m:M:n:e:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
-			case 'S': assemSlideSize = stoi(optarg); break;
+			//case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
-			case 'v': maxVarRegSize = stoi(optarg); break;
-			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
+			case 'M': max_sv_size_usr = stoi(optarg); break;
+			case 'n': minReadsNumSupportSV = stoi(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
-			case 'M': mask_val = stoi(optarg); break;
-			case 'R': delete_reads_val = stoi(optarg); break;
+			case 'v': showVersion(); exit(0);
 			case 'h': showCallUsage(); exit(0);
-			case '?': cout << "unknown option -" << (char)optopt << endl; exit(1);
-			case ':': cout << "the option -" << (char)optopt << " needs a value" << endl; exit(1);
+			case '?':
+				if(optopt) cout << "unknown option '-" << (char)optopt << "'" << endl;
+				else{ // Bad long option
+                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+                        cout << "unknown option '" << argv[optind-1] << "'" << endl;
+				}
+				exit(1);
+			case ':':
+				if(optopt) cout << "the option -'" << (char)optopt << "' needs a value" << endl;
+				else{
+                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+                        cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
+				}
+				exit(1);
+			case 0: // long options
+				if(parse_long_opt(option_index, optarg, lopts)!=0){
+					showCallUsage();
+					return 1;
+				}
+				break;
+			default:
+				cout << "Error: please specify the correct options for 'call' command" << endl;
+				showCallUsage();
+				return 1;
 		}
 	}
 
 	load_from_file_flag = true;
-	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+	if(threadNum_tmp==0) num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+	maxVarRegSize = max_sv_size_usr;
 
 	outDir = deleteTailPathChar(outDir);
-
-	if(mask_val==1) maskMisAlnRegFlag = true;
-	else if(mask_val==0) maskMisAlnRegFlag = false;
-	else{
-		cout << "Error: Please specify the correct mask flag for mis-aligned regions using -M option." << endl << endl;
-		showCallUsage();
-		return 1;
-	}
-	if(delete_reads_val==1) delete_reads_flag = true;
-	else if(delete_reads_val==0) delete_reads_flag = false;
-	else{
-		cout << "Error: Please specify the correct reads delete flag for local assembly using -R option." << endl << endl;
-		showAllUsage();
-		return 1;
-	}
 
 	opt = argc - optind; // the reference file and BAM file on the command line
 	if(opt>=2) {
@@ -405,67 +481,90 @@ int Paras::parseCallParas(int argc, char **argv){
 
 // parse the parameters for 'all' command
 int Paras::parseAllParas(int argc, char **argv){
-	int opt, threadNum_tmp = 1, mask_val, delete_reads_val;
+	int opt, threadNum_tmp = 0, option_index;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
-	assemSlideSize = ASSEM_SLIDE_SIZE;
+	//assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
-	minClipReadsNumSupportSV = MIN_CLIP_READS_NUM_THRES;
-	maxVarRegSize = MAX_VAR_REG_SIZE;
+	max_sv_size_usr = MAX_SV_SIZE_USR;
+	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM;
+	//maxVarRegSize = MAX_VAR_REG_SIZE;
+	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
 	minClipEndSize = MIN_CLIP_END_SIZE;
-	mask_val = MASK_VAL_DEFAULT;
 	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
-	delete_reads_val = 1;
 	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
 	outDir = OUT_DIR;
 	simpleReg_t *simple_reg;
 	string simple_reg_str;
 
-	while( (opt = getopt(argc, argv, ":b:s:S:m:v:n:e:x:o:p:t:T:M:R:h")) != -1 ){
+	static struct option lopts[] = {
+//		{ "daemon", no_argument, NULL, 'D' },
+//		{ "dir", required_argument, NULL, 'd' },
+//		{ "out", required_argument, NULL, 'o' },
+//		{ "log", required_argument, NULL, 'l' },
+//		{ "sample", required_argument, NULL, 0 },
+		{ "threads-per-assem-work", required_argument, NULL, 0 },
+		{ "assem-chunk-size", required_argument, NULL, 0 },
+		{ "keep-assemble-reads", no_argument, NULL, 0 },
+		{ "mask-noisy-region", no_argument, NULL, 0 },
+		{ "version", no_argument, NULL, 'v' },
+		{ "help", no_argument, NULL, 'h' },
+		{ NULL, 0, NULL, 0 }
+	};
+
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:e:x:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
-			case 'b': assemSlideSize = stoi(optarg); break;
+			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
-			case 'S': assemSlideSize = stoi(optarg); break;
+			//case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
-			case 'v': maxVarRegSize = stoi(optarg); break;
-			case 'n': minClipReadsNumSupportSV = stoi(optarg); break;
+			case 'M': max_sv_size_usr = stoi(optarg); break;
+			case 'n': minReadsNumSupportSV = stoi(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'x': expected_cov_assemble = stod(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
-			case 'T': num_threads_per_assem_work = stoi(optarg); break;
-			case 'M': mask_val = stoi(optarg); break;
-			case 'R': delete_reads_val = stoi(optarg); break;
+			case 'v': showVersion(); exit(0);
 			case 'h': showAllUsage(); exit(0);
-			case '?': cout << "unknown option -" << (char)optopt << endl; exit(1);
-			case ':': cout << "the option -" << (char)optopt << " needs a value" << endl; exit(1);
+			case '?':
+				if(optopt) cout << "unknown option '-" << (char)optopt << "'" << endl;
+				else{ // Bad long option
+                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0) {
+                        cout << "unknown option '" << argv[optind-1] << "'" << endl;
+                    }
+				}
+				exit(1);
+			case ':':
+				if(optopt) cout << "the option '-" << (char)optopt << "' needs a value" << endl;
+				else{
+                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+                        cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
+				}
+				exit(1);
+			case 0: // long options
+				if(parse_long_opt(option_index, optarg, lopts)!=0){
+					showAllUsage();
+					return 1;
+				}
+				break;
+			default:
+				cout << "Error: please specify the correct options for 'all' command" << endl;
+				showAllUsage();
+				return 1;
 		}
 	}
 
 	load_from_file_flag = false;
-	num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+	if(threadNum_tmp==0) num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
+	maxVarRegSize = max_sv_size_usr;
 
 	if(num_threads*num_threads_per_assem_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
 		cout << "Warning: the user-specified total number of concurrent assemble work is " << num_threads << ", and the user-specified number of threads for each assemble work is " << num_threads_per_assem_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
 	}
 
 	outDir = deleteTailPathChar(outDir);
-
-	if(mask_val==1) maskMisAlnRegFlag = true;
-	else if(mask_val==0) maskMisAlnRegFlag = false;
-	else{
-		cout << "Error: Please specify the correct mask flag for mis-aligned regions using -M option." << endl << endl;
-		showAllUsage();
-		return 1;
-	}
-	if(delete_reads_val==1) delete_reads_flag = true;
-	else if(delete_reads_val==0) delete_reads_flag = false;
-	else{
-		cout << "Error: Please specify the correct reads delete flag for local assembly using -R option." << endl << endl;
-		showAllUsage();
-		return 1;
-	}
 
 	opt = argc - optind; // the reference file and BAM file on the command line
 	if(opt>=2) {
@@ -505,17 +604,17 @@ void Paras::showUsage(){
 	cout << "Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "     REF_FILE     Reference file (required)" << endl;
-	cout << "     BAM_FILE     Coordinate-sorted BAM file (required)" << endl;
-	cout << "     Region       Limit reference region to process: CHR|CHR:START-END." << endl;
-	cout << "                  If unspecified, all reference regions will be " << endl;
-	cout << "                  processed (optional)" << endl << endl;
+	cout << "   REF_FILE      Reference file (required)" << endl;
+	cout << "   BAM_FILE      Coordinate-sorted BAM file (required)" << endl;
+	cout << "   Region        Reference regions to process: CHR|CHR:START-END." << endl;
+	cout << "                 If unspecified, all reference regions will be " << endl;
+	cout << "                 processed (optional)" << endl << endl;
 
 	cout << "Commands:" << endl;
-	cout << "     detect       detect indel signatures in aligned reads" << endl;
-	cout << "     assemble     assemble candidate regions" << endl;
-	cout << "     call         call indels by alignments of local genome assemblies" << endl;
-	cout << "     all          run the above commands in turn" << endl;
+	cout << "   detect        detect indel signatures in aligned reads" << endl;
+	cout << "   assemble      assemble candidate regions" << endl;
+	cout << "   call          call indels by alignments of local genome assemblies" << endl;
+	cout << "   all           run the above commands in turn" << endl;
 }
 
 // show the usage for detect command
@@ -525,27 +624,30 @@ void Paras::showDetectUsage(){
 	cout << "Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "     REF_FILE     Reference file (required)" << endl;
-	cout << "     BAM_FILE     Coordinate-sorted BAM file (required)" << endl;
-	cout << "     Region       Limit reference region to process: CHR|CHR:START-END." << endl;
-	cout << "                  If unspecified, all reference regions will be " << endl;
-	cout << "                  processed (optional)" << endl << endl;
+	cout << "   REF_FILE      Reference file (required)" << endl;
+	cout << "   BAM_FILE      Coordinate-sorted BAM file (required)" << endl;
+	cout << "   Region        Reference regions to process: CHR|CHR:START-END." << endl;
+	cout << "                 If unspecified, all reference regions will be " << endl;
+	cout << "                 processed (optional)" << endl << endl;
 
 	cout << "Options: " << endl;
-	cout << "     -b INT       block size [1000000]" << endl;
-	cout << "     -s INT       detect slide size [500]" << endl;
-	cout << "     -m INT       minimal SV size to report [2]" << endl;
-	cout << "     -v INT       maximal SV size to report [" << MAX_VAR_REG_SIZE << "]." << endl;
-	cout << "                  Variants with size smaller than threshold will be ignored" << endl;
-	cout << "     -n INT       minimal clipping reads supporting a SV [7]" << endl;
-	cout << "     -e INT       minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
-	cout << "                  with size smaller than threshold will be ignored" << endl;
-	//cout << "     -r FILE      limit reference regions to process [null]: CHR|CHR:START-END" << endl;
-	cout << "     -o DIR       output directory [output]" << endl;
-	cout << "     -p STR       prefix of output result files [null]" << endl;
-	cout << "     -t INT       number of concurrent work [1]" << endl;
-	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
-	cout << "     -h           show this help message and exit" << endl;
+	cout << "   -b INT        block size [1000000]" << endl;
+	cout << "   -s INT        Slide window size [" << SLIDESIZE <<"]" << endl;
+	cout << "   -m INT        minimal SV size to report [" << MIN_SV_SIZE_USR << "]" << endl;
+	cout << "   -M INT        maximal SV size to report [" << MAX_SV_SIZE_USR << "]." << endl;
+	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
+	cout << "   -n INT        minimal number of reads supporting a SV [" << MIN_SUPPORT_READS_NUM << "]" << endl;
+	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
+	cout << "                 with size smaller than threshold will be ignored" << endl;
+	//cout << "   -r FILE       limit reference regions to process [null]: CHR|CHR:START-END" << endl;
+	cout << "   -o DIR        output directory [output]" << endl;
+	cout << "   -p STR        prefix of output result files [null]" << endl;
+	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
+	cout << "                 of threads in machine" << endl;
+	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
+
+	cout << "   -v,--version  show version information" << endl;
+	cout << "   -h,--help     show this help message and exit" << endl;
 }
 
 // show the usage for assemble command
@@ -555,28 +657,34 @@ void Paras::showAssembleUsage(){
 	cout << "Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "     REF_FILE     Reference file (required)" << endl;
-	cout << "     BAM_FILE     Coordinate-sorted BAM file (required)" << endl << endl;
+	cout << "   REF_FILE      Reference file (required)" << endl;
+	cout << "   BAM_FILE      Coordinate-sorted BAM file (required)" << endl << endl;
 
 	cout << "Options: " << endl;
-	cout << "     -b INT       block size [1000000]" << endl;
-	cout << "     -S INT       assemble slide size [10000]" << endl;
-	cout << "     -v INT       maximal SV size to report [" << MAX_VAR_REG_SIZE << "]" << endl;
-	cout << "                  Variants with size smaller than threshold will be ignored" << endl;
-	cout << "     -e INT       minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
-	cout << "                  with size smaller than threshold will be ignored" << endl;
-	cout << "     -x FLOAT     expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
-	cout << "                  0 for no coverage sampling" << endl;
-	cout << "     -o DIR       output directory [output]" << endl;
-	cout << "     -p STR       prefix of output result files [null]" << endl;
-	cout << "     -t INT       number of concurrent work [1]" << endl;
-	cout << "     -T INT       limited number of threads for each assemble work [0]:" << endl;
-	cout << "                  0 for unlimited, and positive INT for the limited" << endl;
-	cout << "                  number of threads for each assemble work" << endl;
-	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
-	cout << "     -R INT       Delete temporary reads during local assembly [1]:" << endl;
-	cout << "                  1 for yes, 0 for no" << endl;
-	cout << "     -h           show this help message and exit" << endl;
+	//cout << "   -s INT        Slide window size for 'detect' command  [" << SLIDESIZE <<"]" << endl;
+	//cout << "   -S INT        Slide window size for 'assemble' and 'call' command [" << ASSEM_SLIDE_SIZE << "]" << endl;
+	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
+	cout << "                 with size smaller than threshold will be ignored" << endl;
+	cout << "   -x FLOAT      expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
+	cout << "                 0 for no coverage sampling" << endl;
+	cout << "   -o DIR        output directory [output]" << endl;
+	cout << "   -p STR        prefix of output result files [null]" << endl;
+	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
+	cout << "                 of threads in machine" << endl;
+	cout << "   --threads-per-assem-work INT" << endl;
+	cout << "                 Limited number of threads for each assemble work [0]:" << endl;
+	cout << "                 0 for unlimited, and positive INT for the limited" << endl;
+	cout << "                 number of threads for each assemble work" << endl;
+	cout << "   --assem-chunk-size INT" << endl;
+	cout << "                 maximal reference chunk size to collect reads data to perform" << endl;
+	cout << "                 local assemble [" << ASM_CHUNK_SIZE_INDEL << "]. Reads of variants with reference" << endl;
+	cout << "                 distance < INT will be collected to perform local assemble" << endl;
+	cout << "   --keep-assemble-reads" << endl;
+	cout << "                 Keep temporary reads from being deleted during local assemble." << endl;
+	cout << "                 This may take some additional disk space" << endl;
+	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
+	cout << "   -v,--version  show version information" << endl;
+	cout << "   -h,--help     show this help message and exit" << endl;
 }
 
 // show the usage for call command
@@ -586,23 +694,26 @@ void Paras::showCallUsage(){
 	cout << "Usage: asvclr call [options] <REF_FILE> <BAM_FILE>" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "     REF_FILE     Reference file (required)" << endl;
-	cout << "     BAM_FILE     Coordinate-sorted BAM file (required)" << endl << endl;
+	cout << "   REF_FILE      Reference file (required)" << endl;
+	cout << "   BAM_FILE      Coordinate-sorted BAM file (required)" << endl << endl;
 
 	cout << "Options: " << endl;
-	cout << "     -b INT       block size [1000000]" << endl;
-	cout << "     -S INT       assemble slide size used in 'assemble' command [10000]" << endl;
-	cout << "     -v INT       maximal SV size to report [" << MAX_VAR_REG_SIZE << "]" << endl;
-	cout << "                  Variants with size smaller than threshold will be ignored" << endl;
-	cout << "     -e INT       minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
-	cout << "                  with size smaller than threshold will be ignored" << endl;
-	cout << "     -o DIR       output directory [output]" << endl;
-	cout << "     -p STR       prefix of output result files [null]" << endl;
-	cout << "     -t INT       number of concurrent work [1]" << endl;
-	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
-	cout << "     -R INT       Delete temporary reads during local assembly [1]:" << endl;
-	cout << "                  1 for yes, 0 for no" << endl;
-	cout << "     -h           show this help message and exit" << endl;
+	//cout << "   -s INT        Slide window size for 'detect' command  [" << SLIDESIZE <<"]" << endl;
+	//cout << "   -S INT        Slide window size for 'assemble' and 'call' command [" << ASSEM_SLIDE_SIZE << "]" << endl;
+	cout << "   -m INT        minimal SV size to report [" << MIN_SV_SIZE_USR << "]" << endl;
+	cout << "   -M INT        maximal SV size to report [" << MAX_SV_SIZE_USR << "]" << endl;
+	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
+	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
+	cout << "                 with size smaller than threshold will be ignored" << endl;
+	cout << "   -o DIR        output directory [output]" << endl;
+	cout << "   -p STR        prefix of output result files [null]" << endl;
+	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
+	cout << "                 of threads in machine" << endl;
+
+	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
+
+	cout << "   -v,--version  show version information" << endl;
+	cout << "   -h,--help     show this help message and exit" << endl;
 }
 
 // show the usage for all command
@@ -612,34 +723,42 @@ void Paras::showAllUsage(){
 	cout << "Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "     REF_FILE     Reference file (required)" << endl;
-	cout << "     BAM_FILE     Coordinate-sorted file (required)" << endl;
-	cout << "     Region       Limit reference region to process: CHR|CHR:START-END." << endl;
-	cout << "                  If unspecified, all reference regions will be " << endl;
-	cout << "                  processed (optional)" << endl << endl;
+	cout << "   REF_FILE      Reference file (required)" << endl;
+	cout << "   BAM_FILE      Coordinate-sorted file (required)" << endl;
+	cout << "   Region        Reference regions to process: CHR|CHR:START-END." << endl;
+	cout << "                 If unspecified, all reference regions will be " << endl;
+	cout << "                 processed (optional)" << endl << endl;
 
 	cout << "Options: " << endl;
-	cout << "     -b INT       block size [1000000]" << endl;
-	cout << "     -s INT       detect slide size [500]" << endl;
-	cout << "     -S INT       assemble slide size [10000]" << endl;
-	cout << "     -m INT       minimal SV size to report [2]" << endl;
-	cout << "     -v INT       maximal SV size to report [" << MAX_VAR_REG_SIZE << "]" << endl;
-	cout << "                  Variants with size smaller than threshold will be ignored" << endl;
-	cout << "     -n INT       minimal clipping reads supporting a SV [7]" << endl;
-	cout << "     -e INT       minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
-	cout << "                  with size smaller than threshold will be ignored" << endl;
-	cout << "     -x FLOAT     expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
-	cout << "                  0 for no coverage sampling" << endl;
-	cout << "     -o DIR       output directory [output]" << endl;
-	cout << "     -p STR       prefix of output result files [null]" << endl;
-	cout << "     -t INT       number of concurrent work [1]" << endl;
-	cout << "     -T INT       limited number of threads for each assemble work [0]:" << endl;
-	cout << "                  0 for unlimited, and positive INT for the limited" << endl;
-	cout << "                  number of threads for each assemble work" << endl;
-	cout << "     -M INT       Mask mis-aligned regions [0]: 1 for yes, 0 for no" << endl;
-	cout << "     -R INT       Delete temporary reads during local assembly [1]:" << endl;
-	cout << "                  1 for yes, 0 for no" << endl;
-	cout << "     -h           show this help message and exit" << endl;
+	cout << "   -b INT        block size [1000000]" << endl;
+	cout << "   -s INT        Slide window size [" << SLIDESIZE <<"]" << endl;
+	//cout << "   -S INT        Slide window size for 'assemble' and 'call' command [" << ASSEM_SLIDE_SIZE << "]" << endl;
+	cout << "   -m INT        minimal SV size to report [" << MIN_SV_SIZE_USR << "]" << endl;
+	cout << "   -M INT        maximal SV size to report [" << MAX_SV_SIZE_USR << "]" << endl;
+	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
+	cout << "   -n INT        minimal number of reads supporting a SV [" << MIN_SUPPORT_READS_NUM << "]" << endl;
+	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
+	cout << "                 with size smaller than threshold will be ignored" << endl;
+	cout << "   -x FLOAT      expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
+	cout << "                 0 for no coverage sampling" << endl;
+	cout << "   -o DIR        output directory [output]" << endl;
+	cout << "   -p STR        prefix of output result files [null]" << endl;
+	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
+	cout << "                 of threads in machine" << endl;
+	cout << "   --threads-per-assem-work INT" << endl;
+	cout << "                 Limited number of threads for each assemble work [0]:" << endl;
+	cout << "                 0 for unlimited, and positive INT for the limited" << endl;
+	cout << "                 number of threads for each assemble work" << endl;
+	cout << "   --assem-chunk-size INT" << endl;
+	cout << "                 maximal reference chunk size to collect reads data to perform" << endl;
+	cout << "                 local assemble [" << ASM_CHUNK_SIZE_INDEL << "]. Reads of variants with reference" << endl;
+	cout << "                 distance < INT will be collected to perform local assemble" << endl;
+	cout << "   --keep-assemble-reads" << endl;
+	cout << "                 Keep temporary reads from being deleted during local assemble." << endl;
+	cout << "                 This may take some additional disk space" << endl;
+	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
+	cout << "   -v,--version  show version information" << endl;
+	cout << "   -h,--help     show this help message and exit" << endl;
 }
 
 // output parameters
@@ -654,21 +773,22 @@ void Paras::outputParas(){
 	if(outFilePrefix.size()) cout << "Output result file prefix: " << outFilePrefix << endl;
 	//cout << "Canu version: " << canu_version << endl;
 
-	cout << "Clipping number supporting SV: " << minClipReadsNumSupportSV << endl;
+	cout << "Sample: " << sample << endl;
+	cout << "Clipping number supporting SV: " << minReadsNumSupportSV << endl;
 	cout << "Block size: " << blockSize << " bp" << endl;
 	cout << "Slide size: " << slideSize << " bp" << endl;
 	cout << "Minimal SV size to report: " << min_sv_size_usr << " bp" << endl;
-	cout << "Maximal SV size to report: " << maxVarRegSize << " bp" << endl;
+	cout << "Maximal SV size to report: " << max_sv_size_usr << " bp" << endl;
 	cout << "Minimal clipping end size: " << minClipEndSize << " bp" << endl;
 	cout << "Expected sampling coverage: " << expected_cov_assemble << endl;
+	cout << "Local assemble chunk size : " << assemChunkSize << " bp" << endl;
 	cout << "Number of concurrent works: " << num_threads << endl;
 	cout << "Limited number of threads for each assemble work: " << num_threads_per_assem_work << endl;
-	if(maskMisAlnRegFlag) cout << "Mask mis-aligned regions: yes" << endl;
-	else cout << "Mask mis-aligned regions: no" << endl;
-	if(delete_reads_flag) cout << "Delete local temporary reads: yes" << endl << endl;
-	else cout << "Delete local temporary reads: no" << endl << endl;
+	if(maskMisAlnRegFlag) cout << "Mask noisy regions: yes" << endl;
+	if(delete_reads_flag==false) cout << "Retain local temporary reads: yes" << endl;
+	cout << endl;
 
-	string desc = "Limit regions to process:";
+	string desc = "Regions to process:";
 	printLimitRegs(limit_reg_vec, desc);
 }
 
@@ -756,4 +876,29 @@ int64_t Paras::estimateSinglePara(int64_t *arr, int32_t n, double threshold, int
 	if(val<min_val) val = min_val;
 
 	return val;
+}
+
+// parse long options
+int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct option *lopts){
+	int ret = 0;
+
+	string opt_name_str = lopts[option_index].name;
+	if(opt_name_str.compare("sample")==0){ // "sample"
+		if(optarg) sample = optarg;
+		else{
+			cout << "Error: Please specify the correct sample name using --sample option." << endl << endl;
+			showDetectUsage();
+			ret = 1;
+		}
+	}else if(opt_name_str.compare("threads-per-assem-work")==0){ // "threads-per-assem-work"
+		num_threads_per_assem_work = true;
+	}else if(opt_name_str.compare("keep-assemble-reads")==0){ // "retain-assemble-reads"
+		delete_reads_flag = false;
+	}else if(opt_name_str.compare("mask-noisy-region")==0){ // "mask-noisy-region"
+		maskMisAlnRegFlag = true;
+	}else if(opt_name_str.compare("assem-chunk-size")==0){ // assem-chunk-size
+		assemChunkSize = stoi(optarg);
+	}
+
+	return ret;
 }

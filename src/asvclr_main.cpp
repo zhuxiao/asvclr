@@ -37,7 +37,6 @@ int main(int argc, char **argv) {
 		cout << "[" << time.getTime() << "]: local assemble ..." << endl;
 
 		// local assemble
-		paras.slideSize = paras.assemSlideSize;
 		genome.genomeLocalAssemble();
 
 		cout << "[" << time.getTime() << "]: local assemble finished." << endl;
@@ -50,7 +49,6 @@ int main(int argc, char **argv) {
 		cout << "[" << time.getTime() << "]: call variants ..." << endl;
 
 		// call variants
-		paras.slideSize = paras.assemSlideSize;	// update slide size
 		genome.genomeCall();
 
 		cout << "[" << time.getTime() << "]: call variants finished." << endl;

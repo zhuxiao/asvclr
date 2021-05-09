@@ -1724,6 +1724,7 @@ int32_t varCand::getAdjustedStartAlnIdxVar(localAln_t *local_aln){
 				}
 		}
 	}
+	if(minMismatchIdx>0) minMismatchIdx --;
 
 	return minMismatchIdx;
 }
@@ -1754,6 +1755,7 @@ int32_t varCand::getAdjustedEndAlnIdxVar(localAln_t *local_aln){
 				break;
 			}
 	}
+	if(maxMismatchIdx!=-1) maxMismatchIdx ++;
 
 	return maxMismatchIdx;
 }
@@ -2409,6 +2411,11 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 		regVec_tmp = regVec[i];
 		for(j=0; j<(int32_t)regVec_tmp.size(); j++){
 			reg = regVec_tmp[j];
+			if(reg->startLocalRefPos>1 and reg->startQueryPos>1){
+				reg->startRefPos --;
+				reg->startLocalRefPos --;
+				reg->startQueryPos --;
+			}
 			computeVarType(reg);  // compute variant type
 			reg->short_sv_flag = false;
 		}
@@ -2865,11 +2872,11 @@ void varCand::distinguishShortDupInvFromIndels(){
 
 				if(ref_dist>=MIN_SHORT_DUP_SIZE and sv_len_tmp>=ref_dist){
 					reg->var_type = VAR_DUP;
-					reg->startRefPos = leftVarRefPos;
+					reg->startRefPos = leftVarRefPos - 1;
 					reg->endRefPos = rightVarRefPos;
-					reg->startLocalRefPos = leftVarLocalRefPos;
+					reg->startLocalRefPos = leftVarLocalRefPos - 1;
 					reg->endLocalRefPos = rightVarLocalRefPos;
-					reg->startQueryPos = leftVarQueryPos;
+					reg->startQueryPos = leftVarQueryPos - 1;
 					reg->endQueryPos = rightVarQueryPos;
 					reg->call_success_status = true;
 					reg->short_sv_flag = true;
@@ -2915,6 +2922,11 @@ void varCand::distinguishShortDupInvFromIndels(){
 						//cout << "sim_ratio_inv=" << sim_ratio_inv << endl;
 
 						if(sim_ratio_inv>=SIMILARITY_THRES_INV){
+							if(reg->startLocalRefPos>1 and reg->startQueryPos>1){
+								reg->startRefPos --;
+								reg->startLocalRefPos --;
+								reg->startQueryPos --;
+							}
 							reg->var_type = VAR_INV;
 							reg->call_success_status = true;
 							reg->short_sv_flag = true;
@@ -3064,6 +3076,12 @@ void varCand::callVariantsAlnSegEnd(){
 					high_indel_clip_ratio = num_vec.at(3);
 
 					if(disagreeNum>0 or highIndelBaseNum>=1 or highIndelClipBaseNum>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES){
+//						if(reg->startLocalRefPos>1 and reg->startQueryPos>1){
+//							reg->startRefPos --;
+//							reg->startLocalRefPos --;
+//							reg->startQueryPos --;
+//						}
+
 						reg->call_success_status = true;
 						reg->aln_seg_end_flag = true;
 					}
@@ -3113,6 +3131,164 @@ vector<double> varCand::computeDisagreeNumAndHighIndelBaseNumAndClipNum(string &
 	return numVec;
 }
 
+// adjust variant locations slightly at left end
+//void varCand::adjustVarLocSlightly(){
+//	size_t i;
+//	int64_t j, query_len, start_idx, start_ref_pos, end_ref_pos, start_query_pos, end_query_pos, left_ext_size = EXT_SIZE_CHK_VAR_LOC, ext_size_ref, ext_size_query, ext_size;
+//	reg_t *reg;
+//	string refseq, altseq;
+//
+//	if(align_success){
+//		if(clip_reg_flag==false){ // indels
+//
+//			// get the reference sequence
+//			FastaSeqLoader refseqloader(refseqfilename);
+//			FastaSeqLoader ctgseqloader(ctgfilename);
+//			for(i=0; i<varVec.size(); i++){
+//				reg = varVec[i];
+//				if(reg->call_success_status and reg->aln_seg_end_flag==false){
+//					query_len = ctgseqloader.getFastaSeqLen(reg->query_id);
+//					start_ref_pos = reg->startLocalRefPos - left_ext_size;
+//					end_ref_pos = reg->endLocalRefPos;
+//					if(start_ref_pos<1) start_ref_pos = 1;
+//					ext_size_ref = reg->startLocalRefPos - start_ref_pos;
+//
+//					if(reg->aln_orient==ALN_PLUS_ORIENT){
+//						start_query_pos = reg->startQueryPos - left_ext_size;
+//						end_query_pos = reg->endQueryPos;
+//						if(start_query_pos<1) start_query_pos = 1;
+//						ext_size_query = reg->startQueryPos - start_query_pos;
+//					}else{
+//						start_query_pos = reg->startQueryPos;
+//						end_query_pos = reg->endQueryPos + left_ext_size;
+//						if(end_query_pos>query_len) end_query_pos = query_len;
+//						ext_size_query = end_query_pos - reg->endQueryPos;
+//					}
+//
+//					if(ext_size_ref<ext_size_query) ext_size = ext_size_ref;
+//					else ext_size = ext_size_query;
+//					start_ref_pos = reg->startLocalRefPos - ext_size;
+//					if(reg->aln_orient==ALN_PLUS_ORIENT) start_query_pos = reg->startQueryPos - ext_size;
+//					else end_query_pos = reg->endQueryPos + ext_size;
+//
+//					refseq = refseqloader.getFastaSeqByPos(0, start_ref_pos, end_ref_pos, ALN_PLUS_ORIENT);
+//					altseq = ctgseqloader.getFastaSeqByPos(reg->query_id, start_query_pos, end_query_pos, reg->aln_orient);
+//
+//					// compute variant location
+//					start_idx = -1;
+//					for(j=ext_size-1; j>=0; j--){
+//						if(refseq.at(j)==altseq.at(j)){
+//							start_idx = j;
+//							break;
+//						}
+//					}
+//					if(start_idx!=-1){
+//						reg->startRefPos -= ext_size - start_idx;
+//						reg->startLocalRefPos -= ext_size - start_idx;
+//						if(reg->aln_orient==ALN_PLUS_ORIENT) reg->startQueryPos -= ext_size - start_idx;
+//						else reg->endQueryPos += ext_size - start_idx;
+//
+//						reg->refseq = refseq.substr(start_idx);
+//						reg->altseq = altseq.substr(start_idx);
+//					}
+//				}
+//			}
+////			for(i=0; i<newVarVec.size(); i++){
+////				reg = newVarVec[i];
+////				if(reg->call_success_status and reg->aln_seg_end_flag==false)
+////					reg->refseq = refseqloader.getFastaSeqByPos(0, reg->startLocalRefPos, reg->endLocalRefPos, ALN_PLUS_ORIENT);
+////			}
+//
+//			// get the query sequence
+////			FastaSeqLoader ctgseqloader(ctgfilename);
+////			for(i=0; i<varVec.size(); i++){
+////				reg = varVec[i];
+////				if(reg->call_success_status and reg->aln_seg_end_flag==false)
+////					reg->altseq = ctgseqloader.getFastaSeqByPos(reg->query_id, reg->startQueryPos, reg->endQueryPos, reg->aln_orient);
+////			}
+////			for(i=0; i<newVarVec.size(); i++){
+////				reg = newVarVec[i];
+////				if(reg->call_success_status and reg->aln_seg_end_flag==false)
+////					reg->altseq = ctgseqloader.getFastaSeqByPos(reg->query_id, reg->startQueryPos, reg->endQueryPos, reg->aln_orient);
+////			}
+//		}else{ // SVs
+//			// get the reference and query sequence
+//			FastaSeqLoader refseqloader(refseqfilename);
+//			FastaSeqLoader ctgseqloader(ctgfilename);
+//			if(call_success){
+//				if((clip_reg->var_type==VAR_DUP or clip_reg->var_type==VAR_INV) and clip_reg->aln_seg_end_flag==false){
+//					query_len = ctgseqloader.getFastaSeqLen(clip_reg->query_id);
+//					start_ref_pos = clip_reg->startLocalRefPos - left_ext_size;
+//					end_ref_pos = clip_reg->endLocalRefPos;
+//					if(start_ref_pos<1) start_ref_pos = 1;
+//					ext_size_ref = clip_reg->startLocalRefPos - start_ref_pos;
+//
+//					if(clip_reg->aln_orient==ALN_PLUS_ORIENT){
+//						start_query_pos = clip_reg->startQueryPos - left_ext_size;
+//						end_query_pos = clip_reg->endQueryPos;
+//						if(start_query_pos<1) start_query_pos = 1;
+//						ext_size_query = clip_reg->startQueryPos - start_query_pos;
+//					}else{
+//						start_query_pos = clip_reg->startQueryPos;
+//						end_query_pos = clip_reg->endQueryPos + left_ext_size;
+//						if(end_query_pos>query_len) end_query_pos = query_len;
+//						ext_size_query = end_query_pos - clip_reg->endQueryPos;
+//					}
+//
+//					if(ext_size_ref<ext_size_query) ext_size = ext_size_ref;
+//					else ext_size = ext_size_query;
+//					start_ref_pos = clip_reg->startLocalRefPos - ext_size;
+//					if(clip_reg->aln_orient==ALN_PLUS_ORIENT) start_query_pos = clip_reg->startQueryPos - ext_size;
+//					else end_query_pos = clip_reg->endQueryPos + ext_size;
+//
+//					refseq = refseqloader.getFastaSeqByPos(0, start_ref_pos, end_ref_pos, ALN_PLUS_ORIENT);
+//					altseq = ctgseqloader.getFastaSeqByPos(clip_reg->query_id, start_query_pos, end_query_pos, clip_reg->aln_orient);
+//
+//					// compute variant location
+//					start_idx = -1;
+//					for(j=ext_size-1; j>=0; j--){
+//						if(refseq.at(j)==altseq.at(j)){
+//							start_idx = j;
+//							break;
+//						}
+//					}
+//					if(start_idx!=-1){
+//						clip_reg->startRefPos -= ext_size - start_idx;
+//						clip_reg->startLocalRefPos -= ext_size - start_idx;
+//						if(clip_reg->aln_orient==ALN_PLUS_ORIENT) clip_reg->startQueryPos -= ext_size - start_idx;
+//						else clip_reg->endQueryPos += ext_size - start_idx;
+//
+//						clip_reg->refseq = refseq.substr(start_idx);
+//						clip_reg->altseq = altseq.substr(start_idx);
+//					}
+//				}
+//			}
+//		}
+//	}
+//
+///*
+//	// print the seqs
+//	if(align_success){
+//		for(i=0; i<varVec.size(); i++){
+//			reg = varVec[i];
+//			if(reg->call_success_status){
+//				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+//				cout << "\tseqs: " << reg->refseq << "\t" << reg->altseq << endl;
+//			}else
+//				cout << "cannot be called" << endl;
+//		}
+//		for(i=0; i<newVarVec.size(); i++){
+//			reg = newVarVec[i];
+//			if(reg->call_success_status){
+//				cout << "New SV: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+//				cout << "\tseqs: " << reg->refseq << "\t" << reg->altseq << endl;
+//			}else
+//				cout << "cannot be called" << endl;
+//		}
+//	}
+//*/
+//}
+
 // fill the sequence, including reference sequence and contig sequence
 void varCand::fillVarseq(){
 	size_t i;
@@ -3157,28 +3333,6 @@ void varCand::fillVarseq(){
 			}
 		}
 	}
-
-/*
-	// print the seqs
-	if(align_success){
-		for(i=0; i<varVec.size(); i++){
-			reg = varVec[i];
-			if(reg->call_success_status){
-				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
-				cout << "\tseqs: " << reg->refseq << "\t" << reg->altseq << endl;
-			}else
-				cout << "cannot be called" << endl;
-		}
-		for(i=0; i<newVarVec.size(); i++){
-			reg = newVarVec[i];
-			if(reg->call_success_status){
-				cout << "New SV: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
-				cout << "\tseqs: " << reg->refseq << "\t" << reg->altseq << endl;
-			}else
-				cout << "cannot be called" << endl;
-		}
-	}
-*/
 }
 
 // determine clipReg variant type
@@ -3341,6 +3495,12 @@ void varCand::determineClipRegInvType(){
 					// compute sequence alignment similarity
 					sim_ratio_inv = computeSimilaritySeqAln(local_aln);
 					if(sim_ratio_inv>=SIMILARITY_THRES_INV){
+						if(clip_reg->startLocalRefPos>1 and clip_reg->startQueryPos>1){
+							clip_reg->startRefPos --;
+							clip_reg->startLocalRefPos --;
+							clip_reg->startQueryPos --;
+						}
+
 						clip_reg->var_type = VAR_INV;
 						clip_reg->call_success_status = true;
 						clip_reg->short_sv_flag = false;
@@ -3519,12 +3679,12 @@ reg_t* varCand::computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t 
 			call_success = true;
 			clip_reg_ret = new reg_t();
 			clip_reg_ret->chrname = clip_pos_vec.at(0).chrname;
-			clip_reg_ret->startRefPos =  clip_pos_vec.at(0).clipRefPos;
-			clip_reg_ret->endRefPos =  clip_pos_vec.at(1).clipRefPos;
-			clip_reg_ret->startLocalRefPos =  clip_pos_vec.at(0).clipLocalRefPos;
-			clip_reg_ret->endLocalRefPos =  clip_pos_vec.at(1).clipLocalRefPos;
-			clip_reg_ret->startQueryPos =  clip_pos_vec.at(0).clipQueryPos;
-			clip_reg_ret->endQueryPos =  clip_pos_vec.at(1).clipQueryPos;
+			clip_reg_ret->startRefPos =  clip_pos_vec.at(0).clipRefPos - 1;
+			clip_reg_ret->endRefPos =  clip_pos_vec.at(1).clipRefPos + 1;
+			clip_reg_ret->startLocalRefPos =  clip_pos_vec.at(0).clipLocalRefPos - 1;
+			clip_reg_ret->endLocalRefPos =  clip_pos_vec.at(1).clipLocalRefPos + 1;
+			clip_reg_ret->startQueryPos =  clip_pos_vec.at(0).clipQueryPos - 1;
+			clip_reg_ret->endQueryPos =  clip_pos_vec.at(1).clipQueryPos + 1;
 			clip_reg_ret->aln_orient = clip_pos_vec.at(0).aln_orient;
 			clip_reg_ret->var_type = var_type;
 			clip_reg_ret->query_id = blat_aln->query_id;

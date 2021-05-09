@@ -43,7 +43,6 @@ class Chrome{
 
 		vector<Block*> blockVector;
 
-		vector<varCand*> assembled_chr_clipReg_vec;		// previously assembled file names
 		vector<varCand*> blat_aligned_chr_varCand_vec;	// previously blat aligned information
 		vector<varCand*> blat_aligned_chr_clipReg_varCand_vec;	// previously blat aligned information
 
@@ -119,7 +118,7 @@ class Chrome{
 		int chrGenerateLocalAssembleWorkOpt_mt();
 		void outputAssemDataToFile(string &filename);
 		void removeVarCandNode(varCand *var_cand, vector<varCand*> &var_cand_vec);
-		void loadPrevAssembledInfo2(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+		void loadPrevAssembledInfo2(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec, vector<assembleWork_opt*> &assem_work_vec);
 		string getAssembleFileHeaderLine();
 
 		void chrCall_st();

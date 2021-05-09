@@ -131,6 +131,8 @@ void clipReg::computeMateAlnClipReg(){
 
 	//printClipVecs("After extract");  // print clips
 
+	//splitClipPosSameAlnSeg(); // split clips of same align segments in one vector
+
 	splitClipPosVec(); // split vector
 
 	//printClipVecs("After split");  // print clips
@@ -159,9 +161,9 @@ void clipReg::extractClipPosVec(){
 	clipAlnData_t *clip_aln_seg, *mate_clip_aln_seg;
 	string queryname, clip_pos_str;
 	vector<int32_t> adjClipAlnSegInfo;
-	clipPos_t *clip_pos_item, *mate_clip_pos_item;
-	int32_t mate_arr_idx, clip_end_flag, mate_clip_end_flag, clip_vec_idx, mate_clip_vec_idx;
-	bool valid_query_end_flag, valid_mate_query_end_flag, same_orient_flag, self_overlap_flag;
+	clipPos_t *clip_pos_item, *mate_clip_pos_item, *clip_pos_tmp;
+	int32_t mate_arr_idx, clip_end_flag, mate_clip_end_flag, clip_vec_idx, mate_clip_vec_idx, mate_clip_vec_idx_tmp, dist;
+	bool valid_query_end_flag, valid_mate_query_end_flag, same_orient_flag, self_overlap_flag, vec_id_changed_flag;
 
 	for(i=0; i<clipAlnDataVector.size(); i++){
 		if(clipAlnDataVector.at(i)->query_checked_flag==false){
@@ -172,6 +174,10 @@ void clipReg::extractClipPosVec(){
 				//cout << "clipReg: " << chrname << ":" << startRefPos << "-" << endRefPos << ", qname=" << queryname << ", align segment number=" << query_aln_segs.size() << endl;
 				continue;
 			}
+
+//			if(queryname.compare("S1_5689")==0 or queryname.compare("S1_10976")==0){
+//				cout << queryname << endl;
+//			}
 
 			for(j=0; j<query_aln_segs.size(); j++){
 				clip_aln_seg = query_aln_segs.at(j);
@@ -234,7 +240,13 @@ void clipReg::extractClipPosVec(){
 							// determine which is the left and which is the right clip region for INV and TRA
 							self_overlap_flag = isSegSelfOverlap(clip_aln_seg, mate_clip_aln_seg, maxVarRegSize);
 							if(self_overlap_flag==false){
-								if(clip_pos_item->chrname.compare(mate_clip_pos_item->chrname)!=0 or clip_pos_item->clipRefPos<=mate_clip_pos_item->clipRefPos){
+								if(clip_vec_idx==mate_clip_vec_idx){ // deal with same part
+									mate_clip_vec_idx_tmp = getMinDistVecId(mate_clip_pos_item);
+									if(mate_clip_vec_idx_tmp!=-1)
+										mate_clip_vec_idx = mate_clip_vec_idx_tmp;
+									else
+										valid_mate_query_end_flag = false;
+								}else if(clip_pos_item->chrname.compare(mate_clip_pos_item->chrname)!=0 or clip_pos_item->clipRefPos<=mate_clip_pos_item->clipRefPos){
 									clip_vec_idx = 0;
 									mate_clip_vec_idx = 1;
 								}else{
@@ -246,27 +258,81 @@ void clipReg::extractClipPosVec(){
 						}
 					}
 
+					// adjust the vector id
+					if(valid_query_end_flag and valid_mate_query_end_flag){
+						vec_id_changed_flag = false;
+						if(clip_pos_item->chrname.compare(mate_clip_pos_item->chrname)==0){
+							dist = clip_pos_item->clipRefPos - mate_clip_pos_item->clipRefPos;
+							if(dist<0) dist = -dist;
+							if(dist<MAX_CLIP_REG_MERGE_DIST){
+								clip_vec_idx = mate_clip_vec_idx = 0;
+								vec_id_changed_flag = true;
+							}
+						}
+						if(vec_id_changed_flag==false){
+							if(clip_pos_item->chrname.compare(mate_clip_pos_item->chrname)!=0 or (mate_clip_pos_item->clip_end==RIGHT_END and mate_clip_pos_item->clip_aln->left_aln==NULL) or (mate_clip_pos_item->clip_end==LEFT_END and mate_clip_pos_item->clip_aln->right_aln==NULL)){
+								mate_clip_vec_idx_tmp = getMinDistVecId(mate_clip_pos_item);
+								if(mate_clip_vec_idx_tmp!=-1)
+									mate_clip_vec_idx = mate_clip_vec_idx_tmp;
+							}
+						}
+					}
+
 					// save to vector
 					if(valid_query_end_flag){
 						clip_pos_item->same_orient_flag = same_orient_flag;
-						if(clip_vec_idx==0)
-							leftClipPosVector.push_back(clip_pos_item);
-						else if(clip_vec_idx==1){
-							if(same_orient_flag) rightClipPosVector.push_back(clip_pos_item);
-							else rightClipPosVector2.push_back(clip_pos_item);
+						if(clip_vec_idx==0){
+							// two clipping ends of the same align segments should be in different vector
+							clip_pos_tmp = getClipPosSameAlnSeg(clip_pos_item, leftClipPosVector);
+							if(clip_pos_tmp)
+								leftClipPosVector2.push_back(clip_pos_item);
+							else
+								leftClipPosVector.push_back(clip_pos_item);
+						}else if(clip_vec_idx==1){
+							if(same_orient_flag){
+								clip_pos_tmp = getClipPosSameAlnSeg(clip_pos_item, rightClipPosVector);
+								if(clip_pos_tmp)
+									rightClipPosVector2.push_back(clip_pos_item);
+								else
+									rightClipPosVector.push_back(clip_pos_item);
+							}else{
+								clip_pos_tmp = getClipPosSameAlnSeg(clip_pos_item, rightClipPosVector2);
+								if(clip_pos_tmp)
+									rightClipPosVector.push_back(clip_pos_item);
+								else
+									rightClipPosVector2.push_back(clip_pos_item);
+							}
 						}
-					}else {
+					}else{
 						delete clip_pos_item;
 						clip_pos_item = NULL;
 					}
 					if(valid_mate_query_end_flag){
 						mate_clip_pos_item->same_orient_flag = same_orient_flag;
-						if(mate_clip_vec_idx==0)
-							leftClipPosVector.push_back(mate_clip_pos_item);
-						else if(mate_clip_vec_idx==1){
-							if(same_orient_flag) rightClipPosVector.push_back(mate_clip_pos_item);
-							else rightClipPosVector2.push_back(mate_clip_pos_item);
-						}
+						if(mate_clip_vec_idx==0){
+							// two clipping ends of the same align segments should be in different vector
+							clip_pos_tmp = getClipPosSameAlnSeg(mate_clip_pos_item, leftClipPosVector);
+							if(clip_pos_tmp)
+								leftClipPosVector2.push_back(mate_clip_pos_item);
+							else
+								leftClipPosVector.push_back(mate_clip_pos_item);
+						}else if(mate_clip_vec_idx==1 or mate_clip_vec_idx==2){
+							if(same_orient_flag) {
+								clip_pos_tmp = getClipPosSameAlnSeg(mate_clip_pos_item, rightClipPosVector);
+								if(clip_pos_tmp)
+									rightClipPosVector2.push_back(mate_clip_pos_item);
+								else
+									rightClipPosVector.push_back(mate_clip_pos_item);
+							}else{
+								clip_pos_tmp = getClipPosSameAlnSeg(mate_clip_pos_item, rightClipPosVector2);
+								if(clip_pos_tmp)
+									rightClipPosVector.push_back(mate_clip_pos_item);
+								else
+									rightClipPosVector2.push_back(mate_clip_pos_item);
+							}
+							//rightClipPosVector.push_back(mate_clip_pos_item); // for mate_clip_vec_idx==2
+						}else if(mate_clip_vec_idx==3)
+							rightClipPosVector2.push_back(mate_clip_pos_item);
 					}else{
 						delete mate_clip_pos_item;
 						mate_clip_pos_item = NULL;
@@ -278,17 +344,86 @@ void clipReg::extractClipPosVec(){
 	}
 }
 
+// get the clip position vector id of minimal distance
+int32_t clipReg::getMinDistVecId(clipPos_t *clip_pos_item){
+	int64_t i, dist_arr[4], minIdx, minValue;
+
+	dist_arr[0] = getMeanDistSingleVec(clip_pos_item, leftClipPosVector);
+	dist_arr[1] = getMeanDistSingleVec(clip_pos_item, leftClipPosVector2);
+	dist_arr[2] = getMeanDistSingleVec(clip_pos_item, rightClipPosVector);
+	dist_arr[3] = getMeanDistSingleVec(clip_pos_item, rightClipPosVector2);
+
+	minIdx = -1;
+	minValue = INT_MAX;
+	for(i=0; i<4; i++){
+		if(dist_arr[i]!=-1){
+			if(minValue>dist_arr[i]){
+				minValue = dist_arr[i];
+				minIdx = i;
+			}
+		}
+	}
+
+	if(minValue>MIN_CLIP_DIST_THRES){
+		//cout << __func__ << ": " << "minIdx=" << minIdx << ", minValue=" << minValue << ", invalid and is skipped!" << endl;
+		minIdx = -1;
+	}
+
+	return minIdx;
+}
+
+// get the mean distance
+int32_t clipReg::getMeanDistSingleVec(clipPos_t *clip_pos_item, vector<clipPos_t*> &clip_pos_vec){
+	int64_t dist, num, sum;
+	clipPos_t *clip_pos_tmp;
+
+	sum = num = 0;
+	for(size_t i=0; i<clip_pos_vec.size(); i++){
+		clip_pos_tmp = clip_pos_vec.at(i);
+		if(clip_pos_tmp->chrname.compare(clip_pos_item->chrname)==0){
+			dist = clip_pos_item->clipRefPos - clip_pos_tmp->clipRefPos;
+			if(dist<0) dist = -dist;
+			sum += dist;
+			num ++;
+		}
+	}
+
+	if(num==0) return -1;
+	else return sum / num;
+}
+
+
+// get the clipping position item with the same align segment from a vector
+clipPos_t* clipReg::getClipPosSameAlnSeg(clipPos_t *clip_pos_item, vector<clipPos_t*> &clip_pos_vec){
+	clipPos_t *clip_pos_ret = NULL, *clip_pos;
+
+	if(clip_pos_item){
+		for(size_t i=0; i<clip_pos_vec.size(); i++){
+			clip_pos = clip_pos_vec.at(i);
+			if(clip_pos->clip_aln==clip_pos_item->clip_aln){
+				clip_pos_ret = clip_pos;
+				break;
+			}
+		}
+	}
+
+	return clip_pos_ret;
+}
+
 void clipReg::splitClipPosVec(){
 	size_t i;
-	clipPos_t *clip_pos, *clip_pos2, *clip_pos3;
+	clipPos_t *clip_pos, *clip_pos2, *clip_pos3, *min_dist_clip_pos, *clip_pos_right_clip_end, *clip_pos_left_clip_end;
 	clipAlnData_t *left_aln, *left_aln2, *right_aln, *right_aln2;
-	bool mid_inner_flag, exist_flag;
-	int32_t vec_id, min_seg_size, end_flag;
+	bool mid_inner_flag, exist_flag, clip_aln_mate_flag, inner_missing_valid_flag, valid_clip_pos_flag, size_consistent_flag;
+	int32_t vec_id, min_seg_size, end_flag, query_clip_pos, query_clip_pos2, min_dist_vec_id;
+	int64_t query_dist, ref_dist;
+	double ratio;
+	vector<clipPos_t*> clip_pos_items, clip_pos_items_tmp;
 
 	for(i=0; i<leftClipPosVector.size(); ){
 		clip_pos = leftClipPosVector.at(i);
 
-//		if(clip_pos->clip_aln->queryname.compare("S2_2594")==0){
+//		if(clip_pos->clip_aln->queryname.compare("S1_6607")==0 or clip_pos->clip_aln->queryname.compare("S1_1566")==0){
 //			cout << "line=" << __LINE__ << ", qname=" << clip_pos->clip_aln->queryname << endl;
 //		}
 
@@ -297,7 +432,34 @@ void clipReg::splitClipPosVec(){
 				if(clip_pos->clip_aln and ((clip_pos->same_orient_flag and clip_pos->clip_aln->ref_dist>=minAlnSize_same_orient)
 						or (clip_pos->same_orient_flag==false and clip_pos->clip_aln->ref_dist>=minAlnSize_diff_orient))){
 					right_aln = clip_pos->clip_aln->right_aln;
-					if(right_aln and clip_pos->clip_aln->rightClipSize>=minClipEndSize and ((right_aln->aln_orient==clip_pos->clip_aln->aln_orient and right_aln->ref_dist>=minAlnSize_same_orient)
+
+					// compute query distance
+					inner_missing_valid_flag = true;
+					clip_pos_items_tmp = getClipPosItemsByQueryname(clip_pos->clip_aln->queryname, leftClipPosVector);
+					if(clip_pos_items_tmp.size()>=2){ // more than two items
+						//cout << clip_pos_items_tmp.size() << endl;
+
+						min_dist_clip_pos = getMinDistClipPosItem(clip_pos, clip_pos_items_tmp);
+						if(min_dist_clip_pos){
+							clip_pos_right_clip_end = clip_pos;
+							clip_pos_left_clip_end = min_dist_clip_pos;
+							if(clip_pos_right_clip_end->clip_aln->right_aln!=clip_pos_left_clip_end->clip_aln or clip_pos_left_clip_end->clip_aln->left_aln!=clip_pos_right_clip_end->clip_aln){
+								inner_missing_valid_flag = false;
+							}else if(clip_pos_left_clip_end->clip_aln==right_aln){
+								// compute query distance
+								if(clip_pos_right_clip_end->clip_end==RIGHT_END) query_clip_pos = clip_pos_right_clip_end->clip_aln->endQueryPos;
+								else query_clip_pos = clip_pos_right_clip_end->clip_aln->startQueryPos;
+								if(clip_pos_left_clip_end->clip_end==RIGHT_END) query_clip_pos2 = clip_pos_left_clip_end->clip_aln->endQueryPos;
+								else query_clip_pos2 = clip_pos_left_clip_end->clip_aln->startQueryPos;
+								query_dist = query_clip_pos2 - query_clip_pos;
+								if(query_dist<0) query_dist = -query_dist;
+								if(query_dist>MAX_INNER_MISSING_IGNORE_SIZE)
+									inner_missing_valid_flag = false;
+							}
+						}
+					}
+
+					if(inner_missing_valid_flag and right_aln and clip_pos->clip_aln->rightClipSize>=minClipEndSize and ((right_aln->aln_orient==clip_pos->clip_aln->aln_orient and right_aln->ref_dist>=minAlnSize_same_orient)
 							or (right_aln->aln_orient!=clip_pos->clip_aln->aln_orient and right_aln->ref_dist>=minAlnSize_diff_orient))){
 						if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient){ // same orient
 							right_aln2 = right_aln->right_aln;
@@ -314,7 +476,14 @@ void clipReg::splitClipPosVec(){
 									if(vec_id!=-1)
 										exist_flag = true;
 
-									if(mid_inner_flag==false and exist_flag==false){
+									size_consistent_flag = true;
+									ref_dist = right_aln2->startRefPos - clip_pos->clipRefPos;
+									if(ref_dist<0) ref_dist = -ref_dist;
+									ratio = (double)ref_dist / right_aln->ref_dist;
+									if(ratio<1.0-CLIP_DIFF_LEN_RATIO_SV or ratio>1.0+CLIP_DIFF_LEN_RATIO_SV)
+										size_consistent_flag = false;
+
+									if(mid_inner_flag==false and exist_flag==false and size_consistent_flag){
 										clip_pos2 = new clipPos_t();
 										clip_pos2->chrname = right_aln2->chrname;
 										clip_pos2->clip_end = LEFT_END;
@@ -328,7 +497,15 @@ void clipReg::splitClipPosVec(){
 	//										cout << "*********** line=" << __LINE__ << ", i=" << i << ", leftClipPos1=" << clip_pos->clipRefPos << ", leftClipPos2=" << clip_pos2->clipRefPos << endl;
 	//									}
 
-										leftClipPosVector2.push_back(clip_pos2);
+										// compute reference distance
+										clip_pos_right_clip_end = clip_pos;
+										clip_pos_left_clip_end = clip_pos2;
+										ref_dist = clip_pos_left_clip_end->clipRefPos - clip_pos_right_clip_end->clipRefPos;
+										if(ref_dist<0) ref_dist = -ref_dist;
+										if(ref_dist<=MAX_INNER_MISSING_IGNORE_SIZE) // small distance
+											leftClipPosVector.push_back(clip_pos2);
+										else
+											leftClipPosVector2.push_back(clip_pos2);
 									}
 								}
 							}
@@ -347,7 +524,14 @@ void clipReg::splitClipPosVec(){
 									if(vec_id!=-1)
 										exist_flag = true;
 
-									if(mid_inner_flag==false and exist_flag==false){
+									size_consistent_flag = true;
+									ref_dist = left_aln2->startRefPos - clip_pos->clipRefPos;
+									if(ref_dist<0) ref_dist = -ref_dist;
+									ratio = (double)ref_dist / right_aln->ref_dist;
+									if(ratio<1.0-CLIP_DIFF_LEN_RATIO_SV or ratio>1.0+CLIP_DIFF_LEN_RATIO_SV)
+										size_consistent_flag = false;
+
+									if(mid_inner_flag==false and exist_flag==false and size_consistent_flag){
 										clip_pos2 = new clipPos_t();
 										clip_pos2->chrname = left_aln2->chrname;
 										clip_pos2->clip_end = LEFT_END;
@@ -361,7 +545,15 @@ void clipReg::splitClipPosVec(){
 	//										cout << "*********** line=" << __LINE__ << ", i=" << i << ", leftClipPos1=" << clip_pos->clipRefPos << ", leftClipPos2=" << clip_pos2->clipRefPos << endl;
 	//									}
 
-										leftClipPosVector2.push_back(clip_pos2);
+										// compute reference distance
+										clip_pos_right_clip_end = clip_pos;
+										clip_pos_left_clip_end = clip_pos2;
+										ref_dist = clip_pos_left_clip_end->clipRefPos - clip_pos_right_clip_end->clipRefPos;
+										if(ref_dist<0) ref_dist = -ref_dist;
+										if(ref_dist<=MAX_INNER_MISSING_IGNORE_SIZE) // small distance
+											leftClipPosVector.push_back(clip_pos2);
+										else
+											leftClipPosVector2.push_back(clip_pos2);
 									}
 								}
 							}
@@ -405,7 +597,34 @@ void clipReg::splitClipPosVec(){
 				if(clip_pos->clip_aln and ((clip_pos->same_orient_flag and clip_pos->clip_aln->ref_dist>=minAlnSize_same_orient)
 						or (clip_pos->same_orient_flag==false and clip_pos->clip_aln->ref_dist>=minAlnSize_diff_orient))){
 					left_aln = clip_pos->clip_aln->left_aln;
-					if(left_aln and clip_pos->clip_aln->leftClipSize>=minClipEndSize and ((left_aln->aln_orient==clip_pos->clip_aln->aln_orient and left_aln->ref_dist>=minAlnSize_same_orient)
+
+					// compute query distance
+					inner_missing_valid_flag = true;
+					clip_pos_items_tmp = getClipPosItemsByQueryname(clip_pos->clip_aln->queryname, leftClipPosVector);
+					if(clip_pos_items_tmp.size()>=2){ // more than two items
+						//cout << clip_pos_items_tmp.size() << endl;
+
+						min_dist_clip_pos = getMinDistClipPosItem(clip_pos, clip_pos_items_tmp);
+						if(min_dist_clip_pos){
+							clip_pos_right_clip_end = min_dist_clip_pos;
+							clip_pos_left_clip_end = clip_pos;
+							if(clip_pos_right_clip_end->clip_aln->right_aln!=clip_pos_left_clip_end->clip_aln or clip_pos_left_clip_end->clip_aln->left_aln!=clip_pos_right_clip_end->clip_aln){
+								inner_missing_valid_flag = false;
+							}else if(clip_pos_right_clip_end->clip_aln==left_aln){
+								// compute query distance
+								if(clip_pos_right_clip_end->clip_end==RIGHT_END) query_clip_pos = clip_pos_right_clip_end->clip_aln->endQueryPos;
+								else query_clip_pos = clip_pos_right_clip_end->clip_aln->startQueryPos;
+								if(clip_pos_left_clip_end->clip_end==RIGHT_END) query_clip_pos2 = clip_pos_left_clip_end->clip_aln->endQueryPos;
+								else query_clip_pos2 = clip_pos_left_clip_end->clip_aln->startQueryPos;
+								query_dist = query_clip_pos2 - query_clip_pos;
+								if(query_dist<0) query_dist = -query_dist;
+								if(query_dist>MAX_INNER_MISSING_IGNORE_SIZE)
+									inner_missing_valid_flag = false;
+							}
+						}
+					}
+
+					if(inner_missing_valid_flag and left_aln and clip_pos->clip_aln->leftClipSize>=minClipEndSize and ((left_aln->aln_orient==clip_pos->clip_aln->aln_orient and left_aln->ref_dist>=minAlnSize_same_orient)
 							or (left_aln->aln_orient!=clip_pos->clip_aln->aln_orient and left_aln->ref_dist>=minAlnSize_diff_orient))){
 						if(clip_pos->clip_aln->aln_orient==left_aln->aln_orient){ // same orient
 							left_aln2 = left_aln->left_aln;
@@ -422,7 +641,14 @@ void clipReg::splitClipPosVec(){
 									if(vec_id!=-1)
 										exist_flag = true;
 
-									if(mid_inner_flag==false and exist_flag==false){
+									size_consistent_flag = true;
+									ref_dist = left_aln2->endRefPos - clip_pos->clipRefPos;
+									if(ref_dist<0) ref_dist = -ref_dist;
+									ratio = (double)ref_dist / left_aln->ref_dist;
+									if(ratio<1.0-CLIP_DIFF_LEN_RATIO_SV or ratio>1.0+CLIP_DIFF_LEN_RATIO_SV)
+										size_consistent_flag = false;
+
+									if(mid_inner_flag==false and exist_flag==false and size_consistent_flag){
 										clip_pos2 = new clipPos_t();
 										clip_pos2->chrname = left_aln2->chrname;
 										clip_pos2->clip_end = RIGHT_END;
@@ -436,7 +662,15 @@ void clipReg::splitClipPosVec(){
 	//										cout << "*********** line=" << __LINE__ << ", i=" << i << ", leftClipPos1=" << clip_pos->clipRefPos << ", leftClipPos2=" << clip_pos2->clipRefPos << endl;
 	//									}
 
-										leftClipPosVector2.push_back(clip_pos2);
+										// compute reference distance
+										clip_pos_right_clip_end = clip_pos2;
+										clip_pos_left_clip_end = clip_pos;
+										ref_dist = clip_pos_left_clip_end->clipRefPos - clip_pos_right_clip_end->clipRefPos;
+										if(ref_dist<0) ref_dist = -ref_dist;
+										if(ref_dist<=MAX_INNER_MISSING_IGNORE_SIZE) // small distance
+											leftClipPosVector.push_back(clip_pos2);
+										else
+											leftClipPosVector2.push_back(clip_pos2);
 									}
 								}
 							}
@@ -455,7 +689,14 @@ void clipReg::splitClipPosVec(){
 									if(vec_id!=-1)
 										exist_flag = true;
 
-									if(mid_inner_flag==false and exist_flag==false){
+									size_consistent_flag = true;
+									ref_dist = right_aln2->endRefPos - clip_pos->clipRefPos;
+									if(ref_dist<0) ref_dist = -ref_dist;
+									ratio = (double)ref_dist / left_aln->ref_dist;
+									if(ratio<1.0-CLIP_DIFF_LEN_RATIO_SV or ratio>1.0+CLIP_DIFF_LEN_RATIO_SV)
+										size_consistent_flag = false;
+
+									if(mid_inner_flag==false and exist_flag==false and size_consistent_flag){
 										clip_pos2 = new clipPos_t();
 										clip_pos2->chrname = right_aln2->chrname;
 										clip_pos2->clip_end = RIGHT_END;
@@ -469,15 +710,39 @@ void clipReg::splitClipPosVec(){
 	//										cout << "*********** line=" << __LINE__ << ", i=" << i << ", leftClipPos1=" << clip_pos->clipRefPos << ", leftClipPos2=" << clip_pos2->clipRefPos << endl;
 	//									}
 
-										leftClipPosVector2.push_back(clip_pos2);
+										// compute reference distance
+										clip_pos_right_clip_end = clip_pos2;
+										clip_pos_left_clip_end = clip_pos;
+										ref_dist = clip_pos_left_clip_end->clipRefPos - clip_pos_right_clip_end->clipRefPos;
+										if(ref_dist<0) ref_dist = -ref_dist;
+										if(ref_dist<=MAX_INNER_MISSING_IGNORE_SIZE) // small distance
+											leftClipPosVector.push_back(clip_pos2);
+										else
+											leftClipPosVector2.push_back(clip_pos2);
 									}
+								}
+							}
+						}
+
+						// get clipping position items with same align segments by queryname
+						clip_aln_mate_flag = true;
+						clip_pos_items = getClipPosItemsByQueryname(clip_pos->clip_aln->queryname, leftClipPosVector);
+						if(clip_pos_items.size()>=2){ // more than two items
+							//cout << clip_pos_items.size() << endl;
+
+							min_dist_clip_pos = getMinDistClipPosItem(clip_pos, clip_pos_items);
+							if(min_dist_clip_pos){
+								clip_pos_right_clip_end = min_dist_clip_pos;
+								clip_pos_left_clip_end = clip_pos;
+								if(clip_pos_right_clip_end->clip_aln->right_aln!=clip_pos_left_clip_end->clip_aln or clip_pos_left_clip_end->clip_aln->left_aln!=clip_pos_right_clip_end->clip_aln){
+									clip_aln_mate_flag = false;
 								}
 							}
 						}
 
 						// process the right end of clip_aln, typically should be in the second vector
 						min_seg_size = (clip_pos->same_orient_flag) ? minAlnSize_same_orient : minAlnSize_diff_orient;
-						if(clip_pos->clip_aln->rightClipSize>=min_seg_size){
+						if(clip_aln_mate_flag and clip_pos->clip_aln->rightClipSize>=min_seg_size){
 							right_aln = clip_pos->clip_aln->right_aln;
 							vec_id = getClipPosVecId(clip_pos->clip_aln, RIGHT_END);
 							if(vec_id==-1){ // not exist, then add it to the second vector
@@ -494,11 +759,27 @@ void clipReg::splitClipPosVec(){
 									clip_pos2->same_orient_flag = clip_pos->same_orient_flag;
 									clip_pos2->self_overlap_flag = false;
 								}
-								leftClipPosVector2.push_back(clip_pos2);
+
+								// deal with left_aln2==NULL or right_aln2==NULL
+								min_dist_vec_id = -1;
+								valid_clip_pos_flag = true;
+								if((clip_pos->clip_aln->aln_orient==left_aln->aln_orient and left_aln2==NULL) or (clip_pos->clip_aln->aln_orient!=left_aln->aln_orient and right_aln2==NULL)){
+									min_dist_vec_id = getMinDistVecId(clip_pos2);
+									if(min_dist_vec_id==-1) valid_clip_pos_flag = false;
+								}
+								if(valid_clip_pos_flag){
+									if(min_dist_vec_id==-1) leftClipPosVector2.push_back(clip_pos2);
+									else{
+										if(min_dist_vec_id==0) leftClipPosVector.push_back(clip_pos2);
+										else if(min_dist_vec_id==1) leftClipPosVector2.push_back(clip_pos2);
+										else if(min_dist_vec_id==2) rightClipPosVector.push_back(clip_pos2);
+										else if(min_dist_vec_id==3) rightClipPosVector2.push_back(clip_pos2);
+									}
+								}else { delete clip_pos2; clip_pos2 = NULL; }
 							}
 
 							// add the mate item of clip_pos2
-							if(right_aln){
+							if(right_aln and (valid_clip_pos_flag and min_dist_vec_id==-1)){
 								if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) end_flag = LEFT_END;
 								else end_flag = RIGHT_END;
 								vec_id = getClipPosVecId(right_aln, end_flag);
@@ -511,11 +792,24 @@ void clipReg::splitClipPosVec(){
 									if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) {
 										clip_pos3->clipRefPos = right_aln->startRefPos;
 										clip_pos3->same_orient_flag = true;
-										rightClipPosVector2.push_back(clip_pos3);
+										//rightClipPosVector2.push_back(clip_pos3);
 									}else {
 										clip_pos3->clipRefPos = right_aln->endRefPos;
 										clip_pos3->same_orient_flag = false;
-										rightClipPosVector.push_back(clip_pos3);
+										//rightClipPosVector.push_back(clip_pos3);
+									}
+
+									min_dist_vec_id = getMinDistVecId(clip_pos3);
+									if(min_dist_vec_id==-1){
+										if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient)
+											rightClipPosVector2.push_back(clip_pos3);
+										else
+											rightClipPosVector.push_back(clip_pos3);
+									}else{
+										if(min_dist_vec_id==0) leftClipPosVector.push_back(clip_pos3);
+										else if(min_dist_vec_id==1) leftClipPosVector2.push_back(clip_pos3);
+										else if(min_dist_vec_id==2) rightClipPosVector.push_back(clip_pos3);
+										else if(min_dist_vec_id==3) rightClipPosVector2.push_back(clip_pos3);
 									}
 								}
 							}
@@ -524,19 +818,21 @@ void clipReg::splitClipPosVec(){
 				}
 			}
 			i++;
-		}else if(clip_pos->same_orient_flag==false){
-
-			cout << "=========== line=" << __LINE__ << ", clip_pos=" << clip_pos->clipRefPos << ", same_orient_flag=false, error!" << endl;
-
-			leftClipPosVector2.push_back(clip_pos);
-			leftClipPosVector.erase(leftClipPosVector.begin()+i);
-		}else i++;
+		}
+//		else if(clip_pos->same_orient_flag==false){
+//
+//			cout << "=========== line=" << __LINE__ << ", clip_pos=" << clip_pos->clipRefPos << ", same_orient_flag=false, error!" << endl;
+//
+//			leftClipPosVector2.push_back(clip_pos);
+//			leftClipPosVector.erase(leftClipPosVector.begin()+i);
+//		}
+		else i++;
 	}
 
 	for(i=0; i<rightClipPosVector.size(); ){
 		clip_pos = rightClipPosVector.at(i);
 
-//		if(clip_pos->clip_aln->queryname.compare("S1_13409")==0){
+//		if(clip_pos->clip_aln->queryname.compare("S1_6982")==0 or clip_pos->clip_aln->queryname.compare("S1_343")==0){
 //			cout << "line=" << __LINE__ << ", qname=" << clip_pos->clip_aln->queryname << endl;
 //		}
 
@@ -545,7 +841,34 @@ void clipReg::splitClipPosVec(){
 				if(clip_pos->clip_aln and ((clip_pos->same_orient_flag and clip_pos->clip_aln->ref_dist>=minAlnSize_same_orient)
 						or (clip_pos->same_orient_flag==false and clip_pos->clip_aln->ref_dist>=minAlnSize_diff_orient))){
 					right_aln = clip_pos->clip_aln->right_aln;
-					if(right_aln and clip_pos->clip_aln->rightClipSize>=minClipEndSize and ((right_aln->aln_orient==clip_pos->clip_aln->aln_orient and right_aln->ref_dist>=minAlnSize_same_orient)
+
+					// compute query distance
+					inner_missing_valid_flag = true;
+					clip_pos_items_tmp = getClipPosItemsByQueryname(clip_pos->clip_aln->queryname, rightClipPosVector);
+					if(clip_pos_items_tmp.size()>=2){ // more than two items
+						//cout << clip_pos_items_tmp.size() << endl;
+
+						min_dist_clip_pos = getMinDistClipPosItem(clip_pos, clip_pos_items_tmp);
+						if(min_dist_clip_pos){
+							clip_pos_right_clip_end = clip_pos;
+							clip_pos_left_clip_end = min_dist_clip_pos;
+							if(clip_pos_right_clip_end->clip_aln->right_aln!=clip_pos_left_clip_end->clip_aln or clip_pos_left_clip_end->clip_aln->left_aln!=clip_pos_right_clip_end->clip_aln){
+								inner_missing_valid_flag = false;
+							}else if(clip_pos_left_clip_end->clip_aln==right_aln){
+								// compute query distance
+								if(clip_pos_right_clip_end->clip_end==RIGHT_END) query_clip_pos = clip_pos_right_clip_end->clip_aln->endQueryPos;
+								else query_clip_pos = clip_pos_right_clip_end->clip_aln->startQueryPos;
+								if(clip_pos_left_clip_end->clip_end==RIGHT_END) query_clip_pos2 = clip_pos_left_clip_end->clip_aln->endQueryPos;
+								else query_clip_pos2 = clip_pos_left_clip_end->clip_aln->startQueryPos;
+								query_dist = query_clip_pos2 - query_clip_pos;
+								if(query_dist<0) query_dist = -query_dist;
+								if(query_dist>MAX_INNER_MISSING_IGNORE_SIZE)
+									inner_missing_valid_flag = false;
+							}
+						}
+					}
+
+					if(inner_missing_valid_flag and right_aln and clip_pos->clip_aln->rightClipSize>=minClipEndSize and ((right_aln->aln_orient==clip_pos->clip_aln->aln_orient and right_aln->ref_dist>=minAlnSize_same_orient)
 							or (right_aln->aln_orient!=clip_pos->clip_aln->aln_orient and right_aln->ref_dist>=minAlnSize_diff_orient))){
 						if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient){ // same orient
 							right_aln2 = right_aln->right_aln;
@@ -562,7 +885,14 @@ void clipReg::splitClipPosVec(){
 									if(vec_id!=-1)
 										exist_flag = true;
 
-									if(mid_inner_flag==false and exist_flag==false){
+									size_consistent_flag = true;
+									ref_dist = right_aln2->startRefPos - clip_pos->clipRefPos;
+									if(ref_dist<0) ref_dist = -ref_dist;
+									ratio = (double)ref_dist / right_aln->ref_dist;
+									if(ratio<1.0-CLIP_DIFF_LEN_RATIO_SV or ratio>1.0+CLIP_DIFF_LEN_RATIO_SV)
+										size_consistent_flag = false;
+
+									if(mid_inner_flag==false and exist_flag==false and size_consistent_flag){
 										clip_pos2 = new clipPos_t();
 										clip_pos2->chrname = right_aln2->chrname;
 										clip_pos2->clip_end = LEFT_END;
@@ -576,7 +906,15 @@ void clipReg::splitClipPosVec(){
 	//										cout << "----------- line=" << __LINE__ << ", i=" << i << ", leftClipPos1=" << clip_pos->clipRefPos << ", leftClipPos2=" << clip_pos2->clipRefPos << endl;
 	//									}
 
-										rightClipPosVector2.push_back(clip_pos2);
+										// compute reference distance
+										clip_pos_right_clip_end = clip_pos;
+										clip_pos_left_clip_end = clip_pos2;
+										ref_dist = clip_pos_left_clip_end->clipRefPos - clip_pos_right_clip_end->clipRefPos;
+										if(ref_dist<0) ref_dist = -ref_dist;
+										if(ref_dist<=MAX_INNER_MISSING_IGNORE_SIZE) // small distance
+											rightClipPosVector.push_back(clip_pos2);
+										else
+											rightClipPosVector2.push_back(clip_pos2);
 									}
 								}
 							}
@@ -595,7 +933,14 @@ void clipReg::splitClipPosVec(){
 									if(vec_id!=-1)
 										exist_flag = true;
 
-									if(mid_inner_flag==false and exist_flag==false){
+									size_consistent_flag = true;
+									ref_dist = left_aln2->startRefPos - clip_pos->clipRefPos;
+									if(ref_dist<0) ref_dist = -ref_dist;
+									ratio = (double)ref_dist / right_aln->ref_dist;
+									if(ratio<1.0-CLIP_DIFF_LEN_RATIO_SV or ratio>1.0+CLIP_DIFF_LEN_RATIO_SV)
+										size_consistent_flag = false;
+
+									if(mid_inner_flag==false and exist_flag==false and size_consistent_flag){
 										clip_pos2 = new clipPos_t();
 										clip_pos2->chrname = left_aln2->chrname;
 										clip_pos2->clip_end = LEFT_END;
@@ -609,7 +954,15 @@ void clipReg::splitClipPosVec(){
 	//										cout << "----------- line=" << __LINE__ << ", i=" << i << ", leftClipPos1=" << clip_pos->clipRefPos << ", leftClipPos2=" << clip_pos2->clipRefPos << endl;
 	//									}
 
-										rightClipPosVector2.push_back(clip_pos2);
+										// compute reference distance
+										clip_pos_right_clip_end = clip_pos;
+										clip_pos_left_clip_end = clip_pos2;
+										ref_dist = clip_pos_left_clip_end->clipRefPos - clip_pos_right_clip_end->clipRefPos;
+										if(ref_dist<0) ref_dist = -ref_dist;
+										if(ref_dist<=MAX_INNER_MISSING_IGNORE_SIZE) // small distance
+											rightClipPosVector.push_back(clip_pos2);
+										else
+											rightClipPosVector2.push_back(clip_pos2);
 									}
 								}
 							}
@@ -647,14 +1000,40 @@ void clipReg::splitClipPosVec(){
 								leftClipPosVector2.push_back(clip_pos2);
 							}
 						}
-
 					}
 				}
 			}else{ // left end
 				if(clip_pos->clip_aln and ((clip_pos->same_orient_flag and clip_pos->clip_aln->ref_dist>=minAlnSize_same_orient)
 						or (clip_pos->same_orient_flag==false and clip_pos->clip_aln->ref_dist>=minAlnSize_diff_orient))){
 					left_aln = clip_pos->clip_aln->left_aln;
-					if(left_aln and clip_pos->clip_aln->leftClipSize>=minClipEndSize and ((left_aln->aln_orient==clip_pos->clip_aln->aln_orient and left_aln->ref_dist>=minAlnSize_same_orient)
+
+					// compute query distance
+					inner_missing_valid_flag = true;
+					clip_pos_items_tmp = getClipPosItemsByQueryname(clip_pos->clip_aln->queryname, rightClipPosVector);
+					if(clip_pos_items_tmp.size()>=2){ // more than two items
+						//cout << clip_pos_items_tmp.size() << endl;
+
+						min_dist_clip_pos = getMinDistClipPosItem(clip_pos, clip_pos_items_tmp);
+						if(min_dist_clip_pos){
+							clip_pos_right_clip_end = min_dist_clip_pos;
+							clip_pos_left_clip_end = clip_pos;
+							if(clip_pos_right_clip_end->clip_aln->right_aln!=clip_pos_left_clip_end->clip_aln or clip_pos_left_clip_end->clip_aln->left_aln!=clip_pos_right_clip_end->clip_aln){
+								inner_missing_valid_flag = false;
+							}else if(clip_pos_right_clip_end->clip_aln==left_aln){
+								// compute query distance
+								if(clip_pos_right_clip_end->clip_end==RIGHT_END) query_clip_pos = clip_pos_right_clip_end->clip_aln->endQueryPos;
+								else query_clip_pos = clip_pos_right_clip_end->clip_aln->startQueryPos;
+								if(clip_pos_left_clip_end->clip_end==RIGHT_END) query_clip_pos2 = clip_pos_left_clip_end->clip_aln->endQueryPos;
+								else query_clip_pos2 = clip_pos_left_clip_end->clip_aln->startQueryPos;
+								query_dist = query_clip_pos2 - query_clip_pos;
+								if(query_dist<0) query_dist = -query_dist;
+								if(query_dist>MAX_INNER_MISSING_IGNORE_SIZE)
+									inner_missing_valid_flag = false;
+							}
+						}
+					}
+
+					if(inner_missing_valid_flag and left_aln and clip_pos->clip_aln->leftClipSize>=minClipEndSize and ((left_aln->aln_orient==clip_pos->clip_aln->aln_orient and left_aln->ref_dist>=minAlnSize_same_orient)
 							or (left_aln->aln_orient!=clip_pos->clip_aln->aln_orient and left_aln->ref_dist>=minAlnSize_diff_orient))){
 						if(clip_pos->clip_aln->aln_orient==left_aln->aln_orient){ // same orient
 							left_aln2 = left_aln->left_aln;
@@ -671,7 +1050,14 @@ void clipReg::splitClipPosVec(){
 									if(vec_id!=-1)
 										exist_flag = true;
 
-									if(mid_inner_flag==false and exist_flag==false){
+									size_consistent_flag = true;
+									ref_dist = left_aln2->endRefPos - clip_pos->clipRefPos;
+									if(ref_dist<0) ref_dist = -ref_dist;
+									ratio = (double)ref_dist / left_aln->ref_dist;
+									if(ratio<1.0-CLIP_DIFF_LEN_RATIO_SV or ratio>1.0+CLIP_DIFF_LEN_RATIO_SV)
+										size_consistent_flag = false;
+
+									if(mid_inner_flag==false and exist_flag==false and size_consistent_flag){
 										clip_pos2 = new clipPos_t();
 										clip_pos2->chrname = left_aln2->chrname;
 										clip_pos2->clip_end = RIGHT_END;
@@ -685,7 +1071,15 @@ void clipReg::splitClipPosVec(){
 	//										cout << "----------- line=" << __LINE__ << ", i=" << i << ", leftClipPos1=" << clip_pos->clipRefPos << ", leftClipPos2=" << clip_pos2->clipRefPos << endl;
 	//									}
 
-										rightClipPosVector2.push_back(clip_pos2);
+										// compute reference distance
+										clip_pos_right_clip_end = clip_pos2;
+										clip_pos_left_clip_end = clip_pos;
+										ref_dist = clip_pos_left_clip_end->clipRefPos - clip_pos_right_clip_end->clipRefPos;
+										if(ref_dist<0) ref_dist = -ref_dist;
+										if(ref_dist<=MAX_INNER_MISSING_IGNORE_SIZE) // small distance
+											rightClipPosVector.push_back(clip_pos2);
+										else
+											rightClipPosVector2.push_back(clip_pos2);
 									}
 								}
 							}
@@ -704,7 +1098,14 @@ void clipReg::splitClipPosVec(){
 									if(vec_id!=-1)
 										exist_flag = true;
 
-									if(mid_inner_flag==false and exist_flag==false){
+									size_consistent_flag = true;
+									ref_dist = right_aln2->endRefPos - clip_pos->clipRefPos;
+									if(ref_dist<0) ref_dist = -ref_dist;
+									ratio = (double)ref_dist / left_aln->ref_dist;
+									if(ratio<1.0-CLIP_DIFF_LEN_RATIO_SV or ratio>1.0+CLIP_DIFF_LEN_RATIO_SV)
+										size_consistent_flag = false;
+
+									if(mid_inner_flag==false and exist_flag==false and size_consistent_flag){
 										clip_pos2 = new clipPos_t();
 										clip_pos2->chrname = right_aln2->chrname;
 										clip_pos2->clip_end = RIGHT_END;
@@ -718,15 +1119,39 @@ void clipReg::splitClipPosVec(){
 	//										cout << "----------- line=" << __LINE__ << ", i=" << i << ", leftClipPos1=" << clip_pos->clipRefPos << ", leftClipPos2=" << clip_pos2->clipRefPos << endl;
 	//									}
 
-										rightClipPosVector2.push_back(clip_pos2);
+										// compute reference distance
+										clip_pos_right_clip_end = clip_pos2;
+										clip_pos_left_clip_end = clip_pos;
+										ref_dist = clip_pos_left_clip_end->clipRefPos - clip_pos_right_clip_end->clipRefPos;
+										if(ref_dist<0) ref_dist = -ref_dist;
+										if(ref_dist<=MAX_INNER_MISSING_IGNORE_SIZE) // small distance
+											rightClipPosVector.push_back(clip_pos2);
+										else
+											rightClipPosVector2.push_back(clip_pos2);
 									}
+								}
+							}
+						}
+
+						// get clipping position items with same align segments by queryname
+						clip_aln_mate_flag = true;
+						clip_pos_items = getClipPosItemsByQueryname(clip_pos->clip_aln->queryname, rightClipPosVector);
+						if(clip_pos_items.size()>=2){ // more than two items
+							//cout << clip_pos_items.size() << endl;
+
+							min_dist_clip_pos = getMinDistClipPosItem(clip_pos, clip_pos_items);
+							if(min_dist_clip_pos){
+								clip_pos_right_clip_end = min_dist_clip_pos;
+								clip_pos_left_clip_end = clip_pos;
+								if(clip_pos_right_clip_end->clip_aln->right_aln!=clip_pos_left_clip_end->clip_aln or clip_pos_left_clip_end->clip_aln->left_aln!=clip_pos_right_clip_end->clip_aln){
+									clip_aln_mate_flag = false;
 								}
 							}
 						}
 
 						min_seg_size = (clip_pos->same_orient_flag) ? minAlnSize_same_orient : minAlnSize_diff_orient;
 						// process the left end of right_aln, typically it should be in the fourth vector
-						if(clip_pos->clip_aln->rightClipSize>=min_seg_size){
+						if(clip_aln_mate_flag and clip_pos->clip_aln->rightClipSize>=min_seg_size){
 							right_aln = clip_pos->clip_aln->right_aln;
 							vec_id = getClipPosVecId(clip_pos->clip_aln, RIGHT_END);
 							if(vec_id==-1){ // not exist, then add it to the second vector
@@ -743,11 +1168,29 @@ void clipReg::splitClipPosVec(){
 									clip_pos2->same_orient_flag = clip_pos->same_orient_flag;
 									clip_pos2->self_overlap_flag = false;
 								}
-								rightClipPosVector2.push_back(clip_pos2);
+
+								// deal with left_aln2==NULL or right_aln2==NULL
+								min_dist_vec_id = -1;
+								valid_clip_pos_flag = true;
+								if((clip_pos->clip_aln->aln_orient==left_aln->aln_orient and left_aln2==NULL) or (clip_pos->clip_aln->aln_orient!=left_aln->aln_orient and right_aln2==NULL)){
+									min_dist_vec_id = getMinDistVecId(clip_pos2);
+									if(min_dist_vec_id==-1) valid_clip_pos_flag = false;
+								}
+								if(valid_clip_pos_flag){
+									if(min_dist_vec_id==-1) rightClipPosVector2.push_back(clip_pos2);
+									else{
+										if(min_dist_vec_id==0) leftClipPosVector.push_back(clip_pos2);
+										else if(min_dist_vec_id==1) leftClipPosVector2.push_back(clip_pos2);
+										else if(min_dist_vec_id==2) rightClipPosVector.push_back(clip_pos2);
+										else if(min_dist_vec_id==3) rightClipPosVector2.push_back(clip_pos2);
+									}
+								}else { delete clip_pos2; clip_pos2 = NULL; }
+
+								//rightClipPosVector2.push_back(clip_pos2);
 							}
 
 							// add the mate item of clip_pos2
-							if(right_aln){
+							if(right_aln and (valid_clip_pos_flag and min_dist_vec_id==-1)){
 								if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient) end_flag = LEFT_END;
 								else end_flag = RIGHT_END;
 								vec_id = getClipPosVecId(right_aln, end_flag);
@@ -760,16 +1203,28 @@ void clipReg::splitClipPosVec(){
 									if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient){
 										clip_pos3->clipRefPos = right_aln->startRefPos;
 										clip_pos3->same_orient_flag = true;
-										leftClipPosVector2.push_back(clip_pos3);
+										//leftClipPosVector2.push_back(clip_pos3);
 									}else{
 										clip_pos3->clipRefPos = right_aln->endRefPos;
 										clip_pos3->same_orient_flag = false;
-										leftClipPosVector.push_back(clip_pos3);
+										//leftClipPosVector.push_back(clip_pos3);
+									}
+
+									min_dist_vec_id = getMinDistVecId(clip_pos3);
+									if(min_dist_vec_id==-1){
+										if(clip_pos->clip_aln->aln_orient==right_aln->aln_orient)
+											leftClipPosVector2.push_back(clip_pos3);
+										else
+											leftClipPosVector.push_back(clip_pos3);
+									}else{
+										if(min_dist_vec_id==0) leftClipPosVector.push_back(clip_pos3);
+										else if(min_dist_vec_id==1) leftClipPosVector2.push_back(clip_pos3);
+										else if(min_dist_vec_id==2) rightClipPosVector.push_back(clip_pos3);
+										else if(min_dist_vec_id==3) rightClipPosVector2.push_back(clip_pos3);
 									}
 								}
 							}
 						}
-
 					}
 				}
 			}
@@ -779,6 +1234,41 @@ void clipReg::splitClipPosVec(){
 //			rightClipPosVector.erase(rightClipPosVector.begin()+i);
 //		}else i++;
 	}
+}
+
+// get clipping position items with same align segments by queryname
+vector<clipPos_t*> clipReg::getClipPosItemsByQueryname(string &queryname, vector<clipPos_t*> &clip_pos_vec){
+	vector<clipPos_t*> clip_items_ret;
+	clipPos_t *clip_pos_item;
+
+	for(size_t i=0; i<clip_pos_vec.size(); i++){
+		clip_pos_item = clip_pos_vec.at(i);
+		if(clip_pos_item->clip_aln->queryname.compare(queryname)==0) clip_items_ret.push_back(clip_pos_item);
+	}
+
+	return clip_items_ret;
+}
+
+clipPos_t* clipReg::getMinDistClipPosItem(clipPos_t *clip_pos, vector<clipPos_t*> &clip_pos_vec){
+	clipPos_t *clip_pos_ret = NULL, *clip_pos_item;
+	int64_t dist, minIdx, minValue;
+
+	minIdx = -1;
+	minValue = INT_MAX;
+	for(size_t i=0; i<clip_pos_vec.size(); i++){
+		clip_pos_item = clip_pos_vec.at(i);
+		if(clip_pos_item->clip_aln!=clip_pos->clip_aln and clip_pos_item->clip_end!=clip_pos->clip_end){
+			dist = clip_pos_item->clipRefPos - clip_pos->clipRefPos;
+			if(dist<0) dist = -dist;
+			if(dist<minValue){
+				minValue = dist;
+				minIdx = i;
+			}
+		}
+	}
+	if(minIdx!=-1) clip_pos_ret = clip_pos_vec.at(minIdx);
+
+	return clip_pos_ret;
 }
 
 // get the vector id of given clip position item
@@ -950,6 +1440,11 @@ void clipReg::addClipPosAtClipEnd(string chrname_clip, int64_t start_pos, int64_
 
 	for(i=0; i<clip_aln_data_vec.size(); i++){
 		clip_aln = clip_aln_data_vec.at(i);
+
+//		if(clip_aln->queryname.compare("S1_11995")==0){
+//			cout << clip_aln->queryname << endl;
+//		}
+
 		if(clip_aln->chrname.compare(chrname_clip)==0){
 			if(clip_end==RIGHT_END){ // right end
 				if(clip_aln->rightClipSize>=minClipEndSize and clip_aln->endRefPos>=start_pos and clip_aln->endRefPos<=end_pos){
@@ -1074,10 +1569,10 @@ void clipReg::removeFakeClips(){
 	removeFakeClipsLongDistSameOrientSingleVec(rightClipPosVector, vec_name="Right");
 	removeFakeClipsLongDistSameOrientSingleVec(rightClipPosVector2, vec_name="Right2");
 
-	removeFakeClipsLowCov(leftClipPosVector, paras->minClipReadsNumSupportSV);
-	removeFakeClipsLowCov(leftClipPosVector2, paras->minClipReadsNumSupportSV);
-	removeFakeClipsLowCov(rightClipPosVector, paras->minClipReadsNumSupportSV);
-	removeFakeClipsLowCov(rightClipPosVector2, paras->minClipReadsNumSupportSV);
+	removeFakeClipsLowCov(leftClipPosVector, paras->minReadsNumSupportSV);
+	removeFakeClipsLowCov(leftClipPosVector2, paras->minReadsNumSupportSV);
+	removeFakeClipsLowCov(rightClipPosVector, paras->minReadsNumSupportSV);
+	removeFakeClipsLowCov(rightClipPosVector2, paras->minReadsNumSupportSV);
 }
 
 // remove fake clips with alignment onto different chromes based on single vector
@@ -1219,7 +1714,7 @@ string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, 
 	int32_t j, clip_end2, vec_id2, num_arr[4], orient_num_arr[2][4];
 	int32_t maxValue, maxIdx, support_num, cov_num;
 
-	if(clip_pos_vec.size()==0) return "";
+	if(clip_pos_vec.size()==0) return "-";
 
 	// coverage of right end clipping position
 	cov_num = computeCovNumClipPos(chrname_clip, meanClipPos, RIGHT_END, fai, paras);
@@ -1282,7 +1777,10 @@ string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, 
 			maxIdx = j;
 		}
 	}
-	if(maxIdx!=-1){
+	//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", support_num=" << support_num << endl;
+
+	//if(maxIdx!=-1){
+	if(maxIdx!=-1 and maxValue>=MIN_CLIP_REG_MATED_RATIO*support_num){
 		//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", orient_nums=[" << orient_num_arr[0][maxIdx] << "," << orient_num_arr[1][maxIdx] << "]" << endl;
 
 		vec_id_str = to_string(maxIdx);
@@ -1359,7 +1857,11 @@ string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, 
 			maxIdx = j;
 		}
 	}
-	if(maxIdx!=-1){
+
+	//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", support_num=" << support_num << endl;
+
+	//if(maxIdx!=-1){
+	if(maxIdx!=-1 and maxValue>=MIN_CLIP_REG_MATED_RATIO*support_num){
 		//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", orient_nums=[" << orient_num_arr[0][maxIdx] << "," << orient_num_arr[1][maxIdx] << "]" << endl;
 
 		vec_id_str = to_string(maxIdx);
@@ -1375,7 +1877,7 @@ string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, 
 	}else
 		right_mate_str = "-";
 
-	if(left_mate_str.compare("-")==0 and right_mate_str.compare("-")==0) mate_reg_str = "";
+	if(left_mate_str.compare("-")==0 and right_mate_str.compare("-")==0) mate_reg_str = "-";
 	else mate_reg_str = left_mate_str + "," + right_mate_str;
 
 	//cout << mate_reg_str << endl;
@@ -1437,14 +1939,40 @@ int32_t clipReg::computeCovNumClipPos(string &chrname, int64_t meanClipPos, int3
 // compute the clip region
 void clipReg::computeClipRegs(){
 	reg_t *reg_tmp;
-	int64_t val_tmp;
+	int64_t val_tmp, dist;
+	size_t i;
+	bool merge_flag;
 
-	for(size_t i=0; i<4; i++) mate_clip_reg.bnd_mate_reg_strs[i] = "-";
+	for(i=0; i<4; i++) mate_clip_reg.bnd_mate_reg_strs[i] = "-";
+
+	// left part
+	mate_clip_reg.leftMeanClipPos = computeMeanClipPos(leftClipPosVector);
+	mate_clip_reg.leftMeanClipPos2 = computeMeanClipPos(leftClipPosVector2);
+	mate_clip_reg.leftClipPosNum = leftClipPosVector.size();
+	mate_clip_reg.leftClipPosNum2 = leftClipPosVector2.size();
+	dist = mate_clip_reg.leftMeanClipPos2 - mate_clip_reg.leftMeanClipPos;
+	if(dist<0) dist = -dist;
+	merge_flag = false;
+	if(mate_clip_reg.leftClipPosNum>0 and mate_clip_reg.leftClipPosNum2>0 and dist<MAX_CLIP_REG_MERGE_DIST){ // short distance, then merge
+		for(i=0; i<leftClipPosVector2.size(); i++) leftClipPosVector.push_back(leftClipPosVector2.at(i));
+		vector<clipPos_t*>().swap(leftClipPosVector2);
+		merge_flag = true;
+	}
+	else if(mate_clip_reg.leftClipPosNum==0){ // move items of vector2 to vector1
+		for(i=0; i<leftClipPosVector2.size(); i++) leftClipPosVector.push_back(leftClipPosVector2.at(i));
+		vector<clipPos_t*>().swap(leftClipPosVector2);
+		mate_clip_reg.leftMeanClipPos = mate_clip_reg.leftMeanClipPos2;
+		mate_clip_reg.leftMeanClipPos2 = 0;
+		mate_clip_reg.leftClipPosNum = leftClipPosVector.size();
+		mate_clip_reg.leftClipPosNum2 = leftClipPosVector2.size();
+	}
 
 	mate_clip_reg.leftClipReg = computeClipRegSingleVec(leftClipPosVector);
 	mate_clip_reg.leftClipReg2 = computeClipRegSingleVec(leftClipPosVector2);
-	mate_clip_reg.leftMeanClipPos = computeMeanClipPos(leftClipPosVector);
-	mate_clip_reg.leftMeanClipPos2 = computeMeanClipPos(leftClipPosVector2);
+	if(merge_flag){
+		mate_clip_reg.leftMeanClipPos = computeMeanClipPos(leftClipPosVector);
+		mate_clip_reg.leftMeanClipPos2 = computeMeanClipPos(leftClipPosVector2);
+	}
 	mate_clip_reg.leftClipPosNum = leftClipPosVector.size();
 	mate_clip_reg.leftClipPosNum2 = leftClipPosVector2.size();
 	if(mate_clip_reg.leftClipReg and mate_clip_reg.leftClipReg2 and mate_clip_reg.leftMeanClipPos>mate_clip_reg.leftMeanClipPos2){
@@ -1453,19 +1981,35 @@ void clipReg::computeClipRegs(){
 		val_tmp = mate_clip_reg.leftClipPosNum; mate_clip_reg.leftClipPosNum = mate_clip_reg.leftClipPosNum2; mate_clip_reg.leftClipPosNum2 = val_tmp;
 		left_part_changed = true;
 	}
-	// compute mate regions for BND format
-	if(left_part_changed==false){
-		if(mate_clip_reg.leftClipReg) mate_clip_reg.bnd_mate_reg_strs[0] = computeMateSingleRegStrForBND(leftClipPosVector, 0, mate_clip_reg.leftClipReg->chrname, mate_clip_reg.leftMeanClipPos);
-		if(mate_clip_reg.leftClipReg2) mate_clip_reg.bnd_mate_reg_strs[1] = computeMateSingleRegStrForBND(leftClipPosVector2, 1, mate_clip_reg.leftClipReg2->chrname, mate_clip_reg.leftMeanClipPos2);
-	}else{
-		if(mate_clip_reg.leftClipReg) mate_clip_reg.bnd_mate_reg_strs[0] = computeMateSingleRegStrForBND(leftClipPosVector2, 0, mate_clip_reg.leftClipReg->chrname, mate_clip_reg.leftMeanClipPos);
-		if(mate_clip_reg.leftClipReg2) mate_clip_reg.bnd_mate_reg_strs[1] = computeMateSingleRegStrForBND(leftClipPosVector, 1, mate_clip_reg.leftClipReg2->chrname, mate_clip_reg.leftMeanClipPos2);
+
+	// right part
+	mate_clip_reg.rightMeanClipPos = computeMeanClipPos(rightClipPosVector);
+	mate_clip_reg.rightMeanClipPos2 = computeMeanClipPos(rightClipPosVector2);
+	mate_clip_reg.rightClipPosNum = rightClipPosVector.size();
+	mate_clip_reg.rightClipPosNum2 = rightClipPosVector2.size();
+	dist = mate_clip_reg.rightMeanClipPos2 - mate_clip_reg.rightMeanClipPos;
+	if(dist<0) dist = -dist;
+	merge_flag = false;
+	if(mate_clip_reg.rightClipPosNum>0 and mate_clip_reg.rightClipPosNum2>0 and dist<MAX_CLIP_REG_MERGE_DIST){ // short distance, then merge
+		for(i=0; i<rightClipPosVector2.size(); i++) rightClipPosVector.push_back(rightClipPosVector2.at(i));
+		vector<clipPos_t*>().swap(rightClipPosVector2);
+		merge_flag = true;
+	}
+	else if(mate_clip_reg.rightClipPosNum==0){
+		for(i=0; i<rightClipPosVector2.size(); i++) rightClipPosVector.push_back(rightClipPosVector2.at(i));
+		vector<clipPos_t*>().swap(rightClipPosVector2);
+		mate_clip_reg.rightMeanClipPos = mate_clip_reg.rightMeanClipPos2;
+		mate_clip_reg.rightMeanClipPos2 = 0;
+		mate_clip_reg.rightClipPosNum = rightClipPosVector.size();
+		mate_clip_reg.rightClipPosNum2 = rightClipPosVector2.size();
 	}
 
 	mate_clip_reg.rightClipReg = computeClipRegSingleVec(rightClipPosVector);
 	mate_clip_reg.rightClipReg2 = computeClipRegSingleVec(rightClipPosVector2);
-	mate_clip_reg.rightMeanClipPos = computeMeanClipPos(rightClipPosVector);
-	mate_clip_reg.rightMeanClipPos2 = computeMeanClipPos(rightClipPosVector2);
+	if(merge_flag){
+		mate_clip_reg.rightMeanClipPos = computeMeanClipPos(rightClipPosVector);
+		mate_clip_reg.rightMeanClipPos2 = computeMeanClipPos(rightClipPosVector2);
+	}
 	mate_clip_reg.rightClipPosNum = rightClipPosVector.size();
 	mate_clip_reg.rightClipPosNum2 = rightClipPosVector2.size();
 	if(mate_clip_reg.rightClipReg and mate_clip_reg.rightClipReg2 and mate_clip_reg.rightMeanClipPos>mate_clip_reg.rightMeanClipPos2){
@@ -1474,8 +2018,16 @@ void clipReg::computeClipRegs(){
 		val_tmp = mate_clip_reg.rightClipPosNum; mate_clip_reg.rightClipPosNum = mate_clip_reg.rightClipPosNum2; mate_clip_reg.rightClipPosNum2 = val_tmp;
 		right_part_changed = true;
 	}
+
 	// compute mate regions for BND format
 	if(left_part_changed==false){
+		if(mate_clip_reg.leftClipReg) mate_clip_reg.bnd_mate_reg_strs[0] = computeMateSingleRegStrForBND(leftClipPosVector, 0, mate_clip_reg.leftClipReg->chrname, mate_clip_reg.leftMeanClipPos);
+		if(mate_clip_reg.leftClipReg2) mate_clip_reg.bnd_mate_reg_strs[1] = computeMateSingleRegStrForBND(leftClipPosVector2, 1, mate_clip_reg.leftClipReg2->chrname, mate_clip_reg.leftMeanClipPos2);
+	}else{
+		if(mate_clip_reg.leftClipReg) mate_clip_reg.bnd_mate_reg_strs[0] = computeMateSingleRegStrForBND(leftClipPosVector2, 0, mate_clip_reg.leftClipReg->chrname, mate_clip_reg.leftMeanClipPos);
+		if(mate_clip_reg.leftClipReg2) mate_clip_reg.bnd_mate_reg_strs[1] = computeMateSingleRegStrForBND(leftClipPosVector, 1, mate_clip_reg.leftClipReg2->chrname, mate_clip_reg.leftMeanClipPos2);
+	}
+	if(right_part_changed==false){
 		if(mate_clip_reg.rightClipReg) mate_clip_reg.bnd_mate_reg_strs[2] = computeMateSingleRegStrForBND(rightClipPosVector, 2, mate_clip_reg.rightClipReg->chrname, mate_clip_reg.rightMeanClipPos);
 		if(mate_clip_reg.rightClipReg2) mate_clip_reg.bnd_mate_reg_strs[3] = computeMateSingleRegStrForBND(rightClipPosVector2, 3, mate_clip_reg.rightClipReg2->chrname, mate_clip_reg.rightMeanClipPos2);
 	}else{
@@ -1489,6 +2041,9 @@ void clipReg::computeClipRegs(){
 	mate_clip_reg.rightClipRegNum = 0;
 	if(mate_clip_reg.rightClipReg) mate_clip_reg.rightClipRegNum ++;
 	if(mate_clip_reg.rightClipReg2) mate_clip_reg.rightClipRegNum ++;
+
+	// remove unmated regions
+	removeBNDUnmatedClipRegs();
 
 	mate_clip_reg.var_cand = NULL;
 	mate_clip_reg.left_var_cand_tra = mate_clip_reg.right_var_cand_tra = NULL;
@@ -1541,6 +2096,150 @@ reg_t* clipReg::computeClipRegSingleVec(vector<clipPos_t*> &clipPosVector){
 	}
 
 	return reg;
+}
+
+// remove unmated clipping regions
+void clipReg::removeBNDUnmatedClipRegs(){
+	int32_t reg_id, clip_end;
+	reg_t *reg;
+	vector<int32_t> mate_mate_reg_id_vec;
+	string mate_reg_id_str, mate_reg_id_str2;
+
+	for(size_t i=0; i<4; i++){
+		reg_id = i;
+		switch(reg_id){
+			case 0: reg = mate_clip_reg.leftClipReg; break;
+			case 1: reg = mate_clip_reg.leftClipReg2; break;
+			case 2: reg = mate_clip_reg.rightClipReg; break;
+			case 3: reg = mate_clip_reg.rightClipReg2; break;
+			default: cerr << "line=" << __LINE__ << ", invalid reg_id=" << reg_id << ", error!" << endl; exit(1);
+		}
+
+		if(reg){
+			if(mate_clip_reg.bnd_mate_reg_strs[reg_id].compare("-")!=0){
+				// right end
+				clip_end = RIGHT_END;
+				mate_mate_reg_id_vec = getMateMateRegID(reg_id, clip_end, mate_clip_reg.bnd_mate_reg_strs);
+				if(mate_mate_reg_id_vec.size()>0 and (mate_mate_reg_id_vec.at(0)!=reg_id or mate_mate_reg_id_vec.at(1)!=clip_end)){ // incorrectly mated
+					cout << "\tMate incorrectly: reg_id=" << reg_id << ", clip_end=" << clip_end << ", mate_mate_reg_id=" << mate_mate_reg_id_vec.at(0) << ", mate_mate_clip_end=" << mate_mate_reg_id_vec.at(1) << endl;
+				}
+
+				// left end
+				clip_end = LEFT_END;
+				mate_mate_reg_id_vec = getMateMateRegID(reg_id, clip_end, mate_clip_reg.bnd_mate_reg_strs);
+				if(mate_mate_reg_id_vec.size()>0 and (mate_mate_reg_id_vec.at(0)!=reg_id or mate_mate_reg_id_vec.at(1)!=clip_end)){ // incorrectly mated
+					cout << "\tMate incorrectly: reg_id=" << reg_id << ", clip_end=" << clip_end << ", mate_mate_reg_id=" << mate_mate_reg_id_vec.at(0) << ", mate_mate_clip_end=" << mate_mate_reg_id_vec.at(1) << endl;
+				}
+			}else{ // no bnd information, then delete the region and its vector
+				cout << "\t===== There are no mate region: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+
+				switch(reg_id){
+					case 0:
+						destroyClipPosVec(leftClipPosVector);
+						mate_clip_reg.leftMeanClipPos = mate_clip_reg.leftClipPosNum = 0;
+						mate_clip_reg.leftClipRegNum --;
+						delete mate_clip_reg.leftClipReg;
+						mate_clip_reg.leftClipReg = NULL;
+						break;
+					case 1:
+						destroyClipPosVec(leftClipPosVector2);
+						mate_clip_reg.leftMeanClipPos2 = mate_clip_reg.leftClipPosNum2 = 0;
+						mate_clip_reg.leftClipRegNum --;
+						delete mate_clip_reg.leftClipReg2;
+						mate_clip_reg.leftClipReg2 = NULL;
+						break;
+					case 2:
+						destroyClipPosVec(rightClipPosVector);
+						mate_clip_reg.rightMeanClipPos = mate_clip_reg.rightClipPosNum = 0;
+						mate_clip_reg.rightClipRegNum --;
+						delete mate_clip_reg.rightClipReg;
+						mate_clip_reg.rightClipReg = NULL;
+						break;
+					case 3:
+						destroyClipPosVec(rightClipPosVector2);
+						mate_clip_reg.rightMeanClipPos2 = mate_clip_reg.rightClipPosNum2 = 0;
+						mate_clip_reg.rightClipRegNum --;
+						delete mate_clip_reg.rightClipReg2;
+						mate_clip_reg.rightClipReg2 = NULL;
+						break;
+					default: cerr << "line=" << __LINE__ << ", invalid reg_id=" << reg_id << ", error!" << endl; exit(1);
+				}
+			}
+		}
+	}
+}
+
+// get mate of mate region id
+vector<int32_t> clipReg::getMateMateRegID(int32_t reg_idx, int32_t end_flag, string bnd_mate_reg_strs[4]){
+	vector<int32_t> mate_mate_reg_id_vec;
+	int32_t mate_reg_id, mate_reg_id2, mate_end_flag, mate_end_flag2;
+	char ch_orient;
+	vector<string> str_vec, str_vec2;
+	string mate_reg_id_str, mate_reg_id_str2;
+
+	if(bnd_mate_reg_strs[reg_idx].compare("-")!=0){
+		// right end
+		mate_reg_id_str = getBNDMateRegStr(reg_idx, end_flag, bnd_mate_reg_strs);
+		if(mate_reg_id_str.compare("-")!=0){
+			mate_reg_id = stoi(mate_reg_id_str.substr(0, 1));
+			ch_orient = mate_reg_id_str.at(1);
+			if(ch_orient=='+'){ // same orient
+				if(end_flag==RIGHT_END)
+					mate_end_flag = LEFT_END;
+				else
+					mate_end_flag = RIGHT_END;
+			}else{ // different orient
+				if(end_flag==RIGHT_END)
+					mate_end_flag = RIGHT_END;
+				else
+					mate_end_flag = LEFT_END;
+			}
+			mate_reg_id_str2 = getBNDMateRegStr(mate_reg_id, mate_end_flag, bnd_mate_reg_strs);
+			if(mate_reg_id_str2.compare("-")!=0){
+				mate_reg_id2 = stoi(mate_reg_id_str2.substr(0, 1));
+				ch_orient = mate_reg_id_str2.at(1);
+				if(ch_orient=='+'){ // same orient
+					if(mate_end_flag==RIGHT_END)
+						mate_end_flag2 = LEFT_END;
+					else
+						mate_end_flag2 = RIGHT_END;
+				}else{ // different orient
+					if(mate_end_flag==RIGHT_END)
+						mate_end_flag2 = RIGHT_END;
+					else
+						mate_end_flag2 = LEFT_END;
+				}
+
+				mate_mate_reg_id_vec.push_back(mate_reg_id2);
+				mate_mate_reg_id_vec.push_back(mate_end_flag2);
+			}
+		}
+	}
+
+	return mate_mate_reg_id_vec;
+}
+
+// get mate region id string
+string clipReg::getBNDMateRegStr(int32_t reg_idx, int32_t end_flag, string bnd_mate_reg_strs[4]){
+	vector<string> str_vec, str_vec2;
+	string bnd_reg_str, mate_reg_id_str = "-";
+
+	if(reg_idx<0 or reg_idx>=4){
+		if(bnd_mate_reg_strs[reg_idx].compare("-")!=0){
+			bnd_reg_str = "";
+			str_vec = split(bnd_mate_reg_strs[reg_idx], ",");
+			if(end_flag==RIGHT_END) // right end
+				bnd_reg_str = str_vec.at(0);
+			else // left end
+				bnd_reg_str = str_vec.at(1);
+
+			if(bnd_reg_str.compare("-")!=0){ // 2+|.|.|.
+				str_vec2 = split(bnd_reg_str, "|");  // 2+
+				mate_reg_id_str = str_vec2.at(0);
+			}
+		}
+	}
+	return mate_reg_id_str;
 }
 
 // remove false overlapped clip region
@@ -1822,7 +2521,7 @@ void clipReg::computeVarTypeClipReg(mateClipReg_t &mate_clip_reg, string &inBamF
 			}
 		}
 		// extract var_type
-		var_type = extractVarType(dup_type_num, inv_type_num, tra_type_num, paras->minClipReadsNumSupportSV);
+		var_type = extractVarType(dup_type_num, inv_type_num, tra_type_num, paras->minReadsNumSupportSV);
 	}
 
 	mate_clip_reg.sv_type = var_type;

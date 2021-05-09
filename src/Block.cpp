@@ -46,8 +46,6 @@ Block::Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai,  Para
 	var_cand_indel_file = NULL;
 	misAln_reg_file = NULL;
 	var_cand_clipReg_file = NULL;
-
-	assembled_chr_clipReg_vec = NULL;
 }
 
 // Destructor
@@ -58,7 +56,6 @@ Block::~Block(){
 	if(!indelVector.empty()) destroyIndelVector();
 	if(!clipRegVector.empty()) destroyClipRegVector();
 	if(!misAlnRegVector.empty()) destroyMisAlnRegVector();
-	if(!assembled_indel_vec.empty()) destroyAssembledVarcandVector(assembled_indel_vec);
 }
 
 // set the output directory
@@ -125,25 +122,10 @@ void Block::destroyMisAlnRegVector(){
 	vector<misAlnReg>().swap(misAlnRegVector);
 }
 
-// destroy assembled varcand vector
-void Block::destroyAssembledVarcandVector(vector<varCand*> &assembled_varcand_vec){
-	varCand *var_cand;
-	for(size_t i=0; i<assembled_varcand_vec.size(); i++){
-		var_cand = assembled_varcand_vec.at(i);
-		var_cand->destroyVarCand();
-		delete var_cand;
-	}
-	vector<varCand*>().swap(assembled_varcand_vec);
-}
-
 // set the region ingnore flag in the block
 void Block::setRegIngFlag(bool headIgnFlag, bool tailIgnFlag){
 	this->headIgnFlag = headIgnFlag;
 	this->tailIgnFlag = tailIgnFlag;
-}
-
-void Block::setAssembledChrClipRegVec(vector<varCand*> *assembled_chr_clipReg_vec){
-	this->assembled_chr_clipReg_vec = assembled_chr_clipReg_vec;
 }
 
 // prepare the alignment data and fill the estimation data
@@ -317,7 +299,7 @@ int Block::outputCovFile(){
 	uint32_t *num_baseArr;
 	ofstream ofile(out_file_str);
 
-	mkdir(workdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+	mkdir(workdir.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 
 	if(!ofile.is_open()){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << out_file_str << endl;
@@ -454,7 +436,7 @@ void Block::saveMisAlnRegToFile(){
 // compute the disagree count for given region
 void Block::computeDisagrNumSingleRegion(size_t startRpos, size_t endRPos, size_t regFlag){
 	// construct a region
-	Region tmp_reg(chrname, startRpos, endRPos, chrlen, startPos, endPos, baseArr+startRpos-startPos, regFlag, paras);
+	Region tmp_reg(chrname, startRpos, endRPos, chrlen, startPos, endPos, baseArr+startRpos-startPos, regFlag, paras, fai);
 
 	// compute the abnormal signatures in a region
 	if(tmp_reg.wholeRefGapFlag==false){
@@ -552,14 +534,14 @@ int Block::processSingleRegion(int64_t startRpos, int64_t endRPos, int64_t regFl
 	if(paras->limit_reg_process_flag){
 		if(sub_limit_reg_vec.size()){
 			//sub_limit_reg_vec_tmp = getSimpleRegs(chrname, startRpos, endRPos, sub_limit_reg_vec);
-			sub_limit_reg_vec_tmp = getOverlappedSimpleRegsExt(chrname, startRpos, endRPos, sub_limit_reg_vec, ASSEM_SLIDE_SIZE);
+			sub_limit_reg_vec_tmp = getOverlappedSimpleRegsExt(chrname, startRpos, endRPos, sub_limit_reg_vec, ASSEMBLE_SIDE_EXT_SIZE);
 			if(sub_limit_reg_vec_tmp.size()==0) process_flag = false;
 		}else process_flag = false;
 	}
 
 	if(process_flag){
 		// construct a region
-		Region tmp_reg(chrname, startRpos, endRPos, chrlen, startPos, endPos, baseArr+startRpos-startPos, regFlag, paras);
+		Region tmp_reg(chrname, startRpos, endRPos, chrlen, startPos, endPos, baseArr+startRpos-startPos, regFlag, paras, fai);
 		tmp_reg.setMeanBlockCov(meanCov);  // set the mean coverage
 
 		// compute the abnormal signatures in a region
@@ -808,13 +790,13 @@ void Block::saveSV2File(){
 	size_t i;
 
 	// creat the directory and open file for detect command
-	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IROTH);
+	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
 
 	// save indel
 	out_file_str = out_dir_detect + "/" + indelFilenameDetect;
 	out_file.open(out_file_str);
 	if(!out_file.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file" << endl;
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file '" << out_file_str << "'" << endl;
 		exit(1);
 	}
 	reg_t* reg;
@@ -828,7 +810,7 @@ void Block::saveSV2File(){
 	out_file_str = out_dir_detect + "/" + snvFilenameDetect;
 	out_file.open(out_file_str);
 	if(!out_file.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file" << endl;
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file '" << out_file_str << "'" << endl;
 		exit(1);
 	}
 	for(i=0; i<snvVector.size(); i++)
@@ -839,7 +821,7 @@ void Block::saveSV2File(){
 	out_file_str = out_dir_detect + "/" + clipRegFilenameDetect;
 	out_file.open(out_file_str);
 	if(!out_file.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file" << endl;
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file '" << out_file_str << "'" << endl;
 		exit(1);
 	}
 	for(i=0; i<clipRegVector.size(); i++){
@@ -897,7 +879,8 @@ void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
 		end_reg_id = tmp_reg_id = -1;
 		for(j=i+1; j<(int32_t)indelVector.size(); j++){
 			tmp_Pos = indelVector[j]->startRefPos;
-			if(tmp_Pos-begPos<(int32_t)paras->slideSize*2){
+			//if(tmp_Pos-begPos<(int32_t)paras->slideSize*2){
+			if(tmp_Pos-begPos<paras->assemChunkSize){
 				tmp_reg_id = j;
 			}else{
 				end_reg_id = tmp_reg_id;
@@ -929,7 +912,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
 void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 	int32_t i, reg_len;
 	vector<reg_t*> varVec;
-	string readsfilename, contigfilename, refseqfilename, tmpdir;
+	string readsfilename, contigfilename, refseqfilename, tmpdir, chrname_left, chrname_right;
 	mateClipReg_t *clip_reg;
 	bool generate_new_flag, generate_flag;
 	reg_t *reg1, *reg2, *reg3, *reg4;
@@ -939,88 +922,87 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 
 	for(i=0; i<(int32_t)mateClipRegVector.size(); i++){
 		clip_reg = mateClipRegVector.at(i);
-		if(clip_reg->leftClipRegNum==1 and clip_reg->rightClipRegNum==1){
-			reg1 = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
-			reg2 = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
-			varVec.clear();
-			varVec.push_back(reg1);
-			varVec.push_back(reg2);
+		reg1 = clip_reg->leftClipReg;
+		reg2 = clip_reg->leftClipReg2;
+		reg3 = clip_reg->rightClipReg;
+		reg4 = clip_reg->rightClipReg2;
 
-			// check limit process regions
-			generate_flag = true;
-			if(paras->limit_reg_process_flag){
-				sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
-				if(sub_limit_reg_vec_work.empty()) generate_flag = false;
-			}
-			if(generate_flag){
-				generate_new_flag = false;
-				if(clip_reg->reg_mated_flag and reg1->chrname.compare(reg2->chrname)==0){
-					reg_len = reg2->startRefPos - reg1->startRefPos;
-					if(reg_len<0) reg_len = -reg_len;
-					if(reg_len<paras->maxVarRegSize)
-						generate_new_flag = true;
+		if(clip_reg->leftClipRegNum>=1 and clip_reg->rightClipRegNum>=1){
+			chrname_left = chrname_right = "";
+			if(clip_reg->leftClipRegNum==1) {
+				if(reg1) chrname_left = reg1->chrname;
+				else if(reg2) chrname_left = reg2->chrname;
+				else{
+					cerr << __func__ << ", line=" << __LINE__ << ": null left region, invalid!" << endl;
+					exit(1);
 				}
-				if(generate_new_flag){
-					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
-				}else{
-					// assemble reg1
-					if(reg1){
-						varVec.clear();
-						varVec.push_back(reg1);
-						generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+			}else{
+				if(reg1->chrname.compare(reg2->chrname)==0) chrname_left = reg1->chrname;
+			}
+			if(clip_reg->rightClipRegNum==1){
+				if(reg3) chrname_right = reg3->chrname;
+				else if(reg4) chrname_right = reg4->chrname;
+				else{
+					cerr << __func__ << ", line=" << __LINE__ << ": null right region, invalid!" << endl;
+					exit(1);
+				}
+			}
+			else{
+				if(reg3->chrname.compare(reg4->chrname)==0) chrname_right = reg3->chrname;
+			}
+
+			if(chrname_left.size()>0 and chrname_right.size()>0){
+				varVec.clear();
+				if(reg1) varVec.push_back(reg1);
+				if(reg2) varVec.push_back(reg2);
+				if(reg3) varVec.push_back(reg3);
+				if(reg4) varVec.push_back(reg4);
+
+				// check limit process regions
+				generate_flag = true;
+				if(paras->limit_reg_process_flag){
+					sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+					if(sub_limit_reg_vec_work.empty()) generate_flag = false;
+				}
+
+				if(generate_flag){
+					generate_new_flag = false;
+					if(clip_reg->reg_mated_flag and chrname_left.compare(chrname_right)==0){
+						if(reg1) start_pos = reg1->startRefPos;
+						else if(reg2) start_pos = reg2->startRefPos;
+						else{
+							cerr << __func__ << ", line=" << __LINE__ << ": null left region, invalid!" << endl;
+							exit(1);
+						}
+						if(reg4) end_pos = reg4->endRefPos;
+						else if(reg3) end_pos = reg3->endRefPos;
+						else{
+							cerr << __func__ << ", line=" << __LINE__ << ": null right region, invalid!" << endl;
+							exit(1);
+						}
+
+						reg_len = end_pos - start_pos;
+						if(reg_len<0) reg_len = -reg_len;
+						if(reg_len<paras->maxVarRegSize)
+						//if(reg_len<paras->assemChunkSize)
+							generate_new_flag = true;
 					}
 
-					// assemble reg2
-					if(reg2){
+					if(generate_new_flag){
+						generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+					}else{
+						// assemble left regions
 						varVec.clear();
-						varVec.push_back(reg2);
+						if(reg1) varVec.push_back(reg1);
+						if(reg2) varVec.push_back(reg2);
+						generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+
+						// assemble right regions
+						varVec.clear();
+						if(reg3) varVec.push_back(reg3);
+						if(reg4) varVec.push_back(reg4);
 						generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 					}
-				}
-			}
-		}else if(clip_reg->leftClipRegNum==2 and clip_reg->rightClipRegNum==2){
-			reg1 = clip_reg->leftClipReg;
-			reg2 = clip_reg->leftClipReg2;
-			reg3 = clip_reg->rightClipReg;
-			reg4 = clip_reg->rightClipReg2;
-			varVec.clear();
-			varVec.push_back(reg1);
-			varVec.push_back(reg2);
-			varVec.push_back(reg3);
-			varVec.push_back(reg4);
-
-			// check limit process regions
-			generate_flag = true;
-			if(paras->limit_reg_process_flag){
-				sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
-				if(sub_limit_reg_vec_work.empty()) generate_flag = false;
-			}
-			if(generate_flag){
-				generate_new_flag = false;
-				if(clip_reg->reg_mated_flag and reg1->chrname.compare(reg2->chrname)==0 and reg3->chrname.compare(reg4->chrname)==0 and reg1->chrname.compare(reg4->chrname)==0){
-					start_pos = reg1->startRefPos;
-					end_pos = reg4->endRefPos;
-
-					reg_len = end_pos - start_pos;
-					if(reg_len<0) reg_len = -reg_len;
-					if(reg_len<paras->maxVarRegSize)
-						generate_new_flag = true;
-				}
-
-				if(generate_new_flag){
-					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
-				}else{
-					// assemble left regions
-					varVec.clear();
-					varVec.push_back(clip_reg->leftClipReg);
-					varVec.push_back(clip_reg->leftClipReg2);
-					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
-
-					// assemble right regions
-					varVec.clear();
-					varVec.push_back(clip_reg->rightClipReg);
-					varVec.push_back(clip_reg->rightClipReg2);
-					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 				}
 			}
 		}else{
@@ -1029,10 +1011,10 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 //			pthread_mutex_unlock(&mutex_print);
 
 			varVec.clear();
-			if(clip_reg->leftClipReg) varVec.push_back(clip_reg->leftClipReg);
-			if(clip_reg->leftClipReg2) varVec.push_back(clip_reg->leftClipReg2);
-			if(clip_reg->rightClipReg) varVec.push_back(clip_reg->rightClipReg);
-			if(clip_reg->rightClipReg2) varVec.push_back(clip_reg->rightClipReg2);
+			if(reg1) varVec.push_back(reg1);
+			if(reg2) varVec.push_back(reg2);
+			if(reg3) varVec.push_back(reg3);
+			if(reg4) varVec.push_back(reg4);
 
 			// check limit process regions
 			generate_flag = true;
@@ -1044,16 +1026,16 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 				// assemble left regions
 				if(clip_reg->leftClipRegNum>=1){
 					varVec.clear();
-					if(clip_reg->leftClipReg) varVec.push_back(clip_reg->leftClipReg);
-					if(clip_reg->leftClipReg2) varVec.push_back(clip_reg->leftClipReg2);
+					if(reg1) varVec.push_back(reg1);
+					if(reg2) varVec.push_back(reg2);
 					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 				}
 
 				// assemble right regions
 				if(clip_reg->rightClipRegNum>=1){
 					varVec.clear();
-					if(clip_reg->rightClipReg) varVec.push_back(clip_reg->rightClipReg);
-					if(clip_reg->rightClipReg2) varVec.push_back(clip_reg->rightClipReg2);
+					if(reg3) varVec.push_back(reg3);
+					if(reg4) varVec.push_back(reg4);
 					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 				}
 			}
@@ -1104,7 +1086,6 @@ void Block::generateAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_
 	int64_t minRefPos, maxRefPos;
 	reg_t *reg;
 	string chrname_tmp, readsfilename, contigfilename, refseqfilename, tmpdir, file_prefix_str;
-	bool assem_done_flag;
 	assembleWork_opt *assem_work_opt;
 
 	// get the minimum and maximum reference position
@@ -1132,65 +1113,17 @@ void Block::generateAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_
 		tmpdir = out_dir_assemble + "/" + "tmp_" + file_prefix_str + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos);
 
 		// check previously assembled information before assembly
-		assem_done_flag = getPrevAssembledDoneFlag(contigfilename, clip_reg_flag);
-		if(assem_done_flag==false){
-			assem_work_opt = allocateAssemWorkOpt(chrname_tmp, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, clip_reg_flag, limit_reg_process_flag, sub_limit_reg_vec_work);
-			if(assem_work_opt){
-				pthread_mutex_lock(&mutex_assem_work);
-				paras->assem_work_vec.push_back(assem_work_opt);
-				paras->assemble_reg_work_total ++;
-				pthread_mutex_unlock(&mutex_assem_work);
-			}else{
-				cerr << __func__ << ", line=" << __LINE__ << ": cannot create assemble work, error!" << endl;
-				exit(1);
-			}
-		}else{
+		assem_work_opt = allocateAssemWorkOpt(chrname_tmp, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, clip_reg_flag, limit_reg_process_flag, sub_limit_reg_vec_work);
+		if(assem_work_opt){
 			pthread_mutex_lock(&mutex_assem_work);
-			paras->assemble_reg_preDone_num ++;
+			paras->assem_work_vec.push_back(assem_work_opt);
+			paras->assemble_reg_work_total ++;
 			pthread_mutex_unlock(&mutex_assem_work);
+		}else{
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot create assemble work, error!" << endl;
+			exit(1);
 		}
 	}
 	varVec.clear();
 }
-
-bool Block::getPrevAssembledDoneFlag(string &contigfilename, bool clipReg_flag){
-	bool flag = false;
-
-	if(clipReg_flag==false){ // indel regions
-		flag = getPrevAssembledDoneFlag2(contigfilename, &assembled_indel_vec);
-	}else{ // clipping regions
-		flag = getPrevAssembledDoneFlag2(contigfilename, assembled_chr_clipReg_vec);
-		if(flag==false)
-			flag = getPrevAssembledDoneFlag2(contigfilename, paras->assembled_clipReg_filename_vec);
-	}
-
-	return flag;
-}
-
-bool Block::getPrevAssembledDoneFlag2(string &contigfilename, vector<varCand*> *assembled_varcand_vec){
-	bool flag = false;
-	varCand *var_cand;
-	for(size_t i=0; i<assembled_varcand_vec->size(); i++){
-		var_cand = assembled_varcand_vec->at(i);
-		if(var_cand->ctgfilename.compare(contigfilename)==0){
-			flag = true;
-			break;
-		}
-	}
-	return flag;
-}
-
-bool Block::getPrevAssembledDoneFlag2(string &contigfilename, vector<string> &assembled_filename_vec){
-	bool flag = false;
-	string filename;
-	for(size_t i=0; i<assembled_filename_vec.size(); i++){
-		filename = assembled_filename_vec.at(i);
-		if(filename.compare(contigfilename)==0){
-			flag = true;
-			break;
-		}
-	}
-	return flag;
-}
-
 

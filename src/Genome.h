@@ -70,6 +70,7 @@ class Genome{
 
 		void genomeLoadMateClipRegData();
 		void recallIndelsFromTRA();
+		bool isExistSuccessClipReg(varCand *var_cand, mateClipReg_t *clip_reg_exclude);
 		void genomeCallTra();
 		void generateBlatAlnFilenameTra();
 		void genomeCallTraOp();

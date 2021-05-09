@@ -4,7 +4,7 @@
 #include "clipAlnDataLoader.h"
 
 //Constructor
-Region::Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrlen, int64_t minRPos, int64_t maxRPos, Base *regBaseArr, size_t regFlag, Paras *paras) {
+Region::Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrlen, int64_t minRPos, int64_t maxRPos, Base *regBaseArr, size_t regFlag, Paras *paras, faidx_t *fai) {
 	this->paras = paras;
 	this->chrname = chrname;
 	this->startRPos = startRpos;
@@ -14,11 +14,7 @@ Region::Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrl
 	this->maxRPos = maxRPos;
 	this->regBaseArr = regBaseArr;
 	this->regFlag = regFlag;
-	fai = fai_load(paras->refFile.c_str());
-	if(!fai){
-		cerr << __func__ << ": could not load fai index of " << paras->refFile << endl;;
-		exit(1);
-	}
+	this->fai = fai;
 
 	switch(regFlag){
 		case HEAD_REGION:
@@ -62,7 +58,6 @@ Region::Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrl
 
 //Destructor
 Region::~Region(){
-	fai_destroy(fai);
 	if(!disagrePosVector.empty()) destroyDisagrePosVector();
 	if(!zeroCovPosVector.empty()) destroyZeroCovPosVector();
 	if(!abCovRegVector.empty()) destroyAbCovRegVector();
@@ -524,7 +519,8 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 		// allocate the indel region
 		if(indel_beg_flag and indel_end_flag){
 			high_con_indel_base_num = getHighConIndelNum(startPos_indel, endPos_indel, MIN_HIGH_INDEL_BASE_RATIO, IGNORE_POLYMER_RATIO_THRES);
-			if(endPos_indel-startPos_indel+1>=(int32_t)paras->min_sv_size_usr or high_con_indel_base_num>0){
+			if(endPos_indel-startPos_indel+1>=paras->min_sv_size_usr or high_con_indel_base_num>=1){
+			//if(endPos_indel-startPos_indel+1>=paras->min_sv_size_usr){
 				num1 = getDisZeroCovNum(startPos_indel, endPos_indel);
 				//num2 = getMismatchBasesAround(startPos_indel, endPos_indel);
 				num3 = getLargeIndelBaseNum(startPos_indel, endPos_indel);

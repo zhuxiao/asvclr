@@ -131,7 +131,6 @@ Block *Chrome::allocateBlock(string& chrname, int64_t startPos, int64_t endPos, 
 		exit(1);
 	}
 	block_tmp->setRegIngFlag(headIgnFlag, tailIgnFlag);
-	block_tmp->setAssembledChrClipRegVec(&assembled_chr_clipReg_vec);
 	block_tmp->setProcessFlag(block_process_flag);
 	return block_tmp;
 }
@@ -261,7 +260,7 @@ int Chrome::chrDetect(){
 
 	if(print_flag) cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
 
-	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IROTH);  // create the directory for detect command
+	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create the directory for detect command
 
 	chrSetMisAlnRegFile();
 
@@ -384,12 +383,12 @@ void Chrome::chrComputeMateClipReg(){
 
 	// compute the mate flag for duplications and inversions
 	for(i=0; i<clipRegVector.size(); i++){
-		//if(i>=35)
+		//if(i>=120) // 107, 97
 		{
 			if(clip_processed_flag_vec.at(i)==false){
 				reg = clipRegVector.at(i);
 
-				//cout << "[" << time.getTime() << "], [" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+				cout << "[" << time.getTime() << "], [" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
 				clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, paras->inBamFile, fai, paras);
 				clip_reg.computeMateClipReg();
@@ -1465,7 +1464,7 @@ void Chrome::chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> 
 			flag = true;
 			if(limit_reg_process_flag) {
 				//sub_limit_reg_vec = getSimpleRegs(chrname, begPos, endPos, limit_reg_vec);
-				sub_limit_reg_vec = getOverlappedSimpleRegsExt(chrname, begPos, endPos, limit_reg_vec, ASSEM_SLIDE_SIZE);
+				sub_limit_reg_vec = getOverlappedSimpleRegsExt(chrname, begPos, endPos, limit_reg_vec, ASSEMBLE_SIDE_EXT_SIZE);
 				if(sub_limit_reg_vec.size()==0) flag = false;
 			}
 
@@ -1542,28 +1541,28 @@ void Chrome::chrLoadMateClipRegDataOp(bool limit_reg_process_flag, vector<simple
 			if(reg1){
 				if(limit_reg_process_flag) {
 					//sub_limit_reg_vec = getSimpleRegs(reg1->chrname, reg1->startRefPos, reg1->endRefPos, limit_reg_vec);
-					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg1->chrname, reg1->startRefPos, reg1->endRefPos, limit_reg_vec, ASSEM_SLIDE_SIZE);
+					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg1->chrname, reg1->startRefPos, reg1->endRefPos, limit_reg_vec, ASSEMBLE_SIDE_EXT_SIZE);
 					if(sub_limit_reg_vec.size()==0) flag1 = false;
 				}
 			}else flag1 = false;
 			if(reg2){
 				if(limit_reg_process_flag) {
 					//sub_limit_reg_vec = getSimpleRegs(reg2->chrname, reg2->startRefPos, reg2->endRefPos, limit_reg_vec);
-					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg2->chrname, reg2->startRefPos, reg2->endRefPos, limit_reg_vec, ASSEM_SLIDE_SIZE);
+					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg2->chrname, reg2->startRefPos, reg2->endRefPos, limit_reg_vec, ASSEMBLE_SIDE_EXT_SIZE);
 					if(sub_limit_reg_vec.size()==0) flag2 = false;
 				}
 			}else flag2 = false;
 			if(reg3){
 				if(limit_reg_process_flag) {
 					//sub_limit_reg_vec = getSimpleRegs(reg3->chrname, reg3->startRefPos, reg3->endRefPos, limit_reg_vec);
-					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg3->chrname, reg3->startRefPos, reg3->endRefPos, limit_reg_vec, ASSEM_SLIDE_SIZE);
+					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg3->chrname, reg3->startRefPos, reg3->endRefPos, limit_reg_vec, ASSEMBLE_SIDE_EXT_SIZE);
 					if(sub_limit_reg_vec.size()==0) flag3 = false;
 				}
 			}else flag3 = false;
 			if(reg4){
 				if(limit_reg_process_flag) {
 					//sub_limit_reg_vec = getSimpleRegs(reg4->chrname, reg4->startRefPos, reg4->endRefPos, limit_reg_vec);
-					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg4->chrname, reg4->startRefPos, reg4->endRefPos, limit_reg_vec, ASSEM_SLIDE_SIZE);
+					sub_limit_reg_vec = getOverlappedSimpleRegsExt(reg4->chrname, reg4->startRefPos, reg4->endRefPos, limit_reg_vec, ASSEMBLE_SIDE_EXT_SIZE);
 					if(sub_limit_reg_vec.size()==0) flag4 = false;
 				}
 			}else flag4 = false;
@@ -1692,167 +1691,158 @@ void Chrome::loadPrevAssembledInfo(){
 	vector<simpleReg_t*> limit_reg_vec;
 	//if(paras->limit_reg_process_flag) limit_reg_vec = getSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
 	if(paras->limit_reg_process_flag) limit_reg_vec = getOverlappedSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
-	loadPrevAssembledInfo2(false, paras->limit_reg_process_flag, limit_reg_vec);
-	loadPrevAssembledInfo2(true, paras->limit_reg_process_flag, paras->limit_reg_vec);
+	loadPrevAssembledInfo2(false, paras->limit_reg_process_flag, limit_reg_vec, paras->assem_work_vec);
+	loadPrevAssembledInfo2(true, paras->limit_reg_process_flag, paras->limit_reg_vec, paras->assem_work_vec);
+
+	// clean previously assembled temporary folders
+	string dir_prefix = "tmp_";
+	cleanPrevAssembledTmpDir(out_dir_assemble, dir_prefix);
+
+	// open the assembly information file
+	//chrSetVarCandFiles();
 }
 
 // load previously assembled information
-void Chrome::loadPrevAssembledInfo2(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void Chrome::loadPrevAssembledInfo2(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec, vector<assembleWork_opt*> &assem_work_vec){
 	ifstream infile;
-	string infilename, line, done_str, old_out_dir, refseqfilename, contigfilename, readsfilename, pattern_str;
-	varCand *var_cand_tmp;
-	vector<string> line_vec, var_str, var_str1, var_str2;
+	ofstream *out_file;
+	string infilename, line, done_str, old_out_dir, refseqfilename, contigfilename, readsfilename, pattern_str, limit_reg_str;
+	string tmp_filename, header_line, new_line;
+	vector<string> var_str, var_str1, var_str2;
 	vector<string> str_vec, str_vec2, str_vec3;
 	size_t i;
-	reg_t *reg;
-	Block *tmp_bloc;
-	int64_t begPos;
+	int64_t item_id;
 	simpleReg_t *simple_reg, *prev_simple_reg;
 	vector<simpleReg_t*> sub_limit_reg_vec, prev_limit_reg_vec, prev_limit_reg_vec_tmp, pos_limit_reg_vec;
-	bool flag, pos_contained_flag, prev_delete_flag;
+	bool flag, pos_contained_flag, prev_delete_flag, done_flag;
 
-	if(clipReg_flag) infilename = var_cand_clipReg_filename;
-	else infilename = var_cand_indel_filename;
-
-	if(isFileExist(infilename)==false) return;
-
-	infile.open(infilename);
-	if(!infile.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << infilename << endl;
-		exit(1);
+	if(clipReg_flag){
+		infilename = var_cand_clipReg_filename;
+		out_file = &var_cand_clipReg_file;
+	}else{
+		infilename = var_cand_indel_filename;
+		out_file = &var_cand_indel_file;
 	}
 
-	if(limit_reg_process_flag){
-		if(clipReg_flag) pattern_str = CLIPREG_PATTERN;
-		else pattern_str = REFSEQ_PATTERN;
-		simple_reg = new simpleReg_t();
-	}
-
-	old_out_dir = "";
-	while(getline(infile, line)){
-		if(line.size()>0 and line.at(0)!='#'){
-			line_vec = split(line, "\t");
-
-			// update item file name
-			if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(line_vec.at(0), paras->out_dir_assemble);
-			refseqfilename = getUpdatedItemFilename(line_vec.at(0), paras->outDir, old_out_dir);
-			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
-			readsfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
-
-//			if(refseqfilename.compare("output_test_limit_reg_20200807/output_chr2/2_assemble/chr2/refseq_chr2_149997126-150006879.fa")==0){
-//				cout << __LINE__ << ": " << refseqfilename << endl;
-//			}
-
-			flag = true;
-			pos_contained_flag = false;
-			prev_delete_flag = true;
-			if(limit_reg_process_flag) {
-				getRegByFilename(simple_reg, refseqfilename, pattern_str);
-				//sub_limit_reg_vec = getSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
-				sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
-				if(sub_limit_reg_vec.size()==0){ // further to check previously recorded limited process regions
-					flag = false;
-					prev_limit_reg_vec = extractSimpleRegsByStr(line_vec.at(8));
-					for(i=0; i<prev_limit_reg_vec.size(); i++){
-						prev_simple_reg = prev_limit_reg_vec.at(i);
-						//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
-						prev_limit_reg_vec_tmp = getFullyContainedSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
-						if(prev_limit_reg_vec_tmp.size()){ // region fully contained
-							flag = true;
-							break;
-						}
-					}
-
-					if(flag==false){ // position contained
-						pos_limit_reg_vec = getPosContainedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
-						if(pos_limit_reg_vec.size()){
-							flag = true;
-							pos_contained_flag = true;
-						}
-					}
-				}
-			}
-
-			if(flag){
-				// allocate memory
-				var_cand_tmp = new varCand();
-				var_cand_tmp->chrname = "";
-				var_cand_tmp->var_cand_filename = "";
-				var_cand_tmp->out_dir_call = "";
-				var_cand_tmp->misAln_filename = "";
-				var_cand_tmp->inBamFile = "";
-				var_cand_tmp->fai = NULL;
-
-				var_cand_tmp->refseqfilename = refseqfilename;  // refseq file name
-				var_cand_tmp->ctgfilename = contigfilename;  // contig file name
-				var_cand_tmp->readsfilename = readsfilename;  // reads file name
-				var_cand_tmp->ref_left_shift_size = stoi(line_vec.at(3));  // ref_left_shift_size
-				var_cand_tmp->ref_right_shift_size = stoi(line_vec.at(4));  // ref_right_shift_size
-
-				var_cand_tmp->blat_aligned_info_vec = NULL;
-				var_cand_tmp->blat_var_cand_file = NULL;
-
-				if(line_vec[5].compare(ASSEMBLY_SUCCESS)==0) var_cand_tmp->assem_success = true;
-				else var_cand_tmp->assem_success = false;
-
-				var_cand_tmp->ctg_num = 0;
-
-				// load variations
-				if(line_vec.at(6).compare("-")!=0){
-					var_str = split(line_vec.at(6), ";");
-					for(i=0; i<var_str.size(); i++){
-						var_str1 = split(var_str.at(i), ":");
-						var_str2 = split(var_str1.at(1), "-");
-						reg = new reg_t();
-						reg->chrname = var_str1.at(0);
-						reg->startRefPos = stoi(var_str2.at(0));
-						reg->endRefPos = stoi(var_str2.at(1));
-						reg->startLocalRefPos = reg->endLocalRefPos = 0;
-						reg->startQueryPos = reg->endQueryPos = 0;
-						reg->sv_len = 0;
-						reg->dup_num = 0;
-						reg->var_type = VAR_UNC;
-						reg->query_id = -1;
-						reg->blat_aln_id = -1;
-						reg->call_success_status = false;
-						reg->short_sv_flag = false;
-						reg->zero_cov_flag = false;
-						reg->aln_seg_end_flag = false;
-						var_cand_tmp->varVec.push_back(reg);  // variation vector
-					}
-					var_cand_tmp->varVec.shrink_to_fit();
-				}
-
-				// limit regions
-				var_cand_tmp->limit_reg_process_flag = paras->limit_reg_process_flag;
-				if(sub_limit_reg_vec.size()) for(i=0; i<sub_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(sub_limit_reg_vec.at(i));
-				else {
-					if(pos_contained_flag==false){
-						for(i=0; i<prev_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(prev_limit_reg_vec.at(i));
-						var_cand_tmp->limit_reg_delete_flag = true;
-						prev_delete_flag = false;
-					}else for(i=0; i<pos_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(pos_limit_reg_vec.at(i));
-				}
-				// deal with 'DONE' string
-				done_str = line_vec.at(line_vec.size()-1);
-				if(done_str.compare(DONE_STR)==0 and var_cand_tmp->varVec.size()>0){
-					if(clipReg_flag) {
-						assembled_chr_clipReg_vec.push_back(var_cand_tmp);
-						paras->assembled_clipReg_filename_vec.push_back(var_cand_tmp->ctgfilename);
-					}else{
-						begPos = var_cand_tmp->varVec.at(0)->startRefPos;
-						tmp_bloc = computeBlocByPos(begPos, blockVector);  // get the block
-						tmp_bloc->assembled_indel_vec.push_back(var_cand_tmp);
-					}
-				}else delete var_cand_tmp;
-			}
-
-			if(!prev_limit_reg_vec.empty() and prev_delete_flag) destroyLimitRegVector(prev_limit_reg_vec);
+	if(isFileExist(infilename)){
+		if(limit_reg_process_flag){
+			if(clipReg_flag) pattern_str = CLIPREG_PATTERN;
+			else pattern_str = REFSEQ_PATTERN;
+			simple_reg = new simpleReg_t();
 		}
-	}
 
-	infile.close();
-	if(limit_reg_process_flag) delete simple_reg;
+		tmp_filename = infilename + "_tmp";
+		rename(infilename.c_str(), tmp_filename.c_str());
+
+		infile.open(tmp_filename);
+		if(!infile.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << tmp_filename << endl;
+			exit(1);
+		}
+
+		out_file->open(infilename);
+		if(!out_file->is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << infilename << endl;
+			exit(1);
+		}
+
+		header_line = getAssembleFileHeaderLine();
+		*out_file << header_line << endl;
+
+		old_out_dir = "";
+		while(getline(infile, line)){
+			if(line.size()>0 and line.at(0)!='#'){
+				str_vec = split(line, "\t");
+
+				// update item file name
+				if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_assemble);
+				refseqfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
+				contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
+				readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+
+	//			if(refseqfilename.compare("output_test_limit_reg_20200807/output_chr2/2_assemble/chr2/refseq_chr2_149997126-150006879.fa")==0){
+	//				cout << __LINE__ << ": " << refseqfilename << endl;
+	//			}
+
+				flag = true;
+				pos_contained_flag = false;
+				prev_delete_flag = true;
+				if(limit_reg_process_flag) {
+					getRegByFilename(simple_reg, refseqfilename, pattern_str);
+					//sub_limit_reg_vec = getSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+					sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+					if(sub_limit_reg_vec.size()==0){ // further to check previously recorded limited process regions
+						flag = false;
+						prev_limit_reg_vec = extractSimpleRegsByStr(str_vec.at(8));
+						for(i=0; i<prev_limit_reg_vec.size(); i++){
+							prev_simple_reg = prev_limit_reg_vec.at(i);
+							//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
+							prev_limit_reg_vec_tmp = getFullyContainedSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
+							if(prev_limit_reg_vec_tmp.size()){ // region fully contained
+								flag = true;
+								break;
+							}
+						}
+
+						if(flag==false){ // position contained
+							pos_limit_reg_vec = getPosContainedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
+							if(pos_limit_reg_vec.size()){
+								flag = true;
+								pos_contained_flag = true;
+							}
+						}
+					}
+				}
+
+				if(flag){
+					// remove the item from assemble work vector
+					done_flag = false;
+					item_id = getItemIDFromAssemWorkVec(contigfilename, assem_work_vec);
+					if(item_id!=-1){ // already assembled
+						done_str = str_vec.at(str_vec.size()-1);
+						if(done_str.compare(DONE_STR)==0) done_flag = true;
+					}
+					if(done_flag){ // assemble done
+						deleteItemFromAssemWorkVec(item_id, assem_work_vec); // already assembled, then remove it from the work vector
+						paras->assemble_reg_preDone_num ++;
+						paras->assemble_reg_work_total --;
+
+						// save to file
+						new_line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename;
+						for(i=3; i<=7; i++) new_line += "\t" + str_vec.at(i);
+
+						// limit regions
+						if(limit_reg_process_flag){
+							if(sub_limit_reg_vec.size()) limit_reg_str = getLimitRegStr(sub_limit_reg_vec);
+							else {
+								if(pos_contained_flag==false) limit_reg_str = getLimitRegStr(prev_limit_reg_vec);
+								else limit_reg_str = getLimitRegStr(pos_limit_reg_vec);
+							}
+						}else limit_reg_str = LIMIT_REG_ALL_STR;
+						new_line += "\t" + limit_reg_str;
+
+						for(i=9; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i); // other fields
+						*out_file << new_line << endl;
+					}
+				}
+
+				if(!prev_limit_reg_vec.empty() and prev_delete_flag) destroyLimitRegVector(prev_limit_reg_vec);
+			}
+		}
+
+		infile.close();
+		remove(tmp_filename.c_str());
+		if(limit_reg_process_flag) delete simple_reg;
+	}else{
+		out_file->open(infilename);
+		if(!out_file->is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << infilename << endl;
+			exit(1);
+		}
+
+		header_line = getAssembleFileHeaderLine();
+		*out_file << header_line << endl;
+	}
 }
 
 // get the assembly file header line which starts with '#'
@@ -1865,16 +1855,9 @@ string Chrome::getAssembleFileHeaderLine(){
 int Chrome::chrGenerateLocalAssembleWorkOpt(){
 	Time time;
 
-	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IROTH);  // create the directory for assemble command
+	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create the directory for assemble command
 
 	//cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
-
-	// clean previously assembled temporary folders
-	string dir_prefix = "tmp_";
-	cleanPrevAssembledTmpDir(out_dir_assemble, dir_prefix);
-
-	// open the assembly information file
-	chrSetVarCandFiles();
 
 	// generate local assemble work
 	if(paras->num_threads<=1) chrGenerateLocalAssembleWorkOpt_st();  // single thread
@@ -1882,10 +1865,6 @@ int Chrome::chrGenerateLocalAssembleWorkOpt(){
 
 //	// close and reset the assembly information file
 //	chrResetVarCandFiles();
-//
-//	// release assembled chrome clipReg information
-//	if(!assembled_chr_clipReg_vec.empty())
-//		destroyVarCandVector(assembled_chr_clipReg_vec);
 
 	return 0;
 }
@@ -1927,10 +1906,6 @@ int Chrome::chrGenerateLocalAssembleWorkOpt_mt(){
 void Chrome::chrResetAssembleData(){
 	// close and reset the assembly information file
 	chrResetVarCandFiles();
-
-	// release assembled chrome clipReg information
-	if(!assembled_chr_clipReg_vec.empty())
-		destroyVarCandVector(assembled_chr_clipReg_vec);
 }
 
 // output assem data to file
@@ -1967,7 +1942,7 @@ void Chrome::outputAssemDataToFile(string &filename){
 int Chrome::chrCall(){
 	Time time;
 
-//	mkdir(out_dir_call.c_str(), S_IRWXU | S_IROTH);  // create the directory for call command
+//	mkdir(out_dir_call.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create the directory for call command
 
 	if(print_flag) cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
 
@@ -2007,8 +1982,8 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("output_dup_20210204_tmp/3_call/chr1/blat_contig_chr1_51403-51939.sim4")==0)
-		//if(i>=375)
+		//if(var_cand->alnfilename.compare("output_20210322/3_call/chr1/blat_chr1_5573001-5579132.sim4")==0)
+		//if(i>=148)
 		{
 			//cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;
 			var_cand->callVariants();
@@ -2065,7 +2040,7 @@ void Chrome::loadVarCandData(){
 }
 
 void Chrome::chrLoadMateClipRegData(){
-	mkdir(out_dir_call.c_str(), S_IRWXU | S_IROTH);  // create the directory for call command
+	mkdir(out_dir_call.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create the directory for call command
 
 	vector<simpleReg_t*> limit_reg_vec;
 	if(mateClipRegVector.size()==0){
@@ -2114,9 +2089,9 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			readsfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
 			chrname_mate_clip_reg = getChrnameByFilename(contigfilename);
 
-//			if(refseqfilename.compare("output_hg19_M0_20200917/2_assemble/chrUn_gl000234/clipReg_refseq_chrUn_gl000234_40405-40531.fa")==0 or refseqfilename.compare("output_hg19_M0_20200917/2_assemble/chrUn_gl000231/clipReg_refseq_chrUn_gl000234_40405-40531.fa")==0){
-//				cout << line << endl;
-//			}
+			//if(refseqfilename.compare("output_20210418/2_assemble/chr1/clipReg_refseq_chr1_1127942-1132735.fa")==0){
+			//	cout << line << endl;
+			//}
 
 			flag = true;
 			pos_contained_flag = false;
@@ -2205,6 +2180,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				else{
 					if(pos_contained_flag==false){
 						for(i=0; i<prev_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(prev_limit_reg_vec.at(i));
+						prev_limit_reg_vec.clear();
 						var_cand_tmp->limit_reg_delete_flag = true;
 						prev_delete_flag = false;
 					}else for(i=0; i<pos_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(pos_limit_reg_vec.at(i));
@@ -3040,7 +3016,9 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 	ofstream outfile_indel, outfile_clipReg;
 	varCand *var_cand;
 	reg_t *reg;
-	string line, sv_type, header_line_bed;;
+	string line, sv_type, header_line_bed;
+	int32_t ref_dist, query_dist;
+	bool size_satisfied;
 
 	outfile_indel.open(outfilename_indel);
 	if(!outfile_indel.is_open()){
@@ -3062,7 +3040,13 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 		var_cand = var_cand_vec[i];
 		for(j=0; j<var_cand->varVec.size(); j++){
 			reg = var_cand->varVec[j];
-			if(reg->call_success_status){
+
+			// choose the size-selected variants
+			ref_dist = reg->endRefPos - reg->startRefPos + 1;
+			query_dist = reg->endQueryPos - reg->startQueryPos + 1;
+			size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
+
+			if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied){
 				file_id = 0;
 				switch(reg->var_type){
 					case VAR_UNC: sv_type = VAR_UNC_STR; break;
@@ -3087,24 +3071,11 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 				else line += "\t-";
 				if(reg->altseq.size()) line += "\t" + reg->altseq;
 				else line += "\t-";
-//				if(reg->var_type==VAR_UNC) line += "\t-\t-";
-//				else line += "\t" + reg->refseq + "\t" + reg->altseq;
 
 				if(reg->short_sv_flag) line += "\tShortSV";
 
 				//cout << "line=" << __LINE__ << ": " << line << endl;
 
-//				if(reg->var_type==VAR_UNC){
-//					cout << "line=" << __LINE__ << ": " << line << ", short_sv_flag=" << reg->short_sv_flag << endl;
-//				}
-
-//				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
-//				if(reg->var_type==VAR_INS or reg->var_type==VAR_DEL)
-//					line += "\t" + to_string(reg->sv_len);
-//				else if(reg->var_type==VAR_DUP)
-//					line += "\t" + to_string(reg->sv_len) + "\t" + to_string(reg->dup_num);
-//				else
-//					line += "\t.";
 				if(file_id==0) outfile_indel << line << endl;
 				else outfile_clipReg << line << endl;
 			}
@@ -3116,7 +3087,13 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 		if(var_cand->clip_reg_flag==false){ // indel
 			for(j=0; j<var_cand->varVec.size(); j++){
 				reg = var_cand->varVec[j];
-				if(reg->call_success_status){
+
+				// choose the size-selected variants
+				ref_dist = reg->endRefPos - reg->startRefPos + 1;
+				query_dist = reg->endQueryPos - reg->startQueryPos + 1;
+				size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
+
+				if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied){
 					file_id = 0;
 					switch(reg->var_type){
 						case VAR_UNC: sv_type = VAR_UNC_STR; break;
@@ -3149,21 +3126,21 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 
 					//cout << "line=" << __LINE__ << ": " << line << endl;
 
-//					line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
-//					if(reg->var_type==VAR_INS or reg->var_type==VAR_DEL)
-//						line += "\t" + to_string(reg->sv_len);
-//					else if(reg->var_type==VAR_DUP)
-//						line += "\t" + to_string(reg->sv_len) + "\t" + to_string(reg->dup_num);
-//					else
-//						line += "\t.";
-
 					if(file_id==0) outfile_indel << line << endl;
 					else outfile_clipReg << line << endl;
 				}
 			}
 		}else{ // cliping region
 			reg = var_cand->clip_reg;
-			if(var_cand->call_success){
+
+			// choose the size-selected variants
+			if(reg){
+				ref_dist = reg->endRefPos - reg->startRefPos + 1;
+				query_dist = reg->endQueryPos - reg->startQueryPos + 1;
+				size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
+			}
+
+			if(reg and reg->var_type!=VAR_UNC and var_cand->call_success and size_satisfied){
 				file_id = 1;
 				switch(reg->var_type){
 					case VAR_UNC: sv_type = VAR_UNC_STR; break;
@@ -3198,11 +3175,6 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 
 				//cout << "line=" << __LINE__ << ": " << line << endl;
 
-//				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "\t" + reg->refseq + "\t" + reg->altseq;
-//				if(reg->var_type==VAR_DUP)
-//					line += "\t" + to_string(reg->sv_len) + "\t" + to_string(reg->dup_num);
-//				else
-//					line += "\t.";
 				if(file_id==1) outfile_clipReg << line << endl;
 				else outfile_indel << line << endl;
 			}else{ // not confirmed SV

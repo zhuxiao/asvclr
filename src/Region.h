@@ -62,7 +62,7 @@ class Region {
 		vector<reg_t*> clipRegVector;  // only for duplication and inversion
 
 	public:
-		Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrlen, int64_t minRPos, int64_t maxRPos, Base *regBaseArr, size_t regFlag, Paras *paras);
+		Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrlen, int64_t minRPos, int64_t maxRPos, Base *regBaseArr, size_t regFlag, Paras *paras, faidx_t *fai);
 		virtual ~Region();
 		void setOutputDir(string& out_dir_assemble_prefix);
 

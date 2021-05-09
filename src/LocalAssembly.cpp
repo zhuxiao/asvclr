@@ -15,7 +15,7 @@ LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, stri
 	this->varVec = varVec;
 	this->fai = fai;
 	this->inBamFile = inBamFile;
-	this->assembly_extend_size = ASSEMBLY_SIDE_EXT_SIZE + assembly_extend_size;
+	this->assembly_extend_size = ASSEMBLE_SIDE_EXT_SIZE + assembly_extend_size;
 	startRefPos_assembly = endRefPos_assembly = 0;
 	mean_read_len = 0;
 	//this->canu_version = canu_version;
@@ -528,8 +528,8 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 	}
 
 	// increase the genome size
-	genomeSize_Canu = ASSEMBLY_GENOME_SIZE_INITIAL;
-	step_size = ASSEMBLY_STEP_SIZE;
+	genomeSize_Canu = ASSEMBLE_GENOME_SIZE_INITIAL;
+	step_size = ASSEMBLE_STEP_SIZE;
 	flag = false;
 	for(i=1; i<=3; i++){
 		// try canu1.7
@@ -601,8 +601,8 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 	}
 
 	// decrease the genome size
-	step_size = ASSEMBLY_STEP_SIZE;
-	genomeSize_Canu = ASSEMBLY_GENOME_SIZE_INITIAL - step_size;
+	step_size = ASSEMBLE_STEP_SIZE;
+	genomeSize_Canu = ASSEMBLE_GENOME_SIZE_INITIAL - step_size;
 	flag = false;
 	for(i=1; i<=3 and genomeSize_Canu>=step_size; i++){
 		// try canu1.7
