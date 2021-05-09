@@ -277,7 +277,7 @@ Variant detection results are reported in two kinds of file format: VCF format a
 
 ### (1) VCF file format
 
-Variants can be reported in VCF file format, and specifically, translocations are recorded by their breakend information which can be typically denoted as `BND` type, and a translocation variant may have 8 breakends at most, i.e. 8 `BND` items. In ASVCLR, the VCF file format can be described as below:
+Variants can be reported in VCF file format, and specifically, translocations are recorded by their breakend information which typically can be denoted as `BND` type, and a translocation variant may have 8 breakends at most, i.e. 8 `BND` items. In ASVCLR, the VCF file format can be described as below:
 
 ```sh
 ##fileformat=VCFv4.2
