@@ -131,8 +131,6 @@ void clipReg::computeMateAlnClipReg(){
 
 	//printClipVecs("After extract");  // print clips
 
-	//splitClipPosSameAlnSeg(); // split clips of same align segments in one vector
-
 	splitClipPosVec(); // split vector
 
 	//printClipVecs("After split");  // print clips
@@ -2121,17 +2119,17 @@ void clipReg::removeBNDUnmatedClipRegs(){
 				clip_end = RIGHT_END;
 				mate_mate_reg_id_vec = getMateMateRegID(reg_id, clip_end, mate_clip_reg.bnd_mate_reg_strs);
 				if(mate_mate_reg_id_vec.size()>0 and (mate_mate_reg_id_vec.at(0)!=reg_id or mate_mate_reg_id_vec.at(1)!=clip_end)){ // incorrectly mated
-					cout << "\tMate incorrectly: reg_id=" << reg_id << ", clip_end=" << clip_end << ", mate_mate_reg_id=" << mate_mate_reg_id_vec.at(0) << ", mate_mate_clip_end=" << mate_mate_reg_id_vec.at(1) << endl;
+					//cout << "\tMate incorrectly: reg_id=" << reg_id << ", clip_end=" << clip_end << ", mate_mate_reg_id=" << mate_mate_reg_id_vec.at(0) << ", mate_mate_clip_end=" << mate_mate_reg_id_vec.at(1) << endl;
 				}
 
 				// left end
 				clip_end = LEFT_END;
 				mate_mate_reg_id_vec = getMateMateRegID(reg_id, clip_end, mate_clip_reg.bnd_mate_reg_strs);
 				if(mate_mate_reg_id_vec.size()>0 and (mate_mate_reg_id_vec.at(0)!=reg_id or mate_mate_reg_id_vec.at(1)!=clip_end)){ // incorrectly mated
-					cout << "\tMate incorrectly: reg_id=" << reg_id << ", clip_end=" << clip_end << ", mate_mate_reg_id=" << mate_mate_reg_id_vec.at(0) << ", mate_mate_clip_end=" << mate_mate_reg_id_vec.at(1) << endl;
+					//cout << "\tMate incorrectly: reg_id=" << reg_id << ", clip_end=" << clip_end << ", mate_mate_reg_id=" << mate_mate_reg_id_vec.at(0) << ", mate_mate_clip_end=" << mate_mate_reg_id_vec.at(1) << endl;
 				}
 			}else{ // no bnd information, then delete the region and its vector
-				cout << "\t===== There are no mate region: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+				//cout << "\t===== There are no mate region: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
 				switch(reg_id){
 					case 0:

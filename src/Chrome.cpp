@@ -383,12 +383,12 @@ void Chrome::chrComputeMateClipReg(){
 
 	// compute the mate flag for duplications and inversions
 	for(i=0; i<clipRegVector.size(); i++){
-		//if(i>=120) // 107, 97
+		//if(i>=3) // 107, 97
 		{
 			if(clip_processed_flag_vec.at(i)==false){
 				reg = clipRegVector.at(i);
 
-				cout << "[" << time.getTime() << "], [" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+				//cout << "[" << time.getTime() << "], [" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
 				clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, paras->inBamFile, fai, paras);
 				clip_reg.computeMateClipReg();
@@ -1982,7 +1982,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
 		var_cand = var_cand_vec.at(i);
-		//if(var_cand->alnfilename.compare("output_20210322/3_call/chr1/blat_chr1_5573001-5579132.sim4")==0)
+		//if(var_cand->alnfilename.compare("output_inv_20210510/3_call/chr2/blat_chr2_1294401-1301900.sim4")==0)
 		//if(i>=148)
 		{
 			//cout << ">>>>>>>>> " << i << "/" << var_cand_vec.size() << ", " << var_cand->alnfilename << ", " << var_cand->ctgfilename << endl;

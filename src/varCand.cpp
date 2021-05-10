@@ -647,7 +647,7 @@ void varCand::updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query
 
 // call indel types
 void varCand::determineIndelType(){
-	int32_t  i, j, k, query_dist, ref_dist, decrease_size, var_type;
+	int32_t  i, j, k, start_seg_idx, end_seg_idx, query_dist, ref_dist, decrease_size, var_type;
 	int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
 	blat_aln_t *blat_aln;
 	aln_seg_t *seg1, *seg2;
@@ -661,9 +661,37 @@ void varCand::determineIndelType(){
 		blat_aln = blat_aln_vec[i];
 		if(blat_aln->valid_aln==true and blat_aln->aln_segs.size()>1){
 			for(j=0; j<(int32_t)blat_aln->aln_segs.size()-1; j++){
+				// get the start and end segment idx
+				start_seg_idx = end_seg_idx = -1;
+				for(k=j; k<(int32_t)blat_aln->aln_segs.size()-1; k++){
+					seg1 = blat_aln->aln_segs[k];
+					query_dist = seg1->query_end - seg1->query_start + 1;
+					ref_dist = seg1->ref_end - seg1->ref_start + 1;
+					if(query_dist<0) query_dist = -query_dist;
+					if(ref_dist<0) ref_dist = -ref_dist;
+					if(query_dist>=MIN_INNER_BLAT_SEG_SIZE and ref_dist>=MIN_INNER_BLAT_SEG_SIZE){
+						start_seg_idx = k;
+						break;
+					}
+				}
+				if(start_seg_idx!=-1){
+					for(k=start_seg_idx+1; k<(int32_t)blat_aln->aln_segs.size(); k++){
+						seg2 = blat_aln->aln_segs[k];
+						query_dist = seg2->query_end - seg2->query_start + 1;
+						ref_dist = seg2->ref_end - seg2->ref_start + 1;
+						if(query_dist<0) query_dist = -query_dist;
+						if(ref_dist<0) ref_dist = -ref_dist;
+						if(query_dist>=MIN_INNER_BLAT_SEG_SIZE and ref_dist>=MIN_INNER_BLAT_SEG_SIZE){
+							end_seg_idx = k;
+							break;
+						}
+					}
+				}
+				if(start_seg_idx==-1 or end_seg_idx==-1) continue;
+
 				var_type = VAR_UNC;
-				seg1 = blat_aln->aln_segs[j];
-				seg2 = blat_aln->aln_segs[j+1];
+				seg1 = blat_aln->aln_segs[start_seg_idx];
+				seg2 = blat_aln->aln_segs[end_seg_idx];
 				if(seg1->query_end>CTG_END_SKIP_SIZE and seg2->query_start>CTG_END_SKIP_SIZE){  // skip contig ends
 					query_dist = seg2->query_start - seg1->query_end;
 					ref_dist = seg2->ref_start - seg1->ref_end;

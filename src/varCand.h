@@ -54,6 +54,8 @@ using namespace std;
 #define MIN_VALID_POLYMER_SIZE				3
 #define MAX_SHORT_MIS_REG_SIZE				1
 
+#define MIN_INNER_BLAT_SEG_SIZE				50
+
 //#define MIN_REF_DIST_DUP_NUM_EST			1000
 
 //#define MAX_SV_SIZE							5000
