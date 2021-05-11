@@ -22,14 +22,13 @@ ASVCLR is an accurate Structural Variant Caller for Long Reads, such as PacBio s
 ## Prerequisites
 ASVCLR depends on the following libraries and tools:
 * HTSlib (http://www.htslib.org/download/)
-* Canu v1.7 (https://github.com/marbl/canu/releases/tag/v1.7.1)
-* Canu v1.8 (or above) (https://github.com/marbl/canu/releases/tag/v1.8)
+* Canu 2.1 or higher (https://github.com/marbl/canu/releases)
 * BLAT (http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/blat/)
-* g++ (v4.7 or later which supports c++11).
+* g++ (v4.7 or higher which supports c++11).
 
-The above library and tools should be installed before compiling ASVCLR. Canu v1.7, v1.8 and BLAT should be globally accessible in the computer system, these executable files `canu1.7`, `canu1.8` and `blat` or their soft links should be included in the `$PATH` directory.
+The above library and tools should be installed before compiling ASVCLR. Canu (2.1 or higher) and BLAT should be globally accessible in the computer system, these executable files `canu` and `blat` or their soft links should be included in the `$PATH` directory.
 
-Note that: Canu v1.7 is several times faster than Canu v1.8, however, it has less ability to construct the assembly results (i.e. contigs) in some genomic regions due to the overlap failure during the assembly process, therefore the two Canu versions are combined used during the local assembly: first try v1.7, and if that fails then v1.8 will be used instead.
+Note that: For different versions of Canu assembler, the v2.1 (and higher) is several times faster than v2.0 and previous versions. Besides, the running time of v1.7 is close to v2.1, however, it has less ability to construct the assembly results (i.e. contigs) in some genomic regions due to the overlap failure during the assembly process. Therefore, Canu 2.1 and higher versions is recommended in ASVCLR.
 
 
 ## Compiling ASVCLR

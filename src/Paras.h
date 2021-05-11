@@ -15,8 +15,10 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"0.10.0"
+#define PROG_VERSION				"0.10.1"
 #define VCF_VERSION					"4.2"
+
+#define CANU_RECOMMEND_VERSION		"2.1"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -84,7 +86,7 @@ class Paras
 {
 	public:
 		// user/system defined parameters
-		string command, refFile, inBamFile, outFilePrefix, sample, pg_cmd_str; //, canu_version;
+		string command, refFile, inBamFile, outFilePrefix, sample, pg_cmd_str, canu_version;
 		string outDir;
 		string out_dir_detect = "1_candidates";    // "1_candidates"
 		string out_dir_assemble = "2_assemble";  // "2_assemble"
@@ -138,7 +140,8 @@ class Paras
 
 	private:
 		void init();
-		//string getCanuVersion();
+		string getCanuVersion();
+		bool isRecommendCanuVersion(string &canu_version, const string &recommend_version);
 		int checkBamFile();
 		int parseParas(int argc, char **argv);
 		string getPgCmd(int argc, char **argv);

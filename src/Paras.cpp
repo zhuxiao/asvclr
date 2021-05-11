@@ -56,42 +56,53 @@ void Paras::init(){
 	num_parts_progress = NUM_PARTS_PROGRESS;
 	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
 
-	//canu_version = getCanuVersion();
+	canu_version = getCanuVersion();
 }
 
 // get the Canu program version
-//string Paras::getCanuVersion(){
-//	string canu_version_str, canu_version_cmd, canu_version_filename, line, canu_prog_name;
-//	ifstream infile;
-//	vector<string> str_vec;
-//
-//	canu_version_filename = "canu_version";
-//	canu_version_cmd = "canu -version > " + canu_version_filename;
-//	system(canu_version_cmd.c_str());
-//
-//	infile.open(canu_version_filename);
-//	if(!infile.is_open()){
-//		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << canu_version_filename << endl;
-//		exit(1);
-//	}
-//
-//	canu_version_str = "";
-//	getline(infile, line);
-//	if(line.size()){
-//		str_vec = split(line, " ");
-//		canu_prog_name = str_vec.at(0);
-//
-//		if(canu_prog_name.compare("Canu")==0) canu_version_str = str_vec.at(1);
-//		else{
-//			cout << "Canu may be not correctly installed, please check its installation before running this program." << endl;
-//			exit(1);
-//		}
-//	}
-//
-//	infile.close();
-//
-//	return canu_version_str;
-//}
+string Paras::getCanuVersion(){
+	string canu_version_str, canu_version_cmd, canu_version_filename, line, canu_prog_name;
+	ifstream infile;
+	vector<string> str_vec;
+
+	canu_version_filename = "canu_version";
+	canu_version_cmd = "canu -version > " + canu_version_filename;
+	system(canu_version_cmd.c_str());
+
+	infile.open(canu_version_filename);
+	if(!infile.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << canu_version_filename << endl;
+		exit(1);
+	}
+
+	canu_version_str = "";
+	getline(infile, line);
+	if(line.size()){
+		str_vec = split(line, " ");
+		canu_prog_name = str_vec.at(0);
+
+		if(canu_prog_name.compare("Canu")==0 or canu_prog_name.compare("canu")==0) canu_version_str = str_vec.at(1);
+		else{
+			cout << "Canu may be not correctly installed, please check its installation before running this program." << endl;
+			exit(1);
+		}
+	}
+
+	infile.close();
+
+	return canu_version_str;
+}
+
+// check whether the canu version is recommended
+bool Paras::isRecommendCanuVersion(string &canu_version, const string &recommend_version){
+	bool flag = true;
+	int32_t result;
+
+	result = canu_version.compare(recommend_version);
+	if(result<0) flag = false;
+
+	return flag;
+}
 
 // check Bam file, and generate the BAM index if it is unavailable
 int Paras::checkBamFile(){
@@ -786,7 +797,12 @@ void Paras::outputParas(){
 	cout << "Limited number of threads for each assemble work: " << num_threads_per_assem_work << endl;
 	if(maskMisAlnRegFlag) cout << "Mask noisy regions: yes" << endl;
 	if(delete_reads_flag==false) cout << "Retain local temporary reads: yes" << endl;
+	cout << "Canu version: " << canu_version << endl;
 	cout << endl;
+
+	bool recommend_ver_flag = isRecommendCanuVersion(canu_version, CANU_RECOMMEND_VERSION);
+	if(recommend_ver_flag==false)
+		cout << "Warning: detected the installed canu version is " << canu_version << ", however, it is highly recommended to use the latest version or the version " << CANU_RECOMMEND_VERSION << " and higher." << endl;
 
 	string desc = "Regions to process:";
 	printLimitRegs(limit_reg_vec, desc);

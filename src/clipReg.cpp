@@ -741,6 +741,8 @@ void clipReg::splitClipPosVec(){
 						// process the right end of clip_aln, typically should be in the second vector
 						min_seg_size = (clip_pos->same_orient_flag) ? minAlnSize_same_orient : minAlnSize_diff_orient;
 						if(clip_aln_mate_flag and clip_pos->clip_aln->rightClipSize>=min_seg_size){
+							min_dist_vec_id = -1;
+							valid_clip_pos_flag = true;
 							right_aln = clip_pos->clip_aln->right_aln;
 							vec_id = getClipPosVecId(clip_pos->clip_aln, RIGHT_END);
 							if(vec_id==-1){ // not exist, then add it to the second vector
@@ -759,8 +761,6 @@ void clipReg::splitClipPosVec(){
 								}
 
 								// deal with left_aln2==NULL or right_aln2==NULL
-								min_dist_vec_id = -1;
-								valid_clip_pos_flag = true;
 								if((clip_pos->clip_aln->aln_orient==left_aln->aln_orient and left_aln2==NULL) or (clip_pos->clip_aln->aln_orient!=left_aln->aln_orient and right_aln2==NULL)){
 									min_dist_vec_id = getMinDistVecId(clip_pos2);
 									if(min_dist_vec_id==-1) valid_clip_pos_flag = false;
@@ -1150,6 +1150,8 @@ void clipReg::splitClipPosVec(){
 						min_seg_size = (clip_pos->same_orient_flag) ? minAlnSize_same_orient : minAlnSize_diff_orient;
 						// process the left end of right_aln, typically it should be in the fourth vector
 						if(clip_aln_mate_flag and clip_pos->clip_aln->rightClipSize>=min_seg_size){
+							min_dist_vec_id = -1;
+							valid_clip_pos_flag = true;
 							right_aln = clip_pos->clip_aln->right_aln;
 							vec_id = getClipPosVecId(clip_pos->clip_aln, RIGHT_END);
 							if(vec_id==-1){ // not exist, then add it to the second vector
@@ -1168,8 +1170,6 @@ void clipReg::splitClipPosVec(){
 								}
 
 								// deal with left_aln2==NULL or right_aln2==NULL
-								min_dist_vec_id = -1;
-								valid_clip_pos_flag = true;
 								if((clip_pos->clip_aln->aln_orient==left_aln->aln_orient and left_aln2==NULL) or (clip_pos->clip_aln->aln_orient!=left_aln->aln_orient and right_aln2==NULL)){
 									min_dist_vec_id = getMinDistVecId(clip_pos2);
 									if(min_dist_vec_id==-1) valid_clip_pos_flag = false;
