@@ -46,12 +46,12 @@ And the binary file `asvclr` will be output into the folder `bin` in this packag
 
 Simply, ASVCLR can be run by typing the `all` command:
 ```sh
-$ asvclr all -t 14 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr all -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 ```
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
 Program: ASVCLR (Accurate Structural Variant Caller for Long Reads)
-Version: 0.10.1 (using htslib 1.9)
+Version: 0.10.2 (using htslib 1.9)
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -88,6 +88,11 @@ Options:
    --keep-assemble-reads
                  Keep temporary reads from being deleted during local assemble.
                  This may take some additional disk space
+   --technology STR
+                 Sequencing technology [pacbio]:
+                   pacbio     : the PacBio CLR sequencing technology;
+                   nanopore   : the Nanopore sequencing technology;
+                   pacbio-hifi: the PacBio CCS sequencing technology.
    --sample STR  Sample name ["sample"]
    -v,--version  show version information
    -h,--help     show this help message and exit
@@ -99,7 +104,7 @@ Besides, the overall help information can be shown as below:
 ```sh
 $ asvclr
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.10.1 (using htslib 1.9)
+Version: 0.10.2 (using htslib 1.9)
 
 Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -123,9 +128,9 @@ Commands:
 Alternatively, there are three steps to run ASVCLR: `detect`, `assemble` and `call`.
 
 ```sh
-$ asvclr detect -t 14 hg38.fa hg38_ngmlr_sorted.bam
-$ asvclr assemble -t 14 hg38.fa hg38_ngmlr_sorted.bam
-$ asvclr call -t 14 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr detect -o out_dir hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr assemble -o out_dir hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr call -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 The reference and an sorted BAM file will be the input of ASVCLR, and the variants stored in the BED file format and translocations in BEDPE file format will be generated as the output.
@@ -136,7 +141,7 @@ The reference and an sorted BAM file will be the input of ASVCLR, and the varian
 Structural variant regions will be detected according to variant signatures. These regions includes insertions, deletions, duplications, inversions and translocations.
 
 ```sh
-$ asvclr detect -t 14 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr detect -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 And the help information are shown below:
@@ -144,7 +149,7 @@ And the help information are shown below:
 ```sh
 $ asvclr detect
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.10.1 (using htslib 1.9)
+Version: 0.10.2 (using htslib 1.9)
 
 Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -178,7 +183,7 @@ Options:
 Perform local assembly for the detected variant regions using Canu, and extract the corresponding local reference.
 
 ```sh
-$ asvclr assemble -t 14 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr assemble -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 And the help information are shown below:
@@ -186,7 +191,7 @@ And the help information are shown below:
 ```sh
 $ asvclr assemble
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.10.1 (using htslib 1.9)
+Version: 0.10.2 (using htslib 1.9)
 
 Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>
 
@@ -214,6 +219,11 @@ Options:
    --keep-assemble-reads
                  Keep temporary reads from being deleted during local assemble.
                  This may take some additional disk space
+   --technology STR
+                 Sequencing technology [pacbio]:
+                   pacbio     : the PacBio CLR sequencing technology;
+                   nanopore   : the Nanopore sequencing technology;
+                   pacbio-hifi: the PacBio CCS sequencing technology.
    --sample STR  Sample name ["sample"]
    -v,--version  show version information
    -h,--help     show this help message and exit
@@ -228,7 +238,7 @@ Note that:
 Align the assembly result (contigs) to its local reference using BLAT to generate the sim4 formated alignments, and call each type variations using the BLAT alignments.
 
 ```sh
-$ asvclr call -t 14 hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr call -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 And the help information are shown below:
@@ -236,7 +246,7 @@ And the help information are shown below:
 ```sh
 $ asvclr call
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.10.1 (using htslib 1.9)
+Version: 0.10.2 (using htslib 1.9)
 
 Usage: asvclr call [options] <REF_FILE> <BAM_FILE>
 
