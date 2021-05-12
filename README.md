@@ -255,25 +255,15 @@ Description:
    BAM_FILE      Coordinate-sorted BAM file (required)
 
 Options: 
+   -m INT        minimal SV size to report [2]
+   -M INT        maximal SV size to report [50000]
+                 Variants with size smaller than threshold will be ignored
    -e INT        minimal clipping end size [200]. Clipping events
                  with size smaller than threshold will be ignored
-   -x FLOAT      expected sampling coverage for local assemble [30], 
-                 0 for no coverage sampling
    -o DIR        output directory [output]
    -p STR        prefix of output result files [null]
    -t INT        number of concurrent work [0]. 0 for the maximal number
                  of threads in machine
-   --threads-per-assem-work INT
-                 Limited number of threads for each assemble work [0]:
-                 0 for unlimited, and positive INT for the limited
-                 number of threads for each assemble work
-   --assem-chunk-size INT
-                 maximal reference chunk size to collect reads data to perform
-                 local assemble [10000]. Reads of variants with reference
-                 distance < INT will be collected to perform local assemble
-   --keep-assemble-reads
-                 Keep temporary reads from being deleted during local assemble.
-                 This may take some additional disk space
    --sample STR  Sample name ["sample"]
    -v,--version  show version information
    -h,--help     show this help message and exit
