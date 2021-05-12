@@ -4,6 +4,7 @@
 #include <cmath>
 #include "Paras.h"
 #include "util.h"
+#include <algorithm>
 
 // Constructor with parameters
 Paras::Paras(){
@@ -36,6 +37,7 @@ void Paras::init(){
 	delete_reads_flag = true;
 	maskMisAlnRegFlag = false;
 	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
+	technology = SEQUENCING_TECH_DEFAULT;
 
 	min_ins_size_filt = 0;
 	min_del_size_filt = 0;
@@ -336,6 +338,7 @@ int Paras::parseAssembleParas(int argc, char **argv){
 //		{ "sample", required_argument, NULL, 0 },
 		{ "threads-per-assem-work", required_argument, NULL, 0 },
 		{ "assem-chunk-size", required_argument, NULL, 0 },
+		{ "technology", required_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -518,6 +521,7 @@ int Paras::parseAllParas(int argc, char **argv){
 		{ "assem-chunk-size", required_argument, NULL, 0 },
 		{ "keep-assemble-reads", no_argument, NULL, 0 },
 		{ "mask-noisy-region", no_argument, NULL, 0 },
+		{ "technology", required_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -693,6 +697,11 @@ void Paras::showAssembleUsage(){
 	cout << "   --keep-assemble-reads" << endl;
 	cout << "                 Keep temporary reads from being deleted during local assemble." << endl;
 	cout << "                 This may take some additional disk space" << endl;
+	cout << "   --technology STR" << endl;
+	cout << "                 Sequencing technology [pacbio]:" << endl;
+	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
+	cout << "                   nanopore   : the Nanopore sequencing technology;" << endl;
+	cout << "                   pacbio-hifi: the PacBio CCS sequencing technology." << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl;
@@ -767,6 +776,11 @@ void Paras::showAllUsage(){
 	cout << "   --keep-assemble-reads" << endl;
 	cout << "                 Keep temporary reads from being deleted during local assemble." << endl;
 	cout << "                 This may take some additional disk space" << endl;
+	cout << "   --technology STR" << endl;
+	cout << "                 Sequencing technology [pacbio]:" << endl;
+	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
+	cout << "                   nanopore   : the Nanopore sequencing technology;" << endl;
+	cout << "                   pacbio-hifi: the PacBio CCS sequencing technology." << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl;
@@ -797,6 +811,7 @@ void Paras::outputParas(){
 	cout << "Limited number of threads for each assemble work: " << num_threads_per_assem_work << endl;
 	if(maskMisAlnRegFlag) cout << "Mask noisy regions: yes" << endl;
 	if(delete_reads_flag==false) cout << "Retain local temporary reads: yes" << endl;
+	cout << "Sequencing technology: " << technology << endl;
 	cout << "Canu version: " << canu_version << endl;
 	cout << endl;
 
@@ -897,13 +912,13 @@ int64_t Paras::estimateSinglePara(int64_t *arr, int32_t n, double threshold, int
 // parse long options
 int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct option *lopts){
 	int ret = 0;
+	string lower_str;
 
 	string opt_name_str = lopts[option_index].name;
 	if(opt_name_str.compare("sample")==0){ // "sample"
 		if(optarg) sample = optarg;
 		else{
 			cout << "Error: Please specify the correct sample name using --sample option." << endl << endl;
-			showDetectUsage();
 			ret = 1;
 		}
 	}else if(opt_name_str.compare("threads-per-assem-work")==0){ // "threads-per-assem-work"
@@ -914,6 +929,16 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 		maskMisAlnRegFlag = true;
 	}else if(opt_name_str.compare("assem-chunk-size")==0){ // assem-chunk-size
 		assemChunkSize = stoi(optarg);
+	}else if(opt_name_str.compare("technology")==0){ // technology
+		technology = optarg;
+		lower_str.resize(technology.size());
+		transform(technology.begin(), technology.end(), lower_str.begin(), ::tolower);
+		if(lower_str.compare(PACBIO_CLR_TECH_STR)==0 or lower_str.compare(PACBIO_CCS_TECH_STR)==0 or lower_str.compare(NANOPORE_TECH_STR)==0){
+			technology = lower_str;
+		}else{
+			cout << "Error: Please specify the correct sequencing technology using '--technology' option." << endl << endl;
+			ret = 1;
+		}
 	}
 
 	return ret;

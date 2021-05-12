@@ -87,7 +87,7 @@ typedef struct {
 	pthread_mutex_t *p_mtx_assemble_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
 	int32_t num_threads_per_assem_work, minClipEndSize;
 
-	string inBamFile;
+	string inBamFile, technology, canu_version;
 	faidx_t *fai;
 	ofstream *var_cand_file;
 	double expected_cov_assemble;

@@ -20,6 +20,11 @@ using namespace std;
 
 #define CANU_RECOMMEND_VERSION		"2.1"
 
+#define PACBIO_CLR_TECH_STR			"pacbio"
+#define PACBIO_CCS_TECH_STR			"pacbio-hifi"
+#define NANOPORE_TECH_STR			"nanopore"
+#define SEQUENCING_TECH_DEFAULT		PACBIO_CLR_TECH_STR
+
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
 #define SNV_EST_OP					2
@@ -86,7 +91,7 @@ class Paras
 {
 	public:
 		// user/system defined parameters
-		string command, refFile, inBamFile, outFilePrefix, sample, pg_cmd_str, canu_version;
+		string command, refFile, inBamFile, outFilePrefix, sample, pg_cmd_str, canu_version, technology;
 		string outDir;
 		string out_dir_detect = "1_candidates";    // "1_candidates"
 		string out_dir_assemble = "2_assemble";  // "2_assemble"
@@ -120,8 +125,8 @@ class Paras
 		int32_t min_ins_num_filt, min_del_num_filt, min_clip_num_filt;
 
 		// auxiliary data for estimation
-		int64_t insSizeEstArr[AUX_ARR_SIZE], delSizeEstArr[AUX_ARR_SIZE], clipSizeEstArr[AUX_ARR_SIZE];
-		int64_t insNumEstArr[AUX_ARR_SIZE], delNumEstArr[AUX_ARR_SIZE], clipNumEstArr[AUX_ARR_SIZE];
+		int64_t insSizeEstArr[AUX_ARR_SIZE+1], delSizeEstArr[AUX_ARR_SIZE+1], clipSizeEstArr[AUX_ARR_SIZE+1];
+		int64_t insNumEstArr[AUX_ARR_SIZE+1], delNumEstArr[AUX_ARR_SIZE+1], clipNumEstArr[AUX_ARR_SIZE+1];
 
 		// assembly regions for thread pool
 		vector<assembleWork_opt*> assem_work_vec;

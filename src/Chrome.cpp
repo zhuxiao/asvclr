@@ -1415,11 +1415,12 @@ void Chrome::chrLoadDataAssemble(){
 	// initialize block information
 	for(i=0; i<mateClipRegVector.size(); i++){
 		mate_clip_reg = mateClipRegVector.at(i);
+		tmp_bloc = NULL;
 		if(mate_clip_reg->leftClipReg and mate_clip_reg->leftClipReg->chrname.compare(chrname)==0) tmp_bloc = computeBlocByPos(mate_clip_reg->leftClipReg->startRefPos, blockVector);  // get the block
 		else if(mate_clip_reg->rightClipReg and mate_clip_reg->rightClipReg->chrname.compare(chrname)==0) tmp_bloc = computeBlocByPos(mate_clip_reg->rightClipReg->startRefPos, blockVector);  // get the block
 		else if(mate_clip_reg->leftClipReg2 and mate_clip_reg->leftClipReg2->chrname.compare(chrname)==0) tmp_bloc = computeBlocByPos(mate_clip_reg->leftClipReg2->startRefPos, blockVector);  // get the block
 		else if(mate_clip_reg->rightClipReg2 and mate_clip_reg->rightClipReg2->chrname.compare(chrname)==0) tmp_bloc = computeBlocByPos(mate_clip_reg->rightClipReg2->startRefPos, blockVector);  // get the block
-		tmp_bloc->mateClipRegVector.push_back(mate_clip_reg);
+		if(tmp_bloc) tmp_bloc->mateClipRegVector.push_back(mate_clip_reg);
 	}
 }
 

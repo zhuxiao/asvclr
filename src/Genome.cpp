@@ -551,7 +551,7 @@ void Genome::genomeLoadDataAssemble(){
 
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("chr14")==0)
+		//if(chr->chrname.compare("GL000225.1")==0)
 		{
 			chr->chrLoadDataAssemble();  // load the variant data
 			chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
@@ -613,6 +613,8 @@ int Genome::processAssembleWork(){
 		assem_work->var_cand_file = var_cand_file;
 		assem_work->expected_cov_assemble = paras->expected_cov_assemble;
 		assem_work->delete_reads_flag = paras->delete_reads_flag;
+		assem_work->technology = paras->technology;
+		assem_work->canu_version = paras->canu_version;
 
 		hts_tpool_dispatch(p, q, processSingleAssembleWork, assem_work);
 	}
@@ -2248,7 +2250,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				for(i=0; i<3; i++){
 					assembly_extend_size = ASSEMBLE_SIDE_LEN * i;
 					// local assembly
-					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->num_threads_per_assem_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
+					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_assem_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -2338,7 +2340,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				for(i=0; i<3; i++){
 					assembly_extend_size = ASSEMBLE_SIDE_LEN * i;
 					// local assembly
-					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->num_threads_per_assem_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
+					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_assem_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -2386,9 +2388,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 }
 
 // perform local assembly
-void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
+void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->delete_reads_flag, paras->minClipEndSize);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->delete_reads_flag, paras->minClipEndSize);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();

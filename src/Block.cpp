@@ -151,9 +151,6 @@ void Block::fillDataEst(size_t op_est){
 	int64_t i;
 	size_t j, len;
 	Base *base;
-	//vector<insEvent_t*>::iterator ins;
-	//vector<delEvent_t*>::iterator del;
-	//vector<clipEvent_t*>::iterator clip;
 
 	for(i=startPos; i<=endPos; i++){
 		base = baseArr + i - startPos;

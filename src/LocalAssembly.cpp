@@ -3,13 +3,15 @@
 
 pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 
-LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag, int32_t minClipEndSize){
+LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag, int32_t minClipEndSize){
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
 	this->readsfilename = preprocessPipeChar(readsfilename);
 	this->contigfilename = preprocessPipeChar(contigfilename);
 	this->refseqfilename = preprocessPipeChar(refseqfilename);
 	this->tmpdir = preprocessPipeChar(tmpdir);
+	this->technology = technology;
+	this->canu_version = canu_version;
 	this->num_threads_per_assem_work = num_threads_per_assem_work;
 	this->minClipEndSize = minClipEndSize;
 	this->varVec = varVec;
@@ -18,7 +20,6 @@ LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, stri
 	this->assembly_extend_size = ASSEMBLE_SIDE_EXT_SIZE + assembly_extend_size;
 	startRefPos_assembly = endRefPos_assembly = 0;
 	mean_read_len = 0;
-	//this->canu_version = canu_version;
 
 	ref_seq_size = reads_count_original = total_bases_original = reads_count = total_bases = 0;
 	local_cov_original = sampled_cov = 0;
@@ -496,14 +497,15 @@ bool LocalAssembly::localAssembleCanu(){
 
 // local assembly using Canu with increasing genome size parameter
 bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
-	string canu_cmd, assem_prefix, cmd2, cmd3, cmd4, tmp_ctg_filename, gnuplotTested_str, fast_option;
+	string canu_cmd, assem_prefix, cmd2, cmd3, cmd4, tmp_ctg_filename, gnuplotTested_str, technology_str; // fast_option;
 	int i, genomeSize_Canu, step_size;
 	bool flag;
 	string cmd_limited_threads_str, limited_threads_str;
 
-//	gnuplotTested_str = "";
-//	if(canu_version.compare("1.7.1")==0 or canu_version.compare("1.7")==0 or canu_version.compare("1.6")==0)
-//		gnuplotTested_str = " gnuplotTested=true";
+	// gnuplotTested_str
+	gnuplotTested_str = "";
+	if(canu_version.compare(MIN_CANU_VERSION_NO_GNPPLOT)<0)
+		gnuplotTested_str = " gnuplotTested=true ";
 
 //	fast_option = "";
 //	if(canu_version.compare("1.8")==0)
@@ -512,7 +514,6 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 	// check the file
 	flag = isFileExist(contigfilename);
 	if(flag) return true; // contig was generated successfully previously
-
 
 	// generate command string
 	assem_prefix = "assembly";
@@ -525,6 +526,30 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 	if(num_threads_per_assem_work>0){
 		limited_threads_str = to_string(num_threads_per_assem_work);
 		cmd_limited_threads_str = " maxThreads=" + limited_threads_str + " obtovlThreads=" + limited_threads_str + " corThreads=" + limited_threads_str + " utgovlThreads=" + limited_threads_str + " redThreads=" + limited_threads_str + " batThreads=" + limited_threads_str + " ";
+	}
+
+	// technology
+	technology_str = "";
+	if(technology.compare(PACBIO_CLR_TECH_STR)==0){
+		if(canu_version.compare(MIN_CANU_VERSION_NO_RAW)>=0)
+			technology_str = " -pacbio ";
+		else
+			technology_str = " -pacbio-raw ";
+	}else if(technology.compare(NANOPORE_TECH_STR)==0){
+		if(canu_version.compare(MIN_CANU_VERSION_NO_RAW)>=0)
+			technology_str = " -nanopore ";
+		else
+			technology_str = " -nanopore-raw ";
+	}else if(technology.compare(PACBIO_CCS_TECH_STR)==0){
+		if(canu_version.compare(MIN_CANU_VERSION_HIFI)>=0)
+			technology_str = " -pacbio-hifi ";
+		else{
+			cerr << __func__ << ", line=" << __LINE__ << ": installed canu version is " << canu_version << ", however, it is required to use the canu version " << MIN_CANU_VERSION_HIFI << " or higher to assemble Pacbio CCS sequencing data." << endl;
+			exit(1);
+		}
+	}else{
+		cerr << __func__ << ", line=" << __LINE__ << ": invalid sequencing technology: " << technology << endl;
+		exit(1);
 	}
 
 	// increase the genome size
@@ -549,7 +574,7 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 //			system(cmd4.c_str());  // remove temporary files
 
 			// try canu1.8, or 2.0
-			canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio " + readsfilename + " > /dev/null 2>&1";
+			canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + gnuplotTested_str + technology_str + readsfilename + " > /dev/null 2>&1";
 			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
@@ -570,17 +595,18 @@ bool LocalAssembly::localAssembleCanu_IncreaseGenomeSize(){
 
 // local assembly using Canu with decreasing genome size parameter
 bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
-	string canu_cmd, assem_prefix, cmd2, cmd3, cmd4, tmp_ctg_filename, gnuplotTested_str, fast_option;
+	string canu_cmd, assem_prefix, cmd2, cmd3, cmd4, tmp_ctg_filename, gnuplotTested_str, technology_str; //, fast_option;
 	int i, genomeSize_Canu, step_size;
 	bool flag;
 	string cmd_limited_threads_str, limited_threads_str;
 
-//	gnuplotTested_str = "";
-//	if(canu_version.compare("1.7.1")==0 or canu_version.compare("1.7")==0 or canu_version.compare("1.6")==0)
-//		gnuplotTested_str = " gnuplotTested=true";
+	// gnuplotTested_str
+	gnuplotTested_str = "";
+	if(canu_version.compare(MIN_CANU_VERSION_NO_GNPPLOT)<0)
+		gnuplotTested_str = " gnuplotTested=true ";
 
 //	fast_option = "";
-//	if(canu_version.compare("1.8")==0)
+//	if(canu_version.compare("1.8")==0 or canu_version.compare("1.9")==0)
 //		fast_option = " -fast";
 
 	// check the file
@@ -598,6 +624,30 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 	if(num_threads_per_assem_work>0){
 		limited_threads_str = to_string(num_threads_per_assem_work);
 		cmd_limited_threads_str = " maxThreads=" + limited_threads_str + " obtovlThreads=" + limited_threads_str + " corThreads=" + limited_threads_str + " utgovlThreads=" + limited_threads_str + " redThreads=" + limited_threads_str + " batThreads=" + limited_threads_str + " ";
+	}
+
+	// technology
+	technology_str = "";
+	if(technology.compare(PACBIO_CLR_TECH_STR)==0){
+		if(canu_version.compare(MIN_CANU_VERSION_NO_RAW)>=0)
+			technology_str = " -pacbio ";
+		else
+			technology_str = " -pacbio-raw ";
+	}else if(technology.compare(NANOPORE_TECH_STR)==0){
+		if(canu_version.compare(MIN_CANU_VERSION_NO_RAW)>=0)
+			technology_str = " -nanopore ";
+		else
+			technology_str = " -nanopore-raw ";
+	}else if(technology.compare(PACBIO_CCS_TECH_STR)==0){
+		if(canu_version.compare(MIN_CANU_VERSION_HIFI)>=0)
+			technology_str = " -pacbio-hifi ";
+		else{
+			cerr << __func__ << ", line=" << __LINE__ << ": installed canu version is " << canu_version << ", however, it is required to use the canu version " << MIN_CANU_VERSION_HIFI << " or higher to assemble Pacbio CCS sequencing data." << endl;
+			exit(1);
+		}
+	}else{
+		cerr << __func__ << ", line=" << __LINE__ << ": invalid sequencing technology: " << technology << endl;
+		exit(1);
 	}
 
 	// decrease the genome size
@@ -622,7 +672,7 @@ bool LocalAssembly::localAssembleCanu_DecreaseGenomeSize(){
 //			system(cmd4.c_str());  // remove temporary files
 
 			// try canu1.8, or 2.0
-			canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + " -pacbio " + readsfilename + " > /dev/null 2>&1";
+			canu_cmd = "canu -p " + assem_prefix + " -d " + tmpdir + cmd_limited_threads_str + " genomeSize=" + to_string(genomeSize_Canu) + gnuplotTested_str + technology_str + readsfilename + " > /dev/null 2>&1";
 			//cout << canu_cmd << endl;
 			system(canu_cmd.c_str());  // local assembly, invoke Canu command
 
