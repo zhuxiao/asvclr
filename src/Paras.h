@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"0.10.2"
+#define PROG_VERSION				"0.10.3"
 #define VCF_VERSION					"4.2"
 
 #define CANU_RECOMMEND_VERSION		"2.1"
@@ -72,7 +72,7 @@ using namespace std;
 
 #define EXPECTED_COV_ASSEMBLE		30.0f
 
-#define NUM_PARTS_PROGRESS			50
+#define NUM_PARTS_PROGRESS			100
 #define NUM_THREADS_PER_ASSEM_WORK	0  // 0: unspecify the limited number of threads for each Canu work
 
 #define OUT_DIR						"output"

@@ -2900,11 +2900,17 @@ void varCand::distinguishShortDupInvFromIndels(){
 
 				if(ref_dist>=MIN_SHORT_DUP_SIZE and sv_len_tmp>=ref_dist){
 					reg->var_type = VAR_DUP;
-					reg->startRefPos = leftVarRefPos - 1;
+					if(leftVarRefPos>1 and leftVarLocalRefPos>1 and leftVarQueryPos>1){
+						reg->startRefPos = leftVarRefPos - 1;
+						reg->startLocalRefPos = leftVarLocalRefPos - 1;
+						reg->startQueryPos = leftVarQueryPos - 1;
+					}else{
+						reg->startRefPos = leftVarRefPos;
+						reg->startLocalRefPos = leftVarLocalRefPos;
+						reg->startQueryPos = leftVarQueryPos;
+					}
 					reg->endRefPos = rightVarRefPos;
-					reg->startLocalRefPos = leftVarLocalRefPos - 1;
 					reg->endLocalRefPos = rightVarLocalRefPos;
-					reg->startQueryPos = leftVarQueryPos - 1;
 					reg->endQueryPos = rightVarQueryPos;
 					reg->call_success_status = true;
 					reg->short_sv_flag = true;
@@ -2950,7 +2956,7 @@ void varCand::distinguishShortDupInvFromIndels(){
 						//cout << "sim_ratio_inv=" << sim_ratio_inv << endl;
 
 						if(sim_ratio_inv>=SIMILARITY_THRES_INV){
-							if(reg->startLocalRefPos>1 and reg->startQueryPos>1){
+							if(reg->startRefPos>1 and reg->startLocalRefPos>1 and reg->startQueryPos>1){
 								reg->startRefPos --;
 								reg->startLocalRefPos --;
 								reg->startQueryPos --;

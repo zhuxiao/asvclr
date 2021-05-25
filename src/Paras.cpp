@@ -338,6 +338,7 @@ int Paras::parseAssembleParas(int argc, char **argv){
 //		{ "sample", required_argument, NULL, 0 },
 		{ "threads-per-assem-work", required_argument, NULL, 0 },
 		{ "assem-chunk-size", required_argument, NULL, 0 },
+		{ "keep-assemble-reads", no_argument, NULL, 0 },
 		{ "technology", required_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
