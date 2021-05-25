@@ -51,7 +51,7 @@ $ asvclr all -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
 Program: ASVCLR (Accurate Structural Variant Caller for Long Reads)
-Version: 0.10.2 (using htslib 1.9)
+Version: 0.10.3 (using htslib 1.9)
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -104,7 +104,7 @@ Besides, the overall help information can be shown as below:
 ```sh
 $ asvclr
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.10.2 (using htslib 1.9)
+Version: 0.10.3 (using htslib 1.9)
 
 Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -149,7 +149,7 @@ And the help information are shown below:
 ```sh
 $ asvclr detect
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.10.2 (using htslib 1.9)
+Version: 0.10.3 (using htslib 1.9)
 
 Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -191,7 +191,7 @@ And the help information are shown below:
 ```sh
 $ asvclr assemble
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.10.2 (using htslib 1.9)
+Version: 0.10.3 (using htslib 1.9)
 
 Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>
 
@@ -246,7 +246,7 @@ And the help information are shown below:
 ```sh
 $ asvclr call
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 0.10.2 (using htslib 1.9)
+Version: 0.10.3 (using htslib 1.9)
 
 Usage: asvclr call [options] <REF_FILE> <BAM_FILE>
 
