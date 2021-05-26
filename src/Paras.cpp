@@ -38,6 +38,7 @@ void Paras::init(){
 	maskMisAlnRegFlag = false;
 	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
 	technology = SEQUENCING_TECH_DEFAULT;
+	include_decoy = false;
 
 	min_ins_size_filt = 0;
 	min_del_size_filt = 0;
@@ -59,6 +60,8 @@ void Paras::init(){
 	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
 
 	canu_version = getCanuVersion();
+
+	call_work_num = 0;
 }
 
 // get the Canu program version
@@ -237,6 +240,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 //		{ "log", required_argument, NULL, 'l' },
 		{ "sample", required_argument, NULL, 0 },
 		{ "mask-noisy-region", no_argument, NULL, 0 },
+		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -340,6 +344,7 @@ int Paras::parseAssembleParas(int argc, char **argv){
 		{ "assem-chunk-size", required_argument, NULL, 0 },
 		{ "keep-assemble-reads", no_argument, NULL, 0 },
 		{ "technology", required_argument, NULL, 0 },
+		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -429,6 +434,7 @@ int Paras::parseCallParas(int argc, char **argv){
 //		{ "out", required_argument, NULL, 'o' },
 //		{ "log", required_argument, NULL, 'l' },
 //		{ "sample", required_argument, NULL, 0 },
+		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -523,6 +529,7 @@ int Paras::parseAllParas(int argc, char **argv){
 		{ "keep-assemble-reads", no_argument, NULL, 0 },
 		{ "mask-noisy-region", no_argument, NULL, 0 },
 		{ "technology", required_argument, NULL, 0 },
+		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -660,6 +667,8 @@ void Paras::showDetectUsage(){
 	cout << "   -p STR        prefix of output result files [null]" << endl;
 	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
+	cout << "   --include-decoy" << endl;
+	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 
 	cout << "   -v,--version  show version information" << endl;
@@ -703,6 +712,8 @@ void Paras::showAssembleUsage(){
 	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
 	cout << "                   nanopore   : the Nanopore sequencing technology;" << endl;
 	cout << "                   pacbio-hifi: the PacBio CCS sequencing technology." << endl;
+	cout << "   --include-decoy" << endl;
+	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl;
@@ -730,7 +741,8 @@ void Paras::showCallUsage(){
 	cout << "   -p STR        prefix of output result files [null]" << endl;
 	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
-
+	cout << "   --include-decoy" << endl;
+	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 
 	cout << "   -v,--version  show version information" << endl;
@@ -782,6 +794,8 @@ void Paras::showAllUsage(){
 	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
 	cout << "                   nanopore   : the Nanopore sequencing technology;" << endl;
 	cout << "                   pacbio-hifi: the PacBio CCS sequencing technology." << endl;
+	cout << "   --include-decoy" << endl;
+	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl;
@@ -812,6 +826,7 @@ void Paras::outputParas(){
 	cout << "Limited number of threads for each assemble work: " << num_threads_per_assem_work << endl;
 	if(maskMisAlnRegFlag) cout << "Mask noisy regions: yes" << endl;
 	if(delete_reads_flag==false) cout << "Retain local temporary reads: yes" << endl;
+	if(include_decoy) cout << "Include decoy items: yes" << endl;
 	cout << "Sequencing technology: " << technology << endl;
 	cout << "Canu version: " << canu_version << endl;
 	cout << endl;
@@ -940,6 +955,8 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 			cout << "Error: Please specify the correct sequencing technology using '--technology' option." << endl << endl;
 			ret = 1;
 		}
+	}else if(opt_name_str.compare("include-decoy")==0){ // include-decoy
+		include_decoy = true;
 	}
 
 	return ret;

@@ -7,6 +7,8 @@
 #include <htslib/sam.h>
 #include <htslib/faidx.h>
 
+class varCand;
+
 using namespace std;
 
 // from clipAlnDataLoader.h
@@ -82,7 +84,7 @@ typedef struct {
 typedef struct {
 	assembleWork_opt *assem_work_opt;
 
-	int32_t work_id, num_work, num_work_per_ten_percent;  // 'work_id' starts from 1
+	int32_t work_id, num_work, num_work_percent;  // 'work_id' starts from 1
 	int32_t *p_assemble_reg_workDone_num;   // pointer to the global variable which was declared in Paras.h
 	pthread_mutex_t *p_mtx_assemble_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
 	int32_t num_threads_per_assem_work, minClipEndSize;
@@ -140,5 +142,13 @@ typedef struct BND_Node{
 	int32_t support_num, mate_support_num, cov_num, mate_cov_num;
 	struct BND_Node *mate_node;
 }BND_t;
+
+
+typedef struct{
+	varCand *var_cand;
+	int32_t work_id, num_work, num_work_percent;
+	int32_t *p_call_workDone_num;   // pointer to the global variable which was declared in Paras.h
+	pthread_mutex_t *p_mtx_call_workDone_num;
+}callWork_opt;
 
 #endif /* SRC_STRUCTURES_H_ */

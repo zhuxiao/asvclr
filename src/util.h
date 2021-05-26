@@ -69,6 +69,7 @@ void *doit_canu(void *arg);
 int test_canu(int n, vector<string> &cmd_vec);
 void* processSingleAssembleWork(void *arg);
 void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag, int32_t minClipEndSize, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+void* processSingleCallWork(void *arg);
 void outputAssemWorkOptToFile_debug(vector<assembleWork_opt*> &assem_work_opt_vec);
 string getOldOutDirname(string &filename, string &sub_work_dir);
 string getUpdatedItemFilename(string &filename, string &out_dir, string &old_out_dir);
@@ -100,7 +101,7 @@ bool isSegSelfOverlap(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, int32_
 vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize);
 vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec, faidx_t *fai);
 bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr, int64_t max_sv_size_usr);
-
+bool isDecoyChr(string &chrname);
 
 class Time{
 	private:

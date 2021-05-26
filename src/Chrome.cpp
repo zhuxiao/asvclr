@@ -41,6 +41,7 @@ void Chrome::init(){
 	blockNum = 0;
 	process_block_num = 0;
 	print_flag = true;
+	decoy_flag = isDecoyChr(chrname);
 }
 
 // set the output directory
@@ -1937,6 +1938,20 @@ void Chrome::outputAssemDataToFile(string &filename){
 		outfile << line << endl;
 	}
 	outfile.close();
+}
+
+// collect call works
+void Chrome::chrCollectCallWork(){
+	int32_t total_chr;
+	// set blat var_cand files
+	setBlatVarcandFiles();
+
+	total_chr = var_cand_vec.size() + var_cand_clipReg_vec.size();
+	paras->call_work_num += total_chr;
+
+	for(size_t i=0; i<var_cand_vec.size(); i++) paras->call_work_vec.push_back(var_cand_vec.at(i));
+	for(size_t i=0; i<var_cand_clipReg_vec.size(); i++) paras->call_work_vec.push_back(var_cand_clipReg_vec.at(i));
+	//cout << "\tChr " << chrname << ": indel regions: " << var_cand_vec.size() << ", clipping regions: " << var_cand_clipReg_vec.size() << ", total regions: " << total_chr << endl;
 }
 
 

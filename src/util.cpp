@@ -1292,7 +1292,7 @@ void* processSingleAssembleWork(void *arg){
 	assembleWork_opt *assem_work_opt = assem_work->assem_work_opt;
 	vector<reg_t*> varVec;
 	vector<simpleReg_t*> sub_limit_reg_vec;
-	size_t i, num_done, num_work, num_work_per_ten_percent;
+	size_t i, num_done, num_work, num_work_percent;
 	double percentage;
 	Time time;
 
@@ -1316,12 +1316,12 @@ void* processSingleAssembleWork(void *arg){
 	num_done = *assem_work->p_assemble_reg_workDone_num;
 
 	num_work = assem_work->num_work;
-	num_work_per_ten_percent = assem_work->num_work_per_ten_percent;
+	num_work_percent = assem_work->num_work_percent;
 	if(num_done==1 and num_done!=num_work){
 		num_done = 0;
 		percentage = (double)num_done / num_work * 100;
 		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
-	}else if(num_done%num_work_per_ten_percent==0 or num_done==num_work){
+	}else if(num_done%num_work_percent==0 or num_done==num_work){
 		percentage = (double)num_done / num_work * 100;
 		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
 	}
@@ -1354,6 +1354,39 @@ void performLocalAssembly(string &readsfilename, string &contigfilename, string 
 
 	// empty the varVec
 	varVec.clear();
+}
+
+// process single assemble work
+void* processSingleCallWork(void *arg){
+	callWork_opt *call_work_opt = (callWork_opt *)arg;
+	varCand *var_cand = call_work_opt->var_cand;
+	size_t num_done, num_work, num_work_percent;
+	double percentage;
+	Time time;
+
+	var_cand->callVariants();
+
+	// output progress information
+	pthread_mutex_lock(call_work_opt->p_mtx_call_workDone_num);
+	(*call_work_opt->p_call_workDone_num) ++;
+	num_done = *call_work_opt->p_call_workDone_num;
+
+	num_work = call_work_opt->num_work;
+	num_work_percent = call_work_opt->num_work_percent;
+	if(num_done==1 and num_done!=num_work){
+		num_done = 0;
+		percentage = (double)num_done / num_work * 100;
+		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
+	}else if(num_done%num_work_percent==0 or num_done==num_work){
+		percentage = (double)num_done / num_work * 100;
+		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
+	}
+	//cout << "\t[" << call_work_opt->work_id << "]: " << var_cand->alnfilename << ", sv_type=" << var_cand->sv_type << endl;
+	pthread_mutex_unlock(call_work_opt->p_mtx_call_workDone_num);
+
+	delete (callWork_opt *)arg;
+
+	return NULL;
 }
 
 void outputAssemWorkOptToFile_debug(vector<assembleWork_opt*> &assem_work_opt_vec){
@@ -2531,6 +2564,21 @@ bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_u
 		size_satisfy = true;
 
 	return size_satisfy;
+}
+
+// determine whether the chrome is decoy chrome
+bool isDecoyChr(string &chrname){
+	bool flag = false;
+	size_t pos;
+
+	pos = chrname.find(DECOY_PREFIX);
+	if(pos==0) flag = true;
+	else{
+		pos = chrname.find(DECOY_PREFIX2);
+		if(pos==0) flag = true;
+	}
+
+	return flag;
 }
 
 

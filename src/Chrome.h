@@ -30,7 +30,7 @@ class Chrome{
 		string chrname;
 		int64_t chrlen;
 		//bool process_flag;
-		bool print_flag;
+		bool print_flag, decoy_flag;
 
 		// output directory
 		string out_dir_detect, out_dir_assemble, out_dir_call;
@@ -84,6 +84,7 @@ class Chrome{
 		int chrGenerateLocalAssembleWorkOpt();
 		void chrResetAssembleData();
 		void chrLoadDataCall();
+		void chrCollectCallWork();
 		int chrCall();
 		void mergeSameRegTRA();
 		void removeVarCandNodeIndel(varCand *var_cand);
@@ -91,6 +92,7 @@ class Chrome{
 		void chrFillVarseq();
 		void saveCallSV2File();
 		void chrLoadMateClipRegData();
+		void resetBlatVarcandFiles();
 
 
 	private:
@@ -134,7 +136,7 @@ class Chrome{
 		void loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 		void setBlatVarcandFiles();
 		string getBlatVarcandFileHeaderLine();
-		void resetBlatVarcandFiles();
+		//void resetBlatVarcandFiles();
 		void chrFillVarseqSingleVec(vector<varCand*> &var_cand_vec);
 		void removeRedundantVar();
 		void removeRedundantIndel(vector<varCand*> &var_cand_vec);

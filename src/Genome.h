@@ -68,6 +68,9 @@ class Genome{
 		int processAssembleWork();
 		ofstream* getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, bool clip_reg_flag);
 
+		void genomeCollectCallWork();
+		void genomeFinishCallWork();
+		int processCallWork();
 		void genomeLoadMateClipRegData();
 		void recallIndelsFromTRA();
 		bool isExistSuccessClipReg(varCand *var_cand, mateClipReg_t *clip_reg_exclude);

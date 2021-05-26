@@ -10,7 +10,7 @@
 #include <htslib/hts.h>
 #include <htslib/faidx.h>
 
-#include "Paras.h"
+//#include "Paras.h"
 
 using namespace std;
 

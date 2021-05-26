@@ -15,7 +15,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"0.10.3"
+#define PROG_VERSION				"1.0.0"
 #define VCF_VERSION					"4.2"
 
 #define CANU_RECOMMEND_VERSION		"2.1"
@@ -24,6 +24,9 @@ using namespace std;
 #define PACBIO_CCS_TECH_STR			"pacbio-hifi"
 #define NANOPORE_TECH_STR			"nanopore"
 #define SEQUENCING_TECH_DEFAULT		PACBIO_CLR_TECH_STR
+
+#define DECOY_PREFIX				"hs37d"
+#define DECOY_PREFIX2				"hs38d"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -99,7 +102,7 @@ class Paras
 		string out_dir_tra = out_dir_call + "/" + "tra";
 		string out_dir_result = "4_results";	// "4_results"
 		int32_t blockSize, slideSize, min_sv_size_usr, max_sv_size_usr, num_threads, large_indel_size_thres; // , assemSlideSize;
-		bool maskMisAlnRegFlag, load_from_file_flag;
+		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy;
 		size_t misAlnRegLenSum = 0;
 		int64_t minReadsNumSupportSV; //, minClipReadsNumSupportSV;
 
@@ -128,11 +131,16 @@ class Paras
 		int64_t insSizeEstArr[AUX_ARR_SIZE+1], delSizeEstArr[AUX_ARR_SIZE+1], clipSizeEstArr[AUX_ARR_SIZE+1];
 		int64_t insNumEstArr[AUX_ARR_SIZE+1], delNumEstArr[AUX_ARR_SIZE+1], clipNumEstArr[AUX_ARR_SIZE+1];
 
-		// assembly regions for thread pool
+		// assemble regions for thread pool
 		vector<assembleWork_opt*> assem_work_vec;
 		int32_t assemble_reg_preDone_num, assemble_reg_work_total, assemble_reg_workDone_num;
 		int16_t num_parts_progress, num_threads_per_assem_work;
 		pthread_mutex_t mtx_assemble_reg_workDone_num;
+
+		// call works for thread pool
+		vector<varCand*> call_work_vec;
+		int32_t call_work_num, call_workDone_num;
+		pthread_mutex_t mtx_call_workDone_num;
 
 	public:
 		Paras();

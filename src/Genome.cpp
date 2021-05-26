@@ -301,7 +301,8 @@ int Genome::genomeDetect(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->chrDetect();
+		if(chr->decoy_flag==false or paras->include_decoy)
+			chr->chrDetect();
 	}
 
 	// remove redundant translocations
@@ -552,6 +553,7 @@ void Genome::genomeLoadDataAssemble(){
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		//if(chr->chrname.compare("GL000225.1")==0)
+		if(chr->decoy_flag==false or paras->include_decoy)
 		{
 			chr->chrLoadDataAssemble();  // load the variant data
 			chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
@@ -570,7 +572,7 @@ int Genome::processAssembleWork(){
 	assembleWork_opt *assem_work_opt;
 	assembleWork *assem_work;
 	ofstream *var_cand_file;
-	size_t num_threads_work, num_work, num_work_per_ten_percent;
+	size_t num_threads_work, num_work, num_work_percent;
 
 	if(paras->assem_work_vec.empty()) return 0;  // no assemble work, then return directly
 
@@ -589,8 +591,8 @@ int Genome::processAssembleWork(){
 
 	paras->assemble_reg_workDone_num = 0;
 	num_work = paras->assem_work_vec.size();
-	num_work_per_ten_percent = num_work / paras->num_parts_progress;
-	if(num_work_per_ten_percent==0) num_work_per_ten_percent = 1;
+	num_work_percent = num_work / paras->num_parts_progress;
+	if(num_work_percent==0) num_work_percent = 1;
 	for(size_t i=0; i<num_work; i++){
 		assem_work_opt = paras->assem_work_vec.at(i);
 		var_cand_file = getVarcandFile(assem_work_opt->chrname, chromeVector, assem_work_opt->clip_reg_flag);
@@ -603,7 +605,7 @@ int Genome::processAssembleWork(){
 		assem_work->assem_work_opt = assem_work_opt;
 		assem_work->work_id = i;
 		assem_work->num_work = num_work;
-		assem_work->num_work_per_ten_percent = num_work_per_ten_percent;
+		assem_work->num_work_percent = num_work_percent;
 		assem_work->p_assemble_reg_workDone_num = &(paras->assemble_reg_workDone_num);
 		assem_work->p_mtx_assemble_reg_workDone_num = &(paras->mtx_assemble_reg_workDone_num);
 		assem_work->num_threads_per_assem_work = paras->num_threads_per_assem_work;
@@ -643,23 +645,22 @@ ofstream* Genome::getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, b
 
 // call variants for genome
 int Genome::genomeCall(){
-	Chrome *chr;
 	Time time;
-
-	cout << "Begin calling variants ..." << endl;
 
 	// load clipping region information
 	genomeLoadMateClipRegData();
 
-	// call variants
-	for(size_t i=0; i<chromeVector.size(); i++){
-		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("hs37d5")==0)
-		{
-			chr->chrLoadDataCall();
-			chr->chrCall();
-		}
-	}
+	// collect regions
+	cout << "Loading regions ..." << endl;
+	genomeCollectCallWork();
+
+	cout << "Number of regions to be processed: " << paras->call_work_num << endl;
+
+	// process call work
+	processCallWork();
+
+	// finish call work
+	genomeFinishCallWork();
 
 	// call TRA according to mate clip regions
 	genomeCallTra();
@@ -685,6 +686,68 @@ int Genome::genomeCall(){
 	// compute statistics for call command
 	cout << "[" << time.getTime() << "]: compute variant NUMBER statistics... " << endl;
 	computeVarNumStatCall();
+
+	return 0;
+}
+
+// collect call work
+void Genome::genomeCollectCallWork(){
+	Chrome *chr;
+	for(size_t i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		//if(chr->chrname.compare("hs37d5")==0)
+		{
+			if(chr->decoy_flag==false or paras->include_decoy){
+				chr->chrLoadDataCall();
+				//chr->chrCall();
+				chr->chrCollectCallWork();
+			}
+		}
+	}
+}
+
+void Genome::genomeFinishCallWork(){
+	Chrome *chr;
+	for(size_t i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		chr->resetBlatVarcandFiles();
+	}
+	vector<varCand*>().swap(paras->call_work_vec);
+}
+
+// call variants using thread pool
+int Genome::processCallWork(){
+	callWork_opt *call_work_opt;
+	varCand *var_cand;
+	size_t num_work, num_work_percent;
+
+	if(paras->call_work_vec.empty()) return 0;  // no assemble work, then return directly
+
+	hts_tpool *p = hts_tpool_init(paras->num_threads);
+	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
+
+	pthread_mutex_init(&paras->mtx_call_workDone_num, NULL);
+
+	paras->call_workDone_num = 0;
+	num_work = paras->call_work_vec.size();
+	num_work_percent = num_work / paras->num_parts_progress;
+	if(num_work_percent==0) num_work_percent = 1;
+	for(size_t i=0; i<num_work; i++){
+		var_cand = paras->call_work_vec.at(i);
+		call_work_opt = new callWork_opt();
+		call_work_opt->var_cand = var_cand;
+		call_work_opt->work_id = i;
+		call_work_opt->num_work = num_work;
+		call_work_opt->num_work_percent = num_work_percent;
+		call_work_opt->p_call_workDone_num = &(paras->call_workDone_num);
+		call_work_opt->p_mtx_call_workDone_num = &(paras->mtx_call_workDone_num);
+
+		hts_tpool_dispatch(p, q, processSingleCallWork, call_work_opt);
+	}
+
+    hts_tpool_process_flush(q);
+    hts_tpool_process_destroy(q);
+    hts_tpool_destroy(p);
 
 	return 0;
 }
@@ -985,36 +1048,38 @@ void Genome::generateBlatAlnFilenameTra(){
 
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		mate_clipReg_vec = chr->mateClipRegVector;
-		for(j=0; j<mate_clipReg_vec.size(); j++){
-			clip_reg = chr->mateClipRegVector.at(j);
-			clip_reg->call_success_flag = false;
-			if(clip_reg->valid_flag and clip_reg->sv_type==VAR_TRA){ // valid TRA
-				for(round_num=0; round_num<2; round_num++){
-					// construct var_cand
-					if(round_num==0){
-						var_cand = clip_reg->left_var_cand_tra;
-						var_cand_tmp = constructNewVarCand(clip_reg->left_var_cand_tra, clip_reg->right_var_cand_tra);
-					}else if(round_num==1){
-						var_cand = clip_reg->right_var_cand_tra;
-						var_cand_tmp = constructNewVarCand(clip_reg->right_var_cand_tra, clip_reg->left_var_cand_tra);
-					}
-
-					if(var_cand and var_cand_tmp){
-						// save to file
-						aln_file_tra << var_cand->alnfilename << "\t" << var_cand->ctgfilename << "\t" << var_cand->refseqfilename << endl;
-						aln_file_tra << var_cand_tmp->alnfilename << "\t" << var_cand_tmp->ctgfilename << "\t" << var_cand_tmp->refseqfilename << endl;
-
-						// release memory
-						for(k=0; k<var_cand_tmp->blat_aln_vec.size(); k++){ // free blat_aln_vec
-							item_blat = var_cand_tmp->blat_aln_vec.at(k);
-							for(t=0; t<item_blat->aln_segs.size(); t++) // free aln_segs
-								delete item_blat->aln_segs.at(t);
-							delete item_blat;
+		if(chr->decoy_flag==false and paras->include_decoy){
+			mate_clipReg_vec = chr->mateClipRegVector;
+			for(j=0; j<mate_clipReg_vec.size(); j++){
+				clip_reg = chr->mateClipRegVector.at(j);
+				clip_reg->call_success_flag = false;
+				if(clip_reg->valid_flag and clip_reg->sv_type==VAR_TRA){ // valid TRA
+					for(round_num=0; round_num<2; round_num++){
+						// construct var_cand
+						if(round_num==0){
+							var_cand = clip_reg->left_var_cand_tra;
+							var_cand_tmp = constructNewVarCand(clip_reg->left_var_cand_tra, clip_reg->right_var_cand_tra);
+						}else if(round_num==1){
+							var_cand = clip_reg->right_var_cand_tra;
+							var_cand_tmp = constructNewVarCand(clip_reg->right_var_cand_tra, clip_reg->left_var_cand_tra);
 						}
-						delete var_cand_tmp;
-					}else{
-						//cout << "hhhhhhhhhhhh" << endl;
+
+						if(var_cand and var_cand_tmp){
+							// save to file
+							aln_file_tra << var_cand->alnfilename << "\t" << var_cand->ctgfilename << "\t" << var_cand->refseqfilename << endl;
+							aln_file_tra << var_cand_tmp->alnfilename << "\t" << var_cand_tmp->ctgfilename << "\t" << var_cand_tmp->refseqfilename << endl;
+
+							// release memory
+							for(k=0; k<var_cand_tmp->blat_aln_vec.size(); k++){ // free blat_aln_vec
+								item_blat = var_cand_tmp->blat_aln_vec.at(k);
+								for(t=0; t<item_blat->aln_segs.size(); t++) // free aln_segs
+									delete item_blat->aln_segs.at(t);
+								delete item_blat;
+							}
+							delete var_cand_tmp;
+						}else{
+							//cout << "hhhhhhhhhhhh" << endl;
+						}
 					}
 				}
 			}
