@@ -2651,7 +2651,7 @@ bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], s
 
 				mate_bnd_pos = tra_pos_arr[mate_reg_id];
 				if(mate_bnd_pos==-1){
-					cout << chrname1 << ":" << bnd_pos << " <---> " << chrname2 << ":" << mate_bnd_pos << endl;
+					//cout << chrname1 << ":" << bnd_pos << " <---> " << chrname2 << ":" << mate_bnd_pos << endl;
 					return false;
 				}
 
@@ -2700,7 +2700,7 @@ bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], s
 				if(checked_arr[mate_reg_id][mate_sub_vec_id]==0)
 					checked_arr[mate_reg_id][mate_sub_vec_id] = 1;
 				else{
-					cout << __func__ << ", line=" << __LINE__ << ": the BND information " << mate_bnd_str << " should not be processed twice, error." << endl;
+					//cout << __func__ << ", line=" << __LINE__ << ": the BND information " << mate_bnd_str << " should not be processed twice, error." << endl;
 					return false;
 				}
 
@@ -2708,7 +2708,7 @@ bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], s
 				if(bnd_str_vec.at(mate_reg_id).compare("-")!=0){
 					bnd_str_vec2_tmp = split(bnd_str_vec.at(mate_reg_id), ",");
 				}else{
-					cout << __func__ << ", line=" << __LINE__ << ": invalid BND information:" << bnd_str_vec.at(reg_id) << endl;
+					//cout << __func__ << ", line=" << __LINE__ << ": invalid BND information:" << bnd_str_vec.at(reg_id) << endl;
 					return false;
 				}
 
@@ -2719,14 +2719,14 @@ bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], s
 					mate_orient_ch2 = mate_str_vec2.at(0).at(1);
 
 					if(mate_reg_id2!=reg_id){
-						cout << __func__ << ", line=" << __LINE__ << ": two regions do not match, reg_id=" << reg_id << ", mate_reg_id2=" << mate_reg_id2 << ", error!" << endl;
+						//cout << __func__ << ", line=" << __LINE__ << ": two regions do not match, reg_id=" << reg_id << ", mate_reg_id2=" << mate_reg_id2 << ", error!" << endl;
 						return false;
 					}else if(mate_orient_ch2!=mate_orient_ch){
-						cout << __func__ << ", line=" << __LINE__ << ": orientation of two regions do not match, mate_orient=" << mate_orient_ch << ", mate_orient2=" << mate_orient_ch2 << ", error!" << endl;
+						//cout << __func__ << ", line=" << __LINE__ << ": orientation of two regions do not match, mate_orient=" << mate_orient_ch << ", mate_orient2=" << mate_orient_ch2 << ", error!" << endl;
 						return false;
 					}
 				}else{
-					cout << __func__ << ", line=" << __LINE__ << ": invalid BND information, error." << endl;
+					//cout << __func__ << ", line=" << __LINE__ << ": invalid BND information, error." << endl;
 					return false;
 				}
 			}
