@@ -384,7 +384,7 @@ void Chrome::chrComputeMateClipReg(){
 
 	// compute the mate flag for duplications and inversions
 	for(i=0; i<clipRegVector.size(); i++){
-		//if(i>=3) // 107, 97
+		//if(i>=4 and chrname.compare("chr2")==0) // 82
 		{
 			if(clip_processed_flag_vec.at(i)==false){
 				reg = clipRegVector.at(i);
@@ -393,6 +393,12 @@ void Chrome::chrComputeMateClipReg(){
 
 				clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, paras->inBamFile, fai, paras);
 				clip_reg.computeMateClipReg();
+
+//				if(clip_reg.mate_clip_reg.valid_flag){
+//					cout << clip_reg.mate_clip_reg.bnd_mate_reg_strs[0];
+//					for(size_t j=1; j<4; j++) cout << ";" << clip_reg.mate_clip_reg.bnd_mate_reg_strs[j];
+//					cout << endl;
+//				}
 
 				processClipRegs(i, clip_processed_flag_vec, clip_reg.mate_clip_reg, reg);
 			}
@@ -1951,7 +1957,7 @@ void Chrome::chrCollectCallWork(){
 
 	for(size_t i=0; i<var_cand_vec.size(); i++) paras->call_work_vec.push_back(var_cand_vec.at(i));
 	for(size_t i=0; i<var_cand_clipReg_vec.size(); i++) paras->call_work_vec.push_back(var_cand_clipReg_vec.at(i));
-	//cout << "\tChr " << chrname << ": indel regions: " << var_cand_vec.size() << ", clipping regions: " << var_cand_clipReg_vec.size() << ", total regions: " << total_chr << endl;
+	cout << "\tChr " << chrname << ": indel regions: " << var_cand_vec.size() << ", clipping regions: " << var_cand_clipReg_vec.size() << ", total regions: " << total_chr << endl;
 }
 
 

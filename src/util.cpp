@@ -880,7 +880,7 @@ string preprocessPipeChar(string &cmd_str){
 	return ret_str;
 }
 
-bool isFileExist(string &filename){
+bool isFileExist(const string &filename){
 	bool flag = false;
 	struct stat fileStat;
 	if (stat(filename.c_str(), &fileStat) == 0)
@@ -1142,28 +1142,30 @@ void cleanPrevAssembledTmpDir(const string &assem_dir_str, const string &dir_pre
 	// get current work directory
 	path = getcwd(NULL, 0);
 
-	if((dp=opendir(assem_dir_str.c_str()))==NULL){
-		cerr << "cannot open directory: " << assem_dir_str << endl;
-		exit(1);
-	}
-	chdir(assem_dir_str.c_str());
-	while((entry = readdir(dp)) != NULL){
-		lstat(entry->d_name, &statbuf);
-		if(S_ISDIR(statbuf.st_mode)){
-			if(strcmp(".", entry->d_name) == 0 || strcmp("..", entry->d_name) == 0) continue;
+	if(isFileExist(assem_dir_str)){
+		if((dp=opendir(assem_dir_str.c_str()))==NULL){
+			cerr << "cannot open directory: " << assem_dir_str << endl;
+			exit(1);
+		}
+		chdir(assem_dir_str.c_str());
+		while((entry = readdir(dp)) != NULL){
+			lstat(entry->d_name, &statbuf);
+			if(S_ISDIR(statbuf.st_mode)){
+				if(strcmp(".", entry->d_name) == 0 || strcmp("..", entry->d_name) == 0) continue;
 
-			if(strlen(entry->d_name)>4){
-				dir_str = entry->d_name;
-				if(dir_str.substr(0, 4).compare(dir_prefix)==0){
-					cmd_str = "rm -rf ";
-					cmd_str += entry->d_name;
-					system(cmd_str.c_str());
+				if(strlen(entry->d_name)>4){
+					dir_str = entry->d_name;
+					if(dir_str.substr(0, 4).compare(dir_prefix)==0){
+						cmd_str = "rm -rf ";
+						cmd_str += entry->d_name;
+						system(cmd_str.c_str());
+					}
 				}
 			}
 		}
+		closedir(dp);
+		chdir(path);
 	}
-	closedir(dp);
-	chdir(path);
 	free(path);
 }
 
@@ -2549,6 +2551,189 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 	}
 
 	return bnd_vec;
+}
+
+// check BND String
+void checkBNDStrVec(mateClipReg_t &mate_clip_reg){
+	int64_t tra_pos_arr[4];
+	int32_t i, checked_arr[4][2];
+	string chrname1, chrname2;
+	vector<string> bnd_str_vec;
+	bool flag, sub_flag;
+
+	flag = true;
+	if(mate_clip_reg.valid_flag and mate_clip_reg.sv_type==VAR_TRA){ // TRA
+		for(i=0; i<4; i++) { checked_arr[i][0] = checked_arr[i][1] = 0; } // initialize
+
+		if(mate_clip_reg.leftClipReg) chrname1 = mate_clip_reg.leftClipReg->chrname;		// CHR1
+		else if(mate_clip_reg.leftClipReg2) chrname1 = mate_clip_reg.leftClipReg2->chrname;		// CHR1
+		else{
+			//cout << __func__ << ", line=" << __LINE__ << ": null left part" << endl;
+			flag = false;
+			goto bnd_invalid_op;
+		}
+		if(mate_clip_reg.rightClipReg) chrname2 = mate_clip_reg.rightClipReg->chrname;		// CHR2
+		else if(mate_clip_reg.rightClipReg2) chrname2 = mate_clip_reg.rightClipReg2->chrname;		// CHR2
+		else{
+			//cout << __func__ << ", line=" << __LINE__ << ": null right part" << endl;
+			flag = false;
+			goto bnd_invalid_op;
+		}
+
+		if(mate_clip_reg.leftMeanClipPos!=0) tra_pos_arr[0] = mate_clip_reg.leftMeanClipPos;
+		else tra_pos_arr[0] = -1;
+		if(mate_clip_reg.leftMeanClipPos2!=0) tra_pos_arr[1] = mate_clip_reg.leftMeanClipPos2;
+		else tra_pos_arr[1] = -1;
+		if(mate_clip_reg.rightMeanClipPos!=0) tra_pos_arr[2] = mate_clip_reg.rightMeanClipPos;
+		else tra_pos_arr[2] = -1;
+		if(mate_clip_reg.rightMeanClipPos2!=0) tra_pos_arr[3] = mate_clip_reg.rightMeanClipPos2;
+		else tra_pos_arr[3] = -1;
+
+		for(i=0; i<4; i++) bnd_str_vec.push_back(mate_clip_reg.bnd_mate_reg_strs[i]);
+
+		// four regions
+		for(i=0; i<4; i++){
+			if(mate_clip_reg.bnd_mate_reg_strs[i].compare("-")!=0){
+				// right end
+				sub_flag = isValidBNDStr(i, RIGHT_END, checked_arr, chrname1, chrname2, tra_pos_arr, bnd_str_vec);
+				if(sub_flag==false){
+					//cout << __func__ << ", line=" << __LINE__ << ": invalid BND item" << endl;
+					flag = false;
+					goto bnd_invalid_op;
+				}
+
+				// left end
+				sub_flag = isValidBNDStr(i, LEFT_END, checked_arr, chrname1, chrname2, tra_pos_arr, bnd_str_vec);
+				if(sub_flag==false){
+					//cout << __func__ << ", line=" << __LINE__ << ": invalid BND item" << endl;
+					flag = false;
+					goto bnd_invalid_op;
+				}
+			}
+		}
+	}
+
+	return;
+
+bnd_invalid_op:
+	if(flag==false)
+		mate_clip_reg.valid_flag = false;
+}
+
+// check BND items
+bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec){
+	vector<string> bnd_str_vec2, bnd_str_vec2_tmp, mate_str_vec, mate_str_vec2;
+	int64_t bnd_pos, mate_bnd_pos;
+	int32_t mate_reg_id, mate_reg_id2, mate_clip_end, sub_vec_id, mate_sub_vec_id;
+	string mate_reg_str, mate_reg_str2, mate_bnd_str, seq_str;
+	char mate_orient_ch, mate_orient_ch2;
+
+	if(reg_id<0 or reg_id>=4) return false;
+
+	if(tra_pos_arr[reg_id]!=-1 or bnd_str_vec.at(reg_id).compare("-")!=0) {
+		sub_vec_id = (clip_end + 1) % 2;
+		if(checked_arr[reg_id][sub_vec_id]==0){ // unprocessed, then process it
+
+			if(clip_end==RIGHT_END) bnd_pos = tra_pos_arr[reg_id] - 1;   // POS
+			else bnd_pos = tra_pos_arr[reg_id];
+
+			bnd_str_vec2 = split(bnd_str_vec.at(reg_id), ",");
+
+			mate_reg_str = bnd_str_vec2.at(sub_vec_id); // "2+|.|.|."
+			if(mate_reg_str.compare("-")!=0){
+				mate_str_vec = split(mate_reg_str, "|");
+				mate_reg_id = stoi(mate_str_vec.at(0).substr(0, 1));
+				mate_orient_ch = mate_str_vec.at(0).at(1);
+//				support_num_str = mate_str_vec.at(2);
+//				cov_num_str = mate_str_vec.at(3);
+//				support_num = stoi(support_num_str);
+//				cov_num = stoi(cov_num_str);
+
+				mate_bnd_pos = tra_pos_arr[mate_reg_id];
+				if(mate_bnd_pos==-1){
+					cout << chrname1 << ":" << bnd_pos << " <---> " << chrname2 << ":" << mate_bnd_pos << endl;
+					return false;
+				}
+
+				checked_arr[reg_id][sub_vec_id] = 1;
+				if(clip_end==RIGHT_END){ // right end
+					if(mate_orient_ch=='+'){ // same orient
+						mate_clip_end = LEFT_END;
+						//reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						//seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+
+						//seq2_str = seq2;
+						mate_bnd_str = seq_str + "[" + chrname2 + ":" + to_string(mate_bnd_pos) + "[";
+						//mate_bnd_str2 = "]" + chrname1 + ":" + to_string(bnd_pos) + "]" + seq2_str;
+					}else{ // different orient
+						mate_clip_end = RIGHT_END;
+						mate_bnd_pos --;
+						//reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						//seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+
+						//seq2_str = seq2;
+						mate_bnd_str = seq_str + "]" + chrname2 + ":" + to_string(mate_bnd_pos) + "]";
+						//mate_bnd_str2 =  "[" + chrname1 + ":" + to_string(bnd_pos) + "[" + seq2_str;
+					}
+				}else{ // left end
+					if(mate_orient_ch=='+'){ // same orient
+						mate_clip_end = RIGHT_END;
+						mate_bnd_pos --;
+						//reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						//seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+
+						//seq2_str = seq2;
+						mate_bnd_str = "]" + chrname2 + ":" + to_string(mate_bnd_pos) + "]" + seq_str;
+						//mate_bnd_str2 = seq2_str + "[" + chrname1 + ":" + to_string(bnd_pos) + "[";
+					}else{ // different orient
+						mate_clip_end = LEFT_END;
+						//reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						//seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+
+						//seq2_str = seq2;
+						mate_bnd_str =  "[" + chrname2 + ":" + to_string(mate_bnd_pos) + "[" + seq_str;
+						//mate_bnd_str2 = seq2_str + "[" + chrname1 + ":" + to_string(bnd_pos) + "[";
+					}
+				}
+				//free(seq2);
+				mate_sub_vec_id = (mate_clip_end + 1) % 2;
+				if(checked_arr[mate_reg_id][mate_sub_vec_id]==0)
+					checked_arr[mate_reg_id][mate_sub_vec_id] = 1;
+				else{
+					cout << __func__ << ", line=" << __LINE__ << ": the BND information " << mate_bnd_str << " should not be processed twice, error." << endl;
+					return false;
+				}
+
+				// mate coverage information
+				if(bnd_str_vec.at(mate_reg_id).compare("-")!=0){
+					bnd_str_vec2_tmp = split(bnd_str_vec.at(mate_reg_id), ",");
+				}else{
+					cout << __func__ << ", line=" << __LINE__ << ": invalid BND information:" << bnd_str_vec.at(reg_id) << endl;
+					return false;
+				}
+
+				mate_reg_str2 = bnd_str_vec2_tmp.at(mate_sub_vec_id); // "0+|..|..|.."
+				if(mate_reg_str2.compare("-")!=0){
+					mate_str_vec2 = split(mate_reg_str2, "|");
+					mate_reg_id2 = stoi(mate_str_vec2.at(0).substr(0, 1));
+					mate_orient_ch2 = mate_str_vec2.at(0).at(1);
+
+					if(mate_reg_id2!=reg_id){
+						cout << __func__ << ", line=" << __LINE__ << ": two regions do not match, reg_id=" << reg_id << ", mate_reg_id2=" << mate_reg_id2 << ", error!" << endl;
+						return false;
+					}else if(mate_orient_ch2!=mate_orient_ch){
+						cout << __func__ << ", line=" << __LINE__ << ": orientation of two regions do not match, mate_orient=" << mate_orient_ch << ", mate_orient2=" << mate_orient_ch2 << ", error!" << endl;
+						return false;
+					}
+				}else{
+					cout << __func__ << ", line=" << __LINE__ << ": invalid BND information, error." << endl;
+					return false;
+				}
+			}
+		}
+	}
+
+	return true;
 }
 
 // determine whether the variant is size satisfied

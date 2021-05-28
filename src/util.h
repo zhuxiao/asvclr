@@ -48,7 +48,7 @@ void printRegVec(vector<reg_t*> &regVec, string header);
 void printMateClipReg(mateClipReg_t *mate_clip_reg);
 vector<string> getLeftRightPartChrname(mateClipReg_t *mate_clip_reg);
 string preprocessPipeChar(string &cmd_str);
-bool isFileExist(string &filename);
+bool isFileExist(const string &filename);
 void removeRedundantItems(vector<reg_t*> &reg_vec);
 int32_t getLineCount(string &filename);
 bool isBaseMatch(char ctgBase, char refBase);
@@ -100,6 +100,8 @@ bool isQuerySelfOverlap(vector<clipAlnData_t*> &query_aln_segs, int32_t maxVarRe
 bool isSegSelfOverlap(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, int32_t maxVarRegSize);
 vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize);
 vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec, faidx_t *fai);
+void checkBNDStrVec(mateClipReg_t &mate_clip_reg);
+bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec);
 bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr, int64_t max_sv_size_usr);
 bool isDecoyChr(string &chrname);
 

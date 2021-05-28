@@ -695,7 +695,7 @@ void Genome::genomeCollectCallWork(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("hs37d5")==0)
+		//if(chr->chrname.compare("6")==0)
 		{
 			if(chr->decoy_flag==false or paras->include_decoy){
 				chr->chrLoadDataCall();
@@ -1107,10 +1107,12 @@ void Genome::genomeCallTraOp(){
 		chr = chromeVector.at(i);
 		mate_clipReg_vec = chr->mateClipRegVector;
 		for(j=0; j<mate_clipReg_vec.size(); j++){
-			//if(i>=1 and j>=2)
-			//	cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << ", " << chr->chrname << endl;
-
 			clip_reg = chr->mateClipRegVector.at(j);
+
+//			if(i>=5 and j>=30)
+//				cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << ", " << chr->chrname << endl;
+//			else continue;
+
 			clip_reg->call_success_flag = false;
 			if(clip_reg->valid_flag and clip_reg->sv_type==VAR_TRA){ // valid TRA
 				for(round_num=0; round_num<2; round_num++){
@@ -2901,8 +2903,8 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 
 					// four regions
 					for(i=0; i<4; i++){
-						// right end
 						if(bnd_str_vec.at(i).compare("-")!=0){
+							// right end
 							sub_bnd_vec = generateBNDItems(i, RIGHT_END, checked_arr, chrname1, chrname2, tra_pos_arr, bnd_str_vec, fai);
 							for(j=0; j<(int32_t)sub_bnd_vec.size(); j++) {
 								outfile << sub_bnd_vec.at(j)->vcf_line << endl;

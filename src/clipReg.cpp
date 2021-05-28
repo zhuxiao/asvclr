@@ -173,7 +173,7 @@ void clipReg::extractClipPosVec(){
 				continue;
 			}
 
-//			if(queryname.compare("S1_5689")==0 or queryname.compare("S1_10976")==0){
+//			if(queryname.compare("S2_8385")==0 or queryname.compare("S2_5705")==0){
 //				cout << queryname << endl;
 //			}
 
@@ -240,9 +240,13 @@ void clipReg::extractClipPosVec(){
 							if(self_overlap_flag==false){
 								if(clip_vec_idx==mate_clip_vec_idx){ // deal with same part
 									mate_clip_vec_idx_tmp = getMinDistVecId(mate_clip_pos_item);
-									if(mate_clip_vec_idx_tmp!=-1)
+									if(mate_clip_vec_idx_tmp!=-1){
 										mate_clip_vec_idx = mate_clip_vec_idx_tmp;
-									else
+										if(mate_clip_vec_idx==2 or mate_clip_vec_idx==3) clip_vec_idx = 0;
+									}else if(same_orient_flag==false){ // different orientation
+										clip_vec_idx = 0;
+										mate_clip_vec_idx = 1;
+									}else
 										valid_mate_query_end_flag = false;
 								}else if(clip_pos_item->chrname.compare(mate_clip_pos_item->chrname)!=0 or clip_pos_item->clipRefPos<=mate_clip_pos_item->clipRefPos){
 									clip_vec_idx = 0;
@@ -2063,6 +2067,9 @@ void clipReg::computeClipRegs(){
 		computeVarTypeClipReg(mate_clip_reg, inBamFile);
 
 	if(mate_clip_reg.sv_type==VAR_UNC) mate_clip_reg.valid_flag = false;
+
+	// check BND items
+	checkBNDStrVec(mate_clip_reg);
 }
 
 // compute the clip region based on single vector
