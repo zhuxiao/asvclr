@@ -46,6 +46,7 @@ class Chrome{
 		vector<varCand*> blat_aligned_chr_varCand_vec;	// previously blat aligned information
 		vector<varCand*> blat_aligned_chr_clipReg_varCand_vec;	// previously blat aligned information
 
+		//int32_t mate_clip_reg_fail_num;
 
 	//private:
 		int32_t blockNum, process_block_num;
@@ -79,6 +80,7 @@ class Chrome{
 		int chrDetect();
 		void removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec);
 		void chrMergeDetectResultToFile();
+		void chrMergeDetectResultToFile_debug();
 		void loadPrevAssembledInfo();
 		void chrLoadDataAssemble();
 		int chrGenerateLocalAssembleWorkOpt();
@@ -109,7 +111,7 @@ class Chrome{
 		int chrDetect_st();
 		int chrDetect_mt();
 		void removeRedundantIndelDetect();
-		void removeRedundantIndelItemDetect(reg_t *reg, size_t bloc_idx, size_t indel_vec_idx);
+		void removeRedundantIndelItemDetect(reg_t *reg, int32_t bloc_idx, int32_t indel_vec_idx);
 		void chrSetVarCandFiles();
 		void chrResetVarCandFiles();
 		void chrSetMisAlnRegFile();
@@ -119,7 +121,6 @@ class Chrome{
 		int chrGenerateLocalAssembleWorkOpt_st();
 		int chrGenerateLocalAssembleWorkOpt_mt();
 		void outputAssemDataToFile(string &filename);
-		void removeVarCandNode(varCand *var_cand, vector<varCand*> &var_cand_vec);
 		void loadPrevAssembledInfo2(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec, vector<assembleWork_opt*> &assem_work_vec);
 		string getAssembleFileHeaderLine();
 
@@ -150,8 +151,13 @@ class Chrome{
 
 		// DUP, INV, TRA
 		void chrComputeMateClipReg();
-		void removeRedundantItemsClipReg(vector<reg_t*> &clipReg_vec, vector<bool> &clip_processed_flag_vec);
-		void processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, mateClipReg_t &mate_clip_reg, reg_t *reg);
+		//void processMateClipRegDetectWork(vector<bool> &clip_processed_flag_vec);
+		void processMateClipRegDetectWork();
+		void sortMateClipRegsByWorkId();
+		void bubbleSortMateClipRegs();
+		void checkSortMateClipRegs();
+		//void removeRedundantItemsClipReg(vector<reg_t*> &clipReg_vec, vector<bool> &clip_processed_flag_vec);
+		void removeRedundantItemsClipReg(vector<reg_t*> &clipReg_vec);
 		mateClipReg_t *getMateRegEndSameClipReg(mateClipReg_t *clip_reg, vector<mateClipReg_t*> &mate_clipReg_vec);
 		void removeFPClipRegsDupInv();
 		vector<size_t> getOverlapClipReg(reg_t *given_reg);

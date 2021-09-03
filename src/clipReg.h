@@ -45,20 +45,6 @@ using namespace std;
 
 #define MIN_CLIP_REG_MATED_RATIO			(0.3f)
 
-typedef struct{
-	reg_t *leftClipReg, *leftClipReg2, *rightClipReg, *rightClipReg2;
-	int32_t leftClipPosNum, leftClipPosNum2, rightClipPosNum, rightClipPosNum2;
-	int64_t leftMeanClipPos, leftMeanClipPos2, rightMeanClipPos, rightMeanClipPos2;
-	int8_t leftClipRegNum, rightClipRegNum;
-
-	int32_t sv_type:8, dup_num:24;
-	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag;
-	varCand *var_cand, *left_var_cand_tra, *right_var_cand_tra;  // TRA
-	string chrname_leftTra1, chrname_leftTra2, chrname_rightTra1, chrname_rightTra2;
-	int32_t leftClipPosTra1, leftClipPosTra2, rightClipPosTra1, rightClipPosTra2;
-	string refseq_tra, altseq_tra, refseq_tra2, altseq_tra2;
-	string bnd_mate_reg_strs[4]; // mate strings for BND format: mate_reg_id1|clip_loc1|sup_num1|cov1,mate_reg_id2|clip_loc2|sup_num2|cov2;......
-}mateClipReg_t;
 
 class clipReg {
 	public:

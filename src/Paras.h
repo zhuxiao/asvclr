@@ -9,13 +9,14 @@
 #include <unistd.h>
 
 #include "structures.h"
+#include "meminfo.h"
 
 using namespace std;
 
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.0.1"
+#define PROG_VERSION				"1.0.6"
 #define VCF_VERSION					"4.2"
 
 #define CANU_RECOMMEND_VERSION		"2.1"
@@ -27,6 +28,11 @@ using namespace std;
 
 #define DECOY_PREFIX				"hs37d"
 #define DECOY_PREFIX2				"hs38d"
+
+#define CHR_X_STR1					"chrX"
+#define CHR_X_STR2					"X"
+#define CHR_Y_STR1					"chrY"
+#define CHR_Y_STR2					"Y"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -46,6 +52,8 @@ using namespace std;
 #define MIN_INDEL_EVENT_NUM			5
 #define MIN_SV_SIZE_USR				2
 #define MAX_SV_SIZE_USR				50000
+
+#define MIN_DUP_SIZE				30  // 2021-07-27
 
 //#define MIN_CLIP_READS_NUM_THRES	7
 #define MIN_SUPPORT_READS_NUM		7
@@ -73,6 +81,7 @@ using namespace std;
 
 #define LIMIT_REG_ALL_STR			"ALL"
 
+#define MIN_INPUT_COV_CANU			5  // 2021-08-01
 #define EXPECTED_COV_ASSEMBLE		30.0f
 
 #define NUM_PARTS_PROGRESS			100
@@ -88,6 +97,8 @@ using namespace std;
 #define MIN_HIGH_CONSENSUS_INS_RATIO		0.3f
 #define MIN_HIGH_CONSENSUS_DEL_RATIO		0.5f	// 0.4
 
+#define MAX_ASSEMBLE_MINUTES			15
+#define MAX_ALN_MINUTES					15
 
 // program parameters
 class Paras
@@ -118,7 +129,10 @@ class Paras
 
 		// reads sampling parameters
 		double expected_cov_assemble;
-		bool delete_reads_flag;
+		bool delete_reads_flag, keep_failed_reads_flag, reassemble_failed_work_flag;
+
+		double min_input_cov_canu;
+		//int32_t min_overlap_length_canu;
 
 		// clipping reads sampling parameters
 		double max_ultra_high_cov;
@@ -162,12 +176,14 @@ class Paras
 		int parseDetectParas(int argc, char **argv);
 		int parseAssembleParas(int argc, char **argv);
 		int parseCallParas(int argc, char **argv);
-		int parseAllParas(int argc, char **argv);
+		int parseAllParas(int argc, char **argv, const string &cmd_str);
+		int parseDetectAssembleParas(int argc, char **argv);
 		void showUsage();
 		void showDetectUsage();
 		void showAssembleUsage();
 		void showCallUsage();
-		void showAllUsage();
+		void showAllUsage(const string &cmd_str);
+		void showDetectAssembleUsage();
 		int64_t estimateSinglePara(int64_t *arr, int32_t n, double threshold, int32_t min_val);
 		int parse_long_opt(int32_t option_index, const char *optarg, const struct option *lopts);
 };

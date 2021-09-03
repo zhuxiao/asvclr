@@ -35,6 +35,7 @@ void Paras::init(){
 	pg_cmd_str = "";
 	num_threads = 0;
 	delete_reads_flag = true;
+	keep_failed_reads_flag = false;
 	maskMisAlnRegFlag = false;
 	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
 	technology = SEQUENCING_TECH_DEFAULT;
@@ -52,6 +53,7 @@ void Paras::init(){
 	reg_sum_size_est = 0;
 	max_reg_sum_size_est = MAX_REG_SUM_SIZE_EST;
 
+	min_input_cov_canu = MIN_INPUT_COV_CANU;
 	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
 	max_ultra_high_cov = MAX_ULTRA_HIGH_COV_THRES;
 
@@ -60,40 +62,33 @@ void Paras::init(){
 	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
 
 	canu_version = getCanuVersion();
+	if(canu_version.empty()){
+		cerr << "Cannot find the 'Canu' assembler, please make sure it is correctly installed and the executable file 'canu' or its soft link is included in the '$PATH' directory." << endl;
+		exit(1);
+	}
+
+	mem_total = getMemInfo("MemTotal", 2);
+	swap_total = getMemInfo("SwapTotal", 2);
+	if(mem_total<0 or swap_total<0){
+		cerr << "line=" << __LINE__ << ", mem_total=" << mem_total << ", swap_total=" << swap_total << ", cannot get the supplied memory information, error." << endl;
+		exit(1);
+	}
 
 	call_work_num = 0;
 }
 
 // get the Canu program version
 string Paras::getCanuVersion(){
-	string canu_version_str, canu_version_cmd, canu_version_filename, line, canu_prog_name;
-	ifstream infile;
-	vector<string> str_vec;
+	FILE *stream;
+	char tmp[256], info[256];
+	string canu_version_str = "";
 
-	canu_version_filename = "canu_version";
-	canu_version_cmd = "canu -version > " + canu_version_filename;
-	system(canu_version_cmd.c_str());
-
-	infile.open(canu_version_filename);
-	if(!infile.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << canu_version_filename << endl;
-		exit(1);
+	sprintf(tmp, "canu -version | awk '$1 ~/(Canu)|(canu)/' | awk '{print $2}'");
+	stream = popen(tmp, "r");
+	if(fread(info, 1, sizeof(info), stream)>0){
+		canu_version_str = info;
 	}
-
-	canu_version_str = "";
-	getline(infile, line);
-	if(line.size()){
-		str_vec = split(line, " ");
-		canu_prog_name = str_vec.at(0);
-
-		if(canu_prog_name.compare("Canu")==0 or canu_prog_name.compare("canu")==0) canu_version_str = str_vec.at(1);
-		else{
-			cout << "Canu may be not correctly installed, please check its installation before running this program." << endl;
-			exit(1);
-		}
-	}
-
-	infile.close();
+	pclose(stream);
 
 	return canu_version_str;
 }
@@ -187,9 +182,13 @@ int Paras::parseParas(int argc, char **argv){
 		command = "call";
 		return parseCallParas(argc-1, argv+1);
 	}else if(strcmp(argv[1], "all")==0){
-		if(argc==2){ showAllUsage(); exit(0); }
+		if(argc==2){ showAllUsage("all"); exit(0); }
 		command = "all";
-		return parseAllParas(argc-1, argv+1);
+		return parseAllParas(argc-1, argv+1, "all");
+	}else if(strcmp(argv[1], "detect-assemble")==0){
+		if(argc==2){ showDetectAssembleUsage(); exit(0); }
+		command = "detect-assemble";
+		return parseDetectAssembleParas(argc-1, argv+1);
 	}else if (strcmp(argv[1], "--version") == 0 or strcmp(argv[1], "-v") == 0) {
 		showVersion();
 		exit(0);
@@ -339,10 +338,13 @@ int Paras::parseAssembleParas(int argc, char **argv){
 //		{ "dir", required_argument, NULL, 'd' },
 //		{ "out", required_argument, NULL, 'o' },
 //		{ "log", required_argument, NULL, 'l' },
-//		{ "sample", required_argument, NULL, 0 },
+		{ "sample", required_argument, NULL, 0 },
 		{ "threads-per-assem-work", required_argument, NULL, 0 },
 		{ "assem-chunk-size", required_argument, NULL, 0 },
 		{ "keep-assemble-reads", no_argument, NULL, 0 },
+		{ "keep-failed-reads", no_argument, NULL, 0 },
+		{ "reassemble-failed-work", no_argument, NULL, 0 },
+		{ "min-input-cov-assemble", required_argument, NULL, 0 },
 		{ "technology", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
@@ -433,7 +435,7 @@ int Paras::parseCallParas(int argc, char **argv){
 //		{ "dir", required_argument, NULL, 'd' },
 //		{ "out", required_argument, NULL, 'o' },
 //		{ "log", required_argument, NULL, 'l' },
-//		{ "sample", required_argument, NULL, 0 },
+		{ "sample", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
@@ -501,7 +503,7 @@ int Paras::parseCallParas(int argc, char **argv){
 }
 
 // parse the parameters for 'all' command
-int Paras::parseAllParas(int argc, char **argv){
+int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	int opt, threadNum_tmp = 0, option_index;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
@@ -523,11 +525,13 @@ int Paras::parseAllParas(int argc, char **argv){
 //		{ "dir", required_argument, NULL, 'd' },
 //		{ "out", required_argument, NULL, 'o' },
 //		{ "log", required_argument, NULL, 'l' },
-//		{ "sample", required_argument, NULL, 0 },
+		{ "sample", required_argument, NULL, 0 },
 		{ "threads-per-assem-work", required_argument, NULL, 0 },
 		{ "assem-chunk-size", required_argument, NULL, 0 },
 		{ "keep-assemble-reads", no_argument, NULL, 0 },
-		{ "mask-noisy-region", no_argument, NULL, 0 },
+		{ "keep-failed-reads", no_argument, NULL, 0 },
+		{ "reassemble-failed-work", no_argument, NULL, 0 },
+		{ "mask-noisy-region", required_argument, NULL, 0 },
 		{ "technology", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
@@ -549,7 +553,7 @@ int Paras::parseAllParas(int argc, char **argv){
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
 			case 'v': showVersion(); exit(0);
-			case 'h': showAllUsage(); exit(0);
+			case 'h': showAllUsage(cmd_str); exit(0);
 			case '?':
 				if(optopt) cout << "unknown option '-" << (char)optopt << "'" << endl;
 				else{ // Bad long option
@@ -567,13 +571,13 @@ int Paras::parseAllParas(int argc, char **argv){
 				exit(1);
 			case 0: // long options
 				if(parse_long_opt(option_index, optarg, lopts)!=0){
-					showAllUsage();
+					showAllUsage(cmd_str);
 					return 1;
 				}
 				break;
 			default:
 				cout << "Error: please specify the correct options for 'all' command" << endl;
-				showAllUsage();
+				showAllUsage(cmd_str);
 				return 1;
 		}
 	}
@@ -600,23 +604,29 @@ int Paras::parseAllParas(int argc, char **argv){
 			if(simple_reg) limit_reg_vec.push_back(simple_reg);
 			else{
 				cout << "Error: Please specify the correct genomic regions to be processed." << endl << endl;
-				showAllUsage();
+				showAllUsage(cmd_str);
 				return 1;
 			}
 		}
 		if(limit_reg_vec.size()) limit_reg_process_flag = true;
 	}else{
 		cout << "Error: Please specify the reference file and coordinate-sorted BAM file." << endl << endl;
-		showAllUsage();
+		showAllUsage(cmd_str);
 		return 1;
 	}
 
 	if(refFile.size()==0){
 		cout << "Error: Please specify the reference" << endl << endl;
-		showAllUsage();
+		showAllUsage(cmd_str);
 		return 1;
 	}
 
+	return 0;
+}
+
+// parse the parameters for 'detect-assemble' command
+int Paras::parseDetectAssembleParas(int argc, char **argv){
+	parseAllParas(argc, argv, "detect-assemble");
 	return 0;
 }
 
@@ -707,6 +717,10 @@ void Paras::showAssembleUsage(){
 	cout << "   --keep-assemble-reads" << endl;
 	cout << "                 Keep temporary reads from being deleted during local assemble." << endl;
 	cout << "                 This may take some additional disk space" << endl;
+	cout << "   --reassemble-failed-work" << endl;
+	cout << "                 Reperform previously failed local assemble work." << endl;
+	cout << "   --min-input-cov-assemble FLOAT" << endl;
+	cout << "                 Minimum input coverage for local assemble [" << MIN_INPUT_COV_CANU << "]" << endl;
 	cout << "   --technology STR" << endl;
 	cout << "                 Sequencing technology [pacbio]:" << endl;
 	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
@@ -750,10 +764,10 @@ void Paras::showCallUsage(){
 }
 
 // show the usage for all command
-void Paras::showAllUsage(){
+void Paras::showAllUsage(const string &cmd_str){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
+	cout << "Usage: asvclr " << cmd_str << " [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
 	cout << "   REF_FILE      Reference file (required)" << endl;
@@ -789,6 +803,10 @@ void Paras::showAllUsage(){
 	cout << "   --keep-assemble-reads" << endl;
 	cout << "                 Keep temporary reads from being deleted during local assemble." << endl;
 	cout << "                 This may take some additional disk space" << endl;
+	cout << "   --reassemble-failed-work" << endl;
+	cout << "                 Reperform previously failed local assemble work." << endl;
+	cout << "   --min-input-cov-assemble FLOAT" << endl;
+	cout << "                 Minimum input coverage for local assemble [" << MIN_INPUT_COV_CANU << "]" << endl;
 	cout << "   --technology STR" << endl;
 	cout << "                 Sequencing technology [pacbio]:" << endl;
 	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
@@ -799,6 +817,11 @@ void Paras::showAllUsage(){
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl;
+}
+
+// show the usage for detect-assemble command
+void Paras::showDetectAssembleUsage(){
+	showAllUsage("detect-assemble");
 }
 
 // output parameters
@@ -826,6 +849,9 @@ void Paras::outputParas(){
 	cout << "Limited number of threads for each assemble work: " << num_threads_per_assem_work << endl;
 	if(maskMisAlnRegFlag) cout << "Mask noisy regions: yes" << endl;
 	if(delete_reads_flag==false) cout << "Retain local temporary reads: yes" << endl;
+	if(keep_failed_reads_flag) cout << "Retain failed local temporary reads: yes" << endl;
+	if(reassemble_failed_work_flag) cout << "Reperform previously failed local assemble work: yes" << endl;
+	cout << "Minimum input coverage for local assemble: " << min_input_cov_canu << endl;
 	if(include_decoy) cout << "Include decoy items: yes" << endl;
 	cout << "Sequencing technology: " << technology << endl;
 	cout << "Canu version: " << canu_version << endl;
@@ -939,8 +965,14 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 		}
 	}else if(opt_name_str.compare("threads-per-assem-work")==0){ // "threads-per-assem-work"
 		num_threads_per_assem_work = true;
-	}else if(opt_name_str.compare("keep-assemble-reads")==0){ // "retain-assemble-reads"
+	}else if(opt_name_str.compare("keep-assemble-reads")==0){ // "keep-assemble-reads"
 		delete_reads_flag = false;
+	}else if(opt_name_str.compare("keep-failed-reads")==0){ // "keep-failed-reads"
+		keep_failed_reads_flag = true;
+	}else if(opt_name_str.compare("reassemble-failed-work")==0){ // "reassemble-failed-work"
+		reassemble_failed_work_flag = true;
+	}else if(opt_name_str.compare("min-input-cov-assemble")==0){ // "min-input-cov-assemble"
+		min_input_cov_canu = stoi(optarg);
 	}else if(opt_name_str.compare("mask-noisy-region")==0){ // "mask-noisy-region"
 		maskMisAlnRegFlag = true;
 	}else if(opt_name_str.compare("assem-chunk-size")==0){ // assem-chunk-size

@@ -8,6 +8,7 @@
 #include "LocalAssembly.h"
 #include "covLoader.h"
 #include "util.h"
+#include "Block.h"
 
 // string split function
 vector<string> split(const string& s, const string& delim)
@@ -1031,23 +1032,31 @@ void exchangeRegLoc(reg_t *reg){
 void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename){
 	string blat_cmd, out_opt;
 	int i, ret, sleep_sec;
+	time_t start_time, end_time; // start time and end time
+	double cost_min;
 
 	out_opt = "-out=sim4 " + alnfilename;
 	blat_cmd = "blat " + refseqfilename + " " + contigfilename + " " + out_opt + " > /dev/null 2>&1";
 
 	//cout << "blat_cmd: " + blat_cmd << endl;
+	time(&start_time);
+	end_time = 0;
 
 	for(i=0; i<3; i++){
-		ret = system(blat_cmd.c_str());
-		if(ret!=0){
-			if(i<2){
-				sleep_sec = (i + 1) * (i + 1) * 10;
-				sleep(sleep_sec);
-				cout << __func__ << ": retry aligning " << contigfilename << endl;
-			}else{
-				cerr << "Please run the correct blat command or check whether blat was correctly installed when aligning " << contigfilename <<"." << endl;
-				exit(1);
-			}
+		time(&end_time);
+		cost_min = difftime(end_time, start_time) / 60.0;
+		if(cost_min<=MAX_ALN_MINUTES){
+			ret = system(blat_cmd.c_str());
+			if(ret!=0){
+				if(i<2){
+					sleep_sec = (i + 1) * (i + 1) * 10;
+					sleep(sleep_sec);
+					cout << __func__ << ": retry aligning " << contigfilename << endl;
+				}else{
+					cerr << "Please run the correct blat command or check whether blat was correctly installed when aligning " << contigfilename <<"." << endl;
+					//exit(1);
+				}
+			}else break;
 		}else break;
 	}
 }
@@ -1128,6 +1137,67 @@ int32_t getQueryNameLoc(string &query_name, vector<string> &query_name_vec){
 		}
 	}
 	return loc;
+}
+
+// determine whether the blat align is completed
+bool isBlatAlnCompleted(string &alnfilename){
+	bool flag = true;
+	string line;
+	ifstream infile;
+	vector<string> line_vec, line_vec1, len_vec;
+
+	if(!isFileExist(alnfilename)) return false;
+
+	infile.open(alnfilename);
+	if(!infile.is_open()){
+		cerr << __func__ << "(), line=" << __LINE__ << ": cannot open file:" << alnfilename << endl;
+		exit(1);
+	}
+
+	// get data
+	while(getline(infile, line)){
+		if(line.size()){
+			if(line.substr(0, 3).compare("seq")==0){  // query and subject titles
+				line_vec = split(line, "=");
+				line_vec1 = split(line_vec[1].substr(1), ",");
+
+				len_vec = split(line_vec1[line_vec1.size()-1].substr(1), " ");
+				if(line_vec[0][3]=='1' or line_vec[0][3]=='2') {
+					if(len_vec.at(1).compare("bp")!=0){
+						flag = false;
+						break;
+					}
+				}else{
+					flag = false;
+					break;
+				}
+			}else if(line[0]=='('){ // complement
+				if(line.size()==12){
+					if(line.substr(1, 10).compare("complement")!=0){
+						flag = false;
+						break;
+					}
+				}else{
+					flag = false;
+					break;
+				}
+			}else{    // segments
+				line_vec = split(line, " ");
+				if(line_vec.size()==7){
+					if(line_vec.at(6).compare("->")!=0 and line_vec.at(6).compare("<-")!=0){
+						flag = false;
+						break;
+					}
+				}else{
+					flag = false;
+					break;
+				}
+			}
+		}
+	}
+	infile.close();
+
+	return flag;
 }
 
 // clean assemble temporary folders
@@ -1305,7 +1375,7 @@ void* processSingleAssembleWork(void *arg){
 	for(i=0; i<assem_work_opt->arr_size; i++) varVec.push_back(assem_work_opt->var_array[i]);
 	for(i=0; i<assem_work_opt->limit_reg_array_size; i++) sub_limit_reg_vec.push_back(assem_work_opt->limit_reg_array[i]);
 
-	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->technology, assem_work->canu_version, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->delete_reads_flag, assem_work->minClipEndSize, assem_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
+	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->technology, assem_work->canu_version, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->min_input_cov_canu, assem_work->delete_reads_flag, assem_work->keep_failed_reads_flag, assem_work->minClipEndSize, assem_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
 	// release memory
 	sub_limit_reg_vec.clear();
@@ -1335,9 +1405,9 @@ void* processSingleAssembleWork(void *arg){
 }
 
 
-void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag, int32_t minClipEndSize, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, int32_t minClipEndSize, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, 0, expected_cov_assemble, delete_reads_flag, minClipEndSize);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, 0, expected_cov_assemble, min_input_cov_canu, delete_reads_flag, keep_failed_reads_flag, minClipEndSize);
 
 	local_assembly.setLimitRegs(limit_reg_process_flag, limit_reg_vec);
 	if(local_assembly.assem_success_preDone_flag==false){
@@ -1359,12 +1429,49 @@ void performLocalAssembly(string &readsfilename, string &contigfilename, string 
 }
 
 // process single assemble work
+void* processSingleBlatAlnWork(void *arg){
+	callWork_opt *call_work_opt = (callWork_opt *)arg;
+	varCand *var_cand = call_work_opt->var_cand;
+	size_t num_done, num_work, num_work_percent;
+	double percentage;
+	Time time;
+
+	//cout << var_cand->alnfilename << endl;
+
+	var_cand->alnCtg2Refseq();
+
+	// output progress information
+	pthread_mutex_lock(call_work_opt->p_mtx_call_workDone_num);
+	(*call_work_opt->p_call_workDone_num) ++;
+	num_done = *call_work_opt->p_call_workDone_num;
+
+	num_work = call_work_opt->num_work;
+	num_work_percent = call_work_opt->num_work_percent;
+	if(num_done==1 and num_done!=num_work){
+		num_done = 0;
+		percentage = (double)num_done / num_work * 100;
+		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
+	}else if(num_done%num_work_percent==0 or num_done==num_work){
+		percentage = (double)num_done / num_work * 100;
+		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
+	}
+	//cout << "\t[" << call_work_opt->work_id << "]: " << var_cand->alnfilename << ", sv_type=" << var_cand->sv_type << endl;
+	pthread_mutex_unlock(call_work_opt->p_mtx_call_workDone_num);
+
+	delete (callWork_opt *)arg;
+
+	return NULL;
+}
+
+// process single assemble work
 void* processSingleCallWork(void *arg){
 	callWork_opt *call_work_opt = (callWork_opt *)arg;
 	varCand *var_cand = call_work_opt->var_cand;
 	size_t num_done, num_work, num_work_percent;
 	double percentage;
 	Time time;
+
+	//cout << var_cand->alnfilename << endl;
 
 	var_cand->callVariants();
 
@@ -1784,8 +1891,8 @@ vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln){
 	refseq_aln = local_aln->alignResultVec[2];
 
 	// compute refPos and queryPos at start_aln_idx
-	start_check_idx = local_aln->start_aln_idx_var - EXT_SIZE_CHK_VAR_LOC;
-	end_check_idx = local_aln->end_aln_idx_var + EXT_SIZE_CHK_VAR_LOC;
+	start_check_idx = local_aln->start_aln_idx_var - 2* EXT_SIZE_CHK_VAR_LOC;
+	end_check_idx = local_aln->end_aln_idx_var + 2 * EXT_SIZE_CHK_VAR_LOC;
 	if(start_check_idx<0) start_check_idx = 0;
 	if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
 	extend_flag = false;
@@ -1995,8 +2102,8 @@ void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchRe
 	else return;
 	chrlen_tmp = faidx_seq_len(fai, chrname_tmp.c_str()); // get the reference length
 
-	start_ref_pos = misReg_vec.at(0)->startRefPos - EXT_SIZE_CHK_VAR_LOC;
-	end_ref_pos = misReg_vec.at(misReg_vec.size()-1)->endRefPos + EXT_SIZE_CHK_VAR_LOC;
+	start_ref_pos = misReg_vec.at(0)->startRefPos - 2 * EXT_SIZE_CHK_VAR_LOC;
+	end_ref_pos = misReg_vec.at(misReg_vec.size()-1)->endRefPos + 2* EXT_SIZE_CHK_VAR_LOC;
 	if(start_ref_pos<1) start_ref_pos = 1;
 	if(end_ref_pos>chrlen_tmp) end_ref_pos = chrlen_tmp;
 
@@ -2123,57 +2230,61 @@ void adjustVarLocByMismatchRegs(reg_t *reg, vector<mismatchReg_t*> &misReg_vec, 
 	int32_t i, max_reg_idx, maxValue, secMax_reg_idx, secMaxValue, left_reg_idx, right_reg_idx;
 	mismatchReg_t *mis_reg, *mis_reg2;
 
-	// get maximum and second maximum mismatch region
-	max_reg_idx = secMax_reg_idx = -1;
-	maxValue = secMaxValue = 0;
-	for(i=0; i<(int32_t)misReg_vec.size(); i++){
-		mis_reg = misReg_vec.at(i);
-		if(mis_reg->reg_size>maxValue){
-			max_reg_idx = i;
-			maxValue = mis_reg->reg_size;
+	if(start_aln_idx_var!=-1 and end_aln_idx_var!=-1){
+		// get maximum and second maximum mismatch region
+		max_reg_idx = secMax_reg_idx = -1;
+		maxValue = secMaxValue = 0;
+		for(i=0; i<(int32_t)misReg_vec.size(); i++){
+			mis_reg = misReg_vec.at(i);
+			if(mis_reg->reg_size>maxValue){
+				max_reg_idx = i;
+				maxValue = mis_reg->reg_size;
+			}
+			if(mis_reg->reg_size>=secMaxValue){
+				secMax_reg_idx = i;
+				secMaxValue = mis_reg->reg_size;
+			}
 		}
-		if(mis_reg->reg_size>=secMaxValue){
-			secMax_reg_idx = i;
-			secMaxValue = mis_reg->reg_size;
+
+		// check its neighbors
+		if(max_reg_idx!=-1){
+			left_reg_idx = right_reg_idx = -1;
+
+			// left side extend
+			mis_reg = misReg_vec.at(max_reg_idx);
+			for(i=max_reg_idx-1; i>=0; i--){
+				mis_reg2 = misReg_vec.at(i);
+				//if((mis_reg->start_aln_idx-mis_reg2->end_aln_idx<=MIN_ADJACENT_REG_DIST) or (mis_reg->start_aln_idx>=end_aln_idx_var and mis_reg2->end_aln_idx<=start_aln_idx_var)){ // distance less than threshold
+				if((mis_reg->start_aln_idx-mis_reg2->end_aln_idx<=MIN_ADJACENT_REG_DIST) and (mis_reg->start_aln_idx>=end_aln_idx_var and mis_reg2->end_aln_idx<=start_aln_idx_var)){ // distance less than threshold
+					left_reg_idx = i;
+					mis_reg = mis_reg2;
+					mis_reg2 = NULL;
+				}else break;
+			}
+			if(left_reg_idx==-1) left_reg_idx = max_reg_idx;
+
+			// right side extend
+			mis_reg = misReg_vec.at(max_reg_idx);
+			for(i=max_reg_idx+1; i<(int32_t)misReg_vec.size(); i++){
+				mis_reg2 = misReg_vec.at(i);
+				//if((mis_reg2->start_aln_idx-mis_reg->end_aln_idx<=MIN_ADJACENT_REG_DIST) or (mis_reg->end_aln_idx<=start_aln_idx_var and mis_reg2->start_aln_idx>=end_aln_idx_var)){ // distance less than threshold
+				if((mis_reg2->start_aln_idx-mis_reg->end_aln_idx<=MIN_ADJACENT_REG_DIST) and (mis_reg->end_aln_idx<=start_aln_idx_var and mis_reg2->start_aln_idx>=end_aln_idx_var)){ // distance less than threshold
+					right_reg_idx = i;
+					mis_reg = mis_reg2;
+					mis_reg2 = NULL;
+				}else break;
+			}
+			if(right_reg_idx==-1) right_reg_idx = max_reg_idx;
+
+			mis_reg = misReg_vec.at(left_reg_idx);
+			mis_reg2 = misReg_vec.at(right_reg_idx);
+			reg->startRefPos = mis_reg->startRefPos;
+			reg->endRefPos = mis_reg2->endRefPos;
+			reg->startLocalRefPos = mis_reg->startLocalRefPos;
+			reg->endLocalRefPos = mis_reg2->endLocalRefPos;
+			reg->startQueryPos = mis_reg->startQueryPos;
+			reg->endQueryPos = mis_reg2->endQueryPos;
 		}
-	}
-
-	// check its neighbors
-	if(max_reg_idx!=-1){
-		left_reg_idx = right_reg_idx = -1;
-
-		// left side extend
-		mis_reg = misReg_vec.at(max_reg_idx);
-		for(i=max_reg_idx-1; i>=0; i--){
-			mis_reg2 = misReg_vec.at(i);
-			if((mis_reg->start_aln_idx-mis_reg2->end_aln_idx<=MIN_ADJACENT_REG_DIST) or (mis_reg->start_aln_idx>=end_aln_idx_var and mis_reg2->end_aln_idx<=start_aln_idx_var)){ // distance less than threshold
-				left_reg_idx = i;
-				mis_reg = mis_reg2;
-				mis_reg2 = NULL;
-			}else break;
-		}
-		if(left_reg_idx==-1) left_reg_idx = max_reg_idx;
-
-		// right side extend
-		mis_reg = misReg_vec.at(max_reg_idx);
-		for(i=max_reg_idx+1; i<(int32_t)misReg_vec.size(); i++){
-			mis_reg2 = misReg_vec.at(i);
-			if((mis_reg2->start_aln_idx-mis_reg->end_aln_idx<=MIN_ADJACENT_REG_DIST) or (mis_reg->end_aln_idx<=start_aln_idx_var and mis_reg2->start_aln_idx>=end_aln_idx_var)){ // distance less than threshold
-				right_reg_idx = i;
-				mis_reg = mis_reg2;
-				mis_reg2 = NULL;
-			}else break;
-		}
-		if(right_reg_idx==-1) right_reg_idx = max_reg_idx;
-
-		mis_reg = misReg_vec.at(left_reg_idx);
-		mis_reg2 = misReg_vec.at(right_reg_idx);
-		reg->startRefPos = mis_reg->startRefPos;
-		reg->endRefPos = mis_reg2->endRefPos;
-		reg->startLocalRefPos = mis_reg->startLocalRefPos;
-		reg->endLocalRefPos = mis_reg2->endLocalRefPos;
-		reg->startQueryPos = mis_reg->startQueryPos;
-		reg->endQueryPos = mis_reg2->endQueryPos;
 	}
 }
 
@@ -2766,6 +2877,212 @@ bool isDecoyChr(string &chrname){
 	return flag;
 }
 
+void removeVarCandNode(varCand *var_cand, vector<varCand*> &var_cand_vec){
+	varCand *var_cand_tmp;
+	for(size_t i=0; i<var_cand_vec.size(); i++){
+		var_cand_tmp = var_cand_vec.at(i);
+		if(var_cand_tmp==var_cand){
+			var_cand_tmp->destroyVarCand();
+			delete var_cand_tmp;
+			var_cand_vec.erase(var_cand_vec.begin()+i);
+			break;
+		}
+	}
+}
+
+// process single mate clipping region detection work
+void *processSingleMateClipRegDetectWork(void *arg){
+	mateClipRegDetectWork_opt *mate_clip_reg_work_opt = (mateClipRegDetectWork_opt *)arg;
+	int32_t work_id = mate_clip_reg_work_opt->work_id;
+	reg_t *reg = mate_clip_reg_work_opt->reg;
+	faidx_t *fai = mate_clip_reg_work_opt->fai;
+	Paras *paras = mate_clip_reg_work_opt->paras;
+	//vector<bool> *clip_processed_flag_vec = mate_clip_reg_work_opt->clip_processed_flag_vec;
+	vector<mateClipReg_t*> *mateClipRegVector = mate_clip_reg_work_opt->mateClipRegVector;
+	vector<reg_t*> *clipRegVector = mate_clip_reg_work_opt->clipRegVector;
+	vector<varCand*> *var_cand_clipReg_vec = mate_clip_reg_work_opt->var_cand_clipReg_vec;
+	vector<Block*> *blockVector = mate_clip_reg_work_opt->blockVector;
+	//int32_t *p_mate_clip_reg_fail_num = mate_clip_reg_work_opt->p_mate_clip_reg_fail_num;
+	pthread_mutex_t *p_mutex_mate_clip_reg = mate_clip_reg_work_opt->p_mutex_mate_clip_reg;
+	//Time time;
+
+	//cout << "\t[" << time.getTime() << "], [" << mate_clip_reg_work_opt->work_id << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+
+	clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, paras->inBamFile, fai, paras);
+	clip_reg.computeMateClipReg();
+
+	//cout << "\t[" << time.getTime() << "]: process clip regions " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+	//processClipRegs(work_id, *clip_processed_flag_vec, clip_reg.mate_clip_reg, reg, mateClipRegVector, clipRegVector, *var_cand_clipReg_vec, *blockVector, paras, p_mutex_mate_clip_reg, p_mate_clip_reg_fail_num);
+	processClipRegs(work_id, clip_reg.mate_clip_reg, reg, mateClipRegVector, clipRegVector, *var_cand_clipReg_vec, *blockVector, paras, p_mutex_mate_clip_reg);
+
+	delete (mateClipRegDetectWork_opt *)arg;
+
+	return NULL;
+}
+
+// process clip regions and mate clip regions
+//void processClipRegs(int32_t work_id, vector<bool> &clip_processed_flag_vec, mateClipReg_t &mate_clip_reg, reg_t *clip_reg, vector<mateClipReg_t*> *mateClipRegVector, vector<reg_t*> *clipRegVector, vector<varCand*> &var_cand_clipReg_vec, vector<Block*> &blockVector, Paras *paras, pthread_mutex_t *p_mutex_mate_clip_reg, int32_t *mate_clip_reg_fail_num){
+void processClipRegs(int32_t work_id, mateClipReg_t &mate_clip_reg, reg_t *clip_reg, vector<mateClipReg_t*> *mateClipRegVector, vector<reg_t*> *clipRegVector, vector<varCand*> &var_cand_clipReg_vec, vector<Block*> &blockVector, Paras *paras, pthread_mutex_t *p_mutex_mate_clip_reg){
+	size_t i;
+	reg_t *reg, *reg_tmp;
+	mateClipReg_t *clip_reg_new;
+	Block *bloc;
+	int32_t idx_tmp;
+
+	if(mate_clip_reg.valid_flag){
+		// add mate clip region
+		if(mate_clip_reg.leftClipReg or mate_clip_reg.leftClipReg2 or mate_clip_reg.rightClipReg or mate_clip_reg.rightClipReg2){
+			clip_reg_new = new mateClipReg_t();
+			clip_reg_new->work_id = work_id;
+			clip_reg_new->leftClipReg = mate_clip_reg.leftClipReg;
+			clip_reg_new->leftClipPosNum = mate_clip_reg.leftClipPosNum;
+			clip_reg_new->rightClipReg = mate_clip_reg.rightClipReg;
+			clip_reg_new->rightClipPosNum = mate_clip_reg.rightClipPosNum;
+			clip_reg_new->leftMeanClipPos = mate_clip_reg.leftMeanClipPos;
+			clip_reg_new->rightMeanClipPos = mate_clip_reg.rightMeanClipPos;
+
+			clip_reg_new->leftClipReg2 = mate_clip_reg.leftClipReg2;
+			clip_reg_new->rightClipReg2 = mate_clip_reg.rightClipReg2;
+			clip_reg_new->leftClipPosNum2 = mate_clip_reg.leftClipPosNum2;
+			clip_reg_new->rightClipPosNum2 = mate_clip_reg.rightClipPosNum2;
+			clip_reg_new->leftClipRegNum = mate_clip_reg.leftClipRegNum;
+			clip_reg_new->rightClipRegNum = mate_clip_reg.rightClipRegNum;
+			clip_reg_new->leftMeanClipPos2 = mate_clip_reg.leftMeanClipPos2;
+			clip_reg_new->rightMeanClipPos2 = mate_clip_reg.rightMeanClipPos2;
+
+			clip_reg_new->reg_mated_flag = mate_clip_reg.reg_mated_flag;
+			clip_reg_new->chrname_leftTra1 = clip_reg_new->chrname_rightTra1 = clip_reg_new->chrname_leftTra2 = clip_reg_new->chrname_rightTra2 = "";
+			clip_reg_new->leftClipPosTra1 = clip_reg_new->rightClipPosTra1 = clip_reg_new->leftClipPosTra2 = clip_reg_new->rightClipPosTra2 = -1;
+			clip_reg_new->sv_type = mate_clip_reg.sv_type;
+			clip_reg_new->dup_num = mate_clip_reg.dup_num;
+			clip_reg_new->valid_flag = mate_clip_reg.valid_flag;
+			clip_reg_new->call_success_flag = false;
+			clip_reg_new->tra_rescue_success_flag = false;
+			for(i=0; i<4; i++) clip_reg_new->bnd_mate_reg_strs[i] = mate_clip_reg.bnd_mate_reg_strs[i];
+
+			pthread_mutex_lock(p_mutex_mate_clip_reg);
+			mateClipRegVector->push_back(clip_reg_new);
+			pthread_mutex_unlock(p_mutex_mate_clip_reg);
+		}
+	}else{
+		// delete mate clip region
+		if(mate_clip_reg.leftClipReg) { delete mate_clip_reg.leftClipReg; mate_clip_reg.leftClipReg = NULL; }
+		if(mate_clip_reg.leftClipReg2) { delete mate_clip_reg.leftClipReg2; mate_clip_reg.leftClipReg2 = NULL; }
+		if(mate_clip_reg.rightClipReg) { delete mate_clip_reg.rightClipReg; mate_clip_reg.rightClipReg = NULL; }
+		if(mate_clip_reg.rightClipReg2) { delete mate_clip_reg.rightClipReg2; mate_clip_reg.rightClipReg2 = NULL; }
+
+		pthread_mutex_lock(p_mutex_mate_clip_reg);
+		if(mate_clip_reg.var_cand) { removeVarCandNode(mate_clip_reg.var_cand, var_cand_clipReg_vec); mate_clip_reg.var_cand = NULL; } // free item
+		if(mate_clip_reg.left_var_cand_tra) { removeVarCandNode(mate_clip_reg.left_var_cand_tra, var_cand_clipReg_vec); mate_clip_reg.left_var_cand_tra = NULL; }  // free item
+		if(mate_clip_reg.right_var_cand_tra) { removeVarCandNode(mate_clip_reg.right_var_cand_tra, var_cand_clipReg_vec); mate_clip_reg.right_var_cand_tra = NULL; }  // free item
+		pthread_mutex_unlock(p_mutex_mate_clip_reg);
+
+		// add the region into indel vector
+		reg = new reg_t();
+		reg->chrname = clip_reg->chrname;
+		reg->startRefPos = clip_reg->startRefPos;
+		reg->endRefPos = clip_reg->endRefPos;
+		reg->startLocalRefPos = reg->endLocalRefPos = 0;
+		reg->startQueryPos = reg->endQueryPos = 0;
+		reg->var_type = VAR_UNC;
+		reg->sv_len = 0;
+		reg->query_id = -1;
+		reg->blat_aln_id = -1;
+		reg->call_success_status = false;
+		reg->short_sv_flag = false;
+		reg->zero_cov_flag = false;
+		reg->aln_seg_end_flag = false;
+
+		// get position
+		pthread_mutex_lock(p_mutex_mate_clip_reg);
+		idx_tmp = -1;
+		bloc = computeBlocByPos_util(clip_reg->startRefPos, blockVector, paras);
+		for(i=0; i<bloc->indelVector.size(); i++){
+			reg_tmp = bloc->indelVector.at(i);
+			if(reg->startRefPos<reg_tmp->startRefPos){
+				idx_tmp = i;
+				break;
+			}
+		}
+		// add item
+		if(idx_tmp!=-1) bloc->indelVector.insert(bloc->indelVector.begin()+idx_tmp, reg);
+		else bloc->indelVector.push_back(reg);
+		pthread_mutex_unlock(p_mutex_mate_clip_reg);
+	}
+}
+
+// compute block by reference position
+Block* computeBlocByPos_util(int64_t begPos, vector<Block*> &block_vec, Paras *paras){
+	int32_t bloc_ID = computeBlocID_util(begPos, block_vec, paras);
+	return block_vec.at(bloc_ID);
+}
+
+// compute block ID
+int32_t computeBlocID_util(int64_t begPos, vector<Block*> &block_vec, Paras *paras){
+	int32_t bloc_ID, bloc_ID_tmp;
+	size_t i;
+	Block *bloc, *mid_bloc;
+
+	bloc_ID_tmp = begPos / (paras->blockSize - 2 * paras->slideSize);
+	if(bloc_ID_tmp>=(int32_t)block_vec.size()) bloc_ID_tmp = (int32_t)block_vec.size() - 1;
+
+	bloc_ID = bloc_ID_tmp;
+
+	mid_bloc = block_vec.at(bloc_ID_tmp);
+	if(begPos<=mid_bloc->startPos){
+		for(i=bloc_ID_tmp; i>=0; i--){
+			bloc = block_vec.at(i);
+			if(bloc->startPos<=begPos){
+				bloc_ID = i;
+				break;
+			}
+		}
+	}else{
+		for(i=bloc_ID_tmp+1; i<block_vec.size(); i++){
+			bloc = block_vec.at(i);
+			if(bloc->startPos>begPos){
+				bloc_ID = i - 1;
+				break;
+			}
+		}
+	}
+
+	return bloc_ID;
+}
+
+// sort the region vector
+void sortRegVec(vector<reg_t*> &regVector){
+	size_t min_idx;
+	reg_t *tmp;
+
+	if(regVector.size()>=2){
+		for(size_t i=0; i<regVector.size(); i++){
+			min_idx = i;
+			for(size_t j=i+1; j<regVector.size(); j++)
+				if(regVector[min_idx]->startRefPos>regVector[j]->startRefPos) min_idx = j;
+			if(min_idx!=i){
+				tmp = regVector[i];
+				regVector[i] = regVector[min_idx];
+				regVector[min_idx] = tmp;
+				//cout << "i=" << i << ", min_idx=" << min_idx << ", swap!" << endl;
+			}
+		}
+	}
+}
+
+bool isRegSorted(vector<reg_t*> &regVector){
+	bool flag = true;
+	if(regVector.size()>=2){
+		for(size_t i=0; i<regVector.size()-1; i++){
+			if(regVector[i]->startRefPos>regVector[i+1]->startRefPos){
+				flag = false;
+				break;
+			}
+		}
+	}
+	return flag;
+}
+
 
 Time::Time() {
 	timestamp = start = end = start_all = end_all = 0;
@@ -2791,6 +3108,32 @@ void Time::printTime(){
 
 void Time::setStartTime(){
 	time(&start);
+}
+
+void Time::printElapsedTime(){
+	double cost_sec, cost_hour, cost_min, cost_day;
+
+	if(start!=0){
+		time(&end);
+		cost_sec = difftime(end, start);
+		cost_min = cost_sec / 60;
+		cost_hour = cost_min / 60;
+		cost_day = cost_hour / 24;
+
+		start = end = 0; // reset time
+
+		if(cost_day>1)
+			cout << "Elapsed time: " << cost_day << " days = " << cost_hour << " hours = " << cost_min << " minutes = " << cost_sec << " seconds" << endl;
+		else if(cost_hour>1)
+			cout << "Elapsed time: " << cost_hour << " hours = " << cost_min << " minutes = " << cost_sec << " seconds" << endl;
+		else if(cost_min>1)
+			cout << "Elapsed time: " << cost_min << " minutes = " << cost_sec << " seconds" << endl;
+		else
+			cout << "Elapsed time: " << cost_sec << " seconds" << endl;
+	}else{
+		cerr << "Please set the start time before calculating the running time" << endl;
+		exit(1);
+	}
 }
 
 void Time::printSubCmdElapsedTime(){

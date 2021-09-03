@@ -412,7 +412,7 @@ void Region::detectIndelReg(){
 	int64_t i = startMidPartPos - subRegSize;
 	if(i<minRPos) i = minRPos;
 	while(i<endMidPartPos){
-//		if(i>7163000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
+//		if(i>1855000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
 //			cout << i << endl;
 
 		reg = getIndelReg(i);
@@ -428,7 +428,7 @@ void Region::detectIndelReg(){
 // get the indel region given the start checking chromosome position
 reg_t* Region::getIndelReg(int64_t startCheckPos){
 	reg_t *reg = NULL;
-	int32_t reg_size1, reg_size2, num1, num3, num4, extendSize, high_con_indel_base_num;
+	int32_t reg_size1, reg_size2, num1, num3, num4, extendSize, high_con_indel_base_num, large_indel_base_num;
 	vector<double> num_vec;
 	double high_indel_clip_ratio;
 	int64_t i, checkPos, startPos1, endPos1, startPos2;
@@ -519,16 +519,16 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 		// allocate the indel region
 		if(indel_beg_flag and indel_end_flag){
 			high_con_indel_base_num = getHighConIndelNum(startPos_indel, endPos_indel, MIN_HIGH_INDEL_BASE_RATIO, IGNORE_POLYMER_RATIO_THRES);
-			if(endPos_indel-startPos_indel+1>=paras->min_sv_size_usr or high_con_indel_base_num>=1){
+			large_indel_base_num = getLargeIndelBaseNum(startPos_indel, endPos_indel);
+			if(endPos_indel-startPos_indel+1>=paras->min_sv_size_usr or high_con_indel_base_num>=1 or large_indel_base_num>=1){
 			//if(endPos_indel-startPos_indel+1>=paras->min_sv_size_usr){
 				num1 = getDisZeroCovNum(startPos_indel, endPos_indel);
 				//num2 = getMismatchBasesAround(startPos_indel, endPos_indel);
-				num3 = getLargeIndelBaseNum(startPos_indel, endPos_indel);
 				num_vec = getTotalHighIndelClipRatioBaseNum(regBaseArr+startPos_indel-startRPos, endPos_indel-startPos_indel+1);
 				num4 = num_vec.at(0);
 				high_indel_clip_ratio = num_vec.at(1);
 				//if(num1>0 or num2>=DISAGREE_NUM_THRES_REG or num3>0) {
-				if(num1>0 or num3>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
+				if(num1>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
 					reg = allocateReg(chrname, startPos_indel, endPos_indel);
 					break;
 				}else checkPos = endPos_indel + 1;

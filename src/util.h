@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <dirent.h>
 #include <htslib/sam.h>
+#include <htslib/faidx.h>
 
 #include "structures.h"
 #include "Base.h"
@@ -57,6 +58,7 @@ void exchangeRegLoc(reg_t *reg);
 void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename);
 bool isBlatAlnResultMatch(string &contigfilename, string &alnfilename);
 int32_t getQueryNameLoc(string &query_name, vector<string> &query_name_vec);
+bool isBlatAlnCompleted(string &alnfilename);
 void cleanPrevAssembledTmpDir(const string &assem_dir_str, const string &dir_prefix);
 string getCallFileHeaderBed();
 string getCallFileHeaderBedpe();
@@ -68,7 +70,8 @@ int32_t getItemIDFromAssemWorkVec(string &contigfilename, vector<assembleWork_op
 void *doit_canu(void *arg);
 int test_canu(int n, vector<string> &cmd_vec);
 void* processSingleAssembleWork(void *arg);
-void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, bool delete_reads_flag, int32_t minClipEndSize, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, int32_t minClipEndSize, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+void* processSingleBlatAlnWork(void *arg);
 void* processSingleCallWork(void *arg);
 void outputAssemWorkOptToFile_debug(vector<assembleWork_opt*> &assem_work_opt_vec);
 string getOldOutDirname(string &filename, string &sub_work_dir);
@@ -104,6 +107,14 @@ void checkBNDStrVec(mateClipReg_t &mate_clip_reg);
 bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec);
 bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr, int64_t max_sv_size_usr);
 bool isDecoyChr(string &chrname);
+void removeVarCandNode(varCand *var_cand, vector<varCand*> &var_cand_vec);
+void *processSingleMateClipRegDetectWork(void *arg);
+void processClipRegs(int32_t work_id, mateClipReg_t &mate_clip_reg, reg_t *reg, vector<mateClipReg_t*> *mateClipRegVector, vector<reg_t*> *clipRegVector, vector<varCand*> &var_cand_clipReg_vec, vector<Block*> &blockVector, Paras *paras, pthread_mutex_t *p_mutex_mate_clip_reg);
+Block* computeBlocByPos_util(int64_t begPos, vector<Block*> &block_vec, Paras *paras);
+int32_t computeBlocID_util(int64_t begPos, vector<Block*> &block_vec, Paras *paras);
+void sortRegVec(vector<reg_t*> &regVector);
+bool isRegSorted(vector<reg_t*> &regVector);
+
 
 class Time{
 	private:
@@ -117,6 +128,7 @@ class Time{
 		string getTime();
 		void printTime();
 		void setStartTime();
+		void printElapsedTime();
 		void printSubCmdElapsedTime();
 		void printOverallElapsedTime();
 };

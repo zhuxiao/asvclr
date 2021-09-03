@@ -70,6 +70,7 @@ class Genome{
 
 		void genomeCollectCallWork();
 		void genomeFinishCallWork();
+		int processBlatAlnWork();
 		int processCallWork();
 		void genomeLoadMateClipRegData();
 		void recallIndelsFromTRA();

@@ -550,13 +550,32 @@ int Genome::genomeLocalAssemble(){
 void Genome::genomeLoadDataAssemble(){
 	Chrome *chr;
 
+	if(chromeVector.size()==0) return;
+
+	// load X, Y, hs37d5
+	for(int32_t i=chromeVector.size()-1; i>=0; i--){
+		chr = chromeVector.at(i);
+		if(chr->decoy_flag==false or paras->include_decoy==false){ // non-decoy
+			if(chr->chrname.compare(CHR_X_STR1)==0 or chr->chrname.compare(CHR_X_STR2)==0 or chr->chrname.compare(CHR_Y_STR1)==0 or chr->chrname.compare(CHR_Y_STR2)==0){
+				chr->chrLoadDataAssemble();  // load the variant data
+				chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
+			}
+		}else if(chr->decoy_flag and paras->include_decoy){ // decoy
+			chr->chrLoadDataAssemble();  // load the variant data
+			chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
+		}
+	}
+
+	// load other chrs
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		//if(chr->chrname.compare("GL000225.1")==0)
-		if(chr->decoy_flag==false or paras->include_decoy)
+		if(chr->decoy_flag==false) // non-decoy
 		{
-			chr->chrLoadDataAssemble();  // load the variant data
-			chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
+			if(chr->chrname.compare(CHR_X_STR1)!=0 and chr->chrname.compare(CHR_X_STR2)!=0 and chr->chrname.compare(CHR_Y_STR1)!=0 and chr->chrname.compare(CHR_Y_STR2)!=0){
+				chr->chrLoadDataAssemble();  // load the variant data
+				chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
+			}
 		}
 	}
 
@@ -614,7 +633,9 @@ int Genome::processAssembleWork(){
 		assem_work->fai = fai;
 		assem_work->var_cand_file = var_cand_file;
 		assem_work->expected_cov_assemble = paras->expected_cov_assemble;
+		assem_work->min_input_cov_canu = paras->min_input_cov_canu;
 		assem_work->delete_reads_flag = paras->delete_reads_flag;
+		assem_work->keep_failed_reads_flag = paras->keep_failed_reads_flag;
 		assem_work->technology = paras->technology;
 		assem_work->canu_version = paras->canu_version;
 
@@ -656,8 +677,15 @@ int Genome::genomeCall(){
 
 	cout << "Number of regions to be processed: " << paras->call_work_num << endl;
 
+	// blat alignment work
+	time.setStartTime();
+	processBlatAlnWork();
+	time.printElapsedTime();
+
 	// process call work
+	time.setStartTime();
 	processCallWork();
+	time.printElapsedTime();
 
 	// finish call work
 	genomeFinishCallWork();
@@ -693,14 +721,33 @@ int Genome::genomeCall(){
 // collect call work
 void Genome::genomeCollectCallWork(){
 	Chrome *chr;
+
+	if(chromeVector.size()==0) return;
+
+	// load X, Y, hs37d5
+	for(int32_t i=chromeVector.size()-1; i>=0; i--){
+		chr = chromeVector.at(i);
+		if(chr->decoy_flag==false or paras->include_decoy==false){ // non-decoy
+			if(chr->chrname.compare(CHR_X_STR1)==0 or chr->chrname.compare(CHR_X_STR2)==0 or chr->chrname.compare(CHR_Y_STR1)==0 or chr->chrname.compare(CHR_Y_STR2)==0){
+				chr->chrLoadDataCall();
+				chr->chrCollectCallWork();
+			}
+		}else if(chr->decoy_flag and paras->include_decoy){ // decoy
+			chr->chrLoadDataCall();
+			chr->chrCollectCallWork();
+		}
+	}
+
+	// load other chrs
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("6")==0)
+		//if(chr->chrname.compare("1")==0)
 		{
-			if(chr->decoy_flag==false or paras->include_decoy){
-				chr->chrLoadDataCall();
-				//chr->chrCall();
-				chr->chrCollectCallWork();
+			if(chr->decoy_flag==false){ // non-decoy
+				if(chr->chrname.compare(CHR_X_STR1)!=0 and chr->chrname.compare(CHR_X_STR2)!=0 and chr->chrname.compare(CHR_Y_STR1)!=0 and chr->chrname.compare(CHR_Y_STR2)!=0){
+					chr->chrLoadDataCall();
+					chr->chrCollectCallWork();
+				}
 			}
 		}
 	}
@@ -716,12 +763,59 @@ void Genome::genomeFinishCallWork(){
 }
 
 // call variants using thread pool
+int Genome::processBlatAlnWork(){
+	callWork_opt *call_work_opt;
+	varCand *var_cand;
+	size_t num_work, num_work_percent;
+
+	if(paras->call_work_vec.empty()) return 0;  // no assemble work, then return directly
+
+	cout << "Begin blat alignment ..." << endl;
+
+	hts_tpool *p = hts_tpool_init(paras->num_threads);
+	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
+
+	pthread_mutex_init(&paras->mtx_call_workDone_num, NULL);
+
+	paras->call_workDone_num = 0;
+	num_work = paras->call_work_vec.size();
+	num_work_percent = num_work / (paras->num_parts_progress >> 1);
+	if(num_work_percent==0) num_work_percent = 1;
+	for(size_t i=0; i<num_work; i++){
+		var_cand = paras->call_work_vec.at(i);
+
+		// DUP not precise (CCS30x): blat_contig_1_1180102-1180675.sim4, blat_contig_1_1183812-1185067.sim4, blat_contig_1_1317611-1318285.sim4
+//		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_1_1860801-1869285.sim4")!=0){
+//			continue;
+//		}
+
+		call_work_opt = new callWork_opt();
+		call_work_opt->var_cand = var_cand;
+		call_work_opt->work_id = i;
+		call_work_opt->num_work = num_work;
+		call_work_opt->num_work_percent = num_work_percent;
+		call_work_opt->p_call_workDone_num = &(paras->call_workDone_num);
+		call_work_opt->p_mtx_call_workDone_num = &(paras->mtx_call_workDone_num);
+
+		hts_tpool_dispatch(p, q, processSingleBlatAlnWork, call_work_opt);
+	}
+
+    hts_tpool_process_flush(q);
+    hts_tpool_process_destroy(q);
+    hts_tpool_destroy(p);
+
+	return 0;
+}
+
+// call variants using thread pool
 int Genome::processCallWork(){
 	callWork_opt *call_work_opt;
 	varCand *var_cand;
 	size_t num_work, num_work_percent;
 
 	if(paras->call_work_vec.empty()) return 0;  // no assemble work, then return directly
+
+	cout << "Begin variants call ..." << endl;
 
 	hts_tpool *p = hts_tpool_init(paras->num_threads);
 	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
@@ -734,6 +828,12 @@ int Genome::processCallWork(){
 	if(num_work_percent==0) num_work_percent = 1;
 	for(size_t i=0; i<num_work; i++){
 		var_cand = paras->call_work_vec.at(i);
+
+		// DUP not precise (CCS30x): blat_contig_1_1180102-1180675.sim4, blat_contig_1_1183812-1185067.sim4, blat_contig_1_1317611-1318285.sim4, blat_1_1860801-1869285.sim4
+		//if(var_cand->alnfilename.compare("output_ngmlr_clr_20x_v1.0.1_20210808/3_call/Y/blat_Y_25500245-25510079.sim4")!=0){
+		//	continue;
+		//}
+
 		call_work_opt = new callWork_opt();
 		call_work_opt->var_cand = var_cand;
 		call_work_opt->work_id = i;
@@ -2457,7 +2557,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 // perform local assembly
 void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->delete_reads_flag, paras->minClipEndSize);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->min_input_cov_canu, paras->delete_reads_flag, paras->keep_failed_reads_flag, paras->minClipEndSize);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();

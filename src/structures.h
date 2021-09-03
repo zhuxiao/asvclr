@@ -8,6 +8,8 @@
 #include <htslib/faidx.h>
 
 class varCand;
+class Block;
+class Paras;
 
 using namespace std;
 
@@ -45,6 +47,22 @@ typedef struct{
 	bool same_orient_flag;  // true: ++, --; false: -+, +-
 	bool self_overlap_flag;
 }clipPos_t;
+
+// from clipReg.h
+typedef struct{
+	reg_t *leftClipReg, *leftClipReg2, *rightClipReg, *rightClipReg2;
+	int32_t work_id, leftClipPosNum, leftClipPosNum2, rightClipPosNum, rightClipPosNum2;
+	int64_t leftMeanClipPos, leftMeanClipPos2, rightMeanClipPos, rightMeanClipPos2;
+	int8_t leftClipRegNum, rightClipRegNum;
+
+	int32_t sv_type:8, dup_num:24;
+	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag;
+	varCand *var_cand, *left_var_cand_tra, *right_var_cand_tra;  // TRA
+	string chrname_leftTra1, chrname_leftTra2, chrname_rightTra1, chrname_rightTra2;
+	int32_t leftClipPosTra1, leftClipPosTra2, rightClipPosTra1, rightClipPosTra2;
+	string refseq_tra, altseq_tra, refseq_tra2, altseq_tra2;
+	string bnd_mate_reg_strs[4]; // mate strings for BND format: mate_reg_id1|clip_loc1|sup_num1|cov1,mate_reg_id2|clip_loc2|sup_num2|cov2;......
+}mateClipReg_t;
 
 
 //from covLoader.h
@@ -92,8 +110,8 @@ typedef struct {
 	string inBamFile, technology, canu_version;
 	faidx_t *fai;
 	ofstream *var_cand_file;
-	double expected_cov_assemble;
-	bool delete_reads_flag;
+	double expected_cov_assemble, min_input_cov_canu;
+	bool delete_reads_flag, keep_failed_reads_flag;
 }assembleWork;
 
 // from varCand.h
@@ -150,5 +168,24 @@ typedef struct{
 	int32_t *p_call_workDone_num;   // pointer to the global variable which was declared in Paras.h
 	pthread_mutex_t *p_mtx_call_workDone_num;
 }callWork_opt;
+
+// 2021-08-09
+struct alnScoreNode{
+	int32_t score: 29, path_val: 3;
+};
+
+typedef struct{
+	reg_t *reg;
+	int32_t work_id, num_work;
+	faidx_t *fai;
+	Paras *paras;
+	vector<mateClipReg_t*> *mateClipRegVector;
+	vector<reg_t*> *clipRegVector;
+	vector<varCand*> *var_cand_clipReg_vec;
+	vector<Block*> *blockVector;
+	//vector<bool> *clip_processed_flag_vec;
+	pthread_mutex_t *p_mutex_mate_clip_reg;
+	//int32_t *p_mate_clip_reg_fail_num;
+}mateClipRegDetectWork_opt;
 
 #endif /* SRC_STRUCTURES_H_ */

@@ -3,7 +3,6 @@
 #include "clipAlnDataLoader.h"
 #include "util.h"
 
-
 clipReg::clipReg(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, faidx_t *fai, Paras *paras){
 	this->chrname = chrname;
 	this->startRefPos = startRefPos - CLIP_END_EXTEND_SIZE;

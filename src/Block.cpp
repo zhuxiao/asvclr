@@ -762,23 +762,23 @@ void Block::removeFalseSNV(){
 }
 
 // sort the region vector
-void Block::sortRegVec(vector<reg_t*> &regVector){
-	size_t min_idx;
-	reg_t *tmp;
-
-	if(regVector.size()>=2){
-		for(size_t i=0; i<regVector.size(); i++){
-			min_idx = i;
-			for(size_t j=i+1; j<regVector.size(); j++)
-				if(regVector[min_idx]->startRefPos>regVector[j]->startRefPos) min_idx = j;
-			if(min_idx!=i){
-				tmp = regVector[i];
-				regVector[i] = regVector[min_idx];
-				regVector[min_idx] = tmp;
-			}
-		}
-	}
-}
+//void Block::sortRegVec(vector<reg_t*> &regVector){
+//	size_t min_idx;
+//	reg_t *tmp;
+//
+//	if(regVector.size()>=2){
+//		for(size_t i=0; i<regVector.size(); i++){
+//			min_idx = i;
+//			for(size_t j=i+1; j<regVector.size(); j++)
+//				if(regVector[min_idx]->startRefPos>regVector[j]->startRefPos) min_idx = j;
+//			if(min_idx!=i){
+//				tmp = regVector[i];
+//				regVector[i] = regVector[min_idx];
+//				regVector[min_idx] = tmp;
+//			}
+//		}
+//	}
+//}
 
 // save SV to file
 void Block::saveSV2File(){

@@ -2,6 +2,8 @@
 #include "clipAlnDataLoader.h"
 #include "util.h"
 
+pthread_mutex_t mutex_down_sample = PTHREAD_MUTEX_INITIALIZER;
+
 clipAlnDataLoader::clipAlnDataLoader(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, int32_t minClipEndSize) {
 	this->chrname = chrname;
 	this->startRefPos = startRefPos;
@@ -154,6 +156,9 @@ double clipAlnDataLoader::samplingAlnDataOp(vector<bam1_t*> &alnDataVector, doub
 	expected_total_bases = reg_size * expect_cov_val;
 	max_reads_num = alnDataVector.size();
 
+	// make sure each down-sampling is equivalent
+	pthread_mutex_lock(&mutex_down_sample);
+	srand(1);
 	reads_count = 0;
 	total_bases = 0;
 	while(total_bases<=expected_total_bases and reads_count<=max_reads_num){
@@ -166,6 +171,7 @@ double clipAlnDataLoader::samplingAlnDataOp(vector<bam1_t*> &alnDataVector, doub
 			reads_count ++;
 		}
 	}
+	pthread_mutex_unlock(&mutex_down_sample);
 	sampled_cov = total_bases / reg_size;
 
 	// remove unselected items

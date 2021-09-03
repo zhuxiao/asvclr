@@ -28,6 +28,7 @@ using namespace std;
 #define MIN_CANU_VERSION_HIFI			"1.9"
 #define MIN_CANU_VERSION_NO_GNPPLOT		"1.8"
 
+
 struct fqSeqNode{
 	size_t seq_id;
 	string seq_name, seq, qual;
@@ -39,7 +40,11 @@ class LocalAssembly {
 		string chrname, readsfilename, contigfilename, refseqfilename, tmpdir, inBamFile, technology, canu_version;
 		int64_t chrlen, assembly_extend_size, startRefPos_assembly, endRefPos_assembly;
 		int32_t num_threads_per_assem_work, minClipEndSize;
-		bool assem_success_preDone_flag;
+		bool assem_success_preDone_flag, assem_success_flag;
+		double min_input_cov_canu;
+
+		// start time and end time
+		time_t start_time, end_time;
 
 		// limit process regions
 		bool limit_reg_process_flag;
@@ -51,14 +56,14 @@ class LocalAssembly {
 		// sampling
 		size_t ref_seq_size, reads_count_original, total_bases_original, reads_count, total_bases;
 		double local_cov_original, sampled_cov, expected_cov, compensation_coefficient, mean_read_len;
-		bool sampling_flag, delete_reads_flag;
+		bool sampling_flag, delete_reads_flag, keep_failed_reads_flag;
 
 	private:
 		vector<bam1_t*> alnDataVector;
 		vector<clipAlnData_t*> clipAlnDataVector;
 
 	public:
-		LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, bool delete_reads_flag, int32_t minClipEndSize);
+		LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, double min_input_cov, bool delete_reads_flag, bool keep_failed_reads_flag, int32_t minClipEndSize);
 		virtual ~LocalAssembly();
 		void extractRefseq();
 		void extractReadsDataFromBAM();

@@ -14,6 +14,7 @@
 #include "Region.h"
 #include "RefSeqLoader.h"
 #include "alnDataLoader.h"
+#include "meminfo.h"
 
 using namespace std;
 
@@ -49,7 +50,7 @@ using namespace std;
 
 #define SIMILARITY_THRES_INV				(0.9)	// to be parameterized
 
-#define EXT_SIZE_CHK_VAR_LOC				100
+#define EXT_SIZE_CHK_VAR_LOC				500		// 100
 
 #define MIN_VALID_POLYMER_SIZE				3
 #define MAX_SHORT_MIS_REG_SIZE				1
@@ -59,7 +60,6 @@ using namespace std;
 //#define MIN_REF_DIST_DUP_NUM_EST			1000
 
 //#define MAX_SV_SIZE							5000
-
 
 
 class varCand {
@@ -91,6 +91,9 @@ class varCand {
 		// blat aligned information file
 		ofstream *blat_var_cand_file;
 
+		// pairwise alignment result
+		vector<localAln_t*> local_aln_vec;
+
 	public:
 		varCand();
 		virtual ~varCand();
@@ -100,12 +103,13 @@ class varCand {
 		vector<int32_t> computeDisagreeNumAndHighIndelBaseNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 		void adjustVarLocSlightly();
 		void fillVarseq();
+		void alnCtg2Refseq();
 		void loadBlatAlnData();
 		void destroyVarCand();
 
 	private:
 		void init();
-		void alnCtg2Refseq();
+		//void alnCtg2Refseq();
 		void recordBlatAlnInfo();
 		bool getBlatAlnDoneFlag();
 		void assignBlatAlnStatus();
@@ -128,6 +132,7 @@ class varCand {
 		void computeExtendAlnSegs(localAln_t *local_aln);
 		void computeLocalLocsAlnShortVar(localAln_t *local_aln);
 		void computeSeqAlignment(localAln_t *local_aln);
+		void computeSeqAlignmentOp(localAln_t *local_aln);
 		void adjustAlnResult(localAln_t *local_aln);
 		void computeVarLoc(localAln_t *local_aln);
 		void adjustVarLoc(localAln_t *local_aln);
@@ -170,6 +175,15 @@ class varCand {
 		vector<size_t> computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq);
 		size_t computeMismatchNumLocalAln(localAln_t *local_aln);
 		vector<size_t> computeQueryClipPosDup(blat_aln_t *blat_aln, int32_t leftClipRefPos, string &refseq, string &queryseq);
+
+		// local alignment result -- 2021-08-22
+		localAln_t* generateNewLocalAlnItem_OnlyAlnInfo(localAln_t *local_aln);
+		void copyLocalAlnInInfo(localAln_t *local_aln_dest, localAln_t *local_aln_src);
+		bool isLocalAlnInfoComplete(localAln_t *local_aln);
+		bool isIdenticalLoclaAlnItems(localAln_t *local_aln1, localAln_t *local_aln2);
+		localAln_t* getIdenticalLocalAlnItem(localAln_t *local_aln, vector<localAln_t*> &local_aln_vec);
+		void addLocalAlnItemToVec(localAln_t *local_aln, vector<localAln_t*> &local_aln_vec);
+		void destroyLocalAlnVec(vector<localAln_t*> &local_aln_vec);
 
 		// output
 		void printSV();

@@ -3,6 +3,10 @@
 #include "Chrome.h"
 #include "Thread.h"
 #include "util.h"
+#include <pthread.h>
+#include <htslib/thread_pool.h>
+
+pthread_mutex_t mutex_mate_clip_reg = PTHREAD_MUTEX_INITIALIZER;
 
 // Constructor with parameters
 Chrome::Chrome(string& chrname, int chrlen, faidx_t *fai, Paras *paras, vector<Chrome*> *chr_vec){
@@ -269,15 +273,15 @@ int Chrome::chrDetect(){
 	else chrDetect_mt();  // multiple threads
 
 	// detect mated clip regions
-	//cout << "[" << time.getTime() << "]: compute mate clip region on chromosome ..." << endl;
+	//cout << "[" << time.getTime() << "]: compute mate clip region on chromosome " << chrname << " ..." << endl;
 	chrComputeMateClipReg();
 
 	// remove FP indels and Snvs in clipping regions
-	//cout << "[" << time.getTime() << "]: remove FP indels and SNVs in mate clip region on chromosome ..." << endl;
+	//cout << "[" << time.getTime() << "]: remove FP indels and SNVs in mate clip region on chromosome " << chrname << " ..." << endl;
 	removeFPIndelSnvInClipReg(mateClipRegVector);
 
 	// remove redundant Indels for 'detect' command
-	//cout << "[" << time.getTime() << "]: remove redundant indels on chromosome ..." << endl;
+	//cout << "[" << time.getTime() << "]: remove redundant indels on chromosome " << chrname << " ..." << endl;
 	removeRedundantIndelDetect();
 
 	// merge the results to single file
@@ -342,77 +346,426 @@ void Chrome::removeRedundantIndelDetect(){
 	}
 }
 
-void Chrome::removeRedundantIndelItemDetect(reg_t *reg, size_t bloc_idx, size_t indel_vec_idx){
-	size_t i, j, start_indel_vec_idx;
+void Chrome::removeRedundantIndelItemDetect(reg_t *reg, int32_t bloc_idx, int32_t indel_vec_idx){
+	int64_t i, j, start_indel_vec_idx;
 	Block *bloc;
 	reg_t *reg_tmp;
+	bool flag;
+	int64_t startPos1, endPos1, startPos2, endPos2;
 
-	for(i=bloc_idx; i<blockVector.size(); i++){
+	// find the left side
+	for(i=bloc_idx; i>=0; i--){
 		bloc = blockVector.at(i);
-		if(i==bloc_idx) start_indel_vec_idx = indel_vec_idx + 1;
-		else start_indel_vec_idx = 0;
-		for(j=start_indel_vec_idx; j<bloc->indelVector.size(); ){
-			reg_tmp = bloc->indelVector.at(j);
-			if(reg_tmp->chrname.compare(reg->chrname)==0 and reg_tmp->startRefPos==reg->startRefPos and reg_tmp->endRefPos==reg->endRefPos){
-				// invalid item, and delete it
-				delete reg_tmp;
-				bloc->indelVector.erase(bloc->indelVector.begin()+j);
-			}else j++;
+		startPos1 = reg->startRefPos - MAX_VAR_REG_SIZE;
+		endPos1 = reg->endRefPos + MAX_VAR_REG_SIZE;
+		startPos2 = bloc->startPos - MAX_VAR_REG_SIZE;
+		endPos2 = bloc->endPos + MAX_VAR_REG_SIZE;
+		if(startPos1<1) startPos1 = 1;
+		if(startPos2<1) startPos2 = 1;
+		flag = isOverlappedPos(startPos1, endPos1, startPos2, endPos2);
+		if(flag){ // overlapped
+			if(i==bloc_idx) start_indel_vec_idx = indel_vec_idx + 1;
+			else start_indel_vec_idx = 0;
+			for(j=start_indel_vec_idx; j<(int64_t)bloc->indelVector.size(); ){
+				reg_tmp = bloc->indelVector.at(j);
+				if(reg_tmp->chrname.compare(reg->chrname)==0 and reg_tmp->startRefPos==reg->startRefPos and reg_tmp->endRefPos==reg->endRefPos){
+					// invalid item, and delete it
+					delete reg_tmp;
+					bloc->indelVector.erase(bloc->indelVector.begin()+j);
+				}else j++;
+			}
+		}else break;
+	}
+
+	// find the right side
+	for(i=bloc_idx+1; i<(int64_t)blockVector.size(); i++){
+		bloc = blockVector.at(i);
+		if(bloc->indelVector.size()>0){
+			startPos1 = reg->startRefPos - MAX_VAR_REG_SIZE;
+			endPos1 = reg->endRefPos + MAX_VAR_REG_SIZE;
+			startPos2 = bloc->startPos - MAX_VAR_REG_SIZE;
+			endPos2 = bloc->endPos + MAX_VAR_REG_SIZE;
+			if(startPos1<1) startPos1 = 1;
+			if(startPos2<1) startPos2 = 1;
+			flag = isOverlappedPos(startPos1, endPos1, startPos2, endPos2);
+			if(flag){ // overlapped
+				for(j=0; j<(int64_t)bloc->indelVector.size(); ){
+					reg_tmp = bloc->indelVector.at(j);
+					if(reg_tmp->chrname.compare(reg->chrname)==0 and reg_tmp->startRefPos==reg->startRefPos and reg_tmp->endRefPos==reg->endRefPos){
+						// invalid item, and delete it
+						delete reg_tmp;
+						bloc->indelVector.erase(bloc->indelVector.begin()+j);
+					}else j++;
+				}
+			}else break;
 		}
 	}
 }
 
 // detect mated clip regions for duplications and inversions
 void Chrome::chrComputeMateClipReg(){
-	Time time;
+	//Time time;
 	size_t i;
 	Block *bloc;
-	reg_t *reg;
-	vector<bool> clip_processed_flag_vec;
+	//reg_t *reg;
+	//vector<bool> clip_processed_flag_vec;
 
 	for(i=0; i<blockVector.size(); i++){
 		bloc = blockVector.at(i);
-		for(size_t j=0; j<bloc->clipRegVector.size(); j++){
-			clipRegVector.push_back(bloc->clipRegVector.at(j));
-			clip_processed_flag_vec.push_back(false);
-		}
+		for(size_t j=0; j<bloc->clipRegVector.size(); j++) clipRegVector.push_back(bloc->clipRegVector.at(j));
 	}
 	clipRegVector.shrink_to_fit();
 
-	// remove redundant items
-	removeRedundantItemsClipReg(clipRegVector, clip_processed_flag_vec);
-
-	// compute the mate flag for duplications and inversions
-	for(i=0; i<clipRegVector.size(); i++){
-		//if(i>=4 and chrname.compare("chr2")==0) // 82
-		{
-			if(clip_processed_flag_vec.at(i)==false){
-				reg = clipRegVector.at(i);
-
-				//cout << "[" << time.getTime() << "], [" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
-
-				clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, paras->inBamFile, fai, paras);
-				clip_reg.computeMateClipReg();
-
-//				if(clip_reg.mate_clip_reg.valid_flag){
-//					cout << clip_reg.mate_clip_reg.bnd_mate_reg_strs[0];
-//					for(size_t j=1; j<4; j++) cout << ";" << clip_reg.mate_clip_reg.bnd_mate_reg_strs[j];
-//					cout << endl;
-//				}
-
-				processClipRegs(i, clip_processed_flag_vec, clip_reg.mate_clip_reg, reg);
-			}
-		}
+	sortRegVec(clipRegVector);
+	if(isRegSorted(clipRegVector)==false){
+		cout << "line=" << __LINE__ << ", region is not sorted in order." << endl;
+		exit(1);
 	}
 
+//	for(i=0; i<clipRegVector.size(); i++) clip_processed_flag_vec.push_back(false);
+//	clip_processed_flag_vec.shrink_to_fit();
+
+	// remove redundant items
+	//removeRedundantItemsClipReg(clipRegVector, clip_processed_flag_vec);
+	removeRedundantItemsClipReg(clipRegVector);
+
+	if(isRegSorted(clipRegVector)==false){
+		cout << "line=" << __LINE__ << ", region is not sorted in order." << endl;
+		exit(1);
+	}
+
+	//processMateClipRegDetectWork(clip_processed_flag_vec);
+	processMateClipRegDetectWork();
+
+	// sort
+	sortMateClipRegsByWorkId();
+	bubbleSortMateClipRegs();
+
+	// check sort
+	checkSortMateClipRegs();
+
 	// merge same TRA region
-	mergeSameRegTRA();
+	//mergeSameRegTRA();
 
 	// remove FPs by detecting false overlapped clip regions for DUPs and INVs
 	removeFPClipRegsDupInv();
 }
 
-void Chrome::removeRedundantItemsClipReg(vector<reg_t*> &clipReg_vec, vector<bool> &processed_flag_vec){
+// detect mate clipping regions using thread pool
+//void Chrome::processMateClipRegDetectWork(vector<bool> &clip_processed_flag_vec){
+void Chrome::processMateClipRegDetectWork(){
+	int32_t num_work;
+	reg_t *reg;
+	mateClipRegDetectWork_opt *mate_clip_reg_work_opt;
+	Time time;
+
+	if(clipRegVector.empty()) return;  // no assemble work, then return directly
+
+	cout << "[" << time.getTime() << "], Chr " << chrname << ", detect mate clipping regions using " << paras->num_threads << " threads ..." << endl;
+
+	hts_tpool *p = hts_tpool_init(paras->num_threads);
+	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
+
+	pthread_mutex_init(&mutex_mate_clip_reg, NULL);
+
+	num_work = clipRegVector.size();
+	for(int32_t i=0; i<num_work; i++){
+	//for(int32_t i=num_work-1; i>=0; i--){
+		//if(clip_processed_flag_vec.at(i)==false){
+			reg = clipRegVector.at(i);
+
+			mate_clip_reg_work_opt = new mateClipRegDetectWork_opt();
+			mate_clip_reg_work_opt->reg = reg;
+			mate_clip_reg_work_opt->work_id = i;
+			mate_clip_reg_work_opt->num_work = num_work;
+			mate_clip_reg_work_opt->fai = fai;
+			mate_clip_reg_work_opt->paras = paras;
+			//mate_clip_reg_work_opt->clip_processed_flag_vec = &clip_processed_flag_vec;
+			mate_clip_reg_work_opt->mateClipRegVector = &mateClipRegVector;
+			mate_clip_reg_work_opt->clipRegVector = &clipRegVector;
+			mate_clip_reg_work_opt->var_cand_clipReg_vec = &var_cand_clipReg_vec;
+			mate_clip_reg_work_opt->blockVector = &blockVector;
+			mate_clip_reg_work_opt->p_mutex_mate_clip_reg = &mutex_mate_clip_reg;
+			//mate_clip_reg_work_opt->p_mate_clip_reg_fail_num = &mate_clip_reg_fail_num;
+
+			hts_tpool_dispatch(p, q, processSingleMateClipRegDetectWork, mate_clip_reg_work_opt);
+		//}
+	}
+
+    hts_tpool_process_flush(q);
+    hts_tpool_process_destroy(q);
+    hts_tpool_destroy(p);
+
+    //cout << "\tChr " << chrname << ", num_work=" << num_work << ", mate_clip_reg_fail_num=" << mate_clip_reg_fail_num << endl;
+}
+
+// sort mate clipping region items by work id
+void Chrome::sortMateClipRegsByWorkId(){
+	size_t i;
+	mateClipReg_t *mate_clip_1, *mate_clip_2, *tmp;
+
+	if(mateClipRegVector.size()<2) return;
+
+	for(i=0; i<mateClipRegVector.size()-1; i++){
+		mate_clip_1 = mateClipRegVector.at(i);
+		mate_clip_2 = mateClipRegVector.at(i+1);
+		if(mate_clip_1->work_id>mate_clip_2->work_id){
+			tmp = mateClipRegVector.at(i);
+			mateClipRegVector.at(i) = mateClipRegVector.at(i+1);
+			mateClipRegVector.at(i+1) = tmp;
+		}
+	}
+}
+
+// sort mate clipping region items by bubble sort
+void Chrome::bubbleSortMateClipRegs(){
+	size_t i, j;
+	mateClipReg_t *mate_clip_1, *mate_clip_2, *tmp;
+	int64_t left_pos1, left_pos2, other_left_pos1, other_left_pos2, left_pos, other_left_pos;
+	int64_t right_pos1, right_pos2, other_right_pos1, other_right_pos2, right_pos, other_right_pos;
+	int64_t left_end_pos1, left_end_pos2, other_left_end_pos1, other_left_end_pos2, left_end_pos, other_left_end_pos;
+	int64_t right_end_pos1, right_end_pos2, other_right_end_pos1, other_right_end_pos2, right_end_pos, other_right_end_pos;
+	int64_t clipPosNum, other_clipPosNum;
+	bool swap_flag, equal_flag;
+
+	if(mateClipRegVector.size()<2) return;
+
+	for(i=0; i<mateClipRegVector.size(); i++){
+		for(j=0; j<mateClipRegVector.size()-i-1; j++){
+			mate_clip_1 = mateClipRegVector.at(j);
+			mate_clip_2 = mateClipRegVector.at(j+1);
+
+			left_pos1 = left_pos2 = other_left_pos1 = other_left_pos2 = left_pos = other_left_pos = -1;
+			right_pos1 = right_pos2 = other_right_pos1 = other_right_pos2 = right_pos = other_right_pos = -1;
+
+			if(mate_clip_1->leftClipReg) {
+				left_pos1 = mate_clip_1->leftClipReg->startRefPos;
+				left_end_pos1 = mate_clip_1->leftClipReg->endRefPos;
+			}
+			if(mate_clip_1->leftClipReg2) {
+				left_pos2 = mate_clip_1->leftClipReg2->startRefPos;
+				left_end_pos2 = mate_clip_1->leftClipReg2->endRefPos;
+			}
+			if(mate_clip_1->rightClipReg){
+				right_pos1 = mate_clip_1->rightClipReg->startRefPos;
+				right_end_pos1 = mate_clip_1->rightClipReg->endRefPos;
+			}
+			if(mate_clip_1->rightClipReg2){
+				right_pos2 = mate_clip_1->rightClipReg2->startRefPos;
+				right_end_pos2 = mate_clip_1->rightClipReg2->endRefPos;
+			}
+
+			if(mate_clip_2->leftClipReg){
+				other_left_pos1 = mate_clip_2->leftClipReg->startRefPos;
+				other_left_end_pos1 = mate_clip_2->leftClipReg->endRefPos;
+			}
+			if(mate_clip_2->leftClipReg2){
+				other_left_pos2 = mate_clip_2->leftClipReg2->startRefPos;
+				other_left_end_pos2 = mate_clip_2->leftClipReg2->endRefPos;
+			}
+			if(mate_clip_2->rightClipReg){
+				other_right_pos1 = mate_clip_2->rightClipReg->startRefPos;
+				other_right_end_pos1 = mate_clip_2->rightClipReg->endRefPos;
+			}
+			if(mate_clip_2->rightClipReg2){
+				other_right_pos2 = mate_clip_2->rightClipReg2->startRefPos;
+				other_right_end_pos2 = mate_clip_2->rightClipReg2->endRefPos;
+			}
+
+			// ignore the second region if there are two regions
+			if(left_pos1!=-1) { left_pos = left_pos1; left_end_pos = left_end_pos1; }
+			else{ left_pos = left_pos2; left_end_pos = left_end_pos2; }
+			if(right_pos1!=-1){ right_pos = right_pos1; right_end_pos = right_end_pos1; }
+			else{ right_pos = right_pos2; right_end_pos = right_end_pos2; }
+
+			if(other_left_pos1!=-1){ other_left_pos = other_left_pos1; other_left_end_pos = other_left_end_pos1; }
+			else{ other_left_pos = other_left_pos2; other_left_end_pos = other_left_end_pos2; }
+			if(other_right_pos1!=-1){ other_right_pos = other_right_pos1; other_right_end_pos = other_right_end_pos1; }
+			else{ other_right_pos = other_right_pos2; other_right_end_pos = other_right_end_pos2; }
+
+			clipPosNum = mate_clip_1->leftClipPosNum + mate_clip_1->leftClipPosNum2 + mate_clip_1->rightClipPosNum + mate_clip_1->rightClipPosNum2;
+			other_clipPosNum = mate_clip_2->leftClipPosNum + mate_clip_2->leftClipPosNum2 + mate_clip_2->rightClipPosNum + mate_clip_2->rightClipPosNum2;
+
+			swap_flag = equal_flag = false;
+			if(left_pos>other_left_pos) swap_flag = true;
+			else if(left_pos==other_left_pos){ // equal left loci, then compare right loci
+				if(right_pos>other_right_pos) swap_flag = true;
+				else if(right_pos==other_right_pos){ // equal right loci, then compare left end loci
+					if(left_end_pos>other_left_end_pos) swap_flag = true;
+					else if(left_end_pos==other_left_end_pos){ // equal left end loci, then compare right end loci
+						if(right_end_pos>other_right_end_pos) swap_flag = true;
+						else if(right_end_pos==other_right_end_pos){ // check clipPosNum
+							if(clipPosNum<other_clipPosNum) swap_flag = true;
+							else if(clipPosNum==other_clipPosNum) equal_flag = true;
+						}
+					}
+				}
+			}
+
+			// sort by the second region
+			if(equal_flag and mate_clip_1->leftClipRegNum==2 and mate_clip_2->leftClipRegNum==2){
+				if(left_pos2>other_left_pos2) swap_flag = true;
+				else if(left_pos2==other_left_pos2){
+					if(left_end_pos2>other_left_end_pos2) swap_flag = true;
+					else if(left_end_pos2==other_left_end_pos2) equal_flag = true;
+				}
+
+			}
+			if(equal_flag and mate_clip_1->rightClipRegNum==2 and mate_clip_2->rightClipRegNum==2){
+				if(right_pos2>other_right_pos2) swap_flag = true;
+				else if(right_pos2==other_right_pos2){
+					if(right_end_pos2>other_right_end_pos2) swap_flag = true;
+					else if(right_end_pos2==other_right_end_pos2) equal_flag = true;
+				}
+			}
+
+			if(swap_flag){ // swap
+				tmp = mateClipRegVector.at(j);
+				mateClipRegVector.at(j) = mateClipRegVector.at(j+1);
+				mateClipRegVector.at(j+1) = tmp;
+			}
+		}
+	}
+}
+
+// check sort mate clipping region items
+void Chrome::checkSortMateClipRegs(){
+	size_t i;
+	mateClipReg_t *mate_clip_1, *mate_clip_2;
+	int64_t left_pos1, left_pos2, other_left_pos1, other_left_pos2, left_pos, other_left_pos, err_pos1, err_pos2;
+	int64_t right_pos1, right_pos2, other_right_pos1, other_right_pos2, right_pos, other_right_pos;
+	int64_t left_end_pos1, left_end_pos2, other_left_end_pos1, other_left_end_pos2, left_end_pos, other_left_end_pos;
+	int64_t right_end_pos1, right_end_pos2, other_right_end_pos1, other_right_end_pos2, right_end_pos, other_right_end_pos;
+	int64_t clipPosNum, other_clipPosNum;
+	bool swap_flag, equal_flag;
+
+	if(mateClipRegVector.size()<2) return;
+
+	for(i=0; i<mateClipRegVector.size()-1; i++){
+		mate_clip_1 = mateClipRegVector.at(i);
+		mate_clip_2 = mateClipRegVector.at(i+1);
+		left_pos1 = left_pos2 = other_left_pos1 = other_left_pos2 = left_pos = other_left_pos = -1;
+		right_pos1 = right_pos2 = other_right_pos1 = other_right_pos2 = right_pos = other_right_pos = -1;
+
+		if(mate_clip_1->leftClipReg) {
+			left_pos1 = mate_clip_1->leftClipReg->startRefPos;
+			left_end_pos1 = mate_clip_1->leftClipReg->endRefPos;
+		}
+		if(mate_clip_1->leftClipReg2) {
+			left_pos2 = mate_clip_1->leftClipReg2->startRefPos;
+			left_end_pos2 = mate_clip_1->leftClipReg2->endRefPos;
+		}
+		if(mate_clip_1->rightClipReg){
+			right_pos1 = mate_clip_1->rightClipReg->startRefPos;
+			right_end_pos1 = mate_clip_1->rightClipReg->endRefPos;
+		}
+		if(mate_clip_1->rightClipReg2){
+			right_pos2 = mate_clip_1->rightClipReg2->startRefPos;
+			right_end_pos2 = mate_clip_1->rightClipReg2->endRefPos;
+		}
+
+		if(mate_clip_2->leftClipReg){
+			other_left_pos1 = mate_clip_2->leftClipReg->startRefPos;
+			other_left_end_pos1 = mate_clip_2->leftClipReg->endRefPos;
+		}
+		if(mate_clip_2->leftClipReg2){
+			other_left_pos2 = mate_clip_2->leftClipReg2->startRefPos;
+			other_left_end_pos2 = mate_clip_2->leftClipReg2->endRefPos;
+		}
+		if(mate_clip_2->rightClipReg){
+			other_right_pos1 = mate_clip_2->rightClipReg->startRefPos;
+			other_right_end_pos1 = mate_clip_2->rightClipReg->endRefPos;
+		}
+		if(mate_clip_2->rightClipReg2){
+			other_right_pos2 = mate_clip_2->rightClipReg2->startRefPos;
+			other_right_end_pos2 = mate_clip_2->rightClipReg2->endRefPos;
+		}
+
+		// ignore the second region if there are two regions
+		if(left_pos1!=-1) { left_pos = left_pos1; left_end_pos = left_end_pos1; }
+		else{ left_pos = left_pos2; left_end_pos = left_end_pos2; }
+		if(right_pos1!=-1){ right_pos = right_pos1; right_end_pos = right_end_pos1; }
+		else{ right_pos = right_pos2; right_end_pos = right_end_pos2; }
+
+		if(other_left_pos1!=-1){ other_left_pos = other_left_pos1; other_left_end_pos = other_left_end_pos1; }
+		else{ other_left_pos = other_left_pos2; other_left_end_pos = other_left_end_pos2; }
+		if(other_right_pos1!=-1){ other_right_pos = other_right_pos1; other_right_end_pos = other_right_end_pos1; }
+		else{ other_right_pos = other_right_pos2; other_right_end_pos = other_right_end_pos2; }
+
+		clipPosNum = mate_clip_1->leftClipPosNum + mate_clip_1->leftClipPosNum2 + mate_clip_1->rightClipPosNum + mate_clip_1->rightClipPosNum2;
+		other_clipPosNum = mate_clip_2->leftClipPosNum + mate_clip_2->leftClipPosNum2 + mate_clip_2->rightClipPosNum + mate_clip_2->rightClipPosNum2;
+
+		swap_flag = equal_flag = false;
+		err_pos1 = err_pos2 = -1;
+		if(left_pos>other_left_pos){
+			swap_flag = true;
+			err_pos1 = left_pos;
+			err_pos2 = other_left_pos;
+		}else if(left_pos==other_left_pos){ // equal left loci, then compare right loci
+			if(right_pos>other_right_pos) {
+				swap_flag = true;
+				err_pos1 = right_pos;
+				err_pos2 = other_right_pos;
+			}else if(right_pos==other_right_pos){ // equal right loci, then compare left end loci
+				if(left_end_pos>other_left_end_pos){
+					swap_flag = true;
+					err_pos1 = left_end_pos;
+					err_pos2 = other_left_end_pos;
+				}else if(left_end_pos==other_left_end_pos){ // equal left end loci, then compare right end loci
+					if(right_end_pos>other_right_end_pos){
+						swap_flag = true;
+						err_pos1 = right_end_pos;
+						err_pos2 = other_right_end_pos;
+					}else if(right_end_pos==other_right_end_pos){ // check clipPosNum
+						if(clipPosNum<other_clipPosNum) {
+							swap_flag = true;
+							err_pos1 = right_end_pos;
+							err_pos2 = other_right_end_pos;
+						}else if(clipPosNum==other_clipPosNum) equal_flag = true;
+					}
+				}
+			}
+		}
+
+		// check the second region
+		if(equal_flag and mate_clip_1->leftClipRegNum==2 and mate_clip_2->leftClipRegNum==2){
+			if(left_pos2>other_left_pos2){
+				swap_flag = true;
+				err_pos1 = left_pos2;
+				err_pos2 = other_left_pos2;
+			}else if(left_pos2==other_left_pos2) {
+				if(left_end_pos2>other_left_end_pos2){
+					swap_flag = true;
+					err_pos1 = left_end_pos2;
+					err_pos2 = other_left_end_pos2;
+				}else if(left_end_pos2==other_left_end_pos2) equal_flag = true;
+			}
+		}
+		if(equal_flag and mate_clip_1->rightClipRegNum==2 and mate_clip_2->rightClipRegNum==2){
+			if(right_pos2>other_right_pos2){
+				swap_flag = true;
+				err_pos1 = right_pos2;
+				err_pos2 = other_right_pos2;
+			}else if(right_pos2==other_right_pos2){
+				if(right_end_pos2>other_right_end_pos2){
+					swap_flag = true;
+					err_pos1 = right_end_pos2;
+					err_pos2 = other_right_end_pos2;
+				}else if(right_end_pos2==other_right_end_pos2) equal_flag = true;
+			}
+		}
+
+		if(swap_flag){
+			cerr << "line=" << __LINE__ << ", " << __func__ << ": i=" << i << ", " << err_pos1 << " > " << err_pos2 << ", order error!" << endl;
+			exit(1);
+		}
+	}
+
+	//cout << "mate clipping regions are sorted in order." << endl;
+}
+
+//void Chrome::removeRedundantItemsClipReg(vector<reg_t*> &clipReg_vec, vector<bool> &processed_flag_vec){
+void Chrome::removeRedundantItemsClipReg(vector<reg_t*> &clipReg_vec){
 	size_t i, j;
 	reg_t *reg, *reg_tmp;
 
@@ -424,264 +777,161 @@ void Chrome::removeRedundantItemsClipReg(vector<reg_t*> &clipReg_vec, vector<boo
 				//cout << "redundant: " << reg_tmp->chrname << ":" << reg_tmp->startRefPos << "-" << reg_tmp->endRefPos << endl;
 				delete reg_tmp;
 				clipReg_vec.erase(clipReg_vec.begin()+j);
-				processed_flag_vec.erase(processed_flag_vec.begin()+j);
+				//processed_flag_vec.erase(processed_flag_vec.begin()+j);
 			}else j++;
 		}
-	}
-}
-
-// process clip regions and mate clip regions
-void Chrome::processClipRegs(size_t idx, vector<bool> &clip_processed_flag_vec, mateClipReg_t &mate_clip_reg, reg_t *clip_reg){
-	size_t i;
-	reg_t *reg, *reg_tmp;
-	mateClipReg_t *clip_reg_new;
-	Block *bloc;
-	int32_t idx_tmp;
-
-	if(mate_clip_reg.valid_flag){
-		// add mate clip region
-		if(mate_clip_reg.leftClipReg or mate_clip_reg.leftClipReg2 or mate_clip_reg.rightClipReg or mate_clip_reg.rightClipReg2){
-			clip_reg_new = new mateClipReg_t();
-			clip_reg_new->leftClipReg = mate_clip_reg.leftClipReg;
-			clip_reg_new->leftClipPosNum = mate_clip_reg.leftClipPosNum;
-			clip_reg_new->rightClipReg = mate_clip_reg.rightClipReg;
-			clip_reg_new->rightClipPosNum = mate_clip_reg.rightClipPosNum;
-			clip_reg_new->leftMeanClipPos = mate_clip_reg.leftMeanClipPos;
-			clip_reg_new->rightMeanClipPos = mate_clip_reg.rightMeanClipPos;
-
-			clip_reg_new->leftClipReg2 = mate_clip_reg.leftClipReg2;
-			clip_reg_new->rightClipReg2 = mate_clip_reg.rightClipReg2;
-			clip_reg_new->leftClipPosNum2 = mate_clip_reg.leftClipPosNum2;
-			clip_reg_new->rightClipPosNum2 = mate_clip_reg.rightClipPosNum2;
-			clip_reg_new->leftClipRegNum = mate_clip_reg.leftClipRegNum;
-			clip_reg_new->rightClipRegNum = mate_clip_reg.rightClipRegNum;
-			clip_reg_new->leftMeanClipPos2 = mate_clip_reg.leftMeanClipPos2;
-			clip_reg_new->rightMeanClipPos2 = mate_clip_reg.rightMeanClipPos2;
-
-			clip_reg_new->reg_mated_flag = mate_clip_reg.reg_mated_flag;
-			clip_reg_new->chrname_leftTra1 = clip_reg_new->chrname_rightTra1 = clip_reg_new->chrname_leftTra2 = clip_reg_new->chrname_rightTra2 = "";
-			clip_reg_new->leftClipPosTra1 = clip_reg_new->rightClipPosTra1 = clip_reg_new->leftClipPosTra2 = clip_reg_new->rightClipPosTra2 = -1;
-			clip_reg_new->sv_type = mate_clip_reg.sv_type;
-			clip_reg_new->dup_num = mate_clip_reg.dup_num;
-			clip_reg_new->valid_flag = mate_clip_reg.valid_flag;
-			clip_reg_new->call_success_flag = false;
-			clip_reg_new->tra_rescue_success_flag = false;
-			for(i=0; i<4; i++) clip_reg_new->bnd_mate_reg_strs[i] = mate_clip_reg.bnd_mate_reg_strs[i];
-			mateClipRegVector.push_back(clip_reg_new);
-		}
-
-		// detect overlapped clip regions
-		if(mate_clip_reg.leftClipReg){ // left region 1
-			for(i=0; i<clipRegVector.size(); i++){
-				reg = clipRegVector.at(i);
-				if(isOverlappedReg(mate_clip_reg.leftClipReg, reg)) // overlapped
-					clip_processed_flag_vec.at(i) = true;
-			}
-		}
-		if(mate_clip_reg.leftClipReg2){ // left region 2
-			for(i=0; i<clipRegVector.size(); i++){
-				reg = clipRegVector.at(i);
-				if(isOverlappedReg(mate_clip_reg.leftClipReg2, reg)) // overlapped
-					clip_processed_flag_vec.at(i) = true;
-			}
-		}
-		if(mate_clip_reg.rightClipReg){ // right region 1
-			for(i=0; i<clipRegVector.size(); i++){
-				reg = clipRegVector.at(i);
-				if(isOverlappedReg(mate_clip_reg.rightClipReg, reg)) // overlapped
-					clip_processed_flag_vec.at(i) = true;
-			}
-		}
-		if(mate_clip_reg.rightClipReg2){ // right region 2
-			for(i=0; i<clipRegVector.size(); i++){
-				reg = clipRegVector.at(i);
-				if(isOverlappedReg(mate_clip_reg.rightClipReg2, reg)) // overlapped
-					clip_processed_flag_vec.at(i) = true;
-			}
-		}
-	}else{
-		// delete mate clip region
-		if(mate_clip_reg.leftClipReg) { delete mate_clip_reg.leftClipReg; mate_clip_reg.leftClipReg = NULL; }
-		if(mate_clip_reg.leftClipReg2) { delete mate_clip_reg.leftClipReg2; mate_clip_reg.leftClipReg2 = NULL; }
-		if(mate_clip_reg.rightClipReg) { delete mate_clip_reg.rightClipReg; mate_clip_reg.rightClipReg = NULL; }
-		if(mate_clip_reg.rightClipReg2) { delete mate_clip_reg.rightClipReg2; mate_clip_reg.rightClipReg2 = NULL; }
-		if(mate_clip_reg.var_cand) { removeVarCandNodeClipReg(mate_clip_reg.var_cand); mate_clip_reg.var_cand = NULL; } // free item
-		if(mate_clip_reg.left_var_cand_tra) { removeVarCandNodeClipReg(mate_clip_reg.left_var_cand_tra); mate_clip_reg.left_var_cand_tra = NULL; }  // free item
-		if(mate_clip_reg.right_var_cand_tra) { removeVarCandNodeClipReg(mate_clip_reg.right_var_cand_tra); mate_clip_reg.right_var_cand_tra = NULL; }  // free item
-
-		// add the region into indel vector
-		reg = new reg_t();
-		reg->chrname = chrname;
-		reg->startRefPos = clip_reg->startRefPos;
-		reg->endRefPos = clip_reg->endRefPos;
-		reg->startLocalRefPos = reg->endLocalRefPos = 0;
-		reg->startQueryPos = reg->endQueryPos = 0;
-		reg->var_type = VAR_UNC;
-		reg->sv_len = 0;
-		reg->query_id = -1;
-		reg->blat_aln_id = -1;
-		reg->call_success_status = false;
-		reg->short_sv_flag = false;
-		reg->zero_cov_flag = false;
-		reg->aln_seg_end_flag = false;
-
-		// get position
-		idx_tmp = -1;
-		bloc = computeBlocByPos(clip_reg->startRefPos, blockVector);
-		for(i=0; i<bloc->indelVector.size(); i++){
-			reg_tmp = bloc->indelVector.at(i);
-			if(reg->startRefPos<reg_tmp->startRefPos){
-				idx_tmp = i;
-				break;
-			}
-		}
-		// add item
-		if(idx_tmp!=-1) bloc->indelVector.insert(bloc->indelVector.begin()+idx_tmp, reg);
-		else bloc->indelVector.push_back(reg);
 	}
 }
 
 // merge same TRA region
 void Chrome::mergeSameRegTRA(){
 	size_t i, end_flag1, pos_num1, pos_num2, mean_pos1, mean_pos2, tmp;
-	mateClipReg_t *clip_reg, *clip_reg_mate_end, *clip_reg_retained, *clip_reg_redudant;
+	mateClipReg_t *clip_reg, *clip_reg_mate_end, *clip_reg_retained, *clip_reg_redudant, *clip_reg_mate_end_tmp;
 	reg_t *reg1, *reg2, *reg_tmp;
 
 	for(i=0; i<mateClipRegVector.size(); i++){
 		clip_reg = mateClipRegVector.at(i);
 		if(clip_reg->valid_flag and clip_reg->reg_mated_flag and clip_reg->sv_type==VAR_TRA and (clip_reg->leftClipRegNum==2 or clip_reg->rightClipRegNum==2)){
 			// get other end region according to the same clipping region
-			clip_reg_mate_end = getMateRegEndSameClipReg(clip_reg, mateClipRegVector);
-			if(clip_reg_mate_end){
-				// merge nodes
-				end_flag1 = 0;
-				reg1 = NULL; pos_num1 = mean_pos1 = 0;
-				if(clip_reg->leftClipRegNum==1){
-					if(clip_reg->leftClipReg){
-						reg1 = clip_reg->leftClipReg;
-						pos_num1 = clip_reg->leftClipPosNum;
-						mean_pos1 = clip_reg->leftMeanClipPos;
-					}else{
-						reg1 = clip_reg->leftClipReg2;
-						pos_num1 = clip_reg->leftClipPosNum2;
-						mean_pos1 = clip_reg->leftMeanClipPos2;
-					}
-					end_flag1 = 1;
-				}else if(clip_reg->rightClipRegNum==1){
-					if(clip_reg->rightClipReg){
-						reg1 = clip_reg->rightClipReg;
-						pos_num1 = clip_reg->rightClipPosNum;
-						mean_pos1 = clip_reg->rightMeanClipPos;
-					}else{
-						reg1 = clip_reg->rightClipReg2;
-						pos_num1 = clip_reg->rightClipPosNum2;
-						mean_pos1 = clip_reg->rightMeanClipPos2;
-					}
-					end_flag1 = 2;
-				}
+			while(1){
+				clip_reg_mate_end = getMateRegEndSameClipReg(clip_reg, mateClipRegVector);
+				if(clip_reg_mate_end and clip_reg_mate_end!=clip_reg_mate_end_tmp){
+					//cout << "line=" << __LINE__ << ", i=" << i << endl;
 
-				reg2 = NULL; pos_num2 = mean_pos2 = 0;
-				if(clip_reg_mate_end->leftClipRegNum==1){
-					if(clip_reg_mate_end->leftClipReg){
-						reg2 = clip_reg_mate_end->leftClipReg;
-						pos_num2 = clip_reg_mate_end->leftClipPosNum;
-						mean_pos2 = clip_reg_mate_end->leftMeanClipPos;
-					}else{
-						reg2 = clip_reg_mate_end->leftClipReg2;
-						pos_num2 = clip_reg_mate_end->leftClipPosNum2;
-						mean_pos2 = clip_reg_mate_end->leftMeanClipPos2;
-					}
-				}else if(clip_reg_mate_end->rightClipRegNum==1){
-					if(clip_reg_mate_end->rightClipReg){
-						reg2 = clip_reg_mate_end->rightClipReg;
-						pos_num2 = clip_reg_mate_end->rightClipPosNum;
-						mean_pos2 = clip_reg_mate_end->rightMeanClipPos;
-					}else{
-						reg2 = clip_reg_mate_end->rightClipReg2;
-						pos_num2 = clip_reg_mate_end->rightClipPosNum2;
-						mean_pos2 = clip_reg_mate_end->rightMeanClipPos2;
-					}
-				}
+					clip_reg_mate_end_tmp = clip_reg_mate_end;
 
-				if(reg1 and reg2){ // merge
-					clip_reg_retained = clip_reg;
-					clip_reg_redudant = clip_reg_mate_end;
-					if(end_flag1==1){
-						// process double-region end
-						if(clip_reg_retained->rightClipRegNum==2 and clip_reg_retained->rightClipReg->startRefPos>clip_reg_retained->rightClipReg2->startRefPos){
-							reg_tmp = clip_reg_retained->rightClipReg;
-							clip_reg_retained->rightClipReg = clip_reg_retained->rightClipReg2;
-							clip_reg_retained->rightClipReg2 = reg_tmp;
-							tmp = clip_reg_retained->rightClipPosNum;
-							clip_reg_retained->rightClipPosNum = clip_reg_retained->rightClipPosNum2;
-							clip_reg_retained->rightClipPosNum2 = tmp;
-							tmp = clip_reg_retained->rightMeanClipPos;
-							clip_reg_retained->rightMeanClipPos = clip_reg_retained->rightMeanClipPos2;
-							clip_reg_retained->rightMeanClipPos2 = tmp;
-						}
-
-						// process single-region end
-						if(reg1->startRefPos<=reg2->startRefPos){
-							clip_reg_retained->leftClipReg = reg1;
-							clip_reg_retained->leftClipPosNum = pos_num1;
-							clip_reg_retained->leftMeanClipPos = mean_pos1;
-							clip_reg_retained->leftClipReg2 = reg2;
-							clip_reg_retained->leftClipPosNum2 = pos_num2;
-							clip_reg_retained->leftMeanClipPos2 = mean_pos2;
+					// merge nodes
+					end_flag1 = 0;
+					reg1 = NULL; pos_num1 = mean_pos1 = 0;
+					if(clip_reg->leftClipRegNum==1){
+						if(clip_reg->leftClipReg){
+							reg1 = clip_reg->leftClipReg;
+							pos_num1 = clip_reg->leftClipPosNum;
+							mean_pos1 = clip_reg->leftMeanClipPos;
 						}else{
-							clip_reg_retained->leftClipReg = reg2;
-							clip_reg_retained->leftClipPosNum = pos_num2;
-							clip_reg_retained->leftMeanClipPos = mean_pos2;
-							clip_reg_retained->leftClipReg2 = reg1;
-							clip_reg_retained->leftClipPosNum2 = pos_num1;
-							clip_reg_retained->leftMeanClipPos2 = mean_pos1;
+							reg1 = clip_reg->leftClipReg2;
+							pos_num1 = clip_reg->leftClipPosNum2;
+							mean_pos1 = clip_reg->leftMeanClipPos2;
 						}
-						clip_reg_retained->leftClipRegNum = 2;
-
-					}else{
-						// process double-region end
-						if(clip_reg_retained->leftClipReg->startRefPos>clip_reg_retained->leftClipReg2->startRefPos){
-							reg_tmp = clip_reg_retained->leftClipReg;
-							clip_reg_retained->leftClipReg = clip_reg_retained->leftClipReg2;
-							clip_reg_retained->leftClipReg2 = reg_tmp;
-							tmp = clip_reg_retained->leftClipPosNum;
-							clip_reg_retained->leftClipPosNum = clip_reg_retained->leftClipPosNum2;
-							clip_reg_retained->leftClipPosNum2 = tmp;
-							tmp = clip_reg_retained->leftMeanClipPos;
-							clip_reg_retained->leftMeanClipPos = clip_reg_retained->leftMeanClipPos2;
-							clip_reg_retained->leftMeanClipPos2 = tmp;
-						}
-
-						// process single-region end
-						if(reg1->startRefPos<=reg2->startRefPos){
-							clip_reg_retained->rightClipReg = reg1;
-							clip_reg_retained->rightClipPosNum = pos_num1;
-							clip_reg_retained->rightMeanClipPos = mean_pos1;
-							clip_reg_retained->rightClipReg2 = reg2;
-							clip_reg_retained->rightClipPosNum2 = pos_num2;
-							clip_reg_retained->rightMeanClipPos2 = mean_pos2;
+						end_flag1 = 1;
+					}else if(clip_reg->rightClipRegNum==1){
+						if(clip_reg->rightClipReg){
+							reg1 = clip_reg->rightClipReg;
+							pos_num1 = clip_reg->rightClipPosNum;
+							mean_pos1 = clip_reg->rightMeanClipPos;
 						}else{
-							clip_reg_retained->rightClipReg = reg2;
-							clip_reg_retained->rightClipPosNum = pos_num2;
-							clip_reg_retained->rightMeanClipPos = mean_pos2;
-							clip_reg_retained->rightClipReg2 = reg1;
-							clip_reg_retained->rightClipPosNum2 = pos_num1;
-							clip_reg_retained->rightMeanClipPos2 = mean_pos1;
+							reg1 = clip_reg->rightClipReg2;
+							pos_num1 = clip_reg->rightClipPosNum2;
+							mean_pos1 = clip_reg->rightMeanClipPos2;
 						}
-						clip_reg_retained->rightClipRegNum = 2;
+						end_flag1 = 2;
 					}
 
-					// update redundant region information
-					if(clip_reg_redudant->leftClipReg==reg2) { clip_reg_redudant->leftClipReg = NULL; clip_reg_redudant->leftClipRegNum--; }
-					else if(clip_reg_redudant->leftClipReg2==reg2) { clip_reg_redudant->leftClipReg2 = NULL; clip_reg_redudant->leftClipRegNum--; }
-					else if(clip_reg_redudant->rightClipReg==reg2) { clip_reg_redudant->rightClipReg = NULL; clip_reg_redudant->rightClipRegNum--; }
-					else if(clip_reg_redudant->rightClipReg2==reg2) { clip_reg_redudant->rightClipReg2 = NULL; clip_reg_redudant->rightClipRegNum--; }
-					else{
-						cerr << "line=" << __LINE__ << ", invalid region, error!" << endl;
-						exit(1);
+					reg2 = NULL; pos_num2 = mean_pos2 = 0;
+					if(clip_reg_mate_end->leftClipRegNum==1){
+						if(clip_reg_mate_end->leftClipReg){
+							reg2 = clip_reg_mate_end->leftClipReg;
+							pos_num2 = clip_reg_mate_end->leftClipPosNum;
+							mean_pos2 = clip_reg_mate_end->leftMeanClipPos;
+						}else{
+							reg2 = clip_reg_mate_end->leftClipReg2;
+							pos_num2 = clip_reg_mate_end->leftClipPosNum2;
+							mean_pos2 = clip_reg_mate_end->leftMeanClipPos2;
+						}
+					}else if(clip_reg_mate_end->rightClipRegNum==1){
+						if(clip_reg_mate_end->rightClipReg){
+							reg2 = clip_reg_mate_end->rightClipReg;
+							pos_num2 = clip_reg_mate_end->rightClipPosNum;
+							mean_pos2 = clip_reg_mate_end->rightMeanClipPos;
+						}else{
+							reg2 = clip_reg_mate_end->rightClipReg2;
+							pos_num2 = clip_reg_mate_end->rightClipPosNum2;
+							mean_pos2 = clip_reg_mate_end->rightMeanClipPos2;
+						}
 					}
-					clip_reg_redudant->valid_flag = false;
-				}
+
+					if(reg1 and reg2){ // merge
+						clip_reg_retained = clip_reg;
+						clip_reg_redudant = clip_reg_mate_end;
+						if(end_flag1==1){
+							// process double-region end
+							if(clip_reg_retained->rightClipRegNum==2 and clip_reg_retained->rightClipReg->startRefPos>clip_reg_retained->rightClipReg2->startRefPos){
+								reg_tmp = clip_reg_retained->rightClipReg;
+								clip_reg_retained->rightClipReg = clip_reg_retained->rightClipReg2;
+								clip_reg_retained->rightClipReg2 = reg_tmp;
+								tmp = clip_reg_retained->rightClipPosNum;
+								clip_reg_retained->rightClipPosNum = clip_reg_retained->rightClipPosNum2;
+								clip_reg_retained->rightClipPosNum2 = tmp;
+								tmp = clip_reg_retained->rightMeanClipPos;
+								clip_reg_retained->rightMeanClipPos = clip_reg_retained->rightMeanClipPos2;
+								clip_reg_retained->rightMeanClipPos2 = tmp;
+
+								cerr << "************** line=" << __LINE__ << ", invalid swap, error!" << endl;
+							}
+
+							// process single-region end
+							if(reg1->startRefPos<=reg2->startRefPos){
+								clip_reg_retained->leftClipReg = reg1;
+								clip_reg_retained->leftClipPosNum = pos_num1;
+								clip_reg_retained->leftMeanClipPos = mean_pos1;
+								clip_reg_retained->leftClipReg2 = reg2;
+								clip_reg_retained->leftClipPosNum2 = pos_num2;
+								clip_reg_retained->leftMeanClipPos2 = mean_pos2;
+							}else{
+								clip_reg_retained->leftClipReg = reg2;
+								clip_reg_retained->leftClipPosNum = pos_num2;
+								clip_reg_retained->leftMeanClipPos = mean_pos2;
+								clip_reg_retained->leftClipReg2 = reg1;
+								clip_reg_retained->leftClipPosNum2 = pos_num1;
+								clip_reg_retained->leftMeanClipPos2 = mean_pos1;
+							}
+							clip_reg_retained->leftClipRegNum = 2;
+
+						}else{
+							// process double-region end
+							if(clip_reg_retained->leftClipReg->startRefPos>clip_reg_retained->leftClipReg2->startRefPos){
+								reg_tmp = clip_reg_retained->leftClipReg;
+								clip_reg_retained->leftClipReg = clip_reg_retained->leftClipReg2;
+								clip_reg_retained->leftClipReg2 = reg_tmp;
+								tmp = clip_reg_retained->leftClipPosNum;
+								clip_reg_retained->leftClipPosNum = clip_reg_retained->leftClipPosNum2;
+								clip_reg_retained->leftClipPosNum2 = tmp;
+								tmp = clip_reg_retained->leftMeanClipPos;
+								clip_reg_retained->leftMeanClipPos = clip_reg_retained->leftMeanClipPos2;
+								clip_reg_retained->leftMeanClipPos2 = tmp;
+							}
+
+							// process single-region end
+							if(reg1->startRefPos<=reg2->startRefPos){
+								clip_reg_retained->rightClipReg = reg1;
+								clip_reg_retained->rightClipPosNum = pos_num1;
+								clip_reg_retained->rightMeanClipPos = mean_pos1;
+								clip_reg_retained->rightClipReg2 = reg2;
+								clip_reg_retained->rightClipPosNum2 = pos_num2;
+								clip_reg_retained->rightMeanClipPos2 = mean_pos2;
+							}else{
+								clip_reg_retained->rightClipReg = reg2;
+								clip_reg_retained->rightClipPosNum = pos_num2;
+								clip_reg_retained->rightMeanClipPos = mean_pos2;
+								clip_reg_retained->rightClipReg2 = reg1;
+								clip_reg_retained->rightClipPosNum2 = pos_num1;
+								clip_reg_retained->rightMeanClipPos2 = mean_pos1;
+							}
+							clip_reg_retained->rightClipRegNum = 2;
+						}
+
+						// update redundant region information
+						if(clip_reg_redudant->leftClipReg==reg2) { clip_reg_redudant->leftClipReg = NULL; clip_reg_redudant->leftClipRegNum--; }
+						else if(clip_reg_redudant->leftClipReg2==reg2) { clip_reg_redudant->leftClipReg2 = NULL; clip_reg_redudant->leftClipRegNum--; }
+						else if(clip_reg_redudant->rightClipReg==reg2) { clip_reg_redudant->rightClipReg = NULL; clip_reg_redudant->rightClipRegNum--; }
+						else if(clip_reg_redudant->rightClipReg2==reg2) { clip_reg_redudant->rightClipReg2 = NULL; clip_reg_redudant->rightClipRegNum--; }
+						else{
+							cerr << "line=" << __LINE__ << ", invalid region, error!" << endl;
+							exit(1);
+						}
+						clip_reg_redudant->valid_flag = false;
+					}
+				}else break;
 			}
 		}
 	}
@@ -1093,6 +1343,105 @@ void Chrome::chrMergeDetectResultToFile(){
 
 	// clipping regions
 	out_file_clipReg.open(out_filename_detect_clipReg);
+	if(!out_file_clipReg.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_detect_clipReg << endl;
+		exit(1);
+	}
+	for(i=0; i<mateClipRegVector.size(); i++){
+		mate_clip_reg = mateClipRegVector.at(i);
+		reg = mate_clip_reg->leftClipReg;
+		line = "";
+		if(reg) line += reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos);
+		else line += "-\t-\t-";
+
+		reg = mate_clip_reg->leftClipReg2;
+		if(reg) line += "\t" + reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos);
+		else line += "\t-\t-\t-";
+
+		reg = mate_clip_reg->rightClipReg;
+		if(reg) line += "\t" + reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos);
+		else line += "\t-\t-\t-";
+
+		reg = mate_clip_reg->rightClipReg2;
+		if(reg) line += "\t" + reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos);
+		else line += "\t-\t-\t-";
+
+		if(mateClipRegVector.at(i)->reg_mated_flag==true) line += "\t1";
+		else line += "\t0";
+
+		switch(mate_clip_reg->sv_type){
+			case VAR_UNC: var_type = "UNC"; break;
+			case VAR_DUP: var_type = "DUP"; break;
+			case VAR_INV: var_type = "INV"; break;
+			case VAR_TRA: var_type = "TRA"; break;
+			case VAR_MIX: var_type = "MIX"; break;
+			default: cerr << __func__ << ", line=" << __LINE__ << ": invalid var_type: " << mate_clip_reg->sv_type << endl; exit(1);
+		}
+
+		line += "\t####\t" + to_string(mate_clip_reg->leftMeanClipPos) + "\t" + to_string(mate_clip_reg->leftMeanClipPos2) + "\t" + to_string(mate_clip_reg->rightMeanClipPos) + "\t" + to_string(mate_clip_reg->rightMeanClipPos2);
+		line += "\t" + var_type;
+
+		if(mate_clip_reg->sv_type==VAR_DUP)
+			line += "\t" + to_string(mate_clip_reg->dup_num);
+		else
+			line += "\t-";
+
+		mate_str = mate_clip_reg->bnd_mate_reg_strs[0];
+		for(j=1; j<4; j++) mate_str += ";" + mate_clip_reg->bnd_mate_reg_strs[j];
+		line += "\t" + mate_str;
+
+		line += "\t" + to_string(mate_clip_reg->leftClipPosNum) + "\t" + to_string(mate_clip_reg->leftClipPosNum2) + "\t" + to_string(mate_clip_reg->rightClipPosNum) + "\t" + to_string(mate_clip_reg->rightClipPosNum2);
+
+		out_file_clipReg << line << endl;
+		//cout << line << endl;
+	}
+	out_file_clipReg.close();
+}
+
+void Chrome::chrMergeDetectResultToFile_debug(){
+	size_t i, j, pos;
+	ofstream out_file_snv, out_file_indel, out_file_clipReg;
+	string filename, line, var_type, mate_str, tmp_str;
+	string out_filename_detect_snv_tmp, out_filename_detect_indel_tmp, out_filename_detect_clipReg_tmp;
+	vector<reg_t*> indel_vec;
+	vector<size_t> snv_vec;
+	mateClipReg_t *mate_clip_reg;
+	reg_t *reg;
+	Block* bloc;
+
+	out_filename_detect_snv_tmp = out_filename_detect_snv + "_tmp";
+	out_filename_detect_indel_tmp = out_filename_detect_indel + "_tmp";
+	out_filename_detect_clipReg_tmp = out_filename_detect_clipReg + "_tmp";
+
+	out_file_snv.open(out_filename_detect_snv_tmp);
+	if(!out_file_snv.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_detect_snv << endl;
+		exit(1);
+	}
+	out_file_indel.open(out_filename_detect_indel_tmp);
+	if(!out_file_indel.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_detect_indel << endl;
+		exit(1);
+	}
+
+	for(i=0; i<blockVector.size(); i++){
+		bloc = blockVector.at(i);
+		indel_vec = bloc->indelVector;
+		for(j=0; j<indel_vec.size(); j++){
+			reg = indel_vec.at(j);
+			out_file_indel << reg->chrname << "\t" << reg->startRefPos << "\t" <<  reg->endRefPos << endl;
+		}
+		snv_vec = bloc->snvVector;
+		for(j=0; j<snv_vec.size(); j++){
+			pos = snv_vec.at(j);
+			out_file_snv << chrname << "\t" << pos << endl;
+		}
+	}
+	out_file_snv.close();
+	out_file_indel.close();
+
+	// clipping regions
+	out_file_clipReg.open(out_filename_detect_clipReg_tmp);
 	if(!out_file_clipReg.is_open()){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_detect_clipReg << endl;
 		exit(1);
@@ -1722,7 +2071,7 @@ void Chrome::loadPrevAssembledInfo2(bool clipReg_flag, bool limit_reg_process_fl
 	int64_t item_id;
 	simpleReg_t *simple_reg, *prev_simple_reg;
 	vector<simpleReg_t*> sub_limit_reg_vec, prev_limit_reg_vec, prev_limit_reg_vec_tmp, pos_limit_reg_vec;
-	bool flag, pos_contained_flag, prev_delete_flag, done_flag;
+	bool flag, pos_contained_flag, prev_delete_flag, done_flag, reassemble_flag;
 
 	if(clipReg_flag){
 		infilename = var_cand_clipReg_filename;
@@ -1804,13 +2153,14 @@ void Chrome::loadPrevAssembledInfo2(bool clipReg_flag, bool limit_reg_process_fl
 
 				if(flag){
 					// remove the item from assemble work vector
-					done_flag = false;
+					done_flag = reassemble_flag = false;
 					item_id = getItemIDFromAssemWorkVec(contigfilename, assem_work_vec);
 					if(item_id!=-1){ // already assembled
 						done_str = str_vec.at(str_vec.size()-1);
 						if(done_str.compare(DONE_STR)==0) done_flag = true;
 					}
-					if(done_flag){ // assemble done
+					if(paras->reassemble_failed_work_flag and str_vec.at(5).compare(ASSEMBLY_FAILURE)==0) reassemble_flag = true;
+					if(done_flag and reassemble_flag==false){ // assemble done and NOT reassemble
 						deleteItemFromAssemWorkVec(item_id, assem_work_vec); // already assembled, then remove it from the work vector
 						paras->assemble_reg_preDone_num ++;
 						paras->assemble_reg_work_total --;
@@ -1957,7 +2307,8 @@ void Chrome::chrCollectCallWork(){
 
 	for(size_t i=0; i<var_cand_vec.size(); i++) paras->call_work_vec.push_back(var_cand_vec.at(i));
 	for(size_t i=0; i<var_cand_clipReg_vec.size(); i++) paras->call_work_vec.push_back(var_cand_clipReg_vec.at(i));
-	cout << "\tChr " << chrname << ": indel regions: " << var_cand_vec.size() << ", clipping regions: " << var_cand_clipReg_vec.size() << ", total regions: " << total_chr << endl;
+	paras->call_work_vec.shrink_to_fit();
+	cout << "\tChr " << chrname << ": " << var_cand_vec.size() << " indel regions, " << var_cand_clipReg_vec.size() << " clipping regions, total regions: " << total_chr << endl;
 }
 
 
@@ -2486,7 +2837,7 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag
 	varCand *var_cand_tmp;
 	simpleReg_t *simple_reg, *prev_simple_reg;
 	vector<simpleReg_t*> sub_limit_reg_vec, prev_limit_reg_vec, prev_limit_reg_vec_tmp, pos_limit_reg_vec;
-	bool flag, pos_contained_flag, prev_delete_flag, aln_ctg_match_flag;
+	bool flag, pos_contained_flag, prev_delete_flag, aln_ctg_match_flag, aln_completed_flag;
 	size_t i;
 
 	if(clipReg_flag) infilename = blat_var_cand_clipReg_filename;
@@ -2584,10 +2935,13 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag
 				}
 
 				// deal with 'DONE' string
-				aln_ctg_match_flag = false;
+				aln_ctg_match_flag = aln_completed_flag = false;
 				done_str = line_vec.at(line_vec.size()-1);
-				if(done_str.compare(DONE_STR)==0) aln_ctg_match_flag = isBlatAlnResultMatch(contigfilename, alnfilename);
-				if(aln_ctg_match_flag){
+				if(done_str.compare(DONE_STR)==0) {
+					aln_ctg_match_flag = isBlatAlnResultMatch(contigfilename, alnfilename);
+					aln_completed_flag = isBlatAlnCompleted(alnfilename);
+				}
+				if(aln_ctg_match_flag and aln_completed_flag){
 					if(clipReg_flag) blat_aligned_chr_clipReg_varCand_vec.push_back(var_cand_tmp);
 					else blat_aligned_chr_varCand_vec.push_back(var_cand_tmp);
 				}else delete var_cand_tmp;
@@ -2596,6 +2950,9 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag
 			if(!prev_limit_reg_vec.empty() and prev_delete_flag) destroyLimitRegVector(prev_limit_reg_vec);
 		}
 	}
+
+	if(clipReg_flag) blat_aligned_chr_clipReg_varCand_vec.shrink_to_fit();
+	else blat_aligned_chr_varCand_vec.shrink_to_fit();
 
 	infile.close();
 	if(limit_reg_process_flag) delete simple_reg;
@@ -2861,19 +3218,6 @@ void Chrome::removeVarCandNodeClipReg(varCand *var_cand){
 	removeVarCandNode(var_cand, var_cand_clipReg_vec);
 }
 
-void Chrome::removeVarCandNode(varCand *var_cand, vector<varCand*> &var_cand_vec){
-	varCand *var_cand_tmp;
-	for(size_t i=0; i<var_cand_vec.size(); i++){
-		var_cand_tmp = var_cand_vec.at(i);
-		if(var_cand_tmp==var_cand){
-			var_cand_tmp->destroyVarCand();
-			delete var_cand_tmp;
-			var_cand_vec.erase(var_cand_vec.begin()+i);
-			break;
-		}
-	}
-}
-
 // fill the sequence, including reference sequence and contig sequence
 void Chrome::chrFillVarseq(){
 	chrFillVarseqSingleVec(var_cand_vec);
@@ -3106,6 +3450,11 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 
 	for(i=0; i<var_cand_clipReg_vec.size(); i++){
 		var_cand = var_cand_clipReg_vec[i];
+
+		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_contig_1_1016017-1016409.sim4")==0){
+			cout << "line=" << __LINE__ << ", alnfilename=" << var_cand->alnfilename << endl;
+		}
+
 		if(var_cand->clip_reg_flag==false){ // indel
 			for(j=0; j<var_cand->varVec.size(); j++){
 				reg = var_cand->varVec[j];

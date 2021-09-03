@@ -24,7 +24,8 @@ ASVCLR depends on the following libraries and tools:
 * HTSlib (http://www.htslib.org/download/)
 * Canu 2.1 or higher (https://github.com/marbl/canu/releases)
 * BLAT (http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/blat/)
-* g++ (v4.7 or higher which supports c++11).
+* g++ (v4.7 or higher which supports c++11)
+* awk (https://pkgs.org/download/gawk)
 
 The above library and tools should be installed before compiling ASVCLR. Canu (2.1 or higher) and BLAT should be globally accessible in the computer system, these executable files `canu` and `blat` or their soft links should be included in the `$PATH` directory.
 
@@ -42,6 +43,17 @@ $ ./autogen.sh
 And the binary file `asvclr` will be output into the folder `bin` in this package directory.
 
 
+## Compiling Prerequisites
+
+Compling prerequisites:
+
+* Ubuntu:
+sudo apt-get install gawk
+
+* CentOS:
+sudo yum install gwak
+
+
 ## Quick Start
 
 Simply, ASVCLR can be run by typing the `all` command:
@@ -51,7 +63,7 @@ $ asvclr all -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
 Program: ASVCLR (Accurate Structural Variant Caller for Long Reads)
-Version: 1.0.1 (using htslib 1.9)
+Version: 1.0.6 (using htslib 1.9)
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -106,7 +118,7 @@ Besides, the overall help information can be shown as below:
 ```sh
 $ asvclr
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.0.1 (using htslib 1.9)
+Version: 1.0.6 (using htslib 1.9)
 
 Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -151,7 +163,7 @@ And the help information are shown below:
 ```sh
 $ asvclr detect
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.0.1 (using htslib 1.9)
+Version: 1.0.6 (using htslib 1.9)
 
 Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -195,7 +207,7 @@ And the help information are shown below:
 ```sh
 $ asvclr assemble
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.0.1 (using htslib 1.9)
+Version: 1.0.6 (using htslib 1.9)
 
 Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>
 
@@ -252,7 +264,7 @@ And the help information are shown below:
 ```sh
 $ asvclr call
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.0.1 (using htslib 1.9)
+Version: 1.0.6 (using htslib 1.9)
 
 Usage: asvclr call [options] <REF_FILE> <BAM_FILE>
 

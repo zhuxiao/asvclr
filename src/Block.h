@@ -100,7 +100,7 @@ class Block{
 		void updateIndelRegUsingLongZeroCov(vector<reg_t*> &regVec, vector<reg_t*> &zero_cov_vec);
 		void removeFalseIndel();
 		void removeFalseSNV();
-		void sortRegVec(vector<reg_t*> &regVector);
+		//void sortRegVec(vector<reg_t*> &regVector);
 		void blockGenerateLocalAssembleWorkOpt_Indel();
 		void blockGenerateLocalAssembleWorkOpt_ClipReg();
 		void saveSV2File();
