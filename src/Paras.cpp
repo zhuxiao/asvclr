@@ -73,6 +73,7 @@ void Paras::init(){
 		cerr << "line=" << __LINE__ << ", mem_total=" << mem_total << ", swap_total=" << swap_total << ", cannot get the supplied memory information, error." << endl;
 		exit(1);
 	}
+	extend_total = mem_total<swap_total ? mem_total : swap_total;
 
 	call_work_num = 0;
 }
@@ -637,17 +638,18 @@ void Paras::showUsage(){
 	cout << "Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
-	cout << "   REF_FILE      Reference file (required)" << endl;
-	cout << "   BAM_FILE      Coordinate-sorted BAM file (required)" << endl;
-	cout << "   Region        Reference regions to process: CHR|CHR:START-END." << endl;
-	cout << "                 If unspecified, all reference regions will be " << endl;
-	cout << "                 processed (optional)" << endl << endl;
+	cout << "   REF_FILE          Reference file (required)" << endl;
+	cout << "   BAM_FILE          Coordinate-sorted BAM file (required)" << endl;
+	cout << "   Region            Reference regions to process: CHR|CHR:START-END." << endl;
+	cout << "                     If unspecified, all reference regions will be " << endl;
+	cout << "                     processed (optional)" << endl << endl;
 
 	cout << "Commands:" << endl;
-	cout << "   detect        detect indel signatures in aligned reads" << endl;
-	cout << "   assemble      assemble candidate regions" << endl;
-	cout << "   call          call indels by alignments of local genome assemblies" << endl;
-	cout << "   all           run the above commands in turn" << endl;
+	cout << "   detect            detect indel signatures in aligned reads" << endl;
+	cout << "   assemble          assemble candidate regions" << endl;
+	cout << "   call              call indels by alignments of local genome assemblies" << endl;
+	cout << "   all               run the above commands in turn" << endl;
+	cout << "   detect-assemble   run 'detect' and 'assemble' commands in turn" << endl;
 }
 
 // show the usage for detect command

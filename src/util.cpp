@@ -14,6 +14,7 @@
 vector<string> split(const string& s, const string& delim)
 {
     vector<string> elems;
+    string tmp;
     size_t pos = 0;
     size_t len = s.length();
     size_t delim_len = delim.length();
@@ -26,7 +27,8 @@ vector<string> split(const string& s, const string& delim)
             elems.push_back(s.substr(pos, len - pos));
             break;
         }
-        elems.push_back(s.substr(pos, find_pos - pos));
+        tmp = s.substr(pos, find_pos - pos);
+        if(!tmp.empty()) elems.push_back(tmp);
         pos = find_pos + delim_len;
     }
     return elems;
@@ -1183,8 +1185,8 @@ bool isBlatAlnCompleted(string &alnfilename){
 				}
 			}else{    // segments
 				line_vec = split(line, " ");
-				if(line_vec.size()==7){
-					if(line_vec.at(6).compare("->")!=0 and line_vec.at(6).compare("<-")!=0){
+				if(line_vec.size()==4){
+					if(line_vec.at(3).compare("->")!=0 and line_vec.at(3).compare("<-")!=0){
 						flag = false;
 						break;
 					}
@@ -3081,6 +3083,86 @@ bool isRegSorted(vector<reg_t*> &regVector){
 		}
 	}
 	return flag;
+}
+
+// start work process monitor
+void startWorkProcessMonitor(string &work_finish_filename, string &monitoring_proc_names){
+	if(isFileExist(work_finish_filename)) remove(work_finish_filename.c_str());
+
+	procMonitor_op *proc_monitor_op = new procMonitor_op();
+	proc_monitor_op->work_finish_filename = work_finish_filename;
+	proc_monitor_op->monitoring_proc_names = monitoring_proc_names;
+
+	// start new thread
+	pthread_t tid;
+	pthread_create(&tid, NULL, workProcessMonitor, proc_monitor_op);
+	pthread_detach(tid);
+}
+
+// assemble monitor
+void *workProcessMonitor(void *arg){
+	procMonitor_op *proc_monitor_op = (procMonitor_op *)arg;
+	FILE *fp;
+	char buffer[256];
+	string pscmd, line, tmp;
+	int32_t uid, len;
+	vector<string> str_vec, tmp_vec, tmp_vec2;
+	int32_t day, hour, minute, total;
+	pid_t pid;
+
+	while(1){
+		if(isFileExist(proc_monitor_op->work_finish_filename)){
+			remove(proc_monitor_op->work_finish_filename.c_str());
+			break;
+		}else{
+			pscmd = "ps -C " + proc_monitor_op->monitoring_proc_names;
+			uid = getuid();
+			pscmd += " -o comm,pid,time,uid | grep ";
+			pscmd += to_string(uid);
+			fp = popen(pscmd.c_str(), "r");
+
+			while(fgets(buffer,sizeof(buffer), fp)){
+				//printf("%s", buffer);
+				line = buffer;
+				str_vec = split(line," ");
+//				for(uint32_t i=0; i<str_vec.size(); i++){
+//					cout << "["<< i << "]:" << str_vec.at(i) << endl;
+//				}
+
+				len = str_vec.size();
+				if(len>=4){
+					//compute cpu running time
+					day = hour= minute = 0;
+					if(str_vec.at(len-2).find('-')==string::npos){
+						tmp_vec = split(str_vec.at(len-2), ":");
+						hour = stoi(tmp_vec.at(0));
+						minute = stoi(tmp_vec.at(1));
+					}else{
+						tmp_vec = split(str_vec.at(len-2), "-");
+						day = stoi(tmp_vec.at(0));
+						tmp_vec2 = split(tmp_vec.at(1), ":");
+						hour = stoi(tmp_vec2.at(0));
+						minute =  stoi(tmp_vec2.at(1));
+					}
+					total = day*24*60 + hour*60 + minute;
+					//cout << total << endl;
+
+					// kill process
+					pid = stoi(str_vec.at(len-3));
+					if(total>MAX_MONITOR_RUNNING_MINUTES){
+						kill(pid, SIGKILL);
+						cout << "kkkkkkkkkiiiiiiiiiiiiiiilllllllllllll: " << line << endl;
+					}
+				}
+			}
+			pclose(fp);
+		}
+		sleep(MONITOR_WAIT_SECONDS);
+	}
+
+	delete (procMonitor_op *)arg;
+
+	return NULL;
 }
 
 

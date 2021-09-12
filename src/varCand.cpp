@@ -263,9 +263,9 @@ void varCand::blatParse(){
 				line_vec = split(line, " ");
 
 				q_reg_str = line_vec[0];   // query
-				s_reg_str = line_vec[2];   // subject
-				ident_percent_str = line_vec[5];  // identity percent
-				orient_str = line_vec[6];  // orientation
+				s_reg_str = line_vec[1];   // subject
+				ident_percent_str = line_vec[2];  // identity percent
+				orient_str = line_vec[3];  // orientation
 
 				aln_seg = new aln_seg_t;   // allocate memory
 
@@ -1146,7 +1146,7 @@ void varCand::computeSeqAlignment(localAln_t *local_aln){
 
 		while(1){
 			pthread_mutex_lock(&mutex_mem);
-			if(mem_seqAln+mem_cost<=mem_total*mem_use_block_factor+swap_total*swap_use_block_factor){ // prepare for alignment computation
+			if(mem_seqAln+mem_cost<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){ // prepare for alignment computation
 				mem_seqAln += mem_cost;
 				work_num ++;
 				aln_flag = true;
@@ -1154,8 +1154,8 @@ void varCand::computeSeqAlignment(localAln_t *local_aln){
 			pthread_mutex_unlock(&mutex_mem);
 
 			if(aln_flag==false){ // block the alignment computation
-				//cout << "\t" << __func__ << ": sleep " << mem_block_seconds << " seconds, rowsNum=" << rowsNum << ", colsNum=" << colsNum << ", " << alnfilename << endl;
-				sleep(mem_block_seconds);
+				//cout << "\t" << __func__ << ": wait " << mem_wait_seconds << " seconds, rowsNum=" << rowsNum << ", colsNum=" << colsNum << ", " << alnfilename << endl;
+				sleep(mem_wait_seconds);
 			}else break;
 		}
 	}
@@ -1196,7 +1196,7 @@ void varCand::computeSeqAlignmentOp(localAln_t *local_aln){
 	gapOpenScore = GAP_OPEN_SCORE;
 
 //	if(rowsNum>=30000 or colsNum>=30000){
-//		cout << "\t" << __func__ << ": work_num=" << work_num << ", rowsNum=" << rowsNum << ", colsNum=" << colsNum << ", " << alnfilename << endl;
+		//cout << "\t" << __func__ << ": work_num=" << work_num << ", rowsNum=" << rowsNum << ", colsNum=" << colsNum << ", " << alnfilename << endl;
 //	}
 
 	arrSize = rowsNum * colsNum;

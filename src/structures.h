@@ -188,4 +188,8 @@ typedef struct{
 	//int32_t *p_mate_clip_reg_fail_num;
 }mateClipRegDetectWork_opt;
 
+typedef struct{
+	string work_finish_filename, monitoring_proc_names;
+}procMonitor_op;
+
 #endif /* SRC_STRUCTURES_H_ */

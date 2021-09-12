@@ -5,11 +5,12 @@ int64_t mem_total = 0;		// in kB
 //int64_t mem_free;		// in kB
 //int64_t mem_available;	// in kB
 int64_t swap_total = 0;	// in kB
+int64_t extend_total = 0;	// in kB, the minimum of mem_total and swap_total
 
 int64_t mem_seqAln = 0;		// in kB
 double mem_use_block_factor = 0.9;
-double swap_use_block_factor = 0.1;
-int32_t mem_block_seconds = 5;	// block the computation by 10 second
+double extend_use_block_factor = 0.1;
+int32_t mem_wait_seconds = 2;	// wait time
 
 int32_t work_num = 0;
 

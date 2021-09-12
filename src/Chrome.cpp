@@ -457,11 +457,11 @@ void Chrome::processMateClipRegDetectWork(){
 	int32_t num_work;
 	reg_t *reg;
 	mateClipRegDetectWork_opt *mate_clip_reg_work_opt;
-	Time time;
+	//Time time;
 
 	if(clipRegVector.empty()) return;  // no assemble work, then return directly
 
-	cout << "[" << time.getTime() << "], Chr " << chrname << ", detect mate clipping regions using " << paras->num_threads << " threads ..." << endl;
+	//cout << "[" << time.getTime() << "], Chr " << chrname << ", detect mate clipping regions using " << paras->num_threads << " threads ..." << endl;
 
 	hts_tpool *p = hts_tpool_init(paras->num_threads);
 	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);

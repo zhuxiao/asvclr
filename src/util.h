@@ -9,10 +9,13 @@
 #include <dirent.h>
 #include <htslib/sam.h>
 #include <htslib/faidx.h>
+#include <signal.h>
+#include <thread>
 
 #include "structures.h"
 #include "Base.h"
 #include "clipReg.h"
+
 
 using namespace std;
 
@@ -114,7 +117,8 @@ Block* computeBlocByPos_util(int64_t begPos, vector<Block*> &block_vec, Paras *p
 int32_t computeBlocID_util(int64_t begPos, vector<Block*> &block_vec, Paras *paras);
 void sortRegVec(vector<reg_t*> &regVector);
 bool isRegSorted(vector<reg_t*> &regVector);
-
+void startWorkProcessMonitor(string &work_finish_filename, string &monitoring_proc_names);
+void *workProcessMonitor(void *arg);
 
 class Time{
 	private:

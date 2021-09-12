@@ -67,6 +67,9 @@ void Genome::init(){
 	out_filename_result_vars_vcf = out_dir_result + "/" + result_prefix + "genome_variants.vcf";
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
+	work_finish_filename = out_dir + "/" + "work_finsh";
+	monitoring_proc_names = "overlapInCore,falconsense,blat";
+
 	limit_reg_filename = out_dir_detect + "/" + paras->limit_reg_filename;
 
 	if(paras->limit_reg_process_flag) saveLimitRegsToFile(limit_reg_filename, paras->limit_reg_vec);
@@ -95,7 +98,7 @@ void Genome::init(){
 	}
 	chr_vec_tmp.shrink_to_fit();
 
-	// sort chromesomes
+	// sort chromosomes
 	sortChromes(chromeVector, chr_vec_tmp);
 }
 
@@ -531,6 +534,9 @@ int Genome::genomeLocalAssemble(){
 
 	//outputAssemWorkOptToFile_debug(paras->assem_work_vec);
 
+	// invoke the monitor of assemble work process
+	startWorkProcessMonitor(work_finish_filename, monitoring_proc_names);
+
 	// begin assemble
 	if(!paras->assem_work_vec.empty()) cout << "[" << time.getTime() << "]: start local assemble..." << endl;
 	processAssembleWork();
@@ -553,7 +559,7 @@ void Genome::genomeLoadDataAssemble(){
 	if(chromeVector.size()==0) return;
 
 	// load X, Y, hs37d5
-	for(int32_t i=chromeVector.size()-1; i>=0; i--){
+	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		if(chr->decoy_flag==false or paras->include_decoy==false){ // non-decoy
 			if(chr->chrname.compare(CHR_X_STR1)==0 or chr->chrname.compare(CHR_X_STR2)==0 or chr->chrname.compare(CHR_Y_STR1)==0 or chr->chrname.compare(CHR_Y_STR2)==0){
@@ -642,11 +648,14 @@ int Genome::processAssembleWork(){
 		hts_tpool_dispatch(p, q, processSingleAssembleWork, assem_work);
 	}
 
-    hts_tpool_process_flush(q);
-    hts_tpool_process_destroy(q);
-    hts_tpool_destroy(p);
+	hts_tpool_process_flush(q);
+	hts_tpool_process_destroy(q);
+	hts_tpool_destroy(p);
 
-    return 0;
+	// create the work finish file
+	generateFile(work_finish_filename);
+
+	return 0;
 }
 
 // get car_cand output file according to given 'chrname'
@@ -664,6 +673,17 @@ ofstream* Genome::getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, b
 	return var_cand_file;
 }
 
+// generate file
+void Genome::generateFile(string &filename){
+	// create the work finish file
+	ofstream out_file(filename);
+	if(!out_file.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << filename << endl;
+		exit(1);
+	}
+	out_file.close();
+}
+
 // call variants for genome
 int Genome::genomeCall(){
 	Time time;
@@ -676,6 +696,9 @@ int Genome::genomeCall(){
 	genomeCollectCallWork();
 
 	cout << "Number of regions to be processed: " << paras->call_work_num << endl;
+
+	// invoke the monitor of assemble work process
+	startWorkProcessMonitor(work_finish_filename, monitoring_proc_names);
 
 	// blat alignment work
 	time.setStartTime();
@@ -697,6 +720,9 @@ int Genome::genomeCall(){
 	cout << "4444444444444" << endl;
 	cout << "[" << time.getTime() << "]: fill variant sequences... " << endl;
 	genomeFillVarseq();
+
+    // generate work process finish file
+    generateFile(work_finish_filename);
 
 	// save SV to file
 	cout << "5555555555555" << endl;
@@ -725,7 +751,7 @@ void Genome::genomeCollectCallWork(){
 	if(chromeVector.size()==0) return;
 
 	// load X, Y, hs37d5
-	for(int32_t i=chromeVector.size()-1; i>=0; i--){
+	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		if(chr->decoy_flag==false or paras->include_decoy==false){ // non-decoy
 			if(chr->chrname.compare(CHR_X_STR1)==0 or chr->chrname.compare(CHR_X_STR2)==0 or chr->chrname.compare(CHR_Y_STR1)==0 or chr->chrname.compare(CHR_Y_STR2)==0){

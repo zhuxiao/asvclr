@@ -10,11 +10,12 @@ extern int64_t mem_total;		// in kB
 //int64_t mem_free;		// in kB
 //int64_t mem_available;	// in kB
 extern int64_t swap_total;	// in kB
+extern int64_t extend_total; // in kB
 
 extern int64_t mem_seqAln;		// in kB
 extern double mem_use_block_factor;
-extern double swap_use_block_factor;
-extern int32_t mem_block_seconds;	// block the computation by 10 second
+extern double extend_use_block_factor;
+extern int32_t mem_wait_seconds;	// wait time
 
 extern int32_t work_num;
 

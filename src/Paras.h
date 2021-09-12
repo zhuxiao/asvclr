@@ -16,7 +16,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.0.6"
+#define PROG_VERSION				"1.0.7"
 #define VCF_VERSION					"4.2"
 
 #define CANU_RECOMMEND_VERSION		"2.1"
@@ -99,6 +99,9 @@ using namespace std;
 
 #define MAX_ASSEMBLE_MINUTES			15
 #define MAX_ALN_MINUTES					15
+
+#define MAX_MONITOR_RUNNING_MINUTES		120
+#define MONITOR_WAIT_SECONDS			60
 
 // program parameters
 class Paras

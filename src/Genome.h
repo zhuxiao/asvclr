@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <string>
+#include <thread>
 
 #include "structures.h"
 #include "Paras.h"
@@ -22,14 +23,14 @@ class Genome{
 		vector<Chrome*> chromeVector;
 		faidx_t *fai;
 		bam_hdr_t *header;
-		int genomeSize;
+		int64_t genomeSize;
 
 		// output directory and files
 		string out_dir, out_dir_detect, out_dir_assemble, out_dir_call, out_dir_tra, out_dir_result;
 
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
 		string out_filename_result_snv, out_filename_result_indel, out_filename_result_clipReg, out_filename_result_tra, out_filename_result_vars, out_filename_result_vars_vcf;
-
+		string work_finish_filename, monitoring_proc_names;
 		string limit_reg_filename;
 
 		//vector<varCand*> var_cand_vec;
@@ -67,6 +68,7 @@ class Genome{
 		void genomeLoadDataAssemble();
 		int processAssembleWork();
 		ofstream* getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, bool clip_reg_flag);
+		void generateFile(string &filename);
 
 		void genomeCollectCallWork();
 		void genomeFinishCallWork();
