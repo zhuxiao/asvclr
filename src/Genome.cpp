@@ -680,6 +680,7 @@ void Genome::generateFile(string &filename){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << filename << endl;
 		exit(1);
 	}
+	out_file << "work_finished" << endl;
 	out_file.close();
 }
 
