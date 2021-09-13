@@ -13,25 +13,26 @@
 // string split function
 vector<string> split(const string& s, const string& delim)
 {
-    vector<string> elems;
-    string tmp;
-    size_t pos = 0;
-    size_t len = s.length();
-    size_t delim_len = delim.length();
-    if (delim_len == 0) return elems;
-    while (pos < len)
-    {
-        int find_pos = s.find(delim, pos);
-        if (find_pos < 0)
-        {
-            elems.push_back(s.substr(pos, len - pos));
-            break;
-        }
-        tmp = s.substr(pos, find_pos - pos);
-        if(!tmp.empty()) elems.push_back(tmp);
-        pos = find_pos + delim_len;
-    }
-    return elems;
+	vector<string> elems;
+	string tmp;
+	size_t pos = 0;
+	size_t len = s.length();
+	size_t delim_len = delim.length();
+	int find_pos;
+
+	if (delim_len == 0) return elems;
+	while (pos < len)
+	{
+		find_pos = s.find(delim, pos);
+		if(find_pos < 0){
+			elems.push_back(s.substr(pos, len - pos));
+			break;
+		}
+		tmp = s.substr(pos, find_pos - pos);
+		if(!tmp.empty()) elems.push_back(tmp);
+		pos = find_pos + delim_len;
+	}
+	return elems;
 }
 
 // determine whether the str exist in string vector
@@ -3086,12 +3087,13 @@ bool isRegSorted(vector<reg_t*> &regVector){
 }
 
 // start work process monitor
-void startWorkProcessMonitor(string &work_finish_filename, string &monitoring_proc_names){
+void startWorkProcessMonitor(string &work_finish_filename, string &monitoring_proc_names, int32_t max_proc_running_minutes){
 	if(isFileExist(work_finish_filename)) remove(work_finish_filename.c_str());
 
 	procMonitor_op *proc_monitor_op = new procMonitor_op();
 	proc_monitor_op->work_finish_filename = work_finish_filename;
 	proc_monitor_op->monitoring_proc_names = monitoring_proc_names;
+	proc_monitor_op->max_proc_running_minutes = max_proc_running_minutes;
 
 	// start new thread
 	pthread_t tid;
@@ -3149,7 +3151,7 @@ void *workProcessMonitor(void *arg){
 
 					// kill process
 					pid = stoi(str_vec.at(len-3));
-					if(total>MAX_MONITOR_RUNNING_MINUTES){
+					if(total>proc_monitor_op->max_proc_running_minutes){
 						kill(pid, SIGKILL);
 						cout << "kkkkkkkkkiiiiiiiiiiiiiiilllllllllllll: " << line << endl;
 					}

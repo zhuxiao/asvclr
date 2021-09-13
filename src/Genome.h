@@ -30,7 +30,7 @@ class Genome{
 
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
 		string out_filename_result_snv, out_filename_result_indel, out_filename_result_clipReg, out_filename_result_tra, out_filename_result_vars, out_filename_result_vars_vcf;
-		string work_finish_filename, monitoring_proc_names;
+		string work_finish_filename;
 		string limit_reg_filename;
 
 		//vector<varCand*> var_cand_vec;

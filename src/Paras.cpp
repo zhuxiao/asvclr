@@ -67,6 +67,9 @@ void Paras::init(){
 		exit(1);
 	}
 
+	monitoring_proc_names = DEFAULT_MONITOR_PROC_NAMES;
+	max_proc_running_minutes = MAX_PROC_RUNNING_MINUTES;
+
 	mem_total = getMemInfo("MemTotal", 2);
 	swap_total = getMemInfo("SwapTotal", 2);
 	if(mem_total<0 or swap_total<0){
@@ -346,6 +349,8 @@ int Paras::parseAssembleParas(int argc, char **argv){
 		{ "keep-failed-reads", no_argument, NULL, 0 },
 		{ "reassemble-failed-work", no_argument, NULL, 0 },
 		{ "min-input-cov-assemble", required_argument, NULL, 0 },
+		{ "monitor_proc_names", required_argument, NULL, 0 },
+		{ "max_proc_running_minutes", required_argument, NULL, 0 },
 		{ "technology", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
@@ -436,6 +441,8 @@ int Paras::parseCallParas(int argc, char **argv){
 //		{ "dir", required_argument, NULL, 'd' },
 //		{ "out", required_argument, NULL, 'o' },
 //		{ "log", required_argument, NULL, 'l' },
+		{ "monitor_proc_names", required_argument, NULL, 0 },
+		{ "max_proc_running_minutes", required_argument, NULL, 0 },
 		{ "sample", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
@@ -533,6 +540,8 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		{ "keep-failed-reads", no_argument, NULL, 0 },
 		{ "reassemble-failed-work", no_argument, NULL, 0 },
 		{ "mask-noisy-region", required_argument, NULL, 0 },
+		{ "monitor_proc_names", required_argument, NULL, 0 },
+		{ "max_proc_running_minutes", required_argument, NULL, 0 },
 		{ "technology", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
@@ -723,6 +732,15 @@ void Paras::showAssembleUsage(){
 	cout << "                 Reperform previously failed local assemble work." << endl;
 	cout << "   --min-input-cov-assemble FLOAT" << endl;
 	cout << "                 Minimum input coverage for local assemble [" << MIN_INPUT_COV_CANU << "]" << endl;
+	cout << "   --monitor_proc_names STR" << endl;
+	cout << "                 Process names to be monitored during Canu assemble and BLAT alignment." << endl;
+	cout << "                 These processes may have ultra-high CPU running time under some certain" << endl;
+	cout << "                 circumstances and should be terminated in advance if they become" << endl;
+	cout << "                 computation intensive works. Note that the process names should be" << endl;
+	cout << "                 comma-delimited and without blanks: [\"" << DEFAULT_MONITOR_PROC_NAMES << "\"]" << endl;
+	cout << "   --max_proc_running_minutes INT" << endl;
+	cout << "                 Monitored processes will be terminated if their CPU running time exceed" << endl;
+	cout << "                 INT minutes: [" << MAX_PROC_RUNNING_MINUTES << "]" << endl;
 	cout << "   --technology STR" << endl;
 	cout << "                 Sequencing technology [pacbio]:" << endl;
 	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
@@ -757,6 +775,15 @@ void Paras::showCallUsage(){
 	cout << "   -p STR        prefix of output result files [null]" << endl;
 	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
+	cout << "   --monitor_proc_names STR" << endl;
+	cout << "                 Process names to be monitored during Canu assemble and BLAT alignment." << endl;
+	cout << "                 These processes may have ultra-high CPU running time under some certain" << endl;
+	cout << "                 circumstances and should be terminated in advance if they become" << endl;
+	cout << "                 computation intensive works. Note that the process names should be" << endl;
+	cout << "                 comma-delimited and without blanks: [\"" << DEFAULT_MONITOR_PROC_NAMES << "\"]" << endl;
+	cout << "   --max_proc_running_minutes INT" << endl;
+	cout << "                 Monitored processes will be terminated if their CPU running time exceed" << endl;
+	cout << "                 INT minutes: [" << MAX_PROC_RUNNING_MINUTES << "]" << endl;
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
@@ -809,6 +836,15 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 Reperform previously failed local assemble work." << endl;
 	cout << "   --min-input-cov-assemble FLOAT" << endl;
 	cout << "                 Minimum input coverage for local assemble [" << MIN_INPUT_COV_CANU << "]" << endl;
+	cout << "   --monitor_proc_names STR" << endl;
+	cout << "                 Process names to be monitored during Canu assemble and BLAT alignment." << endl;
+	cout << "                 These processes may have ultra-high CPU running time under some certain" << endl;
+	cout << "                 circumstances and should be terminated in advance if they become" << endl;
+	cout << "                 computation intensive works. Note that the process names should be" << endl;
+	cout << "                 comma-delimited and without blanks: [\"" << DEFAULT_MONITOR_PROC_NAMES << "\"]" << endl;
+	cout << "   --max_proc_running_minutes INT" << endl;
+	cout << "                 Monitored processes will be terminated if their CPU running time exceed" << endl;
+	cout << "                 INT minutes: [" << MAX_PROC_RUNNING_MINUTES << "]" << endl;
 	cout << "   --technology STR" << endl;
 	cout << "                 Sequencing technology [pacbio]:" << endl;
 	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
@@ -854,6 +890,10 @@ void Paras::outputParas(){
 	if(keep_failed_reads_flag) cout << "Retain failed local temporary reads: yes" << endl;
 	if(reassemble_failed_work_flag) cout << "Reperform previously failed local assemble work: yes" << endl;
 	cout << "Minimum input coverage for local assemble: " << min_input_cov_canu << endl;
+	if(command.compare("assemble")==0 or command.compare("call")==0 or command.compare("all")==0 or command.compare("detect-assemble")==0){
+		cout << "Monitored process names: " << monitoring_proc_names << endl;
+		cout << "Maximum monitored process running minutes: " << max_proc_running_minutes << endl;
+	}
 	if(include_decoy) cout << "Include decoy items: yes" << endl;
 	cout << "Sequencing technology: " << technology << endl;
 	cout << "Canu version: " << canu_version << endl;
@@ -956,6 +996,7 @@ int64_t Paras::estimateSinglePara(int64_t *arr, int32_t n, double threshold, int
 // parse long options
 int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct option *lopts){
 	int ret = 0;
+	size_t find_pos;
 	string lower_str;
 
 	string opt_name_str = lopts[option_index].name;
@@ -979,6 +1020,24 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 		maskMisAlnRegFlag = true;
 	}else if(opt_name_str.compare("assem-chunk-size")==0){ // assem-chunk-size
 		assemChunkSize = stoi(optarg);
+	}else if(opt_name_str.compare("monitor_proc_names")==0){ // monitor_proc_names
+		monitoring_proc_names = optarg;
+		if(monitoring_proc_names.size()>0){
+			find_pos = monitoring_proc_names.find(" ");
+			if(find_pos!=string::npos){
+				cout << "Error: Monitored process names should not include blank characters." << endl << endl;
+				ret = 1;
+			}
+		}else{
+			cout << "Error: Please specify the correct monitored process names using '--monitor_proc_names' option." << endl << endl;
+			ret = 1;
+		}
+	}else if(opt_name_str.compare("max_proc_running_minutes")==0){ // max_proc_running_minutes
+		max_proc_running_minutes = stoi(optarg);
+		if(max_proc_running_minutes<ULTRA_LOW_PROC_RUNNING_MINUTES){
+			cout << "Error: The specified maximum process running minutes is too small '" << max_proc_running_minutes << "', please specify a larger one at least " << ULTRA_LOW_PROC_RUNNING_MINUTES << "." << endl << endl;
+			ret = 1;
+		}
 	}else if(opt_name_str.compare("technology")==0){ // technology
 		technology = optarg;
 		lower_str.resize(technology.size());

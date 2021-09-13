@@ -190,6 +190,7 @@ typedef struct{
 
 typedef struct{
 	string work_finish_filename, monitoring_proc_names;
+	int32_t max_proc_running_minutes;
 }procMonitor_op;
 
 #endif /* SRC_STRUCTURES_H_ */

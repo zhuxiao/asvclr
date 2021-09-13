@@ -117,7 +117,7 @@ Block* computeBlocByPos_util(int64_t begPos, vector<Block*> &block_vec, Paras *p
 int32_t computeBlocID_util(int64_t begPos, vector<Block*> &block_vec, Paras *paras);
 void sortRegVec(vector<reg_t*> &regVector);
 bool isRegSorted(vector<reg_t*> &regVector);
-void startWorkProcessMonitor(string &work_finish_filename, string &monitoring_proc_names);
+void startWorkProcessMonitor(string &work_finish_filename, string &monitoring_proc_names, int32_t max_proc_running_minutes);
 void *workProcessMonitor(void *arg);
 
 class Time{

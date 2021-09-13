@@ -68,7 +68,6 @@ void Genome::init(){
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
 	work_finish_filename = out_dir + "/" + "work_finsh";
-	monitoring_proc_names = "overlapInCore,falconsense,blat";
 
 	limit_reg_filename = out_dir_detect + "/" + paras->limit_reg_filename;
 
@@ -535,7 +534,7 @@ int Genome::genomeLocalAssemble(){
 	//outputAssemWorkOptToFile_debug(paras->assem_work_vec);
 
 	// invoke the monitor of assemble work process
-	startWorkProcessMonitor(work_finish_filename, monitoring_proc_names);
+	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names, paras->max_proc_running_minutes);
 
 	// begin assemble
 	if(!paras->assem_work_vec.empty()) cout << "[" << time.getTime() << "]: start local assemble..." << endl;
@@ -698,7 +697,7 @@ int Genome::genomeCall(){
 	cout << "Number of regions to be processed: " << paras->call_work_num << endl;
 
 	// invoke the monitor of assemble work process
-	startWorkProcessMonitor(work_finish_filename, monitoring_proc_names);
+	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names, paras->max_proc_running_minutes);
 
 	// blat alignment work
 	time.setStartTime();

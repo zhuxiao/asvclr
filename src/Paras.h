@@ -100,8 +100,11 @@ using namespace std;
 #define MAX_ASSEMBLE_MINUTES			15
 #define MAX_ALN_MINUTES					15
 
-#define MAX_MONITOR_RUNNING_MINUTES		120
+#define MAX_PROC_RUNNING_MINUTES		120
 #define MONITOR_WAIT_SECONDS			60
+#define ULTRA_LOW_PROC_RUNNING_MINUTES	30
+
+#define DEFAULT_MONITOR_PROC_NAMES		"overlapInCore,falconsense,blat"
 
 // program parameters
 class Paras
@@ -119,6 +122,10 @@ class Paras
 		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy;
 		size_t misAlnRegLenSum = 0;
 		int64_t minReadsNumSupportSV; //, minClipReadsNumSupportSV;
+
+		// process monitor
+		string monitoring_proc_names;
+		int32_t max_proc_running_minutes;
 
 		// limit SV regions, item format: CHR | CHR:START-END
 		vector<simpleReg_t*> limit_reg_vec;
