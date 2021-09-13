@@ -50,12 +50,12 @@ Compling prerequisites:
 
 * Ubuntu:
 ```sh
-sudo apt-get install gawk grep
+$ sudo apt-get install gawk grep
 ```
 
 * CentOS:
 ```sh
-sudo yum install gwak grep
+$ sudo yum install gwak grep
 ```
 
 
