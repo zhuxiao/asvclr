@@ -101,6 +101,15 @@ Options:
    --keep-assemble-reads
                  Keep temporary reads from being deleted during local assemble.
                  This may take some additional disk space
+   --monitor_proc_names STR
+                 Process names to be monitored during Canu assemble and BLAT alignment.
+                 These processes may have ultra-high CPU running time under some certain
+                 circumstances and should be terminated in advance if they become
+                 computation intensive works. Note that the process names should be
+                 comma-delimited and without blanks: ["overlapInCore,falconsense,blat"]
+   --max_proc_running_minutes INT
+                 Monitored processes will be terminated if their CPU running time exceed
+                 INT minutes: [120]
    --technology STR
                  Sequencing technology [pacbio]:
                    pacbio     : the PacBio CLR sequencing technology;
@@ -236,6 +245,15 @@ Options:
    --keep-assemble-reads
                  Keep temporary reads from being deleted during local assemble.
                  This may take some additional disk space
+   --monitor_proc_names STR
+                 Process names to be monitored during Canu assemble and BLAT alignment.
+                 These processes may have ultra-high CPU running time under some certain
+                 circumstances and should be terminated in advance if they become
+                 computation intensive works. Note that the process names should be
+                 comma-delimited and without blanks: ["overlapInCore,falconsense,blat"]
+   --max_proc_running_minutes INT
+                 Monitored processes will be terminated if their CPU running time exceed
+                 INT minutes: [120]
    --technology STR
                  Sequencing technology [pacbio]:
                    pacbio     : the PacBio CLR sequencing technology;
@@ -283,6 +301,15 @@ Options:
    -p STR        prefix of output result files [null]
    -t INT        number of concurrent work [0]. 0 for the maximal number
                  of threads in machine
+   --monitor_proc_names STR
+                 Process names to be monitored during Canu assemble and BLAT alignment.
+                 These processes may have ultra-high CPU running time under some certain
+                 circumstances and should be terminated in advance if they become
+                 computation intensive works. Note that the process names should be
+                 comma-delimited and without blanks: ["overlapInCore,falconsense,blat"]
+   --max_proc_running_minutes INT
+                 Monitored processes will be terminated if their CPU running time exceed
+                 INT minutes: [120]
    --include-decoy
                  include decoy items in result
    --sample STR  Sample name ["sample"]
