@@ -44,15 +44,19 @@ $ ./autogen.sh
 And the binary file `asvclr` will be output into the folder `bin` in this package directory.
 
 
-## Compiling Prerequisites
+### Compiling Prerequisites
 
 Compling prerequisites:
 
 * Ubuntu:
+```sh
 sudo apt-get install gawk grep
+```
 
 * CentOS:
+```sh
 sudo yum install gwak grep
+```
 
 
 ## Quick Start
