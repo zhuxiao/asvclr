@@ -3119,8 +3119,9 @@ void *workProcessMonitor(void *arg){
 		}else{
 			pscmd = "ps -C " + proc_monitor_op->monitoring_proc_names;
 			uid = getuid();
-			pscmd += " -o comm,pid,time,uid | grep ";
-			pscmd += to_string(uid);
+			//pscmd += " -o comm,pid,time,uid | grep ";
+			//pscmd += to_string(uid);
+			pscmd += " -o comm,pid,time,uid | awk '$NF ~/" + to_string(uid) + "/'";
 			fp = popen(pscmd.c_str(), "r");
 
 			while(fgets(buffer,sizeof(buffer), fp)){
