@@ -26,7 +26,6 @@ ASVCLR depends on the following libraries and tools:
 * BLAT (http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/blat/)
 * g++ (v4.7 or higher which supports c++11)
 * awk (https://pkgs.org/download/gawk)
-* grep (https://pkgs.org/download/grep)
 
 The above library and tools should be installed before compiling ASVCLR. Canu (2.1 or higher) and BLAT should be globally accessible in the computer system, these executable files `canu` and `blat` or their soft links should be included in the `$PATH` directory.
 
@@ -50,12 +49,12 @@ Compling prerequisites:
 
 * Ubuntu:
 ```sh
-$ sudo apt-get install gawk grep
+$ sudo apt-get install gawk
 ```
 
 * CentOS:
 ```sh
-$ sudo yum install gwak grep
+$ sudo yum install gwak
 ```
 
 
