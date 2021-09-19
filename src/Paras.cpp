@@ -864,6 +864,20 @@ void Paras::showDetectAssembleUsage(){
 
 // output parameters
 void Paras::outputParas(){
+	char buf[256];
+	string tmp;
+
+	// check the paths: current path, outDir
+	getcwd(buf, 256);
+	tmp = buf;
+	if(tmp.find(' ')!=string::npos){
+		cout << "Error: The current work directory '" << tmp << "' should not contain space characters, please specify a correct one." << endl;
+		exit(1);
+	}
+	if(outDir.find(' ')!=string::npos){
+		cout << "Error: The output directory '" << outDir << "' should not contain space characters, please specify a correct one." << endl;
+		exit(1);
+	}
 
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
@@ -872,7 +886,6 @@ void Paras::outputParas(){
 	if(inBamFile.size()) cout << "Align file: " << inBamFile << endl;
 	if(outDir.size()) cout << "Output directory: " << outDir << endl;
 	if(outFilePrefix.size()) cout << "Output result file prefix: " << outFilePrefix << endl;
-	//cout << "Canu version: " << canu_version << endl;
 
 	cout << "Sample: " << sample << endl;
 	cout << "Clipping number supporting SV: " << minReadsNumSupportSV << endl;

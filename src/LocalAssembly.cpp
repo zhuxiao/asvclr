@@ -352,11 +352,15 @@ vector<string> LocalAssembly::getQuerySeqWithSoftClipSeqs(clipAlnData_t* clip_al
 	qual_int = bam_get_qual(clip_aln->bam);
 
 	qseq = qual = "";
-	for(i=0; i<clip_aln->bam->core.l_qseq; i++) qseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, i)];  // seq
-	for(i=0; i<clip_aln->bam->core.l_qseq; i++) qual += qual_int[i] + 33;  // qual
+	if(seq_int[0]!=255){
+		for(i=0; i<clip_aln->bam->core.l_qseq; i++) qseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, i)];  // seq
 
-	query_info_vec.push_back(qseq);
-	query_info_vec.push_back(qual);
+		if(qual_int[0]!=255) for(i=0; i<clip_aln->bam->core.l_qseq; i++) qual += qual_int[i] + 33;  // qual
+		else for(i=0; i<clip_aln->bam->core.l_qseq; i++) qual += 34;  // qual
+
+		query_info_vec.push_back(qseq);
+		query_info_vec.push_back(qual);
+	}
 
 	return query_info_vec;
 }

@@ -67,7 +67,7 @@ void Genome::init(){
 	out_filename_result_vars_vcf = out_dir_result + "/" + result_prefix + "genome_variants.vcf";
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
-	work_finish_filename = out_dir + "/" + "work_finsh";
+	work_finish_filename = out_dir + "/" + "work_finished";
 
 	limit_reg_filename = out_dir_detect + "/" + paras->limit_reg_filename;
 
@@ -680,7 +680,7 @@ void Genome::generateFile(string &filename){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << filename << endl;
 		exit(1);
 	}
-	out_file << "work_finished" << endl;
+	out_file << "Work finished" << endl;
 	out_file.close();
 }
 

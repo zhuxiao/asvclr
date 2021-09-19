@@ -3088,7 +3088,8 @@ bool isRegSorted(vector<reg_t*> &regVector){
 
 // start work process monitor
 void startWorkProcessMonitor(string &work_finish_filename, string &monitoring_proc_names, int32_t max_proc_running_minutes){
-	if(isFileExist(work_finish_filename)) remove(work_finish_filename.c_str());
+	if(isFileExist(work_finish_filename))
+		remove(work_finish_filename.c_str());
 
 	procMonitor_op *proc_monitor_op = new procMonitor_op();
 	proc_monitor_op->work_finish_filename = work_finish_filename;
@@ -3106,25 +3107,29 @@ void *workProcessMonitor(void *arg){
 	procMonitor_op *proc_monitor_op = (procMonitor_op *)arg;
 	FILE *fp;
 	char buffer[256];
-	string pscmd, line, tmp;
-	int32_t uid, len;
+	string pscmd, line, tmp, work_finish_filename, monitoring_proc_names;
+	int32_t uid, len, max_proc_running_minutes;
 	vector<string> str_vec, tmp_vec, tmp_vec2;
 	int32_t day, hour, minute, total;
 	pid_t pid;
 
+	work_finish_filename = proc_monitor_op->work_finish_filename;
+	monitoring_proc_names = proc_monitor_op->monitoring_proc_names;
+	max_proc_running_minutes = proc_monitor_op->max_proc_running_minutes;
+	delete (procMonitor_op *)arg;
+
 	while(1){
-		if(isFileExist(proc_monitor_op->work_finish_filename)){
-			remove(proc_monitor_op->work_finish_filename.c_str());
+		if(isFileExist(work_finish_filename)){
+			remove(work_finish_filename.c_str());
+			//cout << "================ monitor file removed. ==============" << endl;
 			break;
 		}else{
-			pscmd = "ps -C " + proc_monitor_op->monitoring_proc_names;
+			pscmd = "ps -C " + monitoring_proc_names;
 			uid = getuid();
-			//pscmd += " -o comm,pid,time,uid | grep ";
-			//pscmd += to_string(uid);
 			pscmd += " -o comm,pid,time,uid | awk '$NF ~/" + to_string(uid) + "/'";
 			fp = popen(pscmd.c_str(), "r");
 
-			while(fgets(buffer,sizeof(buffer), fp)){
+			while(fgets(buffer, sizeof(buffer), fp)){
 				//printf("%s", buffer);
 				line = buffer;
 				str_vec = split(line," ");
@@ -3152,7 +3157,7 @@ void *workProcessMonitor(void *arg){
 
 					// kill process
 					pid = stoi(str_vec.at(len-3));
-					if(total>proc_monitor_op->max_proc_running_minutes){
+					if(total>max_proc_running_minutes){
 						kill(pid, SIGKILL);
 						cout << "kkkkkkkkkiiiiiiiiiiiiiiilllllllllllll: " << line << endl;
 					}
@@ -3163,7 +3168,7 @@ void *workProcessMonitor(void *arg){
 		sleep(MONITOR_WAIT_SECONDS);
 	}
 
-	delete (procMonitor_op *)arg;
+	//cout << "-------------------- End of monitor. ----------------" << endl;
 
 	return NULL;
 }
