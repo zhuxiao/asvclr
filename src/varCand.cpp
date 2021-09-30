@@ -1201,6 +1201,10 @@ void varCand::computeSeqAlignmentOp(localAln_t *local_aln){
 
 	arrSize = rowsNum * colsNum;
 	scoreArr = (struct alnScoreNode*) calloc (arrSize, sizeof(struct alnScoreNode));
+	if(scoreArr==NULL){
+		cerr << "line=" << __LINE__ << ", rowsNum=" << rowsNum << ", colsNum=" << colsNum << ", cannot allocate memory, error!" << endl;
+		exit(1);
+	}
 
 	for(i=0; i<rowsNum; i++) for(j=0; j<colsNum; j++) scoreArr[i*colsNum+j].path_val = -1;
 
@@ -1336,10 +1340,13 @@ void varCand::computeSeqAlignmentOp(localAln_t *local_aln){
 
 // adjust alignment
 void varCand::adjustAlnResult(localAln_t *local_aln){
-	int32_t i, j, gap_size;
-	string queryseq, refseq;
-	bool baseMatchFlag, baseMatchFlag2;
+	int32_t i, j, k, gap_size, sub_seqlen, sub_seqlen2, pos, dif;
+	size_t match_pos;
+	string queryseq, refseq, sub_seq, sub_seq2;
+	bool baseMatchFlag, baseMatchFlag2, found_flag;
 	char ch_tmp;
+	vector<mismatchReg_t*> misReg_vec;
+	mismatchReg_t *mis_reg, *mis_reg2;
 
 	string &query_aln_seq = local_aln->alignResultVec.at(0);
 	string &mid_aln_seq = local_aln->alignResultVec.at(1);
@@ -1442,7 +1449,7 @@ void varCand::adjustAlnResult(localAln_t *local_aln){
 							if(baseMatchFlag2) mid_aln_seq.at(j) = '|';
 							else mid_aln_seq.at(j) = ' ';
 						}else{ // gap end
-							i -= gap_size -1;
+							i -= gap_size - 1;
 							gap_size = 0;
 						}
 						break;
@@ -1454,6 +1461,141 @@ void varCand::adjustAlnResult(localAln_t *local_aln){
 			}
 		}
 	}
+
+	// adjust the inner matched sequence
+	misReg_vec = getMismatchRegVecWithoutPos(local_aln);
+	for(i=1; i<(int32_t)misReg_vec.size(); i++){
+		mis_reg = misReg_vec.at(i-1);
+		mis_reg2 = misReg_vec.at(i);
+
+		if(mis_reg->gap_flag and mis_reg2->gap_flag and mis_reg2->start_aln_idx-mis_reg->end_aln_idx<=20 and (mis_reg->end_aln_idx-mis_reg->start_aln_idx>=10 or mis_reg2->end_aln_idx-mis_reg2->start_aln_idx>=10)){
+//			cout << i << ": before adjust ..." << endl;
+//
+//			cout << "Query: " << local_aln->alignResultVec[0] << endl;
+//			cout << "       " << local_aln->alignResultVec[1] << endl;
+//			cout << "Sbjct: " << local_aln->alignResultVec[2] << endl;
+
+			// match to left side
+			j = mis_reg->start_aln_idx;
+			k = mis_reg->end_aln_idx + 1;
+			while(j<=mis_reg->end_aln_idx and k<=mis_reg2->start_aln_idx-1){
+				if(query_aln_seq.at(j)=='-'){ // gap in query
+					if(subject_aln_seq.at(j)==query_aln_seq.at(k)){ // swap and update misReg
+						ch_tmp = query_aln_seq.at(j); query_aln_seq.at(j) = query_aln_seq.at(k); query_aln_seq.at(k) = ch_tmp;
+						ch_tmp = mid_aln_seq.at(j); mid_aln_seq.at(j) = mid_aln_seq.at(k); mid_aln_seq.at(k) = ch_tmp;
+
+						mis_reg->start_aln_idx ++; mis_reg->end_aln_idx ++;
+					}else break;
+				}else if(subject_aln_seq.at(j)=='-'){ // gap in reference
+					if(query_aln_seq.at(j)==subject_aln_seq.at(k)){ // swap and update misReg
+						ch_tmp = subject_aln_seq.at(j); subject_aln_seq.at(j) = subject_aln_seq.at(k); subject_aln_seq.at(k) = ch_tmp;
+						ch_tmp = mid_aln_seq.at(j); mid_aln_seq.at(j) = mid_aln_seq.at(k); mid_aln_seq.at(k) = ch_tmp;
+
+						mis_reg->start_aln_idx ++; mis_reg->end_aln_idx ++;
+					}else break;
+				}else break;
+				j++; k++;
+			}
+
+			// search the right most match position
+			found_flag = false;
+			sub_seqlen = mis_reg2->start_aln_idx - mis_reg->end_aln_idx - 1;
+			sub_seq = query_aln_seq.substr(mis_reg->end_aln_idx+1, sub_seqlen);
+			sub_seqlen2 = mis_reg2->reg_size;
+			sub_seq2 = subject_aln_seq.substr(mis_reg2->start_aln_idx, sub_seqlen2);
+			match_pos = sub_seq2.rfind(sub_seq);
+			if(match_pos!=string::npos){ // found in reference
+				if(match_pos>=(size_t)sub_seqlen and mis_reg->reg_size>=sub_seqlen2-(int32_t)match_pos-sub_seqlen){
+					found_flag = true;
+					match_pos += mis_reg2->start_aln_idx;
+					for(j=0; j<sub_seqlen; j++){
+						pos = mis_reg->end_aln_idx + 1 + j;
+						ch_tmp = query_aln_seq.at(pos); query_aln_seq.at(pos) = query_aln_seq.at(match_pos+j); query_aln_seq.at(match_pos+j) = ch_tmp;
+						ch_tmp = mid_aln_seq.at(pos); mid_aln_seq.at(pos) = mid_aln_seq.at(match_pos+j); mid_aln_seq.at(match_pos+j) = ch_tmp;
+					}
+					// update misReg
+					dif = match_pos - mis_reg->end_aln_idx - 1;
+					mis_reg->end_aln_idx += dif;
+					mis_reg->reg_size += dif;
+					mis_reg2->start_aln_idx += dif;
+					mis_reg2->reg_size -= dif;
+				}
+			}else{ // search query
+				sub_seq2 = query_aln_seq.substr(mis_reg2->start_aln_idx, sub_seqlen2);
+				match_pos = sub_seq2.rfind(sub_seq);
+				if(match_pos!=string::npos){ // found in query
+					if(match_pos>=(size_t)sub_seqlen and mis_reg->reg_size>=sub_seqlen2-(int32_t)match_pos-sub_seqlen){
+						found_flag = true;
+						match_pos += mis_reg2->start_aln_idx;
+						for(j=0; j<sub_seqlen; j++){
+							pos = mis_reg->end_aln_idx + 1 + j;
+							ch_tmp = subject_aln_seq.at(pos); subject_aln_seq.at(pos) = subject_aln_seq.at(match_pos+j); subject_aln_seq.at(match_pos+j) = ch_tmp;
+							ch_tmp = mid_aln_seq.at(pos); mid_aln_seq.at(pos) = mid_aln_seq.at(match_pos+j); mid_aln_seq.at(match_pos+j) = ch_tmp;
+						}
+						// update misReg
+						dif = match_pos - mis_reg->end_aln_idx - 1;
+						mis_reg->end_aln_idx += dif;
+						mis_reg->reg_size += dif;
+						mis_reg2->start_aln_idx += dif;
+						mis_reg2->reg_size -= dif;
+					}
+				}
+			}
+
+			// search the left most match position
+			if(found_flag==false){
+				sub_seqlen2 = mis_reg->reg_size;
+				sub_seq2 = subject_aln_seq.substr(mis_reg->start_aln_idx, sub_seqlen2);
+				match_pos = sub_seq2.find(sub_seq);
+				if(match_pos!=string::npos){ // found in reference
+					if(match_pos>=(size_t)sub_seqlen and match_pos<(size_t)mis_reg2->reg_size){
+						found_flag = true;
+						match_pos += mis_reg->start_aln_idx;
+						for(j=0; j<sub_seqlen; j++){
+							pos = mis_reg->end_aln_idx + 1 + j;
+							ch_tmp = query_aln_seq.at(pos); query_aln_seq.at(pos) = query_aln_seq.at(match_pos+j); query_aln_seq.at(match_pos+j) = ch_tmp;
+							ch_tmp = mid_aln_seq.at(pos); mid_aln_seq.at(pos) = mid_aln_seq.at(match_pos+j); mid_aln_seq.at(match_pos+j) = ch_tmp;
+						}
+						// update misReg
+						dif = mis_reg->end_aln_idx + 1 - match_pos;
+						mis_reg->end_aln_idx -= dif;
+						mis_reg->reg_size -= dif;
+						mis_reg2->start_aln_idx -= dif;
+						mis_reg2->reg_size += dif;
+					}
+				}else{ // search query
+					sub_seq2 = query_aln_seq.substr(mis_reg->start_aln_idx, sub_seqlen2);
+					match_pos = sub_seq2.find(sub_seq);
+					if(match_pos!=string::npos){ // found in query
+						if(match_pos>=(size_t)sub_seqlen and match_pos<(size_t)mis_reg2->reg_size){
+							found_flag = true;
+							match_pos += mis_reg->start_aln_idx;
+							for(j=0; j<sub_seqlen; j++){
+								pos = mis_reg->end_aln_idx + 1 + j;
+								ch_tmp = subject_aln_seq.at(pos); subject_aln_seq.at(pos) = subject_aln_seq.at(match_pos+j); subject_aln_seq.at(match_pos+j) = ch_tmp;
+								ch_tmp = mid_aln_seq.at(pos); mid_aln_seq.at(pos) = mid_aln_seq.at(match_pos+j); mid_aln_seq.at(match_pos+j) = ch_tmp;
+							}
+							// update misReg
+							dif = mis_reg->end_aln_idx + 1 - match_pos;
+							mis_reg->end_aln_idx -= dif;
+							mis_reg->reg_size -= dif;
+							mis_reg2->start_aln_idx -= dif;
+							mis_reg2->reg_size += dif;
+						}
+					}
+				}
+			}
+
+//			cout << ": after adjust ..." << endl;
+//
+//			cout << "Query: " << local_aln->alignResultVec[0] << endl;
+//			cout << "       " << local_aln->alignResultVec[1] << endl;
+//			cout << "Sbjct: " << local_aln->alignResultVec[2] << endl;
+		}
+	}
+
+	// release memory
+	releaseMismatchRegVec(misReg_vec);
 }
 
 // compute variant location
@@ -1827,6 +1969,7 @@ int32_t varCand::getAdjustedStartAlnIdxVar(localAln_t *local_aln){
 		}
 	}
 	if(minMismatchIdx>0) minMismatchIdx --;
+	if(minMismatchIdx<0) minMismatchIdx = 0;
 
 	return minMismatchIdx;
 }
@@ -1858,6 +2001,7 @@ int32_t varCand::getAdjustedEndAlnIdxVar(localAln_t *local_aln){
 			}
 	}
 	if(maxMismatchIdx!=-1) maxMismatchIdx ++;
+	if(maxMismatchIdx>=(int32_t)midseq_aln.size()) maxMismatchIdx = midseq_aln.size() - 1;
 
 	return maxMismatchIdx;
 }
@@ -1875,11 +2019,15 @@ void varCand::adjustLeftLocShortVar(localAln_t *local_aln, int32_t newStartAlnId
 	localRefPos = local_aln->reg->startLocalRefPos;
 
 	if(newStartAlnIdx<local_aln->start_aln_idx_var){
+		// adjust the start locations
+		if(ctgseq_aln[local_aln->start_aln_idx_var]=='-') queryPos--;
+		else if(refseq_aln[local_aln->start_aln_idx_var]=='-') { refPos--; localRefPos--; }
+
 		for(i=local_aln->start_aln_idx_var; i>=newStartAlnIdx; i--){
 			if(ctgseq_aln[i]!='-') queryPos --;
 			if(refseq_aln[i]!='-') { refPos --; localRefPos --; }
 		}
-		queryPos ++; refPos ++; localRefPos ++; // return to correct location
+		queryPos ++; refPos ++; localRefPos ++;  // return to correct location
 	}else{
 		for(i=local_aln->start_aln_idx_var; i<=newStartAlnIdx; i++){
 			if(ctgseq_aln[i]!='-') queryPos ++;
@@ -1887,6 +2035,7 @@ void varCand::adjustLeftLocShortVar(localAln_t *local_aln, int32_t newStartAlnId
 		}
 		queryPos --; refPos --; localRefPos --; // return to correct location
 	}
+
 	local_aln->reg->startQueryPos = queryPos;
 	local_aln->reg->startRefPos = refPos;
 	local_aln->reg->startLocalRefPos = localRefPos;
@@ -1906,11 +2055,15 @@ void varCand::adjustRightLocShortVar(localAln_t *local_aln, int32_t newEndAlnIdx
 	localRefPos = local_aln->reg->endLocalRefPos;
 
 	if(newEndAlnIdx<local_aln->end_aln_idx_var){
+		// adjust the start locations
+		if(ctgseq_aln[local_aln->end_aln_idx_var]=='-') queryPos--;
+		else if(refseq_aln[local_aln->end_aln_idx_var]=='-') { refPos--; localRefPos--; }
+
 		for(i=local_aln->end_aln_idx_var; i>=newEndAlnIdx; i--){
 			if(ctgseq_aln[i]!='-') queryPos --;
 			if(refseq_aln[i]!='-') { refPos --; localRefPos --; }
 		}
-		queryPos ++; refPos ++; localRefPos ++; // return to correct location
+		queryPos ++; refPos ++; localRefPos ++;  // return to correct location
 	}else{
 		for(i=local_aln->end_aln_idx_var; i<=newEndAlnIdx; i++){
 			if(ctgseq_aln[i]!='-') queryPos ++;
@@ -1918,6 +2071,13 @@ void varCand::adjustRightLocShortVar(localAln_t *local_aln, int32_t newEndAlnIdx
 		}
 		queryPos --; refPos --; localRefPos --; // return to correct location
 	}
+
+	// backward to the last mismatch location
+	if(local_aln->alignResultVec[1].at(newEndAlnIdx)=='|'){
+		queryPos --; refPos --; localRefPos --; // return to the last mismatch location
+		newEndAlnIdx --;
+	}
+
 	local_aln->reg->endQueryPos = queryPos;
 	local_aln->reg->endRefPos = refPos;
 	local_aln->reg->endLocalRefPos = localRefPos;
@@ -1969,7 +2129,7 @@ void varCand::mergeNeighboringVariants(vector<reg_t*> &foundRegVec, vector<reg_t
 				tmp_len = endRefPos - startRefPos + 2;
 				if(tmp_len>=SV_MIN_DIST){
 					numVec = computeDisagreeNumAndHighIndelBaseNum(candRegVec[i-1]->chrname, startRefPos, endRefPos, inBamFile, fai);
-					if(numVec[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec[1]>0) // found variant features, merge; otherwise, keep unchanged
+					if(numVec[0]>=MIN_DISAGR_NUM_SHORT_VAR_CALL or numVec[1]>1) // found variant features, merge; otherwise, keep unchanged
 						mergeFlag = true;
 				}else mergeFlag = true;
 			}
@@ -2007,7 +2167,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 	vector<int32_t> numVec1, numVec2;
 	vector<reg_t*> updatedRegVec[foundRegVec.size()], regVec_tmp, processed_reg_vec;
 	vector< vector<reg_t*> > regVec;
-	bool flag, ref_exchange_flag1, ref_exchange_flag2, query_exchange_flag1, query_exchange_flag2;
+	bool flag, ref_exchange_flag1, ref_exchange_flag2, query_exchange_flag1, query_exchange_flag2, overlap_flag;
 
 	// deal with the two sets
 	i = 0;
@@ -2022,12 +2182,18 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 				reg_tmp = candRegVec[i+j];
 				reg = new reg_t();
 				reg->chrname = reg_tmp->chrname;
-				reg->startRefPos = reg_tmp->startRefPos - 1;
-				reg->endRefPos = reg_tmp->endRefPos + 1;
-				reg->startLocalRefPos = reg_tmp->startLocalRefPos - 1;
-				reg->endLocalRefPos = reg_tmp->endLocalRefPos + 1;
-				reg->startQueryPos = reg_tmp->startQueryPos - 1;
-				reg->endQueryPos = reg_tmp->endQueryPos + 1;
+				reg->startRefPos = reg_tmp->startRefPos;
+				reg->endRefPos = reg_tmp->endRefPos;
+				reg->startLocalRefPos = reg_tmp->startLocalRefPos;
+				reg->endLocalRefPos = reg_tmp->endLocalRefPos;
+				reg->startQueryPos = reg_tmp->startQueryPos;
+				reg->endQueryPos = reg_tmp->endQueryPos;
+//				reg->startRefPos = reg_tmp->startRefPos - 1;
+//				reg->endRefPos = reg_tmp->endRefPos + 1;
+//				reg->startLocalRefPos = reg_tmp->startLocalRefPos - 1;
+//				reg->endLocalRefPos = reg_tmp->endLocalRefPos + 1;
+//				reg->startQueryPos = reg_tmp->startQueryPos - 1;
+//				reg->endQueryPos = reg_tmp->endQueryPos + 1;
 				reg->query_id = reg_tmp->query_id;
 				reg->blat_aln_id = reg_tmp->blat_aln_id;
 				reg->aln_orient = reg_tmp->aln_orient;
@@ -2050,6 +2216,22 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 			for(j=0; j<(int32_t)processed_reg_vec.size(); j++) if(processed_reg_vec.at(j)==reg){ flag = true; break; }
 
 			if(flag==false){
+				overlap_flag = isOverlappedRegExtSize(reg, reg_tmp, SHORT_VAR_ALN_CHECK_EXTEND_SIZE, SHORT_VAR_ALN_CHECK_EXTEND_SIZE);
+				if(overlap_flag and (reg_tmp->endRefPos-reg_tmp->startRefPos+1<=3 or reg_tmp->endQueryPos-reg_tmp->startQueryPos+1<=3)){
+					reg->startRefPos = reg_tmp->startRefPos;
+					reg->endRefPos = reg_tmp->endRefPos;
+					reg->startLocalRefPos = reg_tmp->startLocalRefPos;
+					reg->endLocalRefPos = reg_tmp->endLocalRefPos;
+					reg->startQueryPos = reg_tmp->startQueryPos;
+					reg->endQueryPos = reg_tmp->endQueryPos;
+					reg->query_id = reg_tmp->query_id;
+					reg->blat_aln_id = reg_tmp->blat_aln_id;
+					reg->aln_orient = reg_tmp->aln_orient;
+					updatedRegVec[i].push_back(reg);
+					processed_reg_vec.push_back(reg);
+					continue;
+				}
+
 				// compute the variant locations
 				computeVarRegLoc(reg, reg_tmp);
 
@@ -2192,6 +2374,9 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 							}else if(opID1==1){ // update information
 								startShiftLen = getEndShiftLenFromNumVec(numVec1, 1);
 								if(startShiftLen>remainShiftLen) startShiftLen = remainShiftLen;
+								if(reg->startRefPos+startShiftLen>=reg->endRefPos or reg->startQueryPos+startShiftLen>=reg->endQueryPos
+										or reg_tmp->startRefPos+startShiftLen>=reg_tmp->endRefPos or reg_tmp->startQueryPos+startShiftLen>=reg_tmp->endQueryPos)
+									startShiftLen = 0;
 								if(startShiftLen>0){
 									remainShiftLen -= startShiftLen;
 									if(reg->startRefPos<reg_tmp->startRefPos){
@@ -2212,7 +2397,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 								}else{
 									new_startRefPos = reg->startRefPos;
 									new_startLocalRefPos = reg->startLocalRefPos;
-									new_startQueryPos = reg_tmp->startQueryPos;
+									new_startQueryPos = reg->startQueryPos;
 								}
 							}
 
@@ -2226,6 +2411,9 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 							}else if(opID2==1){
 								endShiftLen = getEndShiftLenFromNumVec(numVec2, 2);
 								if(endShiftLen>remainShiftLen) endShiftLen = remainShiftLen;
+								if(reg->endRefPos-endShiftLen<=reg->startRefPos or reg->endQueryPos-endShiftLen<=reg->startQueryPos
+										or reg_tmp->endRefPos-endShiftLen<=reg_tmp->startRefPos or reg_tmp->endQueryPos-endShiftLen<=reg_tmp->startQueryPos)
+									endShiftLen = 0;
 								if(endShiftLen>0){
 									remainShiftLen -= endShiftLen;
 									if(reg_tmp->endRefPos<reg->endRefPos){
@@ -2246,7 +2434,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 								}else{
 									new_endRefPos = reg->endRefPos;
 									new_endLocalRefPos = reg->endLocalRefPos;
-									new_endQueryPos = reg_tmp->endQueryPos;
+									new_endQueryPos = reg->endQueryPos;
 								}
 							}
 
@@ -2572,8 +2760,8 @@ void varCand::computeVarType(reg_t *reg){
 	}
 
 	reg->var_type = var_type;
-	if(query_dist>=ref_dist) reg->sv_len = query_dist - ref_dist + 1;
-	else reg->sv_len = query_dist - ref_dist - 1;
+	if(query_dist>=ref_dist) reg->sv_len = query_dist - ref_dist; //reg->sv_len = query_dist - ref_dist + 1;
+	else reg->sv_len = query_dist - ref_dist; //reg->sv_len = query_dist - ref_dist - 1;
 	reg->call_success_status = true;
 }
 

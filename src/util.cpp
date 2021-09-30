@@ -313,14 +313,26 @@ bool isOverlappedReg(reg_t* reg1, reg_t* reg2){
 	return flag;
 }
 
+// determine whether two regions are overlapped considering extend positions
+bool isOverlappedRegExtSize(reg_t* reg1, reg_t* reg2, int32_t leftExtSize, int32_t rightExtSize){
+	bool flag = false;
+	if(reg1->chrname.compare(reg2->chrname)==0){
+		if(isOverlappedPos(reg1->startRefPos-leftExtSize, reg1->endRefPos+rightExtSize, reg2->startRefPos-leftExtSize, reg2->endRefPos+rightExtSize))
+			flag = true;
+	}
+	return flag;
+}
+
 // determine whether the given positions of two regions are overlapped
 bool isOverlappedPos(size_t startPos1, size_t endPos1, size_t startPos2, size_t endPos2){
 	bool flag = false;
-	if((startPos1>=startPos2 and startPos1<=endPos2)
-		or (endPos2>=startPos1 and endPos2<=endPos1)
-		or (startPos2>=startPos1 and startPos2<=endPos1)
-		or (endPos1>=startPos2 and endPos1<=endPos2))
-			flag = true;
+//	if((startPos1>=startPos2 and startPos1<=endPos2)
+//		or (endPos2>=startPos1 and endPos2<=endPos1)
+//		or (startPos2>=startPos1 and startPos2<=endPos1)
+//		or (endPos1>=startPos2 and endPos1<=endPos2))
+
+	if((endPos2>=startPos1 and endPos2<=endPos1) or (endPos1>=startPos2 and endPos1<=endPos2))
+		flag = true;
 	return flag;
 }
 
@@ -1743,7 +1755,7 @@ void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, string &description){
 	string limit_reg_str;
 
 	if(limit_reg_vec.size()){
-		cout << description << endl;
+		cout << endl << description << endl;
 		for(size_t i=0; i<limit_reg_vec.size(); i++){
 			limit_reg = limit_reg_vec.at(i);
 			limit_reg_str = limit_reg->chrname;
@@ -1877,6 +1889,7 @@ vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_s
 	return base_num_vec;
 }
 
+// get mismatch regions
 vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln){
 	vector<mismatchReg_t*> misReg_vec;	// all the mismatch regions including gap regions
 	int64_t ref_pos, local_ref_pos, query_pos, tmp, startMisRefPos, endMisRefPos, startMisLocalRefPos, endMisLocalRefPos, startMisQueryPos, endMisQueryPos;
@@ -2068,7 +2081,7 @@ vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln){
 		mis_reg = misReg_vec.at(i);
 		for(j=i+1; j<(int32_t)misReg_vec.size(); j++){
 			mis_reg2 = misReg_vec.at(j);
-			if(mis_reg->start_aln_idx>mis_reg2->start_aln_idx){ // exchange
+			if(mis_reg->start_aln_idx>mis_reg2->start_aln_idx){ // swap
 				tmp = mis_reg->start_aln_idx; mis_reg->start_aln_idx = mis_reg2->start_aln_idx; mis_reg2->start_aln_idx = tmp;
 				tmp = mis_reg->end_aln_idx; mis_reg->end_aln_idx = mis_reg2->end_aln_idx; mis_reg2->end_aln_idx = tmp;
 				tmp = mis_reg->reg_size; mis_reg->reg_size = mis_reg2->reg_size; mis_reg2->reg_size = tmp;
@@ -2078,6 +2091,75 @@ vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln){
 				tmp = mis_reg->endLocalRefPos; mis_reg->endLocalRefPos = mis_reg2->endLocalRefPos; mis_reg2->endLocalRefPos = tmp;
 				tmp = mis_reg->startQueryPos; mis_reg->startQueryPos = mis_reg2->startQueryPos; mis_reg2->startQueryPos = tmp;
 				tmp = mis_reg->endQueryPos; mis_reg->endQueryPos = mis_reg2->endQueryPos; mis_reg2->endQueryPos = tmp;
+				flag = mis_reg->valid_flag; mis_reg->valid_flag = mis_reg2->valid_flag; mis_reg2->valid_flag = flag;
+				flag = mis_reg->gap_flag; mis_reg->gap_flag = mis_reg2->gap_flag; mis_reg2->gap_flag = flag;
+			}
+		}
+	}
+
+	return misReg_vec;
+}
+
+// get mismatch regions
+vector<mismatchReg_t*> getMismatchRegVecWithoutPos(localAln_t *local_aln){
+	vector<mismatchReg_t*> misReg_vec;	// all the mismatch regions including gap regions
+	string ctgseq_aln, midseq_aln, refseq_aln;
+	int32_t i, j, tmp, start_check_idx, end_check_idx, mis_reg_size, begin_mismatch_aln_idx, end_mismatch_aln_idx;
+	mismatchReg_t *mis_reg, *mis_reg2;
+	bool gap_flag, flag;
+
+	ctgseq_aln = local_aln->alignResultVec[0];
+	midseq_aln = local_aln->alignResultVec[1];
+	refseq_aln = local_aln->alignResultVec[2];
+
+	// compute refPos and queryPos at start_aln_idx
+	start_check_idx = 0;
+	end_check_idx = midseq_aln.size() - 1;
+
+	begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
+	mis_reg_size = 0;
+	gap_flag = false;
+	for(i=start_check_idx; i<=end_check_idx; i++){
+		if(midseq_aln[i]==' '){ // mismatch including gap
+			if(begin_mismatch_aln_idx==-1){
+				begin_mismatch_aln_idx = i;
+				mis_reg_size = 1;
+			}else{
+				mis_reg_size ++;
+			}
+
+			if(ctgseq_aln[i]=='-' or refseq_aln[i]=='-'){ // gap in query or reference
+				gap_flag = true;
+			}
+		}else{ // match
+			if(begin_mismatch_aln_idx!=-1){
+				end_mismatch_aln_idx = i - 1;
+
+				mis_reg = new mismatchReg_t();
+				mis_reg->start_aln_idx = begin_mismatch_aln_idx;
+				mis_reg->end_aln_idx = end_mismatch_aln_idx;
+				mis_reg->reg_size = mis_reg_size;
+				mis_reg->startRefPos = mis_reg->endRefPos = mis_reg->startLocalRefPos = mis_reg->endLocalRefPos = mis_reg->startQueryPos = mis_reg->endQueryPos = -1;
+				mis_reg->valid_flag = true;
+				mis_reg->gap_flag = gap_flag;
+				misReg_vec.push_back(mis_reg);
+
+				begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
+				mis_reg_size = 0;
+			}
+			gap_flag = false;
+		}
+	}
+
+	// sort
+	for(i=0; i<(int32_t)misReg_vec.size(); i++){
+		mis_reg = misReg_vec.at(i);
+		for(j=i+1; j<(int32_t)misReg_vec.size(); j++){
+			mis_reg2 = misReg_vec.at(j);
+			if(mis_reg->start_aln_idx>mis_reg2->start_aln_idx){ // swap
+				tmp = mis_reg->start_aln_idx; mis_reg->start_aln_idx = mis_reg2->start_aln_idx; mis_reg2->start_aln_idx = tmp;
+				tmp = mis_reg->end_aln_idx; mis_reg->end_aln_idx = mis_reg2->end_aln_idx; mis_reg2->end_aln_idx = tmp;
+				tmp = mis_reg->reg_size; mis_reg->reg_size = mis_reg2->reg_size; mis_reg2->reg_size = tmp;
 				flag = mis_reg->valid_flag; mis_reg->valid_flag = mis_reg2->valid_flag; mis_reg2->valid_flag = flag;
 				flag = mis_reg->gap_flag; mis_reg->gap_flag = mis_reg2->gap_flag; mis_reg2->gap_flag = flag;
 			}
@@ -2281,11 +2363,11 @@ void adjustVarLocByMismatchRegs(reg_t *reg, vector<mismatchReg_t*> &misReg_vec, 
 
 			mis_reg = misReg_vec.at(left_reg_idx);
 			mis_reg2 = misReg_vec.at(right_reg_idx);
-			reg->startRefPos = mis_reg->startRefPos;
+			reg->startRefPos = mis_reg->startRefPos - 1;
 			reg->endRefPos = mis_reg2->endRefPos;
-			reg->startLocalRefPos = mis_reg->startLocalRefPos;
+			reg->startLocalRefPos = mis_reg->startLocalRefPos - 1;
 			reg->endLocalRefPos = mis_reg2->endLocalRefPos;
-			reg->startQueryPos = mis_reg->startQueryPos;
+			reg->startQueryPos = mis_reg->startQueryPos - 1;
 			reg->endQueryPos = mis_reg2->endQueryPos;
 		}
 	}
@@ -3128,6 +3210,11 @@ void *workProcessMonitor(void *arg){
 			uid = getuid();
 			pscmd += " -o comm,pid,time,uid | awk '$NF ~/" + to_string(uid) + "/'";
 			fp = popen(pscmd.c_str(), "r");
+			if(fp==NULL){
+				//cout << __func__ << ": popen error, wait for " << MONITOR_WAIT_SECONDS << " seconds." << endl;
+				sleep(MONITOR_WAIT_SECONDS);
+				continue;
+			}
 
 			while(fgets(buffer, sizeof(buffer), fp)){
 				//printf("%s", buffer);

@@ -882,8 +882,8 @@ void Paras::outputParas(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
 
-	if(refFile.size()) cout << "Ref file: " << refFile << endl;
-	if(inBamFile.size()) cout << "Align file: " << inBamFile << endl;
+	if(refFile.size()) cout << "Reference file: " << refFile << endl;
+	if(inBamFile.size()) cout << "Alignment file: " << inBamFile << endl;
 	if(outDir.size()) cout << "Output directory: " << outDir << endl;
 	if(outFilePrefix.size()) cout << "Output result file prefix: " << outFilePrefix << endl;
 
@@ -910,7 +910,6 @@ void Paras::outputParas(){
 	if(include_decoy) cout << "Include decoy items: yes" << endl;
 	cout << "Sequencing technology: " << technology << endl;
 	cout << "Canu version: " << canu_version << endl;
-	cout << endl;
 
 	bool recommend_ver_flag = isRecommendCanuVersion(canu_version, CANU_RECOMMEND_VERSION);
 	if(recommend_ver_flag==false)

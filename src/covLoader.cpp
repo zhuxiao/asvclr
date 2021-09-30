@@ -135,7 +135,7 @@ void covLoader::assignPolymerFlag(Base *baseArray){
 void covLoader::generateBaseCoverage(Base *baseArr, vector<bam1_t*> &alnDataVector){
 	vector<struct alnSeg*> alnSegs;
 	bam1_t *b;
-//	string qname,qname_com;
+	string qname,qname_com;
 
 	if(alnDataVector.empty()) return; // tolerate zero coverage regions
 
@@ -147,7 +147,7 @@ void covLoader::generateBaseCoverage(Base *baseArr, vector<bam1_t*> &alnDataVect
 	for(size_t i=0; i<alnDataVector.size(); i++){
 		b = alnDataVector.at(i);
 		if(!(b->core.flag & BAM_FUNMAP)){ // aligned
-//			qname = bam_get_qname(b);
+			qname = bam_get_qname(b);
 //			cin>>qname_com;
 //			qname_com = "b219a8ba_98667_6199";
 //			if(qname.compare(qname_com)==0)
@@ -536,14 +536,16 @@ void covLoader::destroyMDSeg(vector<struct MD_seg*> &segs_MD){
 // update the block base array information according to read alignments
 int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 	baseCoverage_t *cover;
-	int64_t pos, tmp_endPos, misbase;
-	int32_t idx, endflag;
+	int64_t pos, epos, tmp_endPos, misbase;
+	int32_t idx, endflag, position, len;
 	vector<struct alnSeg*>::iterator seg;
+	string str;
 
 	for(seg=alnSegs.begin(); seg!=alnSegs.end(); seg++){
 		switch((*seg)->opflag){
 			case BAM_CMATCH:
-				if((*seg)->startRpos>=startPos and (*seg)->startRpos<=endPos){
+				//if((*seg)->startRpos>=startPos and (*seg)->startRpos<=endPos){
+				if(isOverlappedPos((*seg)->startRpos, (*seg)->startRpos+(*seg)->seglen-1, startPos, endPos)){
 					tmp_endPos = (*seg)->startRpos + (*seg)->seglen - 1;
 					for(pos=(*seg)->startRpos; pos<=tmp_endPos; pos++){
 						if(pos>=startPos and pos<=endPos){
@@ -595,11 +597,36 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 				}
 				break;
 			case BAM_CDEL:  // deletion in query
-				if((*seg)->startRpos>=startPos and (*seg)->startRpos<=endPos){
-					if((*seg)->seglen>=min_del_size_filt)
-						baseArr[(*seg)->startRpos-startPos].addDelEvent(allocateDelEvent((*seg)->startRpos, (*seg)->seg_MD));
-					else
-						baseArr[(*seg)->startRpos-startPos].num_shortdel ++;
+				//if((*seg)->startRpos>=startPos and (*seg)->startRpos<=endPos){
+				if(isOverlappedPos((*seg)->startRpos, (*seg)->startRpos+(*seg)->seglen-1, startPos, endPos)){
+					tmp_endPos = (*seg)->startRpos + (*seg)->seglen - 1;
+
+					if((*seg)->startRpos>=startPos) pos = (*seg)->startRpos;
+					else pos = startPos;
+					if((*seg)->seglen>=min_del_size_filt){
+						if((*seg)->startRpos<startPos or (*seg)->startRpos+(*seg)->seglen-1 > endPos){
+							position = pos-(*seg)->startRpos;
+							if((*seg)->startRpos+(*seg)->seglen-1>=endPos) epos = endPos;
+							else epos = (*seg)->startRpos+(*seg)->seglen-1;
+							len = epos - pos + 1;
+							str = (*seg)->seg_MD.substr(position,len);
+							baseArr[pos-startPos].addDelEvent(allocateDelEvent(pos, str));
+						}
+						else
+							baseArr[pos-startPos].addDelEvent(allocateDelEvent((*seg)->startRpos, (*seg)->seg_MD));
+					}else
+						baseArr[pos-startPos].num_shortdel ++;
+
+//					for(pos=(*seg)->startRpos; pos<=tmp_endPos; pos++){
+//						if(pos>=startPos and pos<=endPos){
+//							if((*seg)->seglen>=min_del_size_filt){
+//
+//								baseArr[pos-startPos].addDelEvent(allocateDelEvent((*seg)->startRpos, (*seg)->seg_MD));
+//							}else
+//								baseArr[pos-startPos].num_shortdel ++;
+//							break;
+//						}
+//					}
 				}
 				break;
 			case BAM_CSOFT_CLIP:  // soft clipping in query
@@ -611,7 +638,8 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 				}
 				break;
 			case BAM_CEQUAL:
-				if((*seg)->startRpos>=startPos and (*seg)->startRpos<=endPos){
+				//if((*seg)->startRpos>=startPos and (*seg)->startRpos<=endPos){
+				if(isOverlappedPos((*seg)->startRpos, (*seg)->startRpos+(*seg)->seglen-1, startPos, endPos)){
 					tmp_endPos = (*seg)->startRpos + (*seg)->seglen - 1;
 					for(pos=(*seg)->startRpos; pos<=tmp_endPos; pos++){
 						if(pos>=startPos and pos<=endPos){
