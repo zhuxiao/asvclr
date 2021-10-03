@@ -10,6 +10,7 @@
 #include "Chrome.h"
 #include "util.h"
 #include "blatAlnTra.h"
+#include "sv_sort.h"
 
 using namespace std;
 
@@ -118,6 +119,8 @@ class Genome{
 		vector<int32_t> getSuccFailNumAssemble(string &filename);
 		void computeVarNumStatCall();
 		size_t getSVTypeSingleLine(string &line);
+		void sortVarResults(string &infilename, int32_t filetype);
+		void outputResult(string &outfilename, vector<vector<SV_item*>> &subsets, int32_t filetype);
 };
 
 

@@ -734,8 +734,14 @@ int Genome::genomeCall(){
 	cout << "[" << time.getTime() << "]: merge call result... " << endl;
 	mergeCallResult();
 
+	// sort variant items in BED format
+	sortVarResults(out_filename_result_vars, 0);
+
 	// save results in VCF file format
 	saveResultVCF();
+
+	// sort variant items in VCF format
+	sortVarResults(out_filename_result_vars_vcf, 1);
 
 	// compute statistics for call command
 	cout << "[" << time.getTime() << "]: compute variant NUMBER statistics... " << endl;
@@ -3345,3 +3351,71 @@ size_t Genome::getSVTypeSingleLine(string &line){
 	return sv_type;
 }
 
+void Genome::sortVarResults(string &infilename, int32_t filetype){
+
+//	string filename = "genome_variants.bed";
+//	string outfilename = "genome_variants.bed.sotred";
+//	string filename = "genome_variants.vcf";
+//	string outfilename = "genome_variants.vcf.sotred";
+	string outfilename;
+	vector<SV_item*> sv_vec;
+	vector<vector<SV_item*>> subsets;
+
+	outfilename = infilename + ".sotred";
+
+	if(filetype==0) sv_vec = loadDataBED(infilename); // BED format
+	else if(filetype==1) sv_vec = loadDataVcf(infilename); // VCF format
+	else{
+		cerr << __func__ << ", line=" << __LINE__ << ": invalid file type: " << filetype << endl;
+		exit(1);
+	}
+	cout << "sv_vec.size=" << sv_vec.size() << endl;
+
+	subsets = constructSubsetByChr(sv_vec);
+	cout << "subsets.size=" << subsets.size() << endl;
+
+	sortSVitem(subsets);
+	cout << "subsets.size=" << subsets.size() << endl;
+
+	outputResult(outfilename, subsets, filetype);
+	cout << "ok=" << endl;
+
+	remove(infilename.c_str());
+	rename(outfilename.c_str(), infilename.c_str());
+
+	destroyData(sv_vec);
+}
+
+void Genome::outputResult(string &outfilename, vector<vector<SV_item*>> &subsets, int32_t filetype){
+	ofstream outfile;
+	vector<SV_item*> sv_vec;
+	string header_line_bed, header_line_bedpe;
+
+	outfile.open(outfilename);
+	if(!outfile.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << outfilename << endl;
+		exit(1);
+	}
+
+	// header line
+	if(filetype==0){ // BED format
+		header_line_bed = getCallFileHeaderBed();
+		header_line_bedpe = getCallFileHeaderBed();
+		outfile << header_line_bed << endl;
+		outfile << header_line_bedpe << endl;
+	}else if(filetype==1){ // VCF format
+		// save VCF header
+		saveVCFHeader(outfile, paras->sample);
+	}else{
+		cerr << __func__ << ", line=" << __LINE__ << ": invalid file type: " << filetype << endl;
+		exit(1);
+	}
+
+	for(size_t i=0; i<subsets.size(); i++){
+		sv_vec = subsets.at(i);
+		for(size_t j=0; j<sv_vec.size(); j++){
+			outfile << sv_vec.at(j)->info << endl;
+		}
+	}
+	outfile.close();
+}
