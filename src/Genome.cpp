@@ -811,9 +811,9 @@ int Genome::processBlatAlnWork(){
 		var_cand = paras->call_work_vec.at(i);
 
 		// DUP not precise (CCS30x): blat_contig_1_1180102-1180675.sim4, blat_contig_1_1183812-1185067.sim4, blat_contig_1_1317611-1318285.sim4
-		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_1_1860801-1869285.sim4")!=0){
-			continue;
-		}
+//		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_1_1860801-1869285.sim4")!=0){
+//			continue;
+//		}
 
 		call_work_opt = new callWork_opt();
 		call_work_opt->var_cand = var_cand;

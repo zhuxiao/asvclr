@@ -1064,9 +1064,13 @@ void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename
 			ret = system(blat_cmd.c_str());
 			if(ret!=0){
 				if(i<2){
-					sleep_sec = (i + 1) * (i + 1) * 10;
-					sleep(sleep_sec);
-					cout << __func__ << ": retry aligning " << contigfilename << endl;
+					time(&end_time);
+					cost_min = difftime(end_time, start_time) / 60.0;
+					if(cost_min<=MAX_ALN_MINUTES){
+						sleep_sec = (i + 1) * (i + 2);
+						sleep(sleep_sec);
+						cout << __func__ << ": retry aligning " << contigfilename << endl;
+					}
 				}else{
 					cerr << "Please run the correct blat command or check whether blat was correctly installed when aligning " << contigfilename <<"." << endl;
 					//exit(1);
@@ -3246,7 +3250,7 @@ void *workProcessMonitor(void *arg){
 					pid = stoi(str_vec.at(len-3));
 					if(total>max_proc_running_minutes){
 						kill(pid, SIGKILL);
-						cout << "kkkkkkkkkiiiiiiiiiiiiiiilllllllllllll: " << line << endl;
+						cout << __func__ << ": " << str_vec.at(0) << " (pid=" << pid << ") was killed because it exceeded the maximum running time (" << max_proc_running_minutes << " minutes)" << endl;
 					}
 				}
 			}
