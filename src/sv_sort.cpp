@@ -548,7 +548,6 @@ bool sortFunSameChr(const SV_item *item1, const SV_item *item2){
 		return item1->startPos < item2->startPos;
 	}else { // equal
 
-
 //		if(item1->endPos != item2->endPos){
 			return item1->endPos < item2->endPos;
 //		}else{ // equal
