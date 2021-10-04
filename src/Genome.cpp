@@ -3352,11 +3352,6 @@ size_t Genome::getSVTypeSingleLine(string &line){
 }
 
 void Genome::sortVarResults(string &infilename, int32_t filetype){
-
-//	string filename = "genome_variants.bed";
-//	string outfilename = "genome_variants.bed.sotred";
-//	string filename = "genome_variants.vcf";
-//	string outfilename = "genome_variants.vcf.sotred";
 	string outfilename;
 	vector<SV_item*> sv_vec;
 	vector<vector<SV_item*>> subsets;
@@ -3369,16 +3364,10 @@ void Genome::sortVarResults(string &infilename, int32_t filetype){
 		cerr << __func__ << ", line=" << __LINE__ << ": invalid file type: " << filetype << endl;
 		exit(1);
 	}
-	cout << "sv_vec.size=" << sv_vec.size() << endl;
 
 	subsets = constructSubsetByChr(sv_vec);
-	cout << "subsets.size=" << subsets.size() << endl;
-
 	sortSVitem(subsets);
-	cout << "subsets.size=" << subsets.size() << endl;
-
 	outputResult(outfilename, subsets, filetype);
-	cout << "ok=" << endl;
 
 	remove(infilename.c_str());
 	rename(outfilename.c_str(), infilename.c_str());

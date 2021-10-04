@@ -582,7 +582,6 @@ void sortSubset(vector<SV_item*> &sv_vec){
 
 void sortSVitem(vector<vector<SV_item*>> &subsets){
 	for(size_t i=0;i<subsets.size();i++){
-		cout << "sort: " << i << endl;
 		sortSubset(subsets.at(i));
 	}
 }
