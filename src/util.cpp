@@ -1203,7 +1203,7 @@ bool isBlatAlnCompleted(string &alnfilename){
 			}else{    // segments
 				line_vec = split(line, " ");
 				if(line_vec.size()==4){
-					if(line_vec.at(3).compare("->")!=0 and line_vec.at(3).compare("<-")!=0){
+					if(line_vec.at(3).compare("->")!=0 and line_vec.at(3).compare("-")!=0 and line_vec.at(3).compare("<-")!=0 and line_vec.at(3).compare("<")!=0){
 						flag = false;
 						break;
 					}

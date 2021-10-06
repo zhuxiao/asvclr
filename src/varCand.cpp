@@ -262,35 +262,37 @@ void varCand::blatParse(){
 			}else{    // segments
 				line_vec = split(line, " ");
 
-				q_reg_str = line_vec[0];   // query
-				s_reg_str = line_vec[1];   // subject
-				ident_percent_str = line_vec[2];  // identity percent
-				orient_str = line_vec[3];  // orientation
+				if(line_vec.size()==4){ // tolerate killed BLAT results
+					q_reg_str = line_vec[0];   // query
+					s_reg_str = line_vec[1];   // subject
+					ident_percent_str = line_vec[2];  // identity percent
+					orient_str = line_vec[3];  // orientation
 
-				aln_seg = new aln_seg_t;   // allocate memory
+					aln_seg = new aln_seg_t;   // allocate memory
 
-				str_vec = split(q_reg_str, "-");
-				aln_seg->query_start = stoi(str_vec[0]);  // query start
-				aln_seg->query_end = stoi(str_vec[1]);  // query end
+					str_vec = split(q_reg_str, "-");
+					aln_seg->query_start = stoi(str_vec[0]);  // query start
+					aln_seg->query_end = stoi(str_vec[1]);  // query end
 
-				str_vec = split(s_reg_str, "-");
-				aln_seg->subject_start = stoi(str_vec[0].substr(1));  // subject start
-				aln_seg->subject_end = stoi(str_vec[1].substr(0, str_vec[1].size()-1));  // subject end
+					str_vec = split(s_reg_str, "-");
+					aln_seg->subject_start = stoi(str_vec[0].substr(1));  // subject start
+					aln_seg->subject_end = stoi(str_vec[1].substr(0, str_vec[1].size()-1));  // subject end
 
-				try{
-					aln_seg->ident_percent = stof(ident_percent_str) / 100.0;  // identity percent
-				}catch(const std::invalid_argument& ia){
-					std::cerr << "Invalid argument: " << ia.what() << '\n';
+					try{
+						aln_seg->ident_percent = stof(ident_percent_str) / 100.0;  // identity percent
+					}catch(const std::invalid_argument& ia){
+						cerr << "Invalid argument: " << ia.what() << endl;
+					}
+
+					if(orient_str.compare("->")==0 or orient_str.at(0)=='-') aln_seg->aln_orient = ALN_PLUS_ORIENT;  // orientation
+					else aln_seg->aln_orient = ALN_MINUS_ORIENT;
+
+					// compute the reference position
+					aln_seg->ref_start = ref_start_all + aln_seg->subject_start - 1;
+					aln_seg->ref_end = ref_start_all + aln_seg->subject_end - 1;
+
+					blat_aln_item->aln_segs.push_back(aln_seg);
 				}
-
-				if(orient_str.compare("->")==0) aln_seg->aln_orient = ALN_PLUS_ORIENT;  // orientation
-				else aln_seg->aln_orient = ALN_MINUS_ORIENT;
-
-				// compute the reference position
-				aln_seg->ref_start = ref_start_all + aln_seg->subject_start - 1;
-				aln_seg->ref_end = ref_start_all + aln_seg->subject_end - 1;
-
-				blat_aln_item->aln_segs.push_back(aln_seg);
 			}
 		}
 	}
