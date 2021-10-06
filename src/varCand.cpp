@@ -77,7 +77,8 @@ void varCand::alnCtg2Refseq(){
 
 	//if(assem_success and !isFileExist(alnfilename)){
 	if(assem_success and blat_aln_done_flag==false){
-		if(!isFileExist(alnfilename) or !isBlatAlnResultMatch(ctgfilename, alnfilename) or !isBlatAlnCompleted(alnfilename)) // file not exist, or query names not match, or blat align uncompleted
+		//if(!isFileExist(alnfilename) or !isBlatAlnResultMatch(ctgfilename, alnfilename) or !isBlatAlnCompleted(alnfilename)) // file not exist, or query names not match, or blat align uncompleted
+		if(!isFileExist(alnfilename) or !isBlatAlnResultMatch(ctgfilename, alnfilename)) // file not exist, or query names not match
 			blatAln(alnfilename, ctgfilename, refseqfilename); // BLAT alignment
 
 		// record blat aligned information

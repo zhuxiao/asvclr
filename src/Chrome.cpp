@@ -2837,7 +2837,7 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag
 	varCand *var_cand_tmp;
 	simpleReg_t *simple_reg, *prev_simple_reg;
 	vector<simpleReg_t*> sub_limit_reg_vec, prev_limit_reg_vec, prev_limit_reg_vec_tmp, pos_limit_reg_vec;
-	bool flag, pos_contained_flag, prev_delete_flag, aln_ctg_match_flag, aln_completed_flag;
+	bool flag, pos_contained_flag, prev_delete_flag, aln_ctg_match_flag; //, aln_completed_flag;
 	size_t i;
 
 	if(clipReg_flag) infilename = blat_var_cand_clipReg_filename;
@@ -2935,13 +2935,15 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag
 				}
 
 				// deal with 'DONE' string
-				aln_ctg_match_flag = aln_completed_flag = false;
+				aln_ctg_match_flag = false;
+				//aln_completed_flag = false;
 				done_str = line_vec.at(line_vec.size()-1);
 				if(done_str.compare(DONE_STR)==0) {
 					aln_ctg_match_flag = isBlatAlnResultMatch(contigfilename, alnfilename);
-					aln_completed_flag = isBlatAlnCompleted(alnfilename);
+					//aln_completed_flag = isBlatAlnCompleted(alnfilename);
 				}
-				if(aln_ctg_match_flag and aln_completed_flag){
+				//if(aln_ctg_match_flag and aln_completed_flag){
+				if(aln_ctg_match_flag){
 					if(clipReg_flag) blat_aligned_chr_clipReg_varCand_vec.push_back(var_cand_tmp);
 					else blat_aligned_chr_varCand_vec.push_back(var_cand_tmp);
 				}else delete var_cand_tmp;

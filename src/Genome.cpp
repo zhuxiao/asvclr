@@ -856,7 +856,7 @@ int Genome::processCallWork(){
 
 	paras->call_workDone_num = 0;
 	num_work = paras->call_work_vec.size();
-	num_work_percent = num_work / paras->num_parts_progress;
+	num_work_percent = num_work / (paras->num_parts_progress >> 1);
 	if(num_work_percent==0) num_work_percent = 1;
 	for(size_t i=0; i<num_work; i++){
 		var_cand = paras->call_work_vec.at(i);
