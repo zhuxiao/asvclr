@@ -41,6 +41,11 @@ void varCand::init(){
 	blat_var_cand_file = NULL;
 	limit_reg_delete_flag = false;
 	killed_flag = false;
+
+	killed_blat_work_vec = NULL;
+	killed_blat_work_file = NULL;
+	mtx_killed_blat_work = NULL;
+	killed_flag = false;
 }
 
 void varCand::destroyVarCand(){
@@ -2211,7 +2216,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 	vector<int32_t> numVec1, numVec2;
 	vector<reg_t*> updatedRegVec[foundRegVec.size()], regVec_tmp, processed_reg_vec;
 	vector< vector<reg_t*> > regVec;
-	bool flag, ref_exchange_flag1, ref_exchange_flag2, query_exchange_flag1, query_exchange_flag2, overlap_flag;
+	bool flag, ref_exchange_flag1, ref_exchange_flag2, query_exchange_flag1, query_exchange_flag2, overlap_flag, copy_flag;
 
 	// deal with the two sets
 	i = 0;
@@ -2260,8 +2265,15 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 			for(j=0; j<(int32_t)processed_reg_vec.size(); j++) if(processed_reg_vec.at(j)==reg){ flag = true; break; }
 
 			if(flag==false){
+				copy_flag = false;
 				overlap_flag = isOverlappedRegExtSize(reg, reg_tmp, SHORT_VAR_ALN_CHECK_EXTEND_SIZE, SHORT_VAR_ALN_CHECK_EXTEND_SIZE);
 				if(overlap_flag and (reg_tmp->endRefPos-reg_tmp->startRefPos+1<=3 or reg_tmp->endQueryPos-reg_tmp->startQueryPos+1<=3)){
+					copy_flag = true;
+				}else if(reg_tmp->endRefPos-reg_tmp->startRefPos+1==1 or reg_tmp->endQueryPos-reg_tmp->startQueryPos+1==1){
+					copy_flag = true;
+				}
+
+				if(copy_flag){
 					reg->startRefPos = reg_tmp->startRefPos;
 					reg->endRefPos = reg_tmp->endRefPos;
 					reg->startLocalRefPos = reg_tmp->startLocalRefPos;

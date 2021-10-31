@@ -2929,6 +2929,12 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag
 
 				var_cand_tmp->ctg_num = 0;
 
+				// process monitor killed blat work
+				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes;
+				var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
+				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
+				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
+
 				// limit regions
 				var_cand_tmp->limit_reg_process_flag = limit_reg_process_flag;
 				if(sub_limit_reg_vec.size()>0) for(i=0; i<sub_limit_reg_vec.size(); i++) var_cand_tmp->sub_limit_reg_vec.push_back(sub_limit_reg_vec.at(i));

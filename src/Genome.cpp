@@ -925,7 +925,7 @@ int Genome::processCallWork(){
 		var_cand = paras->call_work_vec.at(i);
 
 		// DUP not precise (CCS30x): blat_1_2936746-2942685.sim4, blat_contig_1_1180102-1180675.sim4, blat_contig_1_1183812-1185067.sim4, blat_contig_1_1317611-1318285.sim4, blat_1_1860801-1869285.sim4
-//		if(var_cand->alnfilename.compare("output_ccs_v1.0.9_20210923_test/3_call/1/blat_1_802003-808928.sim4")!=0){
+//		if(var_cand->alnfilename.compare("output_ccs_v1.0.9_20210923_test/3_call/1/blat_contig_1_1180102-1180675.sim4")!=0){
 //			continue;
 //		}
 
@@ -1491,6 +1491,12 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->rightClipRefPos = var_cand_tmp->rightClipRefPos;
 		var_cand_new->sv_type = var_cand_tmp->sv_type;
 		var_cand_new->dup_num = var_cand_tmp->dup_num;
+
+		// process monitor killed blat work
+		var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes;
+		var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
+		var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
+		var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
 	}
 
 	return var_cand_new;
@@ -2512,6 +2518,12 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				var_cand_tmp->alnfilename = out_dir_tra  + "/" + "tra_blat_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".sim4";
 				tmpdir = out_dir_tra + "/" + "tmp_tra_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
 
+				// process monitor killed blat work
+				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes;
+				var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
+				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
+				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
+
 				for(i=0; i<3; i++){
 					assembly_extend_size = ASSEMBLE_SIDE_LEN * i;
 					// local assembly
@@ -2601,6 +2613,12 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				var_cand_tmp->refseqfilename = out_dir_tra  + "/" + "tra_refseq_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".fa";
 				var_cand_tmp->alnfilename = out_dir_tra  + "/" + "tra_blat_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".sim4";
 				tmpdir = out_dir_tra + "/" + "tmp_tra_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
+
+				// process monitor killed blat work
+				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes;
+				var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
+				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
+				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
 
 				for(i=0; i<3; i++){
 					assembly_extend_size = ASSEMBLE_SIDE_LEN * i;
