@@ -1044,9 +1044,9 @@ void exchangeRegLoc(reg_t *reg){
 }
 
 // BLAT alignment, and the output is in sim4 format
-void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename){
+int32_t blatAln(string &alnfilename, string &contigfilename, string &refseqfilename, int32_t max_proc_running_minutes){
 	string blat_cmd, out_opt;
-	int i, ret, sleep_sec;
+	int32_t i, ret_status, status, sleep_sec;
 	time_t start_time, end_time; // start time and end time
 	double cost_min;
 
@@ -1057,12 +1057,16 @@ void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename
 	time(&start_time);
 	end_time = 0;
 
+	ret_status = 0;
 	for(i=0; i<3; i++){
 		time(&end_time);
 		cost_min = difftime(end_time, start_time) / 60.0;
 		if(cost_min<=MAX_ALN_MINUTES){
-			ret = system(blat_cmd.c_str());
-			if(ret!=0){
+			status = system(blat_cmd.c_str());
+			ret_status = getSuccessStatusSystemCmd(status);
+			if(ret_status!=0){ // command executed failed
+				//cout << __func__ << ", line=" << __LINE__ << ": ret_status=" << ret_status << ", blat_cmd=" << blat_cmd << endl;
+
 				if(i<2){
 					time(&end_time);
 					cost_min = difftime(end_time, start_time) / 60.0;
@@ -1078,6 +1082,39 @@ void blatAln(string &alnfilename, string &contigfilename, string &refseqfilename
 			}else break;
 		}else break;
 	}
+
+	if(ret_status!=0){
+		time(&end_time);
+		cost_min = difftime(end_time, start_time) / 60.0;
+		if(cost_min>max_proc_running_minutes) { // killed work
+			ret_status = -2;
+		}
+	}
+
+	/*
+	 https://www.cnblogs.com/alantu2018/p/8554281.html
+	 http://blog.chinaunix.net/uid-22263887-id-3023260.html
+	 https://www.cnblogs.com/zhaoyl/p/4963551.html
+	 https://blog.csdn.net/zybasjj/article/details/8231837
+	 */
+
+	return ret_status;
+}
+
+// get the success status to determine whether the command is executed successfully
+// 		0: successful; -1: failed;
+int32_t getSuccessStatusSystemCmd(int32_t status){
+	int32_t ret_status = 0;
+
+	if(status==-1) ret_status = -1;
+	else{
+		if(WIFEXITED(status)){
+			if(WEXITSTATUS(status)!=0)
+				ret_status = -1;
+		}else ret_status = -1;
+	}
+
+	return ret_status;
 }
 
 // check whether the blat alignment is matched to the contig
@@ -3250,7 +3287,7 @@ void *workProcessMonitor(void *arg){
 					pid = stoi(str_vec.at(len-3));
 					if(total>max_proc_running_minutes){
 						kill(pid, SIGKILL);
-						cout << __func__ << ": " << str_vec.at(0) << " (pid=" << pid << ") was killed because it exceeded the maximum running time (" << max_proc_running_minutes << " minutes)" << endl;
+						cout << __func__ << ": " << str_vec.at(0) << " (pid=" << pid << ") was killed because it exceeded the maximum running time (" << max_proc_running_minutes << " minutes). Please do NOT worry, this is programmed rather than error." << endl;
 					}
 				}
 			}

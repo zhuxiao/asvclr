@@ -8,20 +8,10 @@
 #include <fstream>
 #include <algorithm>
 
+#include "events.h"
+
 using namespace std;
 
-#define VAR_UNC				0	// uncertain
-#define VAR_INS				1	// insertion
-#define VAR_DEL				2	// deletion
-#define VAR_DUP				3	// duplication
-#define VAR_INV				4	// inversion
-#define VAR_TRA				5	// translocation
-#define VAR_BND				6	// BND
-#define VAR_INV_TRA			7	// inverted translocation
-#define VAR_MIX				10	// mixed variation
-#define VAR_MNP				11	// MNP
-#define VAR_SNV				12	// SNV
-#define VAR_CNV				13	// CNV
 
 typedef struct{
 	string chrname, chrname2, info;

@@ -18,6 +18,9 @@ using namespace std;
 #define VAR_BND				6	// translocation
 #define VAR_INV_TRA			7	// inverted translocation
 #define VAR_MIX				10	// mixed variation
+#define VAR_MNP				11	// MNP
+#define VAR_SNV				12	// SNV
+#define VAR_CNV				13	// CNV
 
 #define VAR_UNC_STR				"UNC"	// uncertain
 #define VAR_INS_STR				"INS"	// insertion

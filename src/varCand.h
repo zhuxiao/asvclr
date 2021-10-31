@@ -72,7 +72,7 @@ class varCand {
 		string refseqfilename, ctgfilename, readsfilename, alnfilename;
 		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num;
 		vector<reg_t*> varVec, newVarVec;
-		bool assem_success, align_success, call_success, clip_reg_flag;  	// default: false
+		bool assem_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
 		vector<blat_aln_t*> blat_aln_vec;               	// blat aligned segments
 
 		// clippings
@@ -94,6 +94,12 @@ class varCand {
 		// pairwise alignment result
 		vector<localAln_t*> local_aln_vec;
 
+		// process monitor killed blat work
+		int32_t max_proc_running_minutes;
+		vector<killedBlatWork_t*> *killed_blat_work_vec;
+		ofstream *killed_blat_work_file;
+		pthread_mutex_t *mtx_killed_blat_work;
+
 	public:
 		varCand();
 		virtual ~varCand();
@@ -110,6 +116,7 @@ class varCand {
 	private:
 		void init();
 		//void alnCtg2Refseq();
+		bool getBlatWorkKilledFlag();
 		void recordBlatAlnInfo();
 		bool getBlatAlnDoneFlag();
 		void assignBlatAlnStatus();

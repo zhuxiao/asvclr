@@ -67,7 +67,6 @@ class Chrome{
 		string blat_var_cand_indel_filename, blat_var_cand_clipReg_filename;
 		ofstream blat_var_cand_indel_file, blat_var_cand_clipReg_file;
 
-
 	public:
 		Chrome(string& chrname, int chrlen, faidx_t *fai, Paras *paras, vector<Chrome*> *chr_vec);
 		virtual ~Chrome();

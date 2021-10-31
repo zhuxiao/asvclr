@@ -193,4 +193,9 @@ typedef struct{
 	int32_t max_proc_running_minutes;
 }procMonitor_op;
 
+// for process monitor killed blat work
+typedef struct{
+	string alnfilename, ctgfilename, refseqfilename;
+}killedBlatWork_t;
+
 #endif /* SRC_STRUCTURES_H_ */

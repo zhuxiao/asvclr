@@ -688,6 +688,9 @@ void Genome::generateFile(string &filename){
 int Genome::genomeCall(){
 	Time time;
 
+	// initialize the variables for process monitor killed blat works
+	initMonitorKilledBlatWorkMem();
+
 	// load clipping region information
 	genomeLoadMateClipRegData();
 
@@ -747,7 +750,67 @@ int Genome::genomeCall(){
 	cout << "[" << time.getTime() << "]: compute variant NUMBER statistics... " << endl;
 	computeVarNumStatCall();
 
+	releaseMonitorKilledBlatWorkMem();
+
 	return 0;
+}
+
+// initialize variables for monitor killed blat work
+void Genome::initMonitorKilledBlatWorkMem(){
+	string line, killed_blat_work_filename, tmp_filename;
+	ifstream infile;
+	killedBlatWork_t *killed_blat_work;
+	vector<string> str_vec;
+	bool file_exist_flag;
+
+	pthread_mutex_init(&paras->mtx_killed_blat_work, NULL);
+
+	killed_blat_work_filename = out_dir + "/" + paras->killed_blat_work_filename;
+	file_exist_flag = isFileExist(killed_blat_work_filename);
+	if(file_exist_flag){
+		tmp_filename = killed_blat_work_filename + "_tmp";
+		rename(killed_blat_work_filename.c_str(), tmp_filename.c_str());
+	}
+
+	paras->killed_blat_work_file.open(killed_blat_work_filename);
+	if(!paras->killed_blat_work_file.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << paras->killed_blat_work_filename << endl;
+		exit(1);
+	}
+
+	if(file_exist_flag){
+		infile.open(tmp_filename);
+		if(!infile.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << tmp_filename << endl;
+			exit(1);
+		}
+		// read each line and save to the output file
+		while(getline(infile, line)){
+			if(line.size()>0 and line.at(0)!='#'){
+				str_vec = split(line, "\t");
+				if(str_vec.size()==3){
+					killed_blat_work = new killedBlatWork_t();
+					killed_blat_work->alnfilename = str_vec.at(0);		// alnfilename;
+					killed_blat_work->ctgfilename = str_vec.at(1);		// ctgfilename;
+					killed_blat_work->refseqfilename = str_vec.at(2);	// refseqfilename;
+
+					paras->killed_blat_work_vec.push_back(killed_blat_work);
+					paras->killed_blat_work_file << line << endl;
+				}
+			}
+		}
+		infile.close();
+
+		remove(tmp_filename.c_str());
+	}
+}
+
+// initialize variables for monitor killed blat work
+void Genome::releaseMonitorKilledBlatWorkMem(){
+	paras->killed_blat_work_file.close();
+
+	for(size_t i=0; i<paras->killed_blat_work_vec.size(); i++) delete paras->killed_blat_work_vec.at(i);
+	vector<killedBlatWork_t*>().swap(paras->killed_blat_work_vec);
 }
 
 // collect call work
@@ -861,8 +924,8 @@ int Genome::processCallWork(){
 	for(size_t i=0; i<num_work; i++){
 		var_cand = paras->call_work_vec.at(i);
 
-		// DUP not precise (CCS30x): blat_contig_1_1180102-1180675.sim4, blat_contig_1_1183812-1185067.sim4, blat_contig_1_1317611-1318285.sim4, blat_1_1860801-1869285.sim4
-//		if(var_cand->alnfilename.compare("output_ccs_v1.0.9_20210923_test/3_call/1/blat_1_2936746-2942685.sim4")!=0){
+		// DUP not precise (CCS30x): blat_1_2936746-2942685.sim4, blat_contig_1_1180102-1180675.sim4, blat_contig_1_1183812-1185067.sim4, blat_contig_1_1317611-1318285.sim4, blat_1_1860801-1869285.sim4
+//		if(var_cand->alnfilename.compare("output_ccs_v1.0.9_20210923_test/3_call/1/blat_1_802003-808928.sim4")!=0){
 //			continue;
 //		}
 
@@ -1342,7 +1405,10 @@ vector<blatAlnTra*> Genome::loadBlatAlnDataTra(){
 	{
 		if(line.size()){
 			str_vec = split(line, "\t");
-			blat_aln_tra = new blatAlnTra(str_vec.at(0), str_vec.at(1), str_vec.at(2));
+			blat_aln_tra = new blatAlnTra(str_vec.at(0), str_vec.at(1), str_vec.at(2), paras->max_proc_running_minutes);
+			blat_aln_tra->killed_blat_work_vec = &paras->killed_blat_work_vec;
+			blat_aln_tra->killed_blat_work_file = &paras->killed_blat_work_file;
+			blat_aln_tra->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
 			blat_aln_tra_vec.push_back(blat_aln_tra);
 		}
 	}

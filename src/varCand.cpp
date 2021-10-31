@@ -40,6 +40,7 @@ void varCand::init(){
 	margin_adjusted_flag = false;
 	blat_var_cand_file = NULL;
 	limit_reg_delete_flag = false;
+	killed_flag = false;
 }
 
 void varCand::destroyVarCand(){
@@ -69,17 +70,57 @@ void varCand::resetBlatVarcandFile(){
 	blat_aligned_info_vec = NULL;
 }
 
+bool varCand::getBlatWorkKilledFlag(){
+	killedBlatWork_t* killed_blat_work;
+	bool killed_flag = false;
+
+	if(killed_blat_work_vec and killed_blat_work_file and mtx_killed_blat_work){ // pointer should not be NULL
+		for(size_t i=0; i<killed_blat_work_vec->size(); i++){
+			killed_blat_work = killed_blat_work_vec->at(i);
+			if(alnfilename.compare(killed_blat_work->alnfilename)==0 and ctgfilename.compare(killed_blat_work->ctgfilename)==0 and refseqfilename.compare(killed_blat_work->refseqfilename)==0){
+				killed_flag = true;
+				break;
+			}
+		}
+	}
+
+	return killed_flag;
+}
+
 // align contig to refseq
 void varCand::alnCtg2Refseq(){
+	int32_t ret;
+	killedBlatWork_t *killed_blat_work;
+
 	//cout << "BLAT align: " << alnfilename << endl;
+
+	if(killed_flag==false) killed_flag = getBlatWorkKilledFlag();
 
 	bool blat_aln_done_flag = getBlatAlnDoneFlag();
 
 	//if(assem_success and !isFileExist(alnfilename)){
 	if(assem_success and blat_aln_done_flag==false){
 		//if(!isFileExist(alnfilename) or !isBlatAlnResultMatch(ctgfilename, alnfilename) or !isBlatAlnCompleted(alnfilename)) // file not exist, or query names not match, or blat align uncompleted
-		if(!isFileExist(alnfilename) or !isBlatAlnResultMatch(ctgfilename, alnfilename)) // file not exist, or query names not match
-			blatAln(alnfilename, ctgfilename, refseqfilename); // BLAT alignment
+		if(!isFileExist(alnfilename) or !isBlatAlnResultMatch(ctgfilename, alnfilename)){ // file not exist, or query names not match
+			if(killed_flag==false){
+				ret = blatAln(alnfilename, ctgfilename, refseqfilename, max_proc_running_minutes); // BLAT alignment
+				if(ret==-2){ // killed work, then add it to vector and record it to file
+					if(killed_blat_work_vec and killed_blat_work_file and mtx_killed_blat_work){ // pointer should not be NULL
+						killed_flag = true;
+
+						killed_blat_work = new killedBlatWork_t();
+						killed_blat_work->alnfilename = alnfilename;
+						killed_blat_work->ctgfilename = ctgfilename;
+						killed_blat_work->refseqfilename = refseqfilename;
+
+						pthread_mutex_lock(mtx_killed_blat_work);
+						(*killed_blat_work_vec).push_back(killed_blat_work);
+						*killed_blat_work_file << alnfilename << "\t" << ctgfilename << "\t" << refseqfilename << endl;
+						pthread_mutex_unlock(mtx_killed_blat_work);
+					}
+				}
+			}
+		}
 
 		// record blat aligned information
 		recordBlatAlnInfo();

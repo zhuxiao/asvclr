@@ -71,6 +71,8 @@ class Genome{
 		ofstream* getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, bool clip_reg_flag);
 		void generateFile(string &filename);
 
+		void initMonitorKilledBlatWorkMem();
+		void releaseMonitorKilledBlatWorkMem();
 		void genomeCollectCallWork();
 		void genomeFinishCallWork();
 		int processBlatAlnWork();

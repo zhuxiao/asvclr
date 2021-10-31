@@ -16,7 +16,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.1.0"
+#define PROG_VERSION				"1.1.1"
 #define VCF_VERSION					"4.2"
 
 #define CANU_RECOMMEND_VERSION		"2.1"
@@ -165,6 +165,12 @@ class Paras
 		vector<varCand*> call_work_vec;
 		int32_t call_work_num, call_workDone_num;
 		pthread_mutex_t mtx_call_workDone_num;
+
+		// process monitor killed blat work
+		vector<killedBlatWork_t*> killed_blat_work_vec;
+		string killed_blat_work_filename = out_dir_call + "/" + "monitor_killed_blat_work";	// colums: alnfilename,ctgfilename,refseqfilename
+		ofstream killed_blat_work_file;
+		pthread_mutex_t mtx_killed_blat_work;
 
 	public:
 		Paras();
