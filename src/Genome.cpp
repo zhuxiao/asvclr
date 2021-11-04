@@ -757,7 +757,7 @@ int Genome::genomeCall(){
 
 // initialize variables for monitor killed blat work
 void Genome::initMonitorKilledBlatWorkMem(){
-	string line, killed_blat_work_filename, tmp_filename;
+	string line, alnfilename, contigfilename, refseqfilename, old_out_dir, killed_blat_work_filename, tmp_filename;
 	ifstream infile;
 	killedBlatWork_t *killed_blat_work;
 	vector<string> str_vec;
@@ -789,10 +789,15 @@ void Genome::initMonitorKilledBlatWorkMem(){
 			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
 				if(str_vec.size()==3){
+					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_call);
+					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
+					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+
 					killed_blat_work = new killedBlatWork_t();
-					killed_blat_work->alnfilename = str_vec.at(0);		// alnfilename;
-					killed_blat_work->ctgfilename = str_vec.at(1);		// ctgfilename;
-					killed_blat_work->refseqfilename = str_vec.at(2);	// refseqfilename;
+					killed_blat_work->alnfilename = alnfilename;		// alnfilename;
+					killed_blat_work->ctgfilename = contigfilename;		// ctgfilename;
+					killed_blat_work->refseqfilename = refseqfilename;	// refseqfilename;
 
 					paras->killed_blat_work_vec.push_back(killed_blat_work);
 					paras->killed_blat_work_file << line << endl;
