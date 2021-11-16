@@ -16,7 +16,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.1.1"
+#define PROG_VERSION				"1.1.2"
 #define VCF_VERSION					"4.2"
 
 #define CANU_RECOMMEND_VERSION		"2.1"
@@ -97,14 +97,18 @@ using namespace std;
 #define MIN_HIGH_CONSENSUS_INS_RATIO		0.3f
 #define MIN_HIGH_CONSENSUS_DEL_RATIO		0.5f	// 0.4
 
-#define MAX_ASSEMBLE_MINUTES			15
-#define MAX_ALN_MINUTES					15
+#define MAX_ASSEMBLE_MINUTES				15
+#define MAX_ALN_MINUTES						15
 
-#define MAX_PROC_RUNNING_MINUTES		120
-#define MONITOR_WAIT_SECONDS			60
-#define ULTRA_LOW_PROC_RUNNING_MINUTES	30
+//#define MAX_PROC_RUNNING_MINUTES				120
+#define MAX_PROC_RUNNING_MINUTES_ASSEMBLE		500
+#define MAX_PROC_RUNNING_MINUTES_CALL			120
+#define MONITOR_WAIT_SECONDS					60
+#define ULTRA_LOW_PROC_RUNNING_MINUTES			30
 
-#define DEFAULT_MONITOR_PROC_NAMES		"overlapInCore,falconsense,blat"
+//#define DEFAULT_MONITOR_PROC_NAMES				"overlapInCore,falconsense,blat"
+#define DEFAULT_MONITOR_PROC_NAMES_ASSEMBLE		"overlapInCore,falconsense"
+#define DEFAULT_MONITOR_PROC_NAMES_CALL			"blat"
 
 // program parameters
 class Paras
@@ -124,8 +128,8 @@ class Paras
 		int64_t minReadsNumSupportSV; //, minClipReadsNumSupportSV;
 
 		// process monitor
-		string monitoring_proc_names;
-		int32_t max_proc_running_minutes;
+		string monitoring_proc_names_assemble, monitoring_proc_names_call;
+		int32_t max_proc_running_minutes_assemble, max_proc_running_minutes_call;
 
 		// limit SV regions, item format: CHR | CHR:START-END
 		vector<simpleReg_t*> limit_reg_vec;

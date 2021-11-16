@@ -67,7 +67,7 @@ $ asvclr all -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
 Program: ASVCLR (Accurate Structural Variant Caller for Long Reads)
-Version: 1.1.1 (using htslib 1.12)
+Version: 1.1.2 (using htslib 1.12)
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -104,15 +104,24 @@ Options:
    --keep-assemble-reads
                  Keep temporary reads from being deleted during local assemble.
                  This may take some additional disk space
-   --monitor_proc_names STR
-                 Process names to be monitored during Canu assemble and BLAT alignment.
-                 These processes may have ultra-high CPU running time under some certain
-                 circumstances and should be terminated in advance if they become
-                 computation intensive works. Note that the process names should be
-                 comma-delimited and without blanks: ["overlapInCore,falconsense,blat"]
-   --max_proc_running_minutes INT
-                 Monitored processes will be terminated if their CPU running time exceed
-                 INT minutes: [120]
+   --monitor_proc_names_assemble STR
+                 Process names to be monitored during Canu assemble. These processes may
+                 have ultra-high CPU running time under some certain circumstances and
+                 should be terminated in advance if they are computation intensive works.
+                 Note that the process names should be comma-delimited and without blanks:
+                 ["overlapInCore,falconsense"]
+   --monitor_proc_names_call STR
+                 Process names to be monitored during BLAT alignment. These processes may
+                 have ultra-high CPU running time under some certain circumstances and
+                 should be terminated in advance if they are computation intensive works.
+                 Note that the process names should be comma-delimited and without blanks:
+                 ["blat"]
+   --max_proc_running_minutes_assemble INT
+                 Monitored processes for assemble will be terminated if their CPU running
+                 time exceed INT minutes: [500]
+   --max_proc_running_minutes_call INT
+                 Monitored processes for call will be terminated if their CPU running time
+                 exceed INT minutes: [120]
    --technology STR
                  Sequencing technology [pacbio]:
                    pacbio     : the PacBio CLR sequencing technology;
@@ -131,7 +140,7 @@ Besides, the overall help information can be shown as below:
 ```sh
 $ asvclr
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.1.1 (using htslib 1.12)
+Version: 1.1.2 (using htslib 1.12)
 
 Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -176,7 +185,7 @@ And the help information are shown below:
 ```sh
 $ asvclr detect
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.1.1 (using htslib 1.12)
+Version: 1.1.2 (using htslib 1.12)
 
 Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -220,7 +229,7 @@ And the help information are shown below:
 ```sh
 $ asvclr assemble
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.1.1 (using htslib 1.12)
+Version: 1.1.2 (using htslib 1.12)
 
 Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>
 
@@ -248,15 +257,15 @@ Options:
    --keep-assemble-reads
                  Keep temporary reads from being deleted during local assemble.
                  This may take some additional disk space
-   --monitor_proc_names STR
-                 Process names to be monitored during Canu assemble and BLAT alignment.
-                 These processes may have ultra-high CPU running time under some certain
-                 circumstances and should be terminated in advance if they become
-                 computation intensive works. Note that the process names should be
-                 comma-delimited and without blanks: ["overlapInCore,falconsense,blat"]
-   --max_proc_running_minutes INT
-                 Monitored processes will be terminated if their CPU running time exceed
-                 INT minutes: [120]
+   --monitor_proc_names_assemble STR
+                 Process names to be monitored during Canu assemble. These processes may
+                 have ultra-high CPU running time under some certain circumstances and
+                 should be terminated in advance if they are computation intensive works.
+                 Note that the process names should be comma-delimited and without blanks:
+                 ["overlapInCore,falconsense"]
+   --max_proc_running_minutes_assemble INT
+                 Monitored processes for assemble will be terminated if their CPU running
+                 time exceed INT minutes: [500]
    --technology STR
                  Sequencing technology [pacbio]:
                    pacbio     : the PacBio CLR sequencing technology;
@@ -286,7 +295,7 @@ And the help information are shown below:
 ```sh
 $ asvclr call
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.1.1 (using htslib 1.12)
+Version: 1.1.2 (using htslib 1.12)
 
 Usage: asvclr call [options] <REF_FILE> <BAM_FILE>
 
@@ -304,15 +313,15 @@ Options:
    -p STR        prefix of output result files [null]
    -t INT        number of concurrent work [0]. 0 for the maximal number
                  of threads in machine
-   --monitor_proc_names STR
-                 Process names to be monitored during Canu assemble and BLAT alignment.
-                 These processes may have ultra-high CPU running time under some certain
-                 circumstances and should be terminated in advance if they become
-                 computation intensive works. Note that the process names should be
-                 comma-delimited and without blanks: ["overlapInCore,falconsense,blat"]
-   --max_proc_running_minutes INT
-                 Monitored processes will be terminated if their CPU running time exceed
-                 INT minutes: [120]
+   --monitor_proc_names_call STR
+                 Process names to be monitored during BLAT alignment. These processes may
+                 have ultra-high CPU running time under some certain circumstances and
+                 should be terminated in advance if they are computation intensive works.
+                 Note that the process names should be comma-delimited and without blanks:
+                 ["blat"]
+   --max_proc_running_minutes_call INT
+                 Monitored processes for call will be terminated if their CPU running time
+                 exceed INT minutes: [120]
    --include-decoy
                  include decoy items in result
    --sample STR  Sample name ["sample"]

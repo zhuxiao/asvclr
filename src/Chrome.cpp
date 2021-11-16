@@ -2634,7 +2634,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				}
 
 				// process monitor killed blat work
-				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes;
+				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
 				var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
 				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
 				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
@@ -2930,7 +2930,7 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag
 				var_cand_tmp->ctg_num = 0;
 
 				// process monitor killed blat work
-				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes;
+				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
 				var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
 				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
 				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;

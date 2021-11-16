@@ -534,7 +534,7 @@ int Genome::genomeLocalAssemble(){
 	//outputAssemWorkOptToFile_debug(paras->assem_work_vec);
 
 	// invoke the monitor of assemble work process
-	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names, paras->max_proc_running_minutes);
+	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_assemble, paras->max_proc_running_minutes_assemble);
 
 	// begin assemble
 	if(!paras->assem_work_vec.empty()) cout << "[" << time.getTime() << "]: start local assemble..." << endl;
@@ -701,7 +701,7 @@ int Genome::genomeCall(){
 	cout << "Number of regions to be processed: " << paras->call_work_num << endl;
 
 	// invoke the monitor of assemble work process
-	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names, paras->max_proc_running_minutes);
+	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_call, paras->max_proc_running_minutes_call);
 
 	// blat alignment work
 	time.setStartTime();
@@ -930,7 +930,8 @@ int Genome::processCallWork(){
 		var_cand = paras->call_work_vec.at(i);
 
 		// DUP not precise (CCS30x): blat_1_2936746-2942685.sim4, blat_contig_1_1180102-1180675.sim4, blat_contig_1_1183812-1185067.sim4, blat_contig_1_1317611-1318285.sim4, blat_1_1860801-1869285.sim4
-//		if(var_cand->alnfilename.compare("output_ccs_v1.0.9_20210923_test/3_call/1/blat_contig_1_1180102-1180675.sim4")!=0){
+		// DUP check: blat_1_802003-808928.sim4
+//		if(var_cand->alnfilename.compare("output_ccs_v1.1.1_20211106/3_call/1/blat_1_843249-844905.sim4")!=0){
 //			continue;
 //		}
 
@@ -1410,7 +1411,7 @@ vector<blatAlnTra*> Genome::loadBlatAlnDataTra(){
 	{
 		if(line.size()){
 			str_vec = split(line, "\t");
-			blat_aln_tra = new blatAlnTra(str_vec.at(0), str_vec.at(1), str_vec.at(2), paras->max_proc_running_minutes);
+			blat_aln_tra = new blatAlnTra(str_vec.at(0), str_vec.at(1), str_vec.at(2), paras->max_proc_running_minutes_call);
 			blat_aln_tra->killed_blat_work_vec = &paras->killed_blat_work_vec;
 			blat_aln_tra->killed_blat_work_file = &paras->killed_blat_work_file;
 			blat_aln_tra->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
@@ -1498,7 +1499,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->dup_num = var_cand_tmp->dup_num;
 
 		// process monitor killed blat work
-		var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes;
+		var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
 		var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
 		var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
 		var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
@@ -2524,7 +2525,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				tmpdir = out_dir_tra + "/" + "tmp_tra_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
 
 				// process monitor killed blat work
-				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes;
+				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
 				var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
 				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
 				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
@@ -2620,7 +2621,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				tmpdir = out_dir_tra + "/" + "tmp_tra_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
 
 				// process monitor killed blat work
-				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes;
+				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
 				var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
 				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
 				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
