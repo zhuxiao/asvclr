@@ -35,7 +35,7 @@ void Paras::init(){
 	pg_cmd_str = "";
 	num_threads = 0;
 	delete_reads_flag = true;
-	keep_failed_reads_flag = false;
+	keep_failed_reads_flag = reassemble_failed_work_flag = false;
 	maskMisAlnRegFlag = false;
 	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
 	technology = SEQUENCING_TECH_DEFAULT;
@@ -86,7 +86,7 @@ void Paras::init(){
 // get the Canu program version
 string Paras::getCanuVersion(){
 	FILE *stream;
-	char tmp[256], info[256];
+	char tmp[256], info[256] = {0};
 	string canu_version_str = "";
 
 	sprintf(tmp, "canu -version | awk '$1 ~/(Canu)|(canu)/' | awk '{print $2}'");
