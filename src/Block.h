@@ -83,6 +83,7 @@ class Block{
 		void computeBlockMeanCov();
 		void fillDataEst(size_t op_est);
 		void AddReadLenEstInfo();
+		void AddCovDepthEstInfo();
 		int outputCovFile();
 		void maskMisAlnRegs();
 		int computeMisAlnDisagrReg();

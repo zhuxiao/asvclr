@@ -15,7 +15,7 @@
 using namespace std;
 
 #define MIN_VALID_TRA_RATIO			(0.95f)
-#define MAX_BED_COLS_NUM			9		//	maximum column number of BED file
+#define MAX_BED_COLS_NUM			11		//	maximum column number of BED file
 
 
 class Genome{
@@ -71,10 +71,13 @@ class Genome{
 		ofstream* getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, bool clip_reg_flag);
 		void generateFile(string &filename);
 
+		void initMonitorKilledMinimap2WorkMem();
 		void initMonitorKilledBlatWorkMem();
+		void releaseMonitorKilledMinimap2WorkMem();
 		void releaseMonitorKilledBlatWorkMem();
 		void genomeCollectCallWork();
 		void genomeFinishCallWork();
+		int processAlnWork();
 		int processBlatAlnWork();
 		int processCallWork();
 		void genomeLoadMateClipRegData();

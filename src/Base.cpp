@@ -238,6 +238,10 @@ size_t Base::getLargeIndelNum(size_t thres){
 		if(delVector.at(i)->seq.size()>=thres)
 			large_indel_num ++;
 	}
+	for(i=0; i<extendDelVector.size(); i++){
+		if(extendDelVector.at(i)->seq.size()>=thres)
+			large_indel_num ++;
+	}
 	return large_indel_num;
 }
 

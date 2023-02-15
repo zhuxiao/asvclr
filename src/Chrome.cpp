@@ -93,6 +93,11 @@ int Chrome::generateChrBlocks(){
 	while(pos<=chrlen){
 		begPos = pos;
 		endPos = pos + paras->blockSize - 1;
+
+//		if(begPos<14781633 and endPos>14781633){
+//			cout<<begPos<<endl;
+//		}
+
 		if(chrlen-endPos<=paras->blockSize*0.5){
 			endPos = chrlen;
 			pos = endPos + 1;
@@ -473,6 +478,10 @@ void Chrome::processMateClipRegDetectWork(){
 	//for(int32_t i=num_work-1; i>=0; i--){
 		//if(clip_processed_flag_vec.at(i)==false){
 			reg = clipRegVector.at(i);
+
+//			if(i>=87)
+//				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+//			else continue;
 
 			mate_clip_reg_work_opt = new mateClipRegDetectWork_opt();
 			mate_clip_reg_work_opt->reg = reg;
@@ -1840,6 +1849,9 @@ void Chrome::chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> 
 				reg->short_sv_flag = false;
 				reg->zero_cov_flag = false;
 				reg->aln_seg_end_flag = false;
+				reg->query_pos_invalid_flag = false;
+				reg->gt_type = -1;
+				reg->gt_seq = "";
 				//cout << "blocID=" << computeBlocID(begPos, blockVector) << ", reg:" << begPos << "-" << endPos << endl;
 
 				tmp_bloc->indelVector.push_back(reg);  // add the variation
@@ -1882,13 +1894,13 @@ void Chrome::chrLoadMateClipRegDataOp(bool limit_reg_process_flag, vector<simple
 			str_vec = split(line, "\t");
 
 			chrname1 = str_vec.at(0);
-			if(chrname1.compare("-")!=0) { reg1 = new reg_t(); reg1->chrname = chrname1; reg1->startRefPos = stoi(str_vec.at(1)); reg1->endRefPos = stoi(str_vec.at(2)); reg1->zero_cov_flag = false; reg1->aln_seg_end_flag = false; }
+			if(chrname1.compare("-")!=0) { reg1 = new reg_t(); reg1->chrname = chrname1; reg1->startRefPos = stoi(str_vec.at(1)); reg1->endRefPos = stoi(str_vec.at(2)); reg1->zero_cov_flag = false; reg1->aln_seg_end_flag = false; reg1->query_pos_invalid_flag = false; reg1->gt_type = -1; reg1->gt_seq = ""; }
 			chrname2 = str_vec.at(3);
-			if(chrname2.compare("-")!=0) { reg2 = new reg_t(); reg2->chrname = chrname2; reg2->startRefPos = stoi(str_vec.at(4)); reg2->endRefPos = stoi(str_vec.at(5)); reg2->zero_cov_flag = false; reg2->aln_seg_end_flag = false; }
+			if(chrname2.compare("-")!=0) { reg2 = new reg_t(); reg2->chrname = chrname2; reg2->startRefPos = stoi(str_vec.at(4)); reg2->endRefPos = stoi(str_vec.at(5)); reg2->zero_cov_flag = false; reg2->aln_seg_end_flag = false; reg2->query_pos_invalid_flag = false; reg2->gt_type = -1; reg2->gt_seq = ""; }
 			chrname3 = str_vec.at(6);
-			if(chrname3.compare("-")!=0) { reg3 = new reg_t(); reg3->chrname = chrname3; reg3->startRefPos = stoi(str_vec.at(7)); reg3->endRefPos = stoi(str_vec.at(8)); reg3->zero_cov_flag = false; reg3->aln_seg_end_flag = false; }
+			if(chrname3.compare("-")!=0) { reg3 = new reg_t(); reg3->chrname = chrname3; reg3->startRefPos = stoi(str_vec.at(7)); reg3->endRefPos = stoi(str_vec.at(8)); reg3->zero_cov_flag = false; reg3->aln_seg_end_flag = false; reg3->query_pos_invalid_flag = false; reg3->gt_type = -1; reg3->gt_seq = ""; }
 			chrname4 = str_vec.at(9);
-			if(chrname4.compare("-")!=0) { reg4 = new reg_t(); reg4->chrname = chrname4; reg4->startRefPos = stoi(str_vec.at(10)); reg4->endRefPos = stoi(str_vec.at(11)); reg4->zero_cov_flag = false; reg4->aln_seg_end_flag = false; }
+			if(chrname4.compare("-")!=0) { reg4 = new reg_t(); reg4->chrname = chrname4; reg4->startRefPos = stoi(str_vec.at(10)); reg4->endRefPos = stoi(str_vec.at(11)); reg4->zero_cov_flag = false; reg4->aln_seg_end_flag = false; reg4->query_pos_invalid_flag = false; reg4->gt_type = -1; reg4->gt_seq = ""; }
 
 			if(str_vec.at(12).compare("0")==0) mate_flag = false;
 			else mate_flag = true;
@@ -1966,6 +1978,7 @@ void Chrome::chrLoadMateClipRegDataOp(bool limit_reg_process_flag, vector<simple
 				mate_clip_reg->reg_mated_flag = mate_flag;
 				mate_clip_reg->valid_flag = true;
 				mate_clip_reg->call_success_flag = false;
+				mate_clip_reg->supp_num_valid_flag = true;
 				mate_clip_reg->sv_type = var_type;
 				mate_clip_reg->leftMeanClipPos = left_size;
 				mate_clip_reg->leftMeanClipPos2 = left_size2;
@@ -2157,7 +2170,10 @@ void Chrome::loadPrevAssembledInfo2(bool clipReg_flag, bool limit_reg_process_fl
 					item_id = getItemIDFromAssemWorkVec(contigfilename, assem_work_vec);
 					if(item_id!=-1){ // already assembled
 						done_str = str_vec.at(str_vec.size()-1);
-						if(done_str.compare(DONE_STR)==0) done_flag = true;
+						if(done_str.compare(DONE_STR)==0 and isFileExist(refseqfilename)) {
+							if(isReadableFile(contigfilename) and isReadableFile(refseqfilename))
+								done_flag = true;
+						}
 					}
 					if(paras->reassemble_failed_work_flag and str_vec.at(5).compare(ASSEMBLY_FAILURE)==0) reassemble_flag = true;
 					if(done_flag and reassemble_flag==false){ // assemble done and NOT reassemble
@@ -2512,8 +2528,14 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				var_cand_tmp->ref_left_shift_size = stoi(line_vec[3]);	// ref_left_shift_size
 				var_cand_tmp->ref_right_shift_size = stoi(line_vec[4]);	// ref_right_shift_size
 
+				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
+				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
+
 				var_cand_tmp->blat_aligned_info_vec = NULL;
 				var_cand_tmp->blat_var_cand_file = NULL;
+
+				var_cand_tmp->minimap2_aligned_info_vec = NULL;
+				var_cand_tmp->minimap2_var_cand_file = NULL;
 
 				if(line_vec[5].compare(ASSEMBLY_SUCCESS)==0) var_cand_tmp->assem_success = true;
 				else var_cand_tmp->assem_success = false;
@@ -2542,6 +2564,9 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 						reg->short_sv_flag = false;
 						reg->zero_cov_flag = false;
 						reg->aln_seg_end_flag = false;
+						reg->query_pos_invalid_flag = false;
+						reg->gt_type = -1;
+						reg->gt_seq = "";
 						var_cand_tmp->varVec.push_back(reg);  // variation vector
 					}
 					var_cand_tmp->varVec.shrink_to_fit();
@@ -2565,7 +2590,8 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				str_vec2 = split(str_tmp, "_");
 
 				dirname_call_mate_clip_reg = getDirnameCall(chrname_mate_clip_reg);
-				alnfilename = dirname_call_mate_clip_reg + "/blat";
+				if(clipReg_flag) alnfilename = dirname_call_mate_clip_reg + "/blat";
+				else alnfilename = dirname_call_mate_clip_reg + "/minimap2";
 				for(i=1; i<str_vec2.size()-1; i++)
 					alnfilename += "_" + str_vec2[i];
 
@@ -2575,7 +2601,8 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				alnfilename += "_" + str_vec3[0];
 				for(i=1; i<str_vec3.size()-1; i++)
 					alnfilename += "." + str_vec3[i];
-				alnfilename += ".sim4";
+				if(clipReg_flag) alnfilename += ".sim4";
+				else alnfilename += ".paf";
 
 				var_cand_tmp->alnfilename = alnfilename;
 				var_cand_tmp->align_success = false;
@@ -2633,11 +2660,20 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 					var_cand_tmp->dup_num = 0;
 				}
 
+				//set genotyping parameters
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_alle_ratio, paras->gt_max_alle_ratio, paras->minReadsNumSupportSV);
+
 				// process monitor killed blat work
 				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
 				var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
 				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
 				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
+
+				// process monitor killed minimap2 work
+				//var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
+				var_cand_tmp->killed_minimap2_work_vec = &paras->killed_minimap2_work_vec;
+				var_cand_tmp->killed_minimap2_work_file = &paras->killed_minimap2_work_file;
+				var_cand_tmp->mtx_killed_minimap2_work = &paras->mtx_killed_minimap2_work;
 
 				var_cand_vec.push_back(var_cand_tmp);
 				lineNum ++;
@@ -2810,6 +2846,9 @@ void Chrome::loadMisAlnRegData(){
 			reg->short_sv_flag = false;
 			reg->zero_cov_flag = false;
 			reg->aln_seg_end_flag = false;
+			reg->query_pos_invalid_flag = false;
+			reg->gt_type = -1;
+			reg->gt_seq = "";
 			mis_aln_vec.push_back(reg);
 		}
 	}
@@ -2924,16 +2963,31 @@ void Chrome::loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag
 				var_cand_tmp->blat_aligned_info_vec = NULL;
 				var_cand_tmp->blat_var_cand_file = NULL;
 
+				var_cand_tmp->minimap2_aligned_info_vec = NULL;
+				var_cand_tmp->minimap2_var_cand_file = NULL;
+
+				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
+				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
+
 				if(line_vec[3].compare(ALIGN_SUCCESS)==0) var_cand_tmp->align_success = true;
 				else var_cand_tmp->align_success = false;
 
 				var_cand_tmp->ctg_num = 0;
+
+				//set genotyping parameters
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_alle_ratio, paras->gt_max_alle_ratio, paras->minReadsNumSupportSV);
 
 				// process monitor killed blat work
 				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
 				var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
 				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
 				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
+
+				// process monitor killed minimap2 work
+				//var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
+				var_cand_tmp->killed_minimap2_work_vec = &paras->killed_minimap2_work_vec;
+				var_cand_tmp->killed_minimap2_work_file = &paras->killed_minimap2_work_file;
+				var_cand_tmp->mtx_killed_minimap2_work = &paras->mtx_killed_minimap2_work;
 
 				// limit regions
 				var_cand_tmp->limit_reg_process_flag = limit_reg_process_flag;
@@ -3234,7 +3288,7 @@ void Chrome::removeVarCandNodeClipReg(varCand *var_cand){
 
 // fill the sequence, including reference sequence and contig sequence
 void Chrome::chrFillVarseq(){
-	chrFillVarseqSingleVec(var_cand_vec);
+	//chrFillVarseqSingleVec(var_cand_vec);
 	chrFillVarseqSingleVec(var_cand_clipReg_vec);
 }
 
@@ -3391,6 +3445,10 @@ void Chrome::saveCallSV2File(){
 	saveCallIndelClipReg2File(out_filename_call_indel, out_filename_call_clipReg);
 }
 
+void Chrome::saveCallSV2File02(){
+	saveCallIndelClipReg2File02(out_filename_call_indel, out_filename_call_clipReg);
+}
+
 void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfilename_clipReg){
 	size_t i, j, file_id;
 	ofstream outfile_indel, outfile_clipReg;
@@ -3412,7 +3470,7 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 	}
 
 	// header line
-	header_line_bed = getCallFileHeaderBed();
+	header_line_bed = getCallFileHeaderBed(paras->sample);
 	outfile_indel << header_line_bed << endl;
 	outfile_clipReg << header_line_bed << endl;
 
@@ -3451,6 +3509,10 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 				else line += "\t-";
 				if(reg->altseq.size()) line += "\t" + reg->altseq;
 				else line += "\t-";
+
+				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
+				line += "\t" + reg->gt_seq;
+
 
 				if(reg->short_sv_flag) line += "\tShortSV";
 
@@ -3503,6 +3565,9 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 					if(reg->altseq.size()) line += "\t" + reg->altseq;
 					else line += "\t-";
 
+					if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
+					line += "\t" + reg->gt_seq;
+
 					if(reg->short_sv_flag) line += "\tShortSV";
 
 					if(reg->var_type==VAR_UNC){
@@ -3552,6 +3617,9 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 				else line += "\t-";
 				//line += "\t" + reg->refseq + "\t" + reg->altseq;
 
+				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
+				line += "\t" + reg->gt_seq;
+
 				if(reg->short_sv_flag) line += "\tShortSV";
 
 				if(reg->var_type==VAR_UNC){
@@ -3588,4 +3656,366 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 	outfile_indel.close();
 	outfile_clipReg.close();
 }
+
+void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outfilename_clipReg){
+	size_t i, j, file_id;
+	ofstream outfile_indel, outfile_clipReg;
+	varCand *var_cand, *var_cand_pre, *var_cand_pre_pre;
+	reg_t *reg;
+	string line, sv_type, header_line_bed;
+	int32_t ref_dist, query_dist;
+	bool size_satisfied, no_existed;
+
+	outfile_indel.open(outfilename_indel);
+	if(!outfile_indel.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << outfilename_indel << endl;
+		exit(1);
+	}
+	outfile_clipReg.open(outfilename_clipReg);
+	if(!outfile_clipReg.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << outfilename_clipReg << endl;
+		exit(1);
+	}
+
+	// header line
+	header_line_bed = getCallFileHeaderBed(paras->sample);
+	outfile_indel << header_line_bed << endl;
+	outfile_clipReg << header_line_bed << endl;
+
+	for(i=0; i<var_cand_vec.size(); i++){
+		var_cand = var_cand_vec[i];
+		if(i>0) var_cand_pre = var_cand_vec[i-1];
+		if(i>1) var_cand_pre_pre = var_cand_vec[i-2];
+		for(j=0; j<var_cand->newVarVec.size(); j++){
+			no_existed = true;
+			reg = var_cand->newVarVec[j];
+			// choose the size-selected variants
+//			ref_dist = reg->endRefPos - reg->startRefPos + 1;
+//			query_dist = reg->endQueryPos - reg->startQueryPos + 1;
+			//size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
+			size_satisfied = isSizeSatisfied2(reg->sv_len, paras->min_sv_size_usr, paras->max_sv_size_usr);
+
+			if(i>0) no_existed = isNotAlreadyExists(var_cand_pre->newVarVec, reg);
+			if(i>1 and no_existed) no_existed = isNotAlreadyExists(var_cand_pre_pre->newVarVec, reg);
+			if(no_existed) no_existed = isNotAlreadyExists(var_cand->newVarVec, reg, j);
+
+			if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied and no_existed){
+				file_id = 0;
+				switch(reg->var_type){
+					case VAR_UNC: sv_type = VAR_UNC_STR; break;
+					case VAR_INS: sv_type = VAR_INS_STR; break;
+					case VAR_DEL: sv_type = VAR_DEL_STR; break;
+					case VAR_DUP: sv_type = VAR_DUP_STR; file_id = 1; break;
+					case VAR_INV: sv_type = VAR_INV_STR; file_id = 1; break;
+					case VAR_TRA: sv_type = VAR_TRA_STR; file_id = 1; break;
+					default: sv_type = VAR_MIX_STR; break;
+				}
+				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+				if(reg->var_type!=VAR_TRA)
+					line += "\t" + to_string(reg->sv_len);
+				else
+					line += "\t-";
+				if(reg->var_type==VAR_DUP)
+					line += "\t" + to_string(reg->dup_num);
+				else
+					line += "\t-";
+
+				if(reg->refseq.size()) line += "\t" + reg->refseq;
+				else line += "\t-";
+				if(reg->altseq.size()) line += "\t" + reg->altseq;
+				else line += "\t-";
+
+				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
+				line += "\t" + reg->gt_seq;
+
+
+				if(reg->short_sv_flag) line += "\tShortSV";
+
+				//cout << "line=" << __LINE__ << ": " << line << endl;
+
+				if(file_id==0) outfile_indel << line << endl;
+				else outfile_clipReg << line << endl;
+			}
+		}
+	}
+
+	for(i=0; i<var_cand_clipReg_vec.size(); i++){
+		var_cand = var_cand_clipReg_vec[i];
+
+//		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_contig_1_1016017-1016409.sim4")==0){
+//			cout << "line=" << __LINE__ << ", alnfilename=" << var_cand->alnfilename << endl;
+//		}
+
+		if(var_cand->clip_reg_flag==false){ // indel
+			for(j=0; j<var_cand->varVec.size(); j++){
+				reg = var_cand->varVec[j];
+
+				// choose the size-selected variants
+				ref_dist = reg->endRefPos - reg->startRefPos + 1;
+				query_dist = reg->endQueryPos - reg->startQueryPos + 1;
+				size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
+
+				if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied){
+					file_id = 0;
+					switch(reg->var_type){
+						case VAR_UNC: sv_type = VAR_UNC_STR; break;
+						case VAR_INS: sv_type = VAR_INS_STR; break;
+						case VAR_DEL: sv_type = VAR_DEL_STR; break;
+						case VAR_DUP: sv_type = VAR_DUP_STR; file_id = 1; break;
+						case VAR_INV: sv_type = VAR_INV_STR; file_id = 1; break;
+						case VAR_TRA: sv_type = VAR_TRA_STR; file_id = 1; break;
+						default: sv_type = VAR_MIX_STR; break;
+					}
+					line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+					if(reg->var_type!=VAR_TRA)
+						line += "\t" + to_string(reg->sv_len);
+					else
+						line += "\t-";
+					if(reg->var_type==VAR_DUP)
+						line += "\t" + to_string(reg->dup_num);
+					else
+						line += "\t-";
+					if(reg->refseq.size()) line += "\t" + reg->refseq;
+					else line += "\t-";
+					if(reg->altseq.size()) line += "\t" + reg->altseq;
+					else line += "\t-";
+
+					if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
+					line += "\t" + reg->gt_seq;
+
+					if(reg->short_sv_flag) line += "\tShortSV";
+
+					if(reg->var_type==VAR_UNC){
+						cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
+					}
+
+					//cout << "line=" << __LINE__ << ": " << line << endl;
+
+					if(file_id==0) outfile_indel << line << endl;
+					else outfile_clipReg << line << endl;
+				}
+			}
+		}else{ // cliping region
+			reg = var_cand->clip_reg;
+
+			// choose the size-selected variants
+			if(reg){
+				ref_dist = reg->endRefPos - reg->startRefPos + 1;
+				query_dist = reg->endQueryPos - reg->startQueryPos + 1;
+				size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
+			}
+
+			if(reg and reg->var_type!=VAR_UNC and var_cand->call_success and size_satisfied){
+				file_id = 1;
+				switch(reg->var_type){
+					case VAR_UNC: sv_type = VAR_UNC_STR; break;
+					case VAR_INS: sv_type = VAR_INS_STR; file_id = 0; break;
+					case VAR_DEL: sv_type = VAR_DEL_STR; file_id = 0; break;
+					case VAR_DUP: sv_type = VAR_DUP_STR; break;
+					case VAR_INV: sv_type = VAR_INV_STR; break;
+					case VAR_TRA: sv_type = VAR_TRA_STR; break;
+					default: sv_type = VAR_MIX_STR; break;
+				}
+
+				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+				if(reg->var_type!=VAR_TRA)
+					line += "\t" + to_string(reg->sv_len);
+				else
+					line += "\t-";
+				if(reg->var_type==VAR_DUP)
+					line += "\t" + to_string(reg->dup_num);
+				else
+					line += "\t-";
+				if(reg->refseq.size()) line += "\t" + reg->refseq;
+				else line += "\t-";
+				if(reg->altseq.size()) line += "\t" + reg->altseq;
+				else line += "\t-";
+				//line += "\t" + reg->refseq + "\t" + reg->altseq;
+
+				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
+				line += "\t" + reg->gt_seq;
+
+				if(reg->short_sv_flag) line += "\tShortSV";
+
+				if(reg->var_type==VAR_UNC){
+					cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
+				}
+
+				//cout << "line=" << __LINE__ << ": " << line << endl;
+
+				if(file_id==1) outfile_clipReg << line << endl;
+				else outfile_indel << line << endl;
+			}else{ // not confirmed SV
+//				if(var_cand->sv_type!=VAR_UNC){
+//					file_id = 1;
+//					switch(var_cand->sv_type){
+//						case VAR_UNC: sv_type = "UNCERTAIN"; break;
+//						case VAR_INS: sv_type = "INS"; file_id = 0; break;
+//						case VAR_DEL: sv_type = "DEL"; file_id = 0; break;
+//						case VAR_DUP: sv_type = "DUP"; break;
+//						case VAR_INV: sv_type = "INV"; break;
+//						case VAR_TRA: sv_type = "TRA"; break;
+//						default: sv_type = "MIX"; break;
+//					}
+//					line = var_cand->chrname;
+//					if(var_cand->leftClipRefPos>0 and var_cand->rightClipRefPos>0) line += "\t" + to_string(var_cand->leftClipRefPos) + "\t" + to_string(var_cand->rightClipRefPos);
+//					else line += "\t-\t-";
+//					line += "\t.\t.\t" + sv_type + "\t.";
+//					if(file_id==1) outfile_clipReg << line << endl;
+//					else outfile_indel << line << endl;
+//				}
+			}
+		}
+	}
+
+/*
+	for(i=0; i<var_cand_clipReg_vec.size(); i++){
+		var_cand = var_cand_clipReg_vec[i];
+		if(i>0) var_cand_pre = var_cand_vec[i-1];
+		if(i>1) var_cand_pre_pre = var_cand_vec[i-2];
+
+		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_contig_1_1016017-1016409.sim4")==0){
+			cout << "line=" << __LINE__ << ", alnfilename=" << var_cand->alnfilename << endl;
+		}
+
+		if(var_cand->clip_reg_flag==false){ // indel
+			for(j=0; j<var_cand->newVarVec.size(); j++){
+				reg = var_cand->newVarVec[j];
+				no_existed = true;
+
+				// choose the size-selected variants
+//				ref_dist = reg->endRefPos - reg->startRefPos + 1;
+//				query_dist = reg->endQueryPos - reg->startQueryPos + 1;
+//				size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
+
+				size_satisfied = isSizeSatisfied2(reg->sv_len, paras->min_sv_size_usr, paras->max_sv_size_usr);
+
+				if(i>0) no_existed = isNotAlreadyExists(var_cand_pre->newVarVec, reg);
+				if(i>1 and no_existed) no_existed = isNotAlreadyExists(var_cand_pre_pre->newVarVec, reg);
+				if(no_existed) no_existed = isNotAlreadyExists(var_cand->newVarVec, reg, j);
+
+				if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied and no_existed){
+					file_id = 0;
+					switch(reg->var_type){
+						case VAR_UNC: sv_type = VAR_UNC_STR; break;
+						case VAR_INS: sv_type = VAR_INS_STR; break;
+						case VAR_DEL: sv_type = VAR_DEL_STR; break;
+						case VAR_DUP: sv_type = VAR_DUP_STR; file_id = 1; break;
+						case VAR_INV: sv_type = VAR_INV_STR; file_id = 1; break;
+						case VAR_TRA: sv_type = VAR_TRA_STR; file_id = 1; break;
+						default: sv_type = VAR_MIX_STR; break;
+					}
+					line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+					if(reg->var_type!=VAR_TRA)
+						line += "\t" + to_string(reg->sv_len);
+					else
+						line += "\t-";
+					if(reg->var_type==VAR_DUP)
+						line += "\t" + to_string(reg->dup_num);
+					else
+						line += "\t-";
+					if(reg->refseq.size()) line += "\t" + reg->refseq;
+					else line += "\t-";
+					if(reg->altseq.size()) line += "\t" + reg->altseq;
+					else line += "\t-";
+
+					if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
+					line += "\t" + reg->gt_seq;
+
+					if(reg->short_sv_flag) line += "\tShortSV";
+
+					if(reg->var_type==VAR_UNC){
+						cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
+					}
+
+					//cout << "line=" << __LINE__ << ": " << line << endl;
+
+					if(file_id==0) outfile_indel << line << endl;
+					else outfile_clipReg << line << endl;
+				}
+			}
+		}else{ // cliping region
+			reg = var_cand->clip_reg;
+
+			// choose the size-selected variants
+			if(reg){
+//				ref_dist = reg->endRefPos - reg->startRefPos + 1;
+//				query_dist = reg->endQueryPos - reg->startQueryPos + 1;
+//				size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
+				size_satisfied = isSizeSatisfied2(reg->sv_len, paras->min_sv_size_usr, paras->max_sv_size_usr);
+
+				if(i>0) no_existed = isNotAlreadyExists(var_cand_pre->newVarVec, reg);
+				if(i>1 and no_existed) no_existed = isNotAlreadyExists(var_cand_pre_pre->newVarVec, reg);
+				//no_existed = isNotAlreadyExists(var_cand->newVarVec, reg, j);
+			}
+
+			if(reg and reg->var_type!=VAR_UNC and var_cand->call_success and size_satisfied and no_existed){
+				file_id = 1;
+				switch(reg->var_type){
+					case VAR_UNC: sv_type = VAR_UNC_STR; break;
+					case VAR_INS: sv_type = VAR_INS_STR; file_id = 0; break;
+					case VAR_DEL: sv_type = VAR_DEL_STR; file_id = 0; break;
+					case VAR_DUP: sv_type = VAR_DUP_STR; break;
+					case VAR_INV: sv_type = VAR_INV_STR; break;
+					case VAR_TRA: sv_type = VAR_TRA_STR; break;
+					default: sv_type = VAR_MIX_STR; break;
+				}
+
+				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+				if(reg->var_type!=VAR_TRA)
+					line += "\t" + to_string(reg->sv_len);
+				else
+					line += "\t-";
+				if(reg->var_type==VAR_DUP)
+					line += "\t" + to_string(reg->dup_num);
+				else
+					line += "\t-";
+				if(reg->refseq.size()) line += "\t" + reg->refseq;
+				else line += "\t-";
+				if(reg->altseq.size()) line += "\t" + reg->altseq;
+				else line += "\t-";
+				//line += "\t" + reg->refseq + "\t" + reg->altseq;
+
+				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
+				line += "\t" + reg->gt_seq;
+
+				if(reg->short_sv_flag) line += "\tShortSV";
+
+				if(reg->var_type==VAR_UNC){
+					cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
+				}
+
+				//cout << "line=" << __LINE__ << ": " << line << endl;
+
+				if(file_id==1) outfile_clipReg << line << endl;
+				else outfile_indel << line << endl;
+			}else{ // not confirmed SV
+//				if(var_cand->sv_type!=VAR_UNC){
+//					file_id = 1;
+//					switch(var_cand->sv_type){
+//						case VAR_UNC: sv_type = "UNCERTAIN"; break;
+//						case VAR_INS: sv_type = "INS"; file_id = 0; break;
+//						case VAR_DEL: sv_type = "DEL"; file_id = 0; break;
+//						case VAR_DUP: sv_type = "DUP"; break;
+//						case VAR_INV: sv_type = "INV"; break;
+//						case VAR_TRA: sv_type = "TRA"; break;
+//						default: sv_type = "MIX"; break;
+//					}
+//					line = var_cand->chrname;
+//					if(var_cand->leftClipRefPos>0 and var_cand->rightClipRefPos>0) line += "\t" + to_string(var_cand->leftClipRefPos) + "\t" + to_string(var_cand->rightClipRefPos);
+//					else line += "\t-\t-";
+//					line += "\t.\t.\t" + sv_type + "\t.";
+//					if(file_id==1) outfile_clipReg << line << endl;
+//					else outfile_indel << line << endl;
+//				}
+			}
+
+		}
+	}
+*/
+
+	outfile_indel.close();
+	outfile_clipReg.close();
+}
+
 

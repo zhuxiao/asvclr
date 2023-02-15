@@ -237,6 +237,9 @@ reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosR
 	reg->short_sv_flag = false;
 	reg->zero_cov_flag = false;
 	reg->aln_seg_end_flag = false;
+	reg->query_pos_invalid_flag = false;
+	reg->gt_type = -1;
+	reg->gt_seq = "";
 	return reg;
 }
 
@@ -412,10 +415,12 @@ void Region::detectIndelReg(){
 	int64_t i = startMidPartPos - subRegSize;
 	if(i<minRPos) i = minRPos;
 	while(i<endMidPartPos){
-//		if(i>1855000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
+//		if(i>2415000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
 //			cout << i << endl;
-
+		//if(i>14781000){
 		reg = getIndelReg(i);
+		//}
+
 		if(reg){
 			//cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", localRef: " << reg->startLocalRefPos << "-" << reg->endLocalRefPos << ", Query :" << reg->startQueryPos << "-" << reg->endQueryPos << endl;
 			indelVector.push_back(reg);
@@ -528,7 +533,8 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 				num4 = num_vec.at(0);
 				high_indel_clip_ratio = num_vec.at(1);
 				//if(num1>0 or num2>=DISAGREE_NUM_THRES_REG or num3>0) {
-				if(num1>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
+				if(num1>0 or num4>0 or high_indel_clip_ratio>=0.1f) {
+				//if(num1>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
 					reg = allocateReg(chrname, startPos_indel, endPos_indel);
 					break;
 				}else checkPos = endPos_indel + 1;
@@ -656,7 +662,7 @@ void Region::detectHighClipReg(){
 	int64_t i = startMidPartPos - SUB_CLIP_REG_SIZE;
 	if(i<1) i = 1;
 	while(i<endMidPartPos){
-//		if(i>2932500)
+//		if(i>999800)
 //			cout << i << endl;
 
 		reg_t *reg = getClipReg(i);

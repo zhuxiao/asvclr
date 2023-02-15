@@ -165,14 +165,15 @@ void clipReg::extractClipPosVec(){
 	for(i=0; i<clipAlnDataVector.size(); i++){
 		if(clipAlnDataVector.at(i)->query_checked_flag==false){
 			queryname = clipAlnDataVector.at(i)->queryname;
-			query_aln_segs = getQueryClipAlnSegs(queryname, clipAlnDataVector);  // get query clip align segments
+			//query_aln_segs = getQueryClipAlnSegs(queryname, clipAlnDataVector);  // get query clip align segments
+			query_aln_segs = getQueryClipAlnSegsAll(queryname, clipAlnDataVector);  // get query clip align segments
 
 			if(query_aln_segs.size()>MAX_ALN_SEG_NUM_PER_READ_TRA) { // ignore reads of too many align segments
 				//cout << "clipReg: " << chrname << ":" << startRefPos << "-" << endRefPos << ", qname=" << queryname << ", align segment number=" << query_aln_segs.size() << endl;
 				continue;
 			}
 
-//			if(queryname.compare("S2_8385")==0 or queryname.compare("S2_5705")==0){
+//			if(queryname.compare("S1_1515")==0 or queryname.compare("S1_5011")==0){
 //				cout << queryname << endl;
 //			}
 
@@ -424,7 +425,7 @@ void clipReg::splitClipPosVec(){
 	for(i=0; i<leftClipPosVector.size(); ){
 		clip_pos = leftClipPosVector.at(i);
 
-//		if(clip_pos->clip_aln->queryname.compare("S1_6607")==0 or clip_pos->clip_aln->queryname.compare("S1_1566")==0){
+//		if(clip_pos->clip_aln->queryname.compare("S1_8703")==0 or clip_pos->clip_aln->queryname.compare("S1_3935")==0){
 //			cout << "line=" << __LINE__ << ", qname=" << clip_pos->clip_aln->queryname << endl;
 //		}
 
@@ -2069,6 +2070,9 @@ void clipReg::computeClipRegs(){
 
 	// check BND items
 	checkBNDStrVec(mate_clip_reg);
+
+	// check support num
+	checkSuppNum(mate_clip_reg, paras->minReadsNumSupportSV);
 }
 
 // compute the clip region based on single vector
@@ -2097,6 +2101,9 @@ reg_t* clipReg::computeClipRegSingleVec(vector<clipPos_t*> &clipPosVector){
 		reg->endRefPos = clipPosVector.at(maxIdx)->clipRefPos;
 		reg->zero_cov_flag = false;
 		reg->aln_seg_end_flag = false;
+		reg->query_pos_invalid_flag = false;
+		reg->gt_type = -1;
+		reg->gt_seq = "";
 	}
 
 	return reg;
@@ -2437,7 +2444,8 @@ void clipReg::computeVarTypeClipReg(mateClipReg_t &mate_clip_reg, string &inBamF
 			if(clip_aln_seg->query_checked_flag==false){
 				//cout << i << "\t" << clip_aln_seg->chrname << "\t" << clip_aln_seg->startRefPos << "\t" << clip_aln_seg->endRefPos << endl;
 				queryname = clipAlnDataVector.at(i)->queryname;
-				query_aln_segs = getQueryClipAlnSegs(queryname, clipAlnDataVector);  // get query clip align segments
+				//query_aln_segs = getQueryClipAlnSegs(queryname, clipAlnDataVector);  // get query clip align segments
+				query_aln_segs = getQueryClipAlnSegsAll(queryname, clipAlnDataVector);  // get query clip align segments
 				if(query_aln_segs.size()==0) continue;
 
 				// sort according to queryPos

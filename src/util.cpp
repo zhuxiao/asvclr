@@ -1043,6 +1043,56 @@ void exchangeRegLoc(reg_t *reg){
 	}
 }
 
+//Minimap2 alignment, and the output is in paf format
+int32_t minimap2Aln(string &alnfilename, string &contigfilename, string &refseqfilename, int32_t max_proc_running_minutes){
+	string mimimap2_cmd, out_opt;
+		int32_t i, ret_status, status, sleep_sec;
+		time_t start_time, end_time; // start time and end time
+		double cost_min;
+
+		mimimap2_cmd = "minimap2 -c --secondary=no " + refseqfilename + " " + contigfilename + " -o " + alnfilename + " > /dev/null 2>&1";
+
+		//cout << "blat_cmd: " + blat_cmd << endl;
+		time(&start_time);
+		end_time = 0;
+
+		ret_status = 0;
+		for(i=0; i<3; i++){
+			time(&end_time);
+			cost_min = difftime(end_time, start_time) / 60.0;
+			if(cost_min<=MAX_ALN_MINUTES){
+				status = system(mimimap2_cmd.c_str());
+				ret_status = getSuccessStatusSystemCmd(status);
+				if(ret_status!=0){ // command executed failed
+					//cout << __func__ << ", line=" << __LINE__ << ": ret_status=" << ret_status << ", blat_cmd=" << blat_cmd << endl;
+
+					if(i<2){
+						time(&end_time);
+						cost_min = difftime(end_time, start_time) / 60.0;
+						if(cost_min<=MAX_ALN_MINUTES){
+							sleep_sec = (i + 1) * (i + 2);
+							sleep(sleep_sec);
+							cout << __func__ << ": retry aligning " << contigfilename << endl;
+						}
+					}else{
+						cerr << "Please run the correct minimap2 command or check whether minimap2 was correctly installed when aligning " << contigfilename <<"." << endl;
+						//exit(1);
+					}
+				}else break;
+			}else break;
+		}
+
+//		if(ret_status!=0){
+//			time(&end_time);
+//			cost_min = difftime(end_time, start_time) / 60.0;
+//			if(cost_min>max_proc_running_minutes) { // killed work
+//				ret_status = -2;
+//			}
+//		}
+
+		return ret_status;
+}
+
 // BLAT alignment, and the output is in sim4 format
 int32_t blatAln(string &alnfilename, string &contigfilename, string &refseqfilename, int32_t max_proc_running_minutes){
 	string blat_cmd, out_opt;
@@ -1118,6 +1168,68 @@ int32_t getSuccessStatusSystemCmd(int32_t status){
 }
 
 // check whether the blat alignment is matched to the contig
+bool isMinimap2AlnResultMatch(string &contigfilename, string &alnfilename){
+	bool flag;
+	vector<string> query_name_vec_ctg, query_name_vec_minimap2, line_vec;
+	vector<size_t> query_len_vec_minimap2;
+	ifstream infile;
+	string line, query_name_minimap2, query_name_ctg, query_name;
+	size_t i, query_len_minimap2, query_len_ctg ,query_len;
+	int32_t query_loc;
+
+	infile.open(alnfilename);
+	if(!infile.is_open()){
+		cerr << __func__ << "(), line=" << __LINE__ << ": cannot open file:" << alnfilename << endl;
+		exit(1);
+	}
+
+	// load query names
+	FastaSeqLoader fa_loader(contigfilename);
+	query_name_vec_ctg = fa_loader.getFastaSeqNames();
+
+
+	// get blat alignment information
+	while(getline(infile, line)){
+		if(line.size()){
+			line_vec = split(line, "	");
+			query_name = line_vec.at(0);
+			query_len = stoi(line_vec.at(1));
+
+			// get the query name and length
+			query_name_vec_minimap2.push_back(query_name);
+			query_len_vec_minimap2.push_back(query_len);
+
+		}
+	}
+	infile.close();
+
+	// check the match items
+	flag = true;
+	for(i=0; i<query_name_vec_minimap2.size(); i++){
+		query_name_minimap2 = query_name_vec_minimap2.at(i);
+		query_len_minimap2 = query_len_vec_minimap2.at(i);
+
+		// search the query from contig vector
+		query_loc = getQueryNameLoc(query_name_minimap2, query_name_vec_ctg);
+		if(query_loc!=-1){ // query name matched
+			query_len_ctg = fa_loader.getFastaSeqLen(query_loc);
+			if(query_len_minimap2!=query_len_ctg) {
+				flag = false;
+				break;
+			}
+		}else{ // query name unmatched
+			flag = false;
+			break;
+		}
+	}
+
+	if(flag==false){
+		cerr << __func__ << ", line=" << __LINE__ << ", it is not matched between the minimap2 alignment and its corresponding contig, contigfile=" << contigfilename << ", alnfile=" << alnfilename << ", error!" << endl;
+	}
+	return flag;
+}
+
+// check whether the blat alignment is matched to the contig
 bool isBlatAlnResultMatch(string &contigfilename, string &alnfilename){
 	bool flag;
 	vector<string> query_name_vec_ctg, query_name_vec_blat, line_vec, line_vec1, len_vec;
@@ -1137,17 +1249,21 @@ bool isBlatAlnResultMatch(string &contigfilename, string &alnfilename){
 	FastaSeqLoader fa_loader(contigfilename);
 	query_name_vec_ctg = fa_loader.getFastaSeqNames();
 
+
 	// get blat alignment information
 	while(getline(infile, line)){
 		if(line.size()){
 			if(line.substr(0, 3).compare("seq")==0){  // query and subject titles
 				line_vec = split(line, "=");
 				line_vec1 = split(line_vec[1].substr(1), ",");
-				if(line_vec[0][3]=='1') {
-					// get the query name and length
-					query_name_vec_blat.push_back(line_vec1.at(0));
-					len_vec = split(line_vec1[line_vec1.size()-1].substr(1), " ");
-					query_len_vec_blat.push_back(stoi(len_vec[0]));
+
+				if(line_vec1.size()==2){
+					if(line_vec[0][3]=='1') {
+						// get the query name and length
+						query_name_vec_blat.push_back(line_vec1.at(0));
+						len_vec = split(line_vec1[line_vec1.size()-1].substr(1), " ");
+						query_len_vec_blat.push_back(stoi(len_vec[0]));
+					}
 				}
 			}
 		}
@@ -1177,7 +1293,6 @@ bool isBlatAlnResultMatch(string &contigfilename, string &alnfilename){
 	if(flag==false){
 		cerr << __func__ << ", line=" << __LINE__ << ", it is not matched between the blat alignment and its corresponding contig, contigfile=" << contigfilename << ", alnfile=" << alnfilename << ", error!" << endl;
 	}
-
 	return flag;
 }
 
@@ -1188,7 +1303,7 @@ int32_t getQueryNameLoc(string &query_name, vector<string> &query_name_vec){
 	query_name_len = query_name.size();
 	if(query_name_vec.size()){
 		for(i=query_name_vec.size()-1; i>=0; i--){
-			query_name_tmp = query_name_vec.at(i).substr(0,query_name_len);
+			query_name_tmp = query_name_vec.at(i).substr(0, query_name_len);
 			if(query_name_tmp.compare(query_name)==0) { loc = i; break; }
 		}
 	}
@@ -1216,6 +1331,12 @@ bool isBlatAlnCompleted(string &alnfilename){
 			if(line.substr(0, 3).compare("seq")==0){  // query and subject titles
 				line_vec = split(line, "=");
 				line_vec1 = split(line_vec[1].substr(1), ",");
+
+				if(line_vec1.size()<2){
+//					cout << line_vec1.size() << endl;
+					flag = false;
+					break;
+				}
 
 				len_vec = split(line_vec1[line_vec1.size()-1].substr(1), " ");
 				if(line_vec[0][3]=='1' or line_vec[0][3]=='2') {
@@ -1296,16 +1417,16 @@ void cleanPrevAssembledTmpDir(const string &assem_dir_str, const string &dir_pre
 }
 
 // get call file header line for INDEL which starts with '#'
-string getCallFileHeaderBed(){
+string getCallFileHeaderBed(string &sample){
 	string header_line;
-	header_line = "#Chr\tStart\tEnd\tSVType\tSVLen\tDupNum\tRef\tAlt";
+	header_line = "#Chr\tStart\tEnd\tSVType\tSVLen\tDupNum\tRef\tAlt\tFORMAT\t" + sample;
 	return header_line;
 }
 
 // get call file header line for INDEL which starts with '#'
-string getCallFileHeaderBedpe(){
+string getCallFileHeaderBedpe(string &sample){
 	string header_line;
-	header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tSVType\tSVLen1\tSVLen2\tMateReg\tRef1\tAlt1\tRef2\tAlt2";
+	header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tSVType\tSVLen1\tSVLen2\tMateReg\tRef1\tAlt1\tRef2\tAlt2\tFORMAT\t" + sample;
 	return header_line;
 }
 
@@ -1431,7 +1552,7 @@ void* processSingleAssembleWork(void *arg){
 	for(i=0; i<assem_work_opt->arr_size; i++) varVec.push_back(assem_work_opt->var_array[i]);
 	for(i=0; i<assem_work_opt->limit_reg_array_size; i++) sub_limit_reg_vec.push_back(assem_work_opt->limit_reg_array[i]);
 
-	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->technology, assem_work->canu_version, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->min_input_cov_canu, assem_work->delete_reads_flag, assem_work->keep_failed_reads_flag, assem_work->minClipEndSize, assem_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
+	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->technology, assem_work->canu_version, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, assem_work->assemSideExtSize, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->min_input_cov_canu, assem_work->delete_reads_flag, assem_work->keep_failed_reads_flag, assem_work_opt->clip_reg_flag, assem_work->minClipEndSize,assem_work->minConReadLen, assem_work->min_sv_size, assem_work->max_seg_size_ratio, assem_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
 	// release memory
 	sub_limit_reg_vec.clear();
@@ -1461,9 +1582,9 @@ void* processSingleAssembleWork(void *arg){
 }
 
 
-void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, ofstream &assembly_info_file, double expected_cov_assemble, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, int32_t minClipEndSize, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t assembly_extend_size, ofstream &assembly_info_file, double expected_cov_assemble, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, 0, expected_cov_assemble, min_input_cov_canu, delete_reads_flag, keep_failed_reads_flag, minClipEndSize);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, expected_cov_assemble, min_input_cov_canu, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, max_seg_size_ratio);
 
 	local_assembly.setLimitRegs(limit_reg_process_flag, limit_reg_vec);
 	if(local_assembly.assem_success_preDone_flag==false){
@@ -1473,8 +1594,11 @@ void performLocalAssembly(string &readsfilename, string &contigfilename, string 
 		// extract the reads data from BAM file
 		local_assembly.extractReadsDataFromBAM();
 
-		// local assembly using Canu
-		local_assembly.localAssembleCanu();
+
+		if(local_assembly.clip_reg_flag==false)
+			local_assembly.cnsByPoa(); // local consensus using abPOA
+		else
+			local_assembly.localAssembleCanu(); // local assembly using Canu
 	}
 
 	// record assembly information
@@ -1482,6 +1606,59 @@ void performLocalAssembly(string &readsfilename, string &contigfilename, string 
 
 	// empty the varVec
 	varVec.clear();
+}
+
+// determine whether a file is readable
+bool isReadableFile(string &filename){
+	bool flag = true;;
+	ifstream infile;
+	string line;
+
+	if(!isFileExist(filename)) flag = false;
+
+	infile.open(filename);
+	if(!infile.is_open()) flag = false;
+
+	// get data
+	getline(infile, line);
+	if(line.size()==0) flag = false;
+
+	return flag;
+}
+
+// process single assemble work
+void* processSingleMinimap2AlnWork(void *arg){
+	callWork_opt *call_work_opt = (callWork_opt *)arg;
+	varCand *var_cand = call_work_opt->var_cand;
+	size_t num_done, num_work, num_work_percent;
+	double percentage;
+	Time time;
+
+	//cout << var_cand->alnfilename << endl;
+
+	var_cand->alnCtg2Refseq02();
+
+	// output progress information
+	pthread_mutex_lock(call_work_opt->p_mtx_call_workDone_num);
+	(*call_work_opt->p_call_workDone_num) ++;
+	num_done = *call_work_opt->p_call_workDone_num;
+
+	num_work = call_work_opt->num_work;
+	num_work_percent = call_work_opt->num_work_percent;
+	if(num_done==1 and num_done!=num_work){
+		num_done = 0;
+		percentage = (double)num_done / num_work * 100;
+		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
+	}else if(num_done%num_work_percent==0 or num_done==num_work){
+		percentage = (double)num_done / num_work * 100;
+		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
+	}
+	//cout << "\t[" << call_work_opt->work_id << "]: " << var_cand->alnfilename << ", sv_type=" << var_cand->sv_type << endl;
+	pthread_mutex_unlock(call_work_opt->p_mtx_call_workDone_num);
+
+	delete (callWork_opt *)arg;
+
+	return NULL;
 }
 
 // process single assemble work
@@ -1529,7 +1706,8 @@ void* processSingleCallWork(void *arg){
 
 	//cout << var_cand->alnfilename << endl;
 
-	var_cand->callVariants();
+	//var_cand->callVariants();
+	var_cand->callVariants02();
 
 	// output progress information
 	pthread_mutex_lock(call_work_opt->p_mtx_call_workDone_num);
@@ -1919,7 +2097,8 @@ vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_s
 		total_cov = base->getTotalCovNum();
 		ratio = (double)(indel_num + clip_num) / total_cov;
 		if(ratio>=HIGH_INDEL_CLIP_RATIO_THRES) total ++;
-		if(ratio>=SECOND_INDEL_CLIP_RATIO_THRES) total2 ++;
+		//if(ratio>=SECOND_INDEL_CLIP_RATIO_THRES) total2 ++;
+		if(ratio>=0.1f) total2 ++;
 	}
 
 	ratio = (double)total2 / arr_size;
@@ -2449,8 +2628,21 @@ bool isPolymerSeq(string &seq){
 vector<clipAlnData_t*> getQueryClipAlnSegs(string &queryname, vector<clipAlnData_t*> &clipAlnDataVector){
 	vector<clipAlnData_t*> query_aln_segs;
 	for(size_t i=0; i<clipAlnDataVector.size(); i++)
-		if(clipAlnDataVector.at(i)->query_checked_flag==false and clipAlnDataVector.at(i)->queryname==queryname)
+		if(clipAlnDataVector.at(i)->query_checked_flag==false and clipAlnDataVector.at(i)->queryname==queryname and clipAlnDataVector.at(i)->bam!=NULL){
 			query_aln_segs.push_back(clipAlnDataVector.at(i));
+		}
+
+	return query_aln_segs;
+}
+
+// get query clip align segments
+vector<clipAlnData_t*> getQueryClipAlnSegsAll(string &queryname, vector<clipAlnData_t*> &clipAlnDataVector){
+	vector<clipAlnData_t*> query_aln_segs;
+	for(size_t i=0; i<clipAlnDataVector.size(); i++)
+		if(clipAlnDataVector.at(i)->query_checked_flag==false and clipAlnDataVector.at(i)->queryname==queryname){
+			query_aln_segs.push_back(clipAlnDataVector.at(i));
+		}
+
 	return query_aln_segs;
 }
 
@@ -2596,6 +2788,9 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 
 			if(clip_end==RIGHT_END) bnd_pos = tra_pos_arr[reg_id] - 1;   // POS
 			else bnd_pos = tra_pos_arr[reg_id];
+
+			if(bnd_pos<=0)
+				cout << "line=" << __LINE__ << ", bnd_pos=" << bnd_pos << ", error." << endl;
 
 			reg_str = chrname1 + ":" + to_string(bnd_pos) + "-" + to_string(bnd_pos);
 			seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
@@ -2817,6 +3012,15 @@ void checkBNDStrVec(mateClipReg_t &mate_clip_reg){
 			goto bnd_invalid_op;
 		}
 
+		if((mate_clip_reg.leftClipReg==NULL and mate_clip_reg.bnd_mate_reg_strs[0].compare("-")!=0) or (mate_clip_reg.leftClipReg and mate_clip_reg.bnd_mate_reg_strs[0].compare("-")==0)
+			or (mate_clip_reg.leftClipReg2==NULL and mate_clip_reg.bnd_mate_reg_strs[1].compare("-")!=0) or (mate_clip_reg.leftClipReg2 and mate_clip_reg.bnd_mate_reg_strs[1].compare("-")==0)
+			or (mate_clip_reg.rightClipReg==NULL and mate_clip_reg.bnd_mate_reg_strs[2].compare("-")!=0) or (mate_clip_reg.rightClipReg and mate_clip_reg.bnd_mate_reg_strs[2].compare("-")==0)
+			or (mate_clip_reg.rightClipReg2==NULL and mate_clip_reg.bnd_mate_reg_strs[3].compare("-")!=0) or (mate_clip_reg.rightClipReg2 and mate_clip_reg.bnd_mate_reg_strs[3].compare("-")==0))
+		{
+			flag = false;
+			goto bnd_invalid_op;
+		}
+
 		if(mate_clip_reg.leftMeanClipPos!=0) tra_pos_arr[0] = mate_clip_reg.leftMeanClipPos;
 		else tra_pos_arr[0] = -1;
 		if(mate_clip_reg.leftMeanClipPos2!=0) tra_pos_arr[1] = mate_clip_reg.leftMeanClipPos2;
@@ -2973,6 +3177,33 @@ bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], s
 	return true;
 }
 
+void checkSuppNum(mateClipReg_t &mate_clip_reg, int32_t support_num_thres){
+	vector<string> mate_reg_str_vec, mate_str_vec;
+	size_t i, j;
+	string support_num_str;
+	int32_t support_num;
+
+	for(i=0; i<4; i++){
+		if(mate_clip_reg.bnd_mate_reg_strs[i].compare("-")!=0) {
+			mate_reg_str_vec = split(mate_clip_reg.bnd_mate_reg_strs[i], ",");
+			for(j=0; j<2; j++){
+				if(mate_reg_str_vec.at(j).compare("-")!=0){
+					mate_str_vec = split(mate_reg_str_vec.at(j), "|");
+					support_num_str = mate_str_vec.at(2);
+					//cov_num_str = mate_str_vec.at(3);
+					support_num = stoi(support_num_str);
+					//cov_num = stoi(cov_num_str);
+
+					if(support_num<support_num_thres){
+						mate_clip_reg.supp_num_valid_flag = false;
+						return;
+					}
+				}
+			}
+		}
+	}
+}
+
 // determine whether the variant is size satisfied
 bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr, int64_t max_sv_size_usr){
 	int64_t dif;
@@ -2986,6 +3217,89 @@ bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_u
 		size_satisfy = true;
 
 	return size_satisfy;
+}
+
+// determine whether the variant is size satisfied
+bool isSizeSatisfied2(int64_t sv_len, int64_t min_sv_size_usr, int64_t max_sv_size_usr){
+	int64_t size;
+	bool size_satisfy;
+
+	size = sv_len;
+
+	size_satisfy = false;
+	if(size<=max_sv_size_usr and size>=min_sv_size_usr)
+		size_satisfy = true;
+
+	return size_satisfy;
+}
+
+bool isNotAlreadyExists(vector<reg_t*> &varVec, reg_t *reg){
+	bool not_existed = true;
+	int32_t dis;
+	size_t i;
+	double dif_ratio;
+
+//	for(i=0;i<varVec.size();i++){
+//		if(reg->startRefPos==varVec[i]->startRefPos){
+//			if(reg->var_type==varVec[i]->var_type){
+//				if(reg->sv_len==varVec[i]->sv_len){
+//					not_existed = false;
+//				}
+//			}
+//		}
+//	}
+
+	for(i=0;i<varVec.size();i++){
+		if(reg->sv_len<varVec[i]->sv_len){
+			dif_ratio = (double)reg->sv_len/varVec[i]->sv_len;
+		}else{
+			dif_ratio = (double)varVec[i]->sv_len/reg->sv_len;
+		}
+		dis = abs(reg->startRefPos-varVec[i]->startRefPos);
+		//dif_len = abs(reg->sv_len-varVec[i]->sv_len);
+		if(reg->var_type==varVec[i]->var_type){
+			if(dis<10 and dif_ratio>0.9){
+				not_existed = false;
+			}
+		}
+	}
+
+	return not_existed;
+}
+
+bool isNotAlreadyExists(vector<reg_t*> &varVec, reg_t *reg, int32_t pos){
+	bool not_existed = true;
+	size_t i;
+	int32_t dis;
+	double dif_ratio;
+
+//	for(i=0;i<pos;i++){
+//		if(reg->startRefPos==varVec[i]->startRefPos){
+//			if(reg->var_type==varVec[i]->var_type){
+//				if(reg->sv_len==varVec[i]->sv_len){
+//					not_existed = false;
+//				}
+//			}
+//		}
+//	}
+	//
+
+	for(i=0;i<pos;i++){
+		if(reg->sv_len<varVec[i]->sv_len){
+			dif_ratio = (double)reg->sv_len/varVec[i]->sv_len;
+		}else{
+			dif_ratio = (double)varVec[i]->sv_len/reg->sv_len;
+		}
+		dis = abs(reg->startRefPos-varVec[i]->startRefPos);
+		//dif_len = abs(reg->sv_len-varVec[i]->sv_len);
+		if(reg->var_type==varVec[i]->var_type){
+			if(dis<10 and dif_ratio>0.9){
+				not_existed = false;
+			}
+		}
+	}
+
+	return not_existed;
 }
 
 // determine whether the chrome is decoy chrome
@@ -3030,7 +3344,7 @@ void *processSingleMateClipRegDetectWork(void *arg){
 	vector<Block*> *blockVector = mate_clip_reg_work_opt->blockVector;
 	//int32_t *p_mate_clip_reg_fail_num = mate_clip_reg_work_opt->p_mate_clip_reg_fail_num;
 	pthread_mutex_t *p_mutex_mate_clip_reg = mate_clip_reg_work_opt->p_mutex_mate_clip_reg;
-	//Time time;
+	Time time;
 
 	//cout << "\t[" << time.getTime() << "], [" << mate_clip_reg_work_opt->work_id << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
@@ -3084,6 +3398,7 @@ void processClipRegs(int32_t work_id, mateClipReg_t &mate_clip_reg, reg_t *clip_
 			clip_reg_new->valid_flag = mate_clip_reg.valid_flag;
 			clip_reg_new->call_success_flag = false;
 			clip_reg_new->tra_rescue_success_flag = false;
+			clip_reg_new->supp_num_valid_flag = mate_clip_reg.supp_num_valid_flag;
 			for(i=0; i<4; i++) clip_reg_new->bnd_mate_reg_strs[i] = mate_clip_reg.bnd_mate_reg_strs[i];
 
 			pthread_mutex_lock(p_mutex_mate_clip_reg);
@@ -3103,37 +3418,42 @@ void processClipRegs(int32_t work_id, mateClipReg_t &mate_clip_reg, reg_t *clip_
 		if(mate_clip_reg.right_var_cand_tra) { removeVarCandNode(mate_clip_reg.right_var_cand_tra, var_cand_clipReg_vec); mate_clip_reg.right_var_cand_tra = NULL; }  // free item
 		pthread_mutex_unlock(p_mutex_mate_clip_reg);
 
-		// add the region into indel vector
-		reg = new reg_t();
-		reg->chrname = clip_reg->chrname;
-		reg->startRefPos = clip_reg->startRefPos;
-		reg->endRefPos = clip_reg->endRefPos;
-		reg->startLocalRefPos = reg->endLocalRefPos = 0;
-		reg->startQueryPos = reg->endQueryPos = 0;
-		reg->var_type = VAR_UNC;
-		reg->sv_len = 0;
-		reg->query_id = -1;
-		reg->blat_aln_id = -1;
-		reg->call_success_status = false;
-		reg->short_sv_flag = false;
-		reg->zero_cov_flag = false;
-		reg->aln_seg_end_flag = false;
+		if(mate_clip_reg.supp_num_valid_flag){
+			// add the region into indel vector
+			reg = new reg_t();
+			reg->chrname = clip_reg->chrname;
+			reg->startRefPos = clip_reg->startRefPos;
+			reg->endRefPos = clip_reg->endRefPos;
+			reg->startLocalRefPos = reg->endLocalRefPos = 0;
+			reg->startQueryPos = reg->endQueryPos = 0;
+			reg->var_type = VAR_UNC;
+			reg->sv_len = 0;
+			reg->query_id = -1;
+			reg->blat_aln_id = -1;
+			reg->call_success_status = false;
+			reg->short_sv_flag = false;
+			reg->zero_cov_flag = false;
+			reg->aln_seg_end_flag = false;
+			reg->query_pos_invalid_flag = false;
+			reg->gt_type = -1;
+			reg->gt_seq = "";
 
-		// get position
-		pthread_mutex_lock(p_mutex_mate_clip_reg);
-		idx_tmp = -1;
-		bloc = computeBlocByPos_util(clip_reg->startRefPos, blockVector, paras);
-		for(i=0; i<bloc->indelVector.size(); i++){
-			reg_tmp = bloc->indelVector.at(i);
-			if(reg->startRefPos<reg_tmp->startRefPos){
-				idx_tmp = i;
-				break;
+			// get position
+			pthread_mutex_lock(p_mutex_mate_clip_reg);
+			idx_tmp = -1;
+			bloc = computeBlocByPos_util(clip_reg->startRefPos, blockVector, paras);
+			for(i=0; i<bloc->indelVector.size(); i++){
+				reg_tmp = bloc->indelVector.at(i);
+				if(reg->startRefPos<reg_tmp->startRefPos){
+					idx_tmp = i;
+					break;
+				}
 			}
+			// add item
+			if(idx_tmp!=-1) bloc->indelVector.insert(bloc->indelVector.begin()+idx_tmp, reg);
+			else bloc->indelVector.push_back(reg);
+			pthread_mutex_unlock(p_mutex_mate_clip_reg);
 		}
-		// add item
-		if(idx_tmp!=-1) bloc->indelVector.insert(bloc->indelVector.begin()+idx_tmp, reg);
-		else bloc->indelVector.push_back(reg);
-		pthread_mutex_unlock(p_mutex_mate_clip_reg);
 	}
 }
 
@@ -3301,6 +3621,1348 @@ void *workProcessMonitor(void *arg){
 	return NULL;
 }
 
+// generate the alignment segments
+vector<struct alnSeg*> generateAlnSegs(bam1_t* b){
+	vector<struct alnSeg*> alnSegs;
+	vector<struct MD_seg*> segs_MD;
+	struct MD_seg* seg_MD;
+
+	uint32_t *c, op, i = 0, j = 0, startRpos, startQpos;
+	int32_t k, tmp_cigar_len, tmp_MD_len, common_len;  // common_len: used only for match flag
+	string ins_str;
+
+	startRpos = b->core.pos + 1;  // 1-based
+	startQpos = 1;
+
+	c = bam_get_cigar(b);  // CIGAR
+	op = bam_cigar_op(c[i]);
+	tmp_cigar_len = bam_cigar_oplen(c[i]);
+
+	segs_MD = extractMDSegs(b);
+	seg_MD = segs_MD[j];
+	tmp_MD_len = seg_MD->seglen;
+	while(i<b->core.n_cigar or j<segs_MD.size()){
+		common_len = -1;
+		switch(op){
+			case BAM_CMATCH:
+				if(tmp_cigar_len>=tmp_MD_len) // tmp_cigar_len >= seg_MD.len
+					common_len = tmp_MD_len;
+				else // tmp_cigar_len < seg_MD.len
+					common_len = tmp_cigar_len;
+
+				// add alnSeg item
+				//if(common_len==1 and seg_MD->opflag==MD_MISMATCH){
+				if(common_len==1 and seg_MD->opflag==BAM_CDIFF){
+					// change the mismatched reference base to query base
+					seg_MD->seg = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos-1)];
+					//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, MD_MISMATCH, seg_MD->seg));
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CDIFF, seg_MD->seg));
+				}else{
+					//str_tmp = "";
+					//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CMATCH, str_tmp));
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CEQUAL, ""));
+				}
+
+				startRpos += common_len;
+				startQpos += common_len;
+
+				tmp_cigar_len -= common_len;
+				tmp_MD_len -= common_len;
+
+				if(tmp_cigar_len==0 and ++i<b->core.n_cigar){
+					op = bam_cigar_op(c[i]);
+					tmp_cigar_len = bam_cigar_oplen(c[i]);
+				}
+				if(tmp_MD_len==0 and ++j<segs_MD.size()){
+					seg_MD = segs_MD[j];
+					tmp_MD_len = seg_MD->seglen;
+				}
+				break;
+			case BAM_CINS:
+				// add alnSeg item
+				ins_str = "";
+				for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
+				startQpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+
+				break;
+			case BAM_CDEL:
+				// add alnSeg item
+				if(tmp_cigar_len==tmp_MD_len){
+					if(seg_MD->opflag==BAM_CDEL){
+						alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, seg_MD->seg));
+						startRpos += tmp_cigar_len;
+						op = bam_cigar_op(c[++i]);
+						tmp_cigar_len = bam_cigar_oplen(c[i]);
+						seg_MD = segs_MD[++j];
+						tmp_MD_len = seg_MD->seglen;
+					}else{
+						cerr << __func__ << ", line=" << __LINE__ << ": error" << endl;
+						exit(1);
+					}
+				}else{
+					cerr << __func__ << ", line=" << __LINE__ << ": error" << endl;
+					exit(1);
+				}
+				break;
+			case BAM_CSOFT_CLIP:
+			case BAM_CHARD_CLIP:
+				//str_tmp = to_string(tmp_cigar_len);
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, op, to_string(tmp_cigar_len)));
+				if(op==BAM_CSOFT_CLIP) startQpos += tmp_cigar_len;
+				if(++i<b->core.n_cigar){
+					op = bam_cigar_op(c[i]);
+					tmp_cigar_len = bam_cigar_oplen(c[i]);
+				}
+				break;
+			case BAM_CREF_SKIP:  // unexpected events
+			case BAM_CPAD:
+			case BAM_CEQUAL:
+			case BAM_CDIFF:
+			case BAM_CBACK:
+			default:
+				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
+				exit(1);
+		}
+	}
+	destroyMDSeg(segs_MD);
+
+	return alnSegs;
+}
+
+// generate the alignment segments
+vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, int64_t endRefPos_paras){
+	vector<struct alnSeg*> alnSegs;
+	vector<struct MD_seg*> segs_MD;
+	struct MD_seg* seg_MD;
+
+	uint32_t *c, op, i = 0, j = 0, startRpos, startQpos;
+	int32_t k, tmp_cigar_len, tmp_MD_len, common_len, startmatch_idx, endmatch_idx;  // common_len: used only for match flag
+	string ins_str;
+	bool overlap_flag;
+	int64_t end_ref_pos;
+
+
+	startRpos = b->core.pos + 1;  // 1-based
+	startQpos = 1;
+
+	c = bam_get_cigar(b);  // CIGAR
+	op = bam_cigar_op(c[i]);
+	tmp_cigar_len = bam_cigar_oplen(c[i]);
+
+	segs_MD = extractMDSegs(b);
+	seg_MD = segs_MD[j];
+	tmp_MD_len = seg_MD->seglen;
+	while(i<b->core.n_cigar or j<segs_MD.size()){
+		end_ref_pos = getEndRefPosAlnSeg(startRpos, op, tmp_cigar_len);
+		overlap_flag = isOverlappedPos(startRpos, end_ref_pos, startRefPos_paras, endRefPos_paras);
+
+		switch(op){
+			case BAM_CMATCH:
+				common_len = -1;
+				if(tmp_cigar_len>=tmp_MD_len) // tmp_cigar_len >= seg_MD.len
+					common_len = tmp_MD_len;
+				else // tmp_cigar_len < seg_MD.len
+					common_len = tmp_cigar_len;
+
+				// recompute the overlap
+				end_ref_pos = getEndRefPosAlnSeg(startRpos, op, common_len);
+				overlap_flag = isOverlappedPos(startRpos, end_ref_pos, startRefPos_paras, endRefPos_paras);
+				if(overlap_flag){
+					// add alnSeg item
+					//if(common_len==1 and seg_MD->opflag==MD_MISMATCH){
+					if(common_len==1 and seg_MD->opflag==BAM_CDIFF){
+						// change the mismatched reference base to query base
+						seg_MD->seg = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos-1)];
+						//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, MD_MISMATCH, seg_MD->seg));
+						alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CDIFF, seg_MD->seg));
+					}else{
+						startmatch_idx = startRefPos_paras - startRpos;
+						if(startmatch_idx<0) startmatch_idx = 0;
+						endmatch_idx = common_len - 1;
+						if(startRpos+common_len-1>endRefPos_paras)
+							endmatch_idx -= (startRpos+common_len-1) - endRefPos_paras;
+						//str_tmp = "";
+						//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CMATCH, str_tmp));
+						alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
+					}
+				}
+
+				startRpos += common_len;
+				startQpos += common_len;
+
+				tmp_cigar_len -= common_len;
+				tmp_MD_len -= common_len;
+
+				if(tmp_cigar_len==0 and ++i<b->core.n_cigar){
+					op = bam_cigar_op(c[i]);
+					tmp_cigar_len = bam_cigar_oplen(c[i]);
+				}
+				if(tmp_MD_len==0 and ++j<segs_MD.size()){
+					seg_MD = segs_MD[j];
+					tmp_MD_len = seg_MD->seglen;
+				}
+				break;
+			case BAM_CINS:
+				if(overlap_flag){
+					// add alnSeg item
+					ins_str = "";
+					for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
+				}
+				startQpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CDEL:
+				// add alnSeg item
+				if(tmp_cigar_len==tmp_MD_len){
+					if(seg_MD->opflag==BAM_CDEL){
+						if(overlap_flag)
+							alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, seg_MD->seg));
+						startRpos += tmp_cigar_len;
+						op = bam_cigar_op(c[++i]);
+						tmp_cigar_len = bam_cigar_oplen(c[i]);
+						seg_MD = segs_MD[++j];
+						tmp_MD_len = seg_MD->seglen;
+					}else{
+						cerr << __func__ << ", line=" << __LINE__ << ": error" << endl;
+						exit(1);
+					}
+				}else{
+					cerr << __func__ << ", line=" << __LINE__ << ": error" << endl;
+					exit(1);
+				}
+				break;
+			case BAM_CSOFT_CLIP:
+			case BAM_CHARD_CLIP:
+				if(overlap_flag){
+					//str_tmp = to_string(tmp_cigar_len);
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, op, to_string(tmp_cigar_len)));
+				}
+				if(op==BAM_CSOFT_CLIP) startQpos += tmp_cigar_len;
+				if(++i<b->core.n_cigar){
+					op = bam_cigar_op(c[i]);
+					tmp_cigar_len = bam_cigar_oplen(c[i]);
+				}
+				break;
+			case BAM_CREF_SKIP:  // unexpected events
+			case BAM_CPAD:
+			case BAM_CEQUAL:
+			case BAM_CDIFF:
+			case BAM_CBACK:
+			default:
+				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
+				exit(1);
+		}
+	}
+	destroyMDSeg(segs_MD);
+
+	return alnSegs;
+}
+
+vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, Base* BaseArr, int64_t startRefPos_paras, int64_t endRefPos_paras){
+	vector<struct alnSeg*> alnSegs;
+	uint32_t *c, op, i = 0,startRpos, startQpos;
+	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx;
+	char queBase, ref;
+	string ins_str, diff, del;
+
+	startRpos = b->core.pos + 1;  // 1-based
+	startQpos = 1;
+
+	c = bam_get_cigar(b);  // CIGAR
+	op = bam_cigar_op(c[i]);
+	tmp_cigar_len = bam_cigar_oplen(c[i]);
+	//string qname = bam_get_qname(b);
+
+	while(i<b->core.n_cigar){
+		switch(op){
+			case BAM_CMATCH:
+				mis_idx = -1;
+				for(k=0; k<tmp_cigar_len; k++){
+					if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras){
+						queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+						ref = BaseArr[startRpos+k-startRefPos_paras].coverage.refBase;
+						if(isBaseMatch(queBase,ref)==false){
+							if(mis_idx==-1) {
+								startmatch_idx = 0;
+								endmatch_idx = k;//
+								//str_tmp = "";
+								//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, endmatch_idx, BAM_CMATCH, str_tmp));
+								alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, endmatch_idx, BAM_CEQUAL, ""));
+							}else {
+								startmatch_idx = mis_idx + 1;
+								endmatch_idx = k - 1;
+								//str_tmp = "";
+								//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx, endmatch_idx-startmatch_idx, BAM_CMATCH, str_tmp));
+								alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
+							}
+							//diff = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+							diff = queBase;
+							//alnSegs.push_back(allocateAlnSeg(startRpos+k, startQpos+k, 1, MD_MISMATCH, diff));
+							alnSegs.push_back(allocateAlnSeg(startRpos+k, startQpos+k, 1, BAM_CDIFF, diff));
+							mis_idx = k;
+						}
+					}
+				}
+				if(mis_idx==-1){
+					//str_tmp = "";
+					//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CMATCH, str_tmp));
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CEQUAL, ""));
+				}else {
+					startmatch_idx = mis_idx + 1;
+					//str_tmp = "";
+					//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx+1, tmp_cigar_len-startmatch_idx-1, BAM_CMATCH, str_tmp));
+					alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, tmp_cigar_len-startmatch_idx, BAM_CEQUAL, ""));
+				}
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CINS:
+				// add alnSeg item
+				ins_str = "";
+				for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
+				startQpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+
+				break;
+			case BAM_CDEL:
+				// add alnSeg item
+				del = "";
+				for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];//something wrong?
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CSOFT_CLIP:
+			case BAM_CHARD_CLIP:
+				//str_tmp = to_string(tmp_cigar_len);
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, op, to_string(tmp_cigar_len)));
+				if(op==BAM_CSOFT_CLIP) startQpos += tmp_cigar_len;
+				if(++i<b->core.n_cigar){
+					op = bam_cigar_op(c[i]);
+					tmp_cigar_len = bam_cigar_oplen(c[i]);
+				}
+				break;
+			case BAM_CEQUAL:
+				//str_tmp = "";
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CEQUAL, ""));
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CDIFF:
+				diff = "";
+				for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDIFF, diff));
+
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CREF_SKIP: // unexpected events
+			case BAM_CPAD:
+			case BAM_CBACK:
+			default:
+				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
+				exit(1);
+		}
+	}
+	return alnSegs;
+}
+
+vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, Base* BaseArr, int64_t startRefPos_paras, int64_t endRefPos_paras){
+	vector<struct alnSeg*> alnSegs;
+	uint32_t *c, op, i = 0,startRpos, startQpos;
+	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx;
+	char queBase, ref;
+	string ins_str, diff, del;
+	bool overlap_flag;
+	int64_t end_ref_pos;
+
+	startRpos = b->core.pos + 1;  // 1-based
+	startQpos = 1;
+
+	c = bam_get_cigar(b);  // CIGAR
+	op = bam_cigar_op(c[i]);
+	tmp_cigar_len = bam_cigar_oplen(c[i]);
+	//string qname = bam_get_qname(b);
+
+	while(i<b->core.n_cigar){
+		end_ref_pos = getEndRefPosAlnSeg(startRpos, op, tmp_cigar_len);
+		overlap_flag = isOverlappedPos(startRpos, end_ref_pos, startRefPos_paras, endRefPos_paras);
+		switch(op){
+			case BAM_CMATCH:
+				if(overlap_flag){
+					mis_idx = -1;
+					for(k=0; k<tmp_cigar_len; k++){
+						if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras){
+							queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+							ref = BaseArr[startRpos+k-startRefPos_paras].coverage.refBase;
+							if(isBaseMatch(queBase,ref)==false){
+								if(startRpos+k>startRefPos_paras){
+									if(mis_idx==-1) {
+										//startmatch_idx = 0;
+										startmatch_idx = startRefPos_paras - startRpos;
+										if(startmatch_idx<0) startmatch_idx = 0;
+									}else
+										startmatch_idx = mis_idx + 1;
+									endmatch_idx = k - 1;
+									//str_tmp = "";
+									//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx, endmatch_idx-startmatch_idx, BAM_CMATCH, str_tmp));
+									alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
+								}
+								//diff = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+								diff = queBase;
+								//alnSegs.push_back(allocateAlnSeg(startRpos+k, startQpos+k, 1, MD_MISMATCH, diff));
+								alnSegs.push_back(allocateAlnSeg(startRpos+k, startQpos+k, 1, BAM_CDIFF, diff));
+								mis_idx = k;
+							}
+						}
+					}
+					if(mis_idx==-1){
+						startmatch_idx = startRefPos_paras - startRpos;
+						if(startmatch_idx<0) startmatch_idx = 0;
+						endmatch_idx = tmp_cigar_len - 1;
+						if(startRpos+tmp_cigar_len-1>endRefPos_paras)
+							endmatch_idx -= (startRpos+tmp_cigar_len-1) - endRefPos_paras;
+						//str_tmp = "";
+						//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CMATCH, str_tmp));
+						alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
+					}else {
+						startmatch_idx = mis_idx + 1;
+						endmatch_idx = tmp_cigar_len - 1;
+						if(startRpos+tmp_cigar_len-1>endRefPos_paras)
+							endmatch_idx -= (startRpos+tmp_cigar_len-1) - endRefPos_paras;
+						//str_tmp = "";
+						//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx+1, tmp_cigar_len-startmatch_idx-1, BAM_CMATCH, str_tmp));
+						//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, tmp_cigar_len-startmatch_idx, BAM_CEQUAL, ""));
+						alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
+					}
+				}
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CINS:
+				if(overlap_flag){
+					// add alnSeg item
+					ins_str = "";
+					for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
+				}
+				startQpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+
+				break;
+			case BAM_CDEL:
+				if(overlap_flag){
+					// add alnSeg item
+					del = "";
+					for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];//something wrong?
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
+				}
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CSOFT_CLIP:
+			case BAM_CHARD_CLIP:
+				if(overlap_flag){
+					//str_tmp = to_string(tmp_cigar_len);
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, op, to_string(tmp_cigar_len)));
+				}
+				if(op==BAM_CSOFT_CLIP) startQpos += tmp_cigar_len;
+				if(++i<b->core.n_cigar){
+					op = bam_cigar_op(c[i]);
+					tmp_cigar_len = bam_cigar_oplen(c[i]);
+				}
+				break;
+			case BAM_CEQUAL:
+				if(overlap_flag){
+					//str_tmp = "";
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CEQUAL, ""));
+				}
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CDIFF:
+				if(overlap_flag){
+					diff = "";
+					for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDIFF, diff));
+				}
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CREF_SKIP: // unexpected events
+			case BAM_CPAD:
+			case BAM_CBACK:
+			default:
+				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
+				exit(1);
+		}
+	}
+	return alnSegs;
+}
+
+vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, string &refseq, int64_t startRefPos_paras, int64_t endRefPos_paras){
+	vector<struct alnSeg*> alnSegs;
+	uint32_t *c, op, i = 0,startRpos, startQpos;
+	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx;
+	char queBase, ref;
+	string ins_str, diff, del;
+
+	startRpos = b->core.pos + 1;  // 1-based
+	startQpos = 1;
+
+	c = bam_get_cigar(b);  // CIGAR
+	op = bam_cigar_op(c[i]);
+	tmp_cigar_len = bam_cigar_oplen(c[i]);
+	//string qname = bam_get_qname(b);
+
+	while(i<b->core.n_cigar){
+		switch(op){
+			case BAM_CMATCH:
+				mis_idx = -1;
+				for(k=0; k<tmp_cigar_len; k++){
+					if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras){
+						queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+						ref = refseq.at(startRpos+k-startRefPos_paras);
+						if(isBaseMatch(queBase,ref)==false){
+							if(mis_idx==-1) {
+								startmatch_idx = 0;
+								endmatch_idx = k;//
+								//str_tmp = "";
+								//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, endmatch_idx, BAM_CMATCH, str_tmp));
+								alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, endmatch_idx, BAM_CEQUAL, ""));
+							}else {
+								startmatch_idx = mis_idx + 1;
+								endmatch_idx = k - 1;
+								//str_tmp = "";
+								//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx, endmatch_idx-startmatch_idx, BAM_CMATCH, str_tmp));
+								alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
+							}
+							//diff = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+							diff = queBase;
+							//alnSegs.push_back(allocateAlnSeg(startRpos+k, startQpos+k, 1, MD_MISMATCH, diff));
+							alnSegs.push_back(allocateAlnSeg(startRpos+k, startQpos+k, 1, BAM_CDIFF, diff));
+							mis_idx = k;
+						}
+					}
+				}
+				if(mis_idx==-1){
+					//str_tmp = "";
+					//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CMATCH, str_tmp));
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CEQUAL, ""));
+				}else {
+					startmatch_idx = mis_idx + 1;
+					//str_tmp = "";
+					//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx+1, tmp_cigar_len-startmatch_idx-1, BAM_CMATCH, str_tmp));
+					alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, tmp_cigar_len-startmatch_idx, BAM_CEQUAL, ""));
+				}
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CINS:
+				// add alnSeg item
+				ins_str = "";
+				for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
+				startQpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+
+				break;
+			case BAM_CDEL:
+				// add alnSeg item
+				del = "";
+				for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];//something wrong?
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CSOFT_CLIP:
+			case BAM_CHARD_CLIP:
+				//str_tmp = to_string(tmp_cigar_len);
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, op, to_string(tmp_cigar_len)));
+				if(op==BAM_CSOFT_CLIP) startQpos += tmp_cigar_len;
+				if(++i<b->core.n_cigar){
+					op = bam_cigar_op(c[i]);
+					tmp_cigar_len = bam_cigar_oplen(c[i]);
+				}
+				break;
+			case BAM_CEQUAL:
+				//str_tmp = "";
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CEQUAL, ""));
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CDIFF:
+				diff = "";
+				for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDIFF, diff));
+
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CREF_SKIP: // unexpected events
+			case BAM_CPAD:
+			case BAM_CBACK:
+			default:
+				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
+				exit(1);
+		}
+	}
+	return alnSegs;
+}
+
+vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t startRefPos_paras, int64_t endRefPos_paras){
+	vector<struct alnSeg*> alnSegs;
+	uint32_t *c, op, i = 0,startRpos, startQpos;
+	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx;
+	char queBase, ref;
+	string ins_str, diff, del;
+	bool overlap_flag;
+	int64_t end_ref_pos;
+
+	startRpos = b->core.pos + 1;  // 1-based
+	startQpos = 1;
+
+	c = bam_get_cigar(b);  // CIGAR
+	op = bam_cigar_op(c[i]);
+	tmp_cigar_len = bam_cigar_oplen(c[i]);
+	//string qname = bam_get_qname(b);
+
+	while(i<b->core.n_cigar){
+		end_ref_pos = getEndRefPosAlnSeg(startRpos, op, tmp_cigar_len);
+		overlap_flag = isOverlappedPos(startRpos, end_ref_pos, startRefPos_paras, endRefPos_paras);
+		switch(op){
+			case BAM_CMATCH:
+				if(overlap_flag){
+					mis_idx = -1;
+					for(k=0; k<tmp_cigar_len; k++){
+						if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras){
+							queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+							ref = refseq.at(startRpos+k-startRefPos_paras);
+							if(isBaseMatch(queBase,ref)==false){
+								if(startRpos+k>startRefPos_paras){
+									if(mis_idx==-1) {
+										//startmatch_idx = 0;
+										startmatch_idx = startRefPos_paras - startRpos;
+										if(startmatch_idx<0) startmatch_idx = 0;
+									}else
+										startmatch_idx = mis_idx + 1;
+									endmatch_idx = k - 1;
+									//str_tmp = "";
+									//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx, endmatch_idx-startmatch_idx, BAM_CMATCH, str_tmp));
+									alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
+								}
+								//diff = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+								diff = queBase;
+								//alnSegs.push_back(allocateAlnSeg(startRpos+k, startQpos+k, 1, MD_MISMATCH, diff));
+								alnSegs.push_back(allocateAlnSeg(startRpos+k, startQpos+k, 1, BAM_CDIFF, diff));
+								mis_idx = k;
+							}
+						}
+					}
+					if(mis_idx==-1){
+						startmatch_idx = startRefPos_paras - startRpos;
+						if(startmatch_idx<0) startmatch_idx = 0;
+						endmatch_idx = tmp_cigar_len - 1;
+						if(startRpos+tmp_cigar_len-1>endRefPos_paras)
+							endmatch_idx -= (startRpos+tmp_cigar_len-1) - endRefPos_paras;
+						//str_tmp = "";
+						//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CMATCH, str_tmp));
+						//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, tmp_cigar_len-startmatch_idx, BAM_CEQUAL, ""));
+						alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
+					}else {
+						startmatch_idx = mis_idx + 1;
+						endmatch_idx = tmp_cigar_len - 1;
+						if(startRpos+tmp_cigar_len-1>endRefPos_paras)
+							endmatch_idx -= (startRpos+tmp_cigar_len-1) - endRefPos_paras;
+						//str_tmp = "";
+						//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx+1, tmp_cigar_len-startmatch_idx-1, BAM_CMATCH, str_tmp));
+						//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, tmp_cigar_len-startmatch_idx, BAM_CEQUAL, ""));
+						alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
+					}
+				}
+
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CINS:
+				if(overlap_flag){
+					// add alnSeg item
+					ins_str = "";
+					for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
+				}
+
+				startQpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CDEL:
+				if(overlap_flag){
+					// add alnSeg item
+					del = "";
+					for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];//something wrong?
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
+				}
+
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CSOFT_CLIP:
+			case BAM_CHARD_CLIP:
+				if(overlap_flag){
+					//str_tmp = to_string(tmp_cigar_len);
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, op, to_string(tmp_cigar_len)));
+				}
+
+				if(op==BAM_CSOFT_CLIP) startQpos += tmp_cigar_len;
+				if(++i<b->core.n_cigar){
+					op = bam_cigar_op(c[i]);
+					tmp_cigar_len = bam_cigar_oplen(c[i]);
+				}
+				break;
+			case BAM_CEQUAL:
+				if(overlap_flag){
+					//str_tmp = "";
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CEQUAL, ""));
+				}
+
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CDIFF:
+				if(overlap_flag){
+					diff = "";
+					for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDIFF, diff));
+				}
+
+				startQpos += tmp_cigar_len;
+				startRpos += tmp_cigar_len;
+				op = bam_cigar_op(c[++i]);
+				tmp_cigar_len = bam_cigar_oplen(c[i]);
+				break;
+			case BAM_CREF_SKIP: // unexpected events
+			case BAM_CPAD:
+			case BAM_CBACK:
+			default:
+				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
+				exit(1);
+		}
+		if(startRpos>endRefPos_paras) break;
+	}
+	return alnSegs;
+}
+
+vector<struct pafalnSeg*> generatePafAlnSegs(minimap2_aln_t* minimap2_aln_item, string cons_seq, string ref_seq){
+	vector<struct pafalnSeg*> pafalnSegs;
+	string cigar;
+	int32_t seglen, relative_strand;
+	uint32_t opflag, i;
+	bool cigar_int_flag = false;
+	int64_t startRpos, startQpos, startSubjectPos;
+	int32_t op_num;
+	int32_t *seglens = new int32_t[1000]();
+	uint32_t *opflags = new uint32_t[1000]();
+	char *opflags_char = new char[1000]();
+
+	cigar = minimap2_aln_item->cigar;
+	op_num = 0;
+
+	for(i = 0; i < cigar.length(); i++){
+		if(cigar.at(i) >= '0' and cigar.at(i) <= '9'){
+			if(cigar_int_flag){//804M
+				seglens[op_num] = seglens[op_num]*10 + cigar.at(i) - '0';
+			}else{//8M
+				seglens[op_num] = cigar.at(i) - '0';
+				cigar_int_flag = true;
+			}
+		}else if(cigar.at(i) >= 'A' and cigar.at(i) <= 'Z'){
+			opflags_char[op_num] = cigar.at(i);
+			op_num++;
+			if(cigar_int_flag) cigar_int_flag = false;
+		}
+	}
+
+	for(i = 0; i < op_num; i++){
+		switch(opflags_char[i]){
+			case 'M':
+				opflags[i] = BAM_CMATCH;
+				break;
+			case 'I':
+				opflags[i] = BAM_CINS;
+				break;
+			case 'D':
+				opflags[i] = BAM_CDEL;
+				break;
+			case 'S':
+				opflags[i] = BAM_CSOFT_CLIP;
+				break;
+			case 'H':
+				opflags[i] = BAM_CHARD_CLIP;
+				break;
+			case BAM_CREF_SKIP: // unexpected events
+			case BAM_CPAD:
+			case BAM_CBACK:
+			default:
+				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << opflags[i] << endl;
+				exit(1);
+		}
+	}
+
+	if(minimap2_aln_item->relative_strand==ALN_PLUS_ORIENT){
+		i = 0;
+		while(i < op_num){
+			if(i == 0){
+				startRpos = minimap2_aln_item->region_startRefPos + minimap2_aln_item->subject_start - 1;
+				startQpos = minimap2_aln_item->query_start;
+				startSubjectPos = minimap2_aln_item->subject_start;
+			}else{
+				switch (opflags[i-1]) {
+					case BAM_CMATCH:
+						//startRpos = startRpos + seglens[i-1];
+						//startQpos = startQpos + seglens[i-1];
+						//startSubjectPos = startSubjectPos + seglens[i-1];
+						startRpos = startRpos + seglens[i-1] + 1;
+						startQpos = startQpos + seglens[i-1] + 1;
+						startSubjectPos = startSubjectPos + seglens[i-1] + 1;
+						break;
+					case BAM_CINS:
+						//startQpos = startQpos + seglens[i-1];
+						startQpos = startQpos + seglens[i-1] - 1;
+						startRpos = startRpos - 1;
+						startSubjectPos = startSubjectPos - 1;
+						break;
+					case BAM_CDEL:
+						//startRpos = startRpos + seglens[i-1];
+						//startSubjectPos = startSubjectPos + seglens[i-1];
+						startRpos = startRpos + seglens[i-1] - 1;
+						startSubjectPos = startSubjectPos + seglens[i-1] - 1;
+						startQpos = startQpos - 1;
+						break;
+					case BAM_CSOFT_CLIP:
+					case BAM_CHARD_CLIP:
+					case BAM_CEQUAL:
+					case BAM_CDIFF:
+						break;
+					case BAM_CREF_SKIP:
+						// unexpected events
+					case BAM_CPAD:
+					case BAM_CBACK:
+					default:
+						cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << opflags[i-1] << endl;
+						exit(1);
+				}
+			}
+			seglen = seglens[i];
+			opflag = opflags[i];
+			relative_strand = minimap2_aln_item->relative_strand;
+			if(startRpos<=minimap2_aln_item->region_endRefPos and startQpos<=minimap2_aln_item->query_end and startSubjectPos<=minimap2_aln_item->subject_end)
+				pafalnSegs.push_back(allocatePafAlnSeg(startRpos, startQpos, startSubjectPos, seglen, opflag, cons_seq, ref_seq, relative_strand));
+			i++;
+		}
+	}
+
+	delete []seglens;
+	delete []opflags;
+	delete []opflags_char;
+
+	return pafalnSegs;
+}
+
+struct alnSeg* allocateAlnSeg(int64_t startRpos, int64_t startQpos, int32_t seglen, uint32_t opflag, const string &seg_MD){
+	struct alnSeg* seg = new struct alnSeg;
+	if(!seg){
+		cerr << __func__ << ": cannot allocate memory" << endl;
+		exit(1);
+	}
+	seg->startRpos = startRpos;
+	seg->startQpos = startQpos;
+	seg->seglen = seglen;
+	seg->opflag = opflag;
+	seg->seg_MD = seg_MD;
+	return seg;
+}
+
+struct pafalnSeg* allocatePafAlnSeg(int64_t startRpos, int64_t startQpos, int64_t startSubjectPos, int32_t seglen, uint32_t opflag, string cons_seq, string ref_seq, int32_t aln_orient){
+	struct pafalnSeg* seg = new struct pafalnSeg;
+	size_t tmp_startPos, tmp_endPos, tmp_startPos2, tmp_endPos2;
+	string ret;
+	if(!seg){
+		cerr << __func__ << ": cannot allocate memory" << endl;
+		exit(1);
+	}
+//	seg->startRpos = startRpos;
+//	seg->startQpos = startQpos;
+//	seg->startSubjectPos = startSubjectPos;
+	seg->startRpos = startRpos - 1;
+	seg->startQpos = startQpos - 1;
+	seg->startSubjectPos = startSubjectPos - 1;
+	seg->seglen = seglen;
+	seg->opflag = opflag;
+	switch (opflag) {
+		case BAM_CMATCH:
+			seg->alt_seq = "N";
+			seg->ref_seq = "N";
+			break;
+		case BAM_CINS:
+			//seg->ref_seq = ref_seq.substr(startSubjectPos - 1, 1);
+			seg->ref_seq = ref_seq.substr(startSubjectPos - 1, 1);
+//			if(aln_orient==ALN_PLUS_ORIENT){
+			//seg->alt_seq = cons_seq.substr(startQpos - 1, seglen);
+			seg->alt_seq = cons_seq.substr(startQpos - 1, seglen + 1);
+//				}else{
+//					tmp_endPos = startQpos + seglen - 1;
+//					tmp_startPos = startQpos;
+//					tmp_startPos2 = cons_seq.size() - tmp_endPos + 1;
+//					tmp_endPos2 = cons_seq.size() - tmp_startPos + 1;
+//					ret = cons_seq.substr(tmp_startPos2-1, tmp_endPos2-tmp_startPos2+1);
+//					reverseComplement(ret);
+//					seg->alt_seq = ret;
+//				}
+			break;
+		case BAM_CDEL:
+			//seg->alt_seq = cons_seq.substr(startQpos - 1, 1);
+			seg->alt_seq = cons_seq.substr(startQpos - 1, 1);
+//			if(aln_orient==ALN_PLUS_ORIENT){
+			//seg->ref_seq = ref_seq.substr(startSubjectPos - 1, seglen);
+			seg->ref_seq = ref_seq.substr(startSubjectPos - 1, seglen + 1);
+//			}else{
+////				tmp_endPos = startSubjectPos + seglen - 1;
+////				tmp_startPos = startSubjectPos;
+////				tmp_startPos2 = cons_seq.size() - tmp_endPos + 1;
+////				tmp_endPos2 = cons_seq.size() - tmp_startPos + 1;
+//				ret = cons_seq.substr(startQpos - 1, seglen);
+//				reverseComplement(ret);
+//				seg->ref_seq = ret;
+//			}
+			break;
+		case BAM_CSOFT_CLIP:
+		case BAM_CHARD_CLIP:
+			break;
+		case BAM_CEQUAL:
+		case BAM_CDIFF:
+			seg->alt_seq = "N";
+			seg->ref_seq = "N";
+			break;
+		case BAM_CREF_SKIP:
+			// unexpected events
+		case BAM_CPAD:
+		case BAM_CBACK:
+		default:
+			cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << opflag << endl;
+			exit(1);
+	}
+	return seg;
+}
+
+// release the alignment segments
+void destroyAlnSegs(vector<struct alnSeg*> &alnSegs){
+	vector<struct alnSeg*>::iterator seg;
+	for(seg=alnSegs.begin(); seg!=alnSegs.end(); seg++) delete *seg;
+	vector<struct alnSeg*>().swap(alnSegs);
+}
+
+//estimate the kind of bamfile
+int32_t getBamType(bam1_t *b){
+	uint32_t *c, op,i;
+	uint8_t *flag;
+	flag = bam_aux_get(b,"MD");
+	if ( flag ){
+		for(i=0; i<b->core.n_cigar; i++){
+			c = bam_get_cigar(b);  // CIGAR
+			op = bam_cigar_op(c[i]);
+			if(op == BAM_CMATCH){
+				//cout<<"there are MD flag and CMATCH in the bam file"<<endl;
+				return BAM_CIGAR_NO_DIFF_MD;
+			}
+		}
+		for(i=0; i<b->core.n_cigar; i++){
+			c = bam_get_cigar(b);  // CIGAR
+			op = bam_cigar_op(c[i]);
+			if(op == BAM_CEQUAL || op == BAM_CDIFF){
+				//cout<<"there are MD flag and CDIFF in the bam file"<<endl;
+				return BAM_CIGAR_DIFF_MD;
+			}
+		}
+	}else {
+		for(i=0; i<b->core.n_cigar; i++){
+			c = bam_get_cigar(b);  // CIGAR
+			op = bam_cigar_op(c[i]);
+			if(op == BAM_CMATCH){
+				//cout<<"there is no MD flag but having CMATCH in the bam file"<<endl;
+				return BAM_CIGAR_NO_DIFF_NO_MD;
+			}
+		}
+		for(i=0; i<b->core.n_cigar; i++){
+			c = bam_get_cigar(b);  // CIGAR
+			op = bam_cigar_op(c[i]);
+			if(op == BAM_CEQUAL || op == BAM_CDIFF){
+				//cout<<"there is no MD flag but having CDIFF in the bam file"<<endl;
+				return BAM_CIGAR_DIFF_NO_MD;
+			}
+		}
+	}
+
+	cout<<"invalid bam file"<<endl;
+	return BAM_INVALID;
+}
+
+// get the MD segs
+vector<struct MD_seg*> extractMDSegs(bam1_t* b){
+	vector<struct MD_seg*> segs_MD;
+	char *p;
+	string seg;
+
+	p = bam_aux2Z(bam_aux_get(b, "MD"));  // MD
+	while(*p){
+		seg = "";
+		if(*p=='^'){  // deletion
+			p++;  // omit the '^'
+			while((*p>='A' and *p<='Z') or (*p>='a' and *p<='z')) seg += *p++;
+			// allocate the MD seg node, and add it to vector
+			segs_MD.push_back(allocateMDSeg(seg, BAM_CDEL));
+		}else if(*p>='0' and *p<='9'){  // match (BAM_CEQUAL)
+			seg += *p++;
+			while(*p>='0' and *p<='9') seg += *p++;
+			// allocate the MD seg node, and add it to vector
+			//if(seg!="0") segs_MD.push_back(allocateMDSeg(seg, BAM_CMATCH));
+			if(seg!="0") segs_MD.push_back(allocateMDSeg(seg, BAM_CEQUAL));
+		}else if((*p>='A' and *p<='Z') or (*p>='a' and *p<='z')){ // mismatch (BAM_CDIFF)
+			seg += *p++;
+			if((*p>='A' and *p<='Z') or (*p>='a' and *p<='z')){
+				cerr << __func__ << ": invalid seg" << endl;
+				exit(1);
+			}
+
+			// allocate the MD seg node, and add it to vector
+			//segs_MD.push_back(allocateMDSeg(seg, MD_MISMATCH));
+			segs_MD.push_back(allocateMDSeg(seg, BAM_CDIFF));
+		}else{
+			cerr << __func__ << ": invalid seg" << endl;
+			exit(1);
+		}
+	}
+
+	return segs_MD;
+}
+
+// allocate MD seg node
+struct MD_seg* allocateMDSeg(string& seg, uint32_t opflag){
+	struct MD_seg* seg_MD = new struct MD_seg();
+	if(!seg_MD){
+		cerr << __func__ << ": cannot allocate memory" << endl;
+		exit(1);
+	}
+	seg_MD->seg = seg;
+	seg_MD->opflag = opflag;
+	switch(opflag){
+		//case BAM_CMATCH: seg_MD->seglen = stoi(seg_MD->seg); break;
+		case BAM_CEQUAL: seg_MD->seglen = stoi(seg_MD->seg); break;
+		case BAM_CDEL:
+		//case MD_MISMATCH: seg_MD->seglen = seg_MD->seg.size(); break;
+		case BAM_CDIFF: seg_MD->seglen = seg_MD->seg.size(); break;
+		default:
+			cerr << __func__ << ": invalid opflag:" << opflag << endl; exit(1);
+	}
+	return seg_MD;
+}
+
+// destroy MD seg vector
+void destroyMDSeg(vector<struct MD_seg*> &segs_MD){
+	vector<struct MD_seg*>::iterator seg;
+	for(seg=segs_MD.begin(); seg!=segs_MD.end(); seg++) delete *seg;
+	vector<struct MD_seg*>().swap(segs_MD);
+}
+
+// output the aln seg items
+void outputAlnSegs(vector<struct alnSeg*> &alnSegs){
+	size_t i;
+	vector<struct alnSeg*>::iterator seg;
+	cout << "count: " << alnSegs.size() << endl;
+	for(i=0, seg=alnSegs.begin(); seg!=alnSegs.end(); seg++, i++)
+		cout << "[" << i << "]: startRpos=" << (*seg)->startRpos << ", startQpos=" << (*seg)->startQpos <<
+				", seglen=" << (*seg)->seglen << ", opflag=" << size_t((*seg)->opflag) <<
+				", seg_MD=" << (*seg)->seg_MD << endl;
+}
+
+// output the MD seg items
+void outputMDSeg(vector<struct MD_seg*> &segs_MD){
+	size_t i;
+	vector<struct MD_seg*>::iterator seg;
+	cout << "count: " << segs_MD.size() << endl;
+	for(i=0, seg=segs_MD.begin(); seg!=segs_MD.end(); seg++, i++)
+		cout << "[" << i << "]: seg=" << (*seg)->seg << ", opflag=" << size_t((*seg)->opflag) << endl;
+}
+
+// determine whether the alignment have the given cigar flag
+bool haveOpflagCigar(bam1_t* b, uint32_t opfalg){
+	bool flag = false;
+	uint32_t i, *c, op;
+
+	for(i=0; i<b->core.n_cigar; i++){
+		c = bam_get_cigar(b);  // CIGAR
+		op = bam_cigar_op(c[i]);
+		if(op==opfalg){ flag = true; break;}
+	}
+	return flag;
+}
+
+
+// test alnSeg vector for single chromosome
+void testAlnSegVec(string &inBamFile, faidx_t *fai){
+	samFile *in = 0;
+	bam_hdr_t *header;
+	int32_t i, result, bam_type, seq_len, chrlen_tmp, startPos, endPos;
+	size_t count;
+	bam1_t *b;
+	string reg_str, chr_name, refseq;
+	vector<struct alnSeg*> alnSegs;
+	char *seq;
+
+	if ((in = sam_open(inBamFile.c_str(), "r")) == 0) {
+		cerr << __func__ << ": failed to open " << inBamFile << " for reading" << endl;
+		exit(1);
+	}
+
+	if ((header = sam_hdr_read(in)) == 0) {
+		cerr << __func__ << ": fail to read the header from " << inBamFile << endl;
+		exit(1);
+	}
+
+	hts_idx_t *idx = sam_index_load(in, inBamFile.c_str()); // load index
+	if (idx == 0) { // index is unavailable
+		cerr << __func__ << ": random alignment retrieval only works for indexed BAM files.\n" << endl;
+		exit(1);
+	}
+
+	for(i=0; i<header->n_targets; i++){
+		chr_name = header->target_name[i];
+		startPos = 1;
+		endPos = header->target_len[i];
+		reg_str = chr_name + ":" + to_string(startPos) + "-" + to_string(endPos);
+		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		refseq = seq;
+		free(seq);
+
+		hts_itr_t *iter = sam_itr_querys(idx, header, reg_str.c_str()); // parse a region in the format like `chr2:100-200'
+		if (iter == NULL) { // region invalid or reference name not found
+			int beg, end;
+			if (hts_parse_reg(reg_str.c_str(), &beg, &end))
+				cerr <<  __func__ << ": region " << reg_str << " specifies an unknown reference name." << endl;
+			else
+				cerr <<  __func__ << ": region " << reg_str << " could not be parsed." << endl;
+			exit(1);
+		}
+
+		// fetch alignments
+		bam_type = -1;
+		count = 0;
+		b = bam_init1();
+		while ((result = sam_itr_next(in, iter, b)) >= 0) {
+			count++;
+
+			if(bam_type==-1) bam_type = getBamType(b);
+			if(bam_type==BAM_INVALID){
+				cerr << __func__ << ": unknown bam type, error!" << endl;
+				exit(1);
+			}
+
+			if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+//				qname = bam_get_qname(b);
+//				cin>>qname_com;
+//				qname_com = "b219a8ba_98667_6199";
+//				if(qname.compare(qname_com)==0)
+//					cout << qname << endl;
+//				else continue;
+
+				switch(bam_type){
+					case BAM_CIGAR_NO_DIFF_MD:
+						alnSegs = generateAlnSegs(b);
+						break;
+					case BAM_CIGAR_NO_DIFF_NO_MD:
+					case BAM_CIGAR_DIFF_MD:
+					case BAM_CIGAR_DIFF_NO_MD:
+						alnSegs = generateAlnSegs_no_MD(b, refseq, startPos, endPos);
+						break;
+					default:
+						cerr << __func__ << ": unknown bam type, error!" << endl;
+						exit(1);
+				}// generate align segments
+
+				// test single alnSeg vector
+				checkAlnSegVecSingleQuery(alnSegs);
+
+				//updateBaseInfo(baseArr, alnSegs); // update base information
+				destroyAlnSegs(alnSegs);
+			}
+
+			b = bam_init1();
+		}
+
+		bam_destroy1(b);
+		if (result < -1) {
+			cerr <<  __func__ << ": retrieval of region " << reg_str << " failed due to truncated file or corrupt BAM index file." << endl;
+			exit(1);
+		}
+
+		hts_itr_destroy(iter);
+	}
+
+	// load align data from iteration
+	//loadAlnDataFromIter(alnDataVector, in, header, iter, reg_str);
+
+	hts_idx_destroy(idx); // destroy the BAM index
+	bam_hdr_destroy(header);
+	if(in) sam_close(in);
+}
+
+void checkAlnSegVecSingleQuery(vector<struct alnSeg*> &alnSegs){
+	struct alnSeg *seg, *seg_prev;
+
+	seg = NULL;
+	for(size_t i=0; i<alnSegs.size(); i++){
+		seg = alnSegs.at(i);
+		if(seg->seglen==0){
+			cout << "line=" << __LINE__ << ", opflag=" << seg->opflag << ", seglen=" << seg->seglen << ", seg_MD=" << seg->seg_MD << ", startRpos=" << seg->startRpos << ", startQpos=" << seg->startQpos << endl;
+		}
+	}
+
+	for(size_t i=1; i<alnSegs.size(); i++){
+		seg_prev = alnSegs.at(i-1);
+		seg = alnSegs.at(i);
+		if((seg_prev->opflag==BAM_CDIFF or seg_prev->opflag==BAM_CDEL) and (seg->opflag==BAM_CDIFF or seg->opflag==BAM_CDEL)){
+			cout << "line=" << __LINE__ << ", opflag=" << seg->opflag << ", seglen=" << seg->seglen << ", seg_MD=" << seg->seg_MD << ", startRpos=" << seg->startRpos << ", startQpos=" << seg->startQpos << endl;
+		}
+	}
+}
+
+// get original query length
+int32_t getOriginalQueryLen(bam1_t *b){
+	int32_t querylen, left_clip_size, right_clip_size;
+	uint32_t *c, op1, op2;
+
+	c = bam_get_cigar(b);  // CIGAR
+	// left clip
+	op1 = bam_cigar_op(c[0]);
+	if(op1==BAM_CSOFT_CLIP or op1==BAM_CHARD_CLIP) left_clip_size = bam_cigar_oplen(c[0]);
+	else left_clip_size = 0;
+	// left clip
+	op2 = bam_cigar_op(c[b->core.n_cigar-1]);
+	if(op2==BAM_CSOFT_CLIP or op2==BAM_CHARD_CLIP) right_clip_size = bam_cigar_oplen(c[b->core.n_cigar-1]);
+	else right_clip_size = 0;
+
+	// querylen
+	querylen = b->core.l_qseq;
+	if(op1==BAM_CHARD_CLIP)
+		querylen += left_clip_size;
+	if(op2==BAM_CHARD_CLIP)
+		querylen += right_clip_size;
+
+	return querylen;
+}
+
+int64_t getEndRefPosAlnSeg(struct alnSeg *aln_seg){
+	int64_t end_ref_pos = 0;
+
+	if(aln_seg){
+		switch(aln_seg->opflag){
+			case BAM_CMATCH:
+				end_ref_pos = aln_seg->startRpos + aln_seg->seglen - 1;
+				break;
+			case BAM_CINS:
+				end_ref_pos = aln_seg->startRpos;
+				break;
+			case BAM_CDEL:
+				end_ref_pos = aln_seg->startRpos + aln_seg->seglen - 1;
+				break;
+			case BAM_CSOFT_CLIP:
+			case BAM_CHARD_CLIP:
+				end_ref_pos = aln_seg->startRpos;
+				break;
+			case BAM_CEQUAL:
+			case BAM_CDIFF:
+				end_ref_pos = aln_seg->startRpos + aln_seg->seglen - 1;
+				break;
+			case BAM_CREF_SKIP:
+				// unexpected events
+			case BAM_CPAD:
+			case BAM_CBACK:
+			default:
+				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << aln_seg->opflag << endl;
+				exit(1);
+		}
+	}
+
+	return end_ref_pos;
+}
+
+int64_t getEndRefPosAlnSeg(int64_t startRpos, int32_t opflag, int32_t op_len){
+	int64_t end_ref_pos = 0;
+
+	switch(opflag){
+		case BAM_CMATCH:
+			end_ref_pos = startRpos + op_len - 1;
+			break;
+		case BAM_CINS:
+			end_ref_pos = startRpos;
+			break;
+		case BAM_CDEL:
+			end_ref_pos = startRpos + op_len - 1;
+			break;
+		case BAM_CSOFT_CLIP:
+		case BAM_CHARD_CLIP:
+			end_ref_pos = startRpos;
+			break;
+		case BAM_CEQUAL:
+		case BAM_CDIFF:
+			end_ref_pos = startRpos + op_len - 1;
+			break;
+		case BAM_CREF_SKIP:
+			// unexpected events
+		case BAM_CPAD:
+		case BAM_CBACK:
+		default:
+			cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << opflag << endl;
+			exit(1);
+	}
+
+	return end_ref_pos;
+}
 
 Time::Time() {
 	timestamp = start = end = start_all = end_all = 0;

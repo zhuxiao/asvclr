@@ -11,12 +11,13 @@
 #include "structures.h"
 #include "meminfo.h"
 
+
 using namespace std;
 
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.1.2"
+#define PROG_VERSION				"1.2.0"
 #define VCF_VERSION					"4.2"
 
 #define CANU_RECOMMEND_VERSION		"2.1"
@@ -46,20 +47,26 @@ using namespace std;
 
 // default parameter values
 #define BLOCKSIZE  					1000000
-#define SLIDESIZE  					500
+#define SLIDESIZE  					500//500
 
 #define MIN_INDEL_EVENT_SIZE		2
 #define MIN_INDEL_EVENT_NUM			5
-#define MIN_SV_SIZE_USR				2
+#define MIN_SV_SIZE_USR				20
+#define MAX_SEG_SIZE_RATIO			0.5f
 #define MAX_SV_SIZE_USR				50000
 
 #define MIN_DUP_SIZE				30  // 2021-07-27
 
 //#define MIN_CLIP_READS_NUM_THRES	7
-#define MIN_SUPPORT_READS_NUM		7
+#define MIN_SUPPORT_READS_NUM_EST		-1
+#define MIN_SUPPORT_READS_NUM_FACTOR	0.07f
 
 #define MAX_VAR_REG_SIZE			50000
-#define ASM_CHUNK_SIZE_INDEL		10000
+#define ASM_CHUNK_SIZE_INDEL		1000	// 10000
+#define ASM_CHUNK_SIZE_EXT_INDEL	1000	//1000
+//#define ASM_CHUNK_SIZE_CLIP			20000	// 10000
+#define ASM_CHUNK_SIZE_EXT_CLIP		10000	//1000, 20000
+#define MIN_CONS_READ_LEN			100
 
 #define SIZE_PERCENTILE_EST			0.95
 #define NUM_PERCENTILE_EST			0.99995
@@ -81,11 +88,11 @@ using namespace std;
 
 #define LIMIT_REG_ALL_STR			"ALL"
 
-#define MIN_INPUT_COV_CANU			5  // 2021-08-01
-#define EXPECTED_COV_ASSEMBLE		30.0f
+#define MIN_INPUT_COV_CANU			5  		// 2021-08-01
+#define EXPECTED_COV_ASSEMBLE		40.0f	// 30.0f
 
 #define NUM_PARTS_PROGRESS			100
-#define NUM_THREADS_PER_ASSEM_WORK	0  // 0: unspecify the limited number of threads for each Canu work
+#define NUM_THREADS_PER_ASSEM_WORK	0  		// 0: unspecify the limited number of threads for each Canu work
 
 #define OUT_DIR						"output"
 #define SAMPLE_DEFAULT				"sample"
@@ -101,7 +108,7 @@ using namespace std;
 #define MAX_ALN_MINUTES						15
 
 //#define MAX_PROC_RUNNING_MINUTES				120
-#define MAX_PROC_RUNNING_MINUTES_ASSEMBLE		500
+#define MAX_PROC_RUNNING_MINUTES_ASSEMBLE		300
 #define MAX_PROC_RUNNING_MINUTES_CALL			120
 #define MONITOR_WAIT_SECONDS					60
 #define ULTRA_LOW_PROC_RUNNING_MINUTES			30
@@ -109,6 +116,16 @@ using namespace std;
 //#define DEFAULT_MONITOR_PROC_NAMES				"overlapInCore,falconsense,blat"
 #define DEFAULT_MONITOR_PROC_NAMES_ASSEMBLE		"overlapInCore,falconsense"
 #define DEFAULT_MONITOR_PROC_NAMES_CALL			"blat"
+
+// assemble parameters
+//#define REFSEQ_SIDE_LEN					1000	// 10000, 20000
+//#define ASSEMBLE_SIDE_LEN				1000	// 10000
+//#define REFSEQ_SIDE_LEN					20000	// 10000, 20000
+//#define ASSEMBLE_SIDE_LEN				10000	// 10000
+#define ASSEMBLE_GENOME_SIZE_INITIAL	30000
+#define ASSEMBLE_STEP_SIZE				10000
+#define ASSEMBLE_SIDE_EXT_SIZE			5000
+
 
 // program parameters
 class Paras
@@ -123,6 +140,7 @@ class Paras
 		string out_dir_tra = out_dir_call + "/" + "tra";
 		string out_dir_result = "4_results";	// "4_results"
 		int32_t blockSize, slideSize, min_sv_size_usr, max_sv_size_usr, num_threads, large_indel_size_thres; // , assemSlideSize;
+		double max_seg_size_ratio_usr;
 		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy;
 		size_t misAlnRegLenSum = 0;
 		int64_t minReadsNumSupportSV; //, minClipReadsNumSupportSV;
@@ -136,9 +154,11 @@ class Paras
 		bool limit_reg_process_flag = false;	// true for limit regions; default is false for disable limit regions (i.e. process all regions)
 		string limit_reg_filename = "limit_regions.bed";
 
-		int32_t maxVarRegSize, minClipEndSize, assemChunkSize;
+		int32_t maxVarRegSize, minClipEndSize, assemChunkSize, assemSideExtSize, assemSideExtSizeClip, minConReadLen;
 
 		int64_t mean_read_len, total_read_num_est;
+		//int64_t chr_mean_depth, total_depth, chrome_num;
+		vector<int64_t> mean_depth_vec;
 		int32_t reg_sum_size_est, max_reg_sum_size_est;
 
 		// reads sampling parameters
@@ -176,6 +196,16 @@ class Paras
 		ofstream killed_blat_work_file;
 		pthread_mutex_t mtx_killed_blat_work;
 
+		// process monitor killed blat work
+		vector<killedMinimap2Work_t*> killed_minimap2_work_vec;
+		string killed_minimap2_work_filename = out_dir_call + "/" + "monitor_killed_minimap2_work";	// colums: alnfilename,ctgfilename,refseqfilename
+		ofstream killed_minimap2_work_file;
+		pthread_mutex_t mtx_killed_minimap2_work;
+
+		//genotyping parameters
+		int32_t gt_min_sig_size;
+		double gt_size_ratio_match, gt_min_alle_ratio, gt_max_alle_ratio;
+
 	public:
 		Paras();
 		Paras(int argc, char **argv);
@@ -205,6 +235,7 @@ class Paras
 		void showAllUsage(const string &cmd_str);
 		void showDetectAssembleUsage();
 		int64_t estimateSinglePara(int64_t *arr, int32_t n, double threshold, int32_t min_val);
+		int64_t estimateMinReadsNumSupportSV(vector<int64_t> &mean_depth_vec);
 		int parse_long_opt(int32_t option_index, const char *optarg, const struct option *lopts);
 };
 

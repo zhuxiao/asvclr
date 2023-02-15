@@ -5,6 +5,7 @@
 #include <cstring>
 #include <fstream>
 #include <vector>
+#include <algorithm>
 #include <limits.h>
 #include <stdexcept>
 #include <htslib/faidx.h>
@@ -15,6 +16,10 @@
 #include "RefSeqLoader.h"
 #include "alnDataLoader.h"
 #include "meminfo.h"
+#include "genotyping.h"
+#include "clipAlnDataLoader.h"
+#include "util.h"
+
 
 using namespace std;
 
@@ -61,6 +66,11 @@ using namespace std;
 
 //#define MAX_SV_SIZE							5000
 
+#define GT_SIG_SIZE_THRES					3
+#define GT_SIZE_RATIO_MATCH_THRES			0.7
+#define GT_MIN_ALLE_RATIO_THRES				0.3
+#define GT_MAX_ALLE_RATIO_THRES				0.7
+
 
 class varCand {
 	public:
@@ -70,10 +80,11 @@ class varCand {
 		bool limit_reg_process_flag, limit_reg_delete_flag;
 
 		string refseqfilename, ctgfilename, readsfilename, alnfilename;
-		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num;
+		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV;
 		vector<reg_t*> varVec, newVarVec;
 		bool assem_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
 		vector<blat_aln_t*> blat_aln_vec;               	// blat aligned segments
+		vector<minimap2_aln_t*> minimap2_aln_vec;           // minimap2 aligned segments
 
 		// clippings
 		reg_t *clip_reg; //, *clip_reg_mate;
@@ -88,8 +99,12 @@ class varCand {
 		// blat aligned information
 		vector<varCand*> *blat_aligned_info_vec;	// previously blat aligned information
 
+		// minimap2 aligned information
+		vector<varCand*> *minimap2_aligned_info_vec;	// previously minimap2 aligned information
+
 		// blat aligned information file
 		ofstream *blat_var_cand_file;
+		ofstream *minimap2_var_cand_file;
 
 		// pairwise alignment result
 		vector<localAln_t*> local_aln_vec;
@@ -100,28 +115,53 @@ class varCand {
 		ofstream *killed_blat_work_file;
 		pthread_mutex_t *mtx_killed_blat_work;
 
+		// process monitor killed minimap2 work
+		//int32_t max_proc_running_minutes;
+		vector<killedMinimap2Work_t*> *killed_minimap2_work_vec;
+		ofstream *killed_minimap2_work_file;
+		pthread_mutex_t *mtx_killed_minimap2_work;
+
+		//genotyping parameter
+		int32_t gt_min_sig_size, gt_min_sup_num_recover;
+		double gt_size_ratio_match, gt_min_alle_ratio, gt_max_alle_ratio;
+
+		//SV position correction
+		vector<svpos_correction_t*> svpos_correction_vec;
+
 	public:
 		varCand();
 		virtual ~varCand();
 		void callVariants();
+		void callVariants02();
 		void setBlatVarcandFile(ofstream *blat_var_cand_file, vector<varCand*> *blat_aligned_info_vec);
 		void resetBlatVarcandFile();
+		void setGtParas(int32_t gt_min_sig_size, double gt_size_ratio_match, double gt_min_alle_ratio, double gt_max_alle_ratio, int32_t min_sup_num_recover);
 		vector<int32_t> computeDisagreeNumAndHighIndelBaseNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 		void adjustVarLocSlightly();
 		void fillVarseq();
+		void alnCtg2Refseq02();
 		void alnCtg2Refseq();
+		void loadMinimap2AlnData();
 		void loadBlatAlnData();
 		void destroyVarCand();
 
 	private:
 		void init();
 		//void alnCtg2Refseq();
+		bool getMinimap2WorkKilledFlag();
 		bool getBlatWorkKilledFlag();
+		void recordMinimap2AlnInfo();
 		void recordBlatAlnInfo();
+		bool getMinimap2AlnDoneFlag();
 		bool getBlatAlnDoneFlag();
+		void assignMinimap2AlnStatus();
 		void assignBlatAlnStatus();
 		void callIndelVariants();
+		void callIndelVariants02();
 		void callClipRegVariants();
+		void minimap2Parse();
+		//allocatePafInDelAlnSeg
+		void getMissingPafInDelsAtAlnSegEnd(vector<struct pafalnSeg*> &all_pafalnsegs, vector<struct pafalnSeg*> &pafalnsegs, int32_t region_refstart, int32_t region_refend, int32_t querystart, int32_t queryend, int32_t query_len, int32_t subjectlen, int32_t subjectstart, int32_t subjectend, int32_t match_base_num, int32_t match_ref_len, string cons_seq, string ref_seq, int32_t aln_orient);
 		void blatParse();
 		void assignBestAlnFlag();
 		void assignAlnOrientFlag();
@@ -132,6 +172,13 @@ class varCand {
 		float computeRepeatCovRatio(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void determineIndelType();
+		void eraseFalsePositiveVariants();
+		void svPosCorrection(reg_t* reg);
+		bool searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_assembly, int64_t endRefPos_assembly, double size_ratio_match_thres);
+		//vector<int32_t> computeQueryStartEndLocByRefPos(vector<struct alnSeg*> &query_alnSegs, bam1_t *b);
+		void destoryClipAlnData();
+		void destoryPosCorrectionVec();
+		int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &query_aln_segs);
 		void callShortVariants();
 		bool isUnsplitAln(reg_t *reg);
 		bool determineQueryidReg(reg_t *reg);
@@ -178,6 +225,7 @@ class varCand {
 		//reg_t* computeInvReg(reg_t *reg, int32_t blat_aln_idx, vector<int32_t> blat_aln_idx_inv_vec);
 		void updateVarVec();
 		reg_t* computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq, size_t var_type);
+		reg_t* computeClipPos2(vector<blat_aln_t*> &blat_aln_vec, size_t var_type);
 		vector<size_t> computeLeftShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq);
 		vector<size_t> computeRightShiftSizeDup(reg_t *reg, aln_seg_t *seg1, aln_seg_t *seg2, string &refseq, string &queryseq);
 		size_t computeMismatchNumLocalAln(localAln_t *local_aln);
@@ -191,11 +239,18 @@ class varCand {
 		localAln_t* getIdenticalLocalAlnItem(localAln_t *local_aln, vector<localAln_t*> &local_aln_vec);
 		void addLocalAlnItemToVec(localAln_t *local_aln, vector<localAln_t*> &local_aln_vec);
 		void destroyLocalAlnVec(vector<localAln_t*> &local_aln_vec);
+		void destroyMinimap2AlnVec(vector<minimap2_aln_t*> &minimap2_aln_vec);
+
+		// genotyping
+		void indelGenotyping();
+		void indelGenotyping02();
 
 		// output
 		void printSV();
 		void outputNewVarcandVec();
 		void outputMultiBlatAlnBlocks();
+
+		vector<clipAlnData_t*> clipAlnDataVector;
 };
 
 #endif /* SRC_VARCAND_H_ */

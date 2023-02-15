@@ -18,10 +18,11 @@ class Base
 		baseCoverage_t coverage;
 		vector<insEvent_t*> insVector;  // insertion event vector
 		vector<delEvent_t*> delVector;  // deletion event vector
+		vector<delEvent_t*> extendDelVector;  // extend deletion event vector, 20220530
 		vector<clipEvent_t*> clipVector;  // deletion event vector
 
 		int32_t num_shortIns, num_shortdel, num_shortClip, del_num_from_del_vec;
-		int32_t maxConIndelEventNum: 27, max_con_type: 5;		// max_con_type: BAM_CINS, BAM_CDEL, BAM_CSOFT_CLIP, BAM_CHARD_CLIP, MD_MISMATCH, etc.
+		int32_t maxConIndelEventNum: 27, max_con_type: 5;		// max_con_type: BAM_CINS, BAM_CDEL, BAM_CSOFT_CLIP, BAM_CHARD_CLIP, BAM_CDIFF, etc.
 		float maxConIndelEventRatio;  // the ratio of maximum number of consensus indel events to the sum of total coverage and deletions (i.e. shadow coverage)
 
 	public:

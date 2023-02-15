@@ -1,6 +1,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <algorithm>
+#include <cmath>
 
 #include "Block.h"
 #include "covLoader.h"
@@ -143,7 +144,10 @@ void Block::blockFillDataEst(size_t op_est){
 	// compute mean read length
 	if(op_est==SIZE_EST_OP){
 		AddReadLenEstInfo();
+		//baseArr
+		if(paras->minReadsNumSupportSV==MIN_SUPPORT_READS_NUM_EST) AddCovDepthEstInfo();
 	}
+
 }
 
 // fill the estimation data
@@ -218,6 +222,25 @@ void Block::AddReadLenEstInfo(){
 		paras->mean_read_len += total;
 		paras->total_read_num_est += num;
 	}
+}
+
+void Block::AddCovDepthEstInfo(){
+	int64_t i, num, depth_all;
+	size_t j, len;
+	Base *base;
+
+	num = 0;
+	depth_all = 0;
+	//paras->chr_mean_depth = 0;
+	for(i=startPos; i<=endPos; i++){
+		base = baseArr + i - startPos;
+		if(base->coverage.idx_RefBase!=4){ // excluding 'Ns' gap region
+			num++;
+			depth_all += base->coverage.num_bases[5];
+		}
+	}
+	paras->mean_depth_vec.push_back(round((double)depth_all/num));
+	//paras->chr_mean_depth =  round((double)depth_all/num);
 }
 
 // block process
@@ -633,6 +656,9 @@ void Block::computeZeroCovReg(Region &reg){
 			reg_tmp->short_sv_flag = false;
 			reg_tmp->zero_cov_flag = false;
 			reg_tmp->aln_seg_end_flag = false;
+			reg_tmp->query_pos_invalid_flag = false;
+			reg_tmp->gt_type = -1;
+			reg_tmp->gt_seq = "";
 
 			zeroCovRegVector.push_back(reg_tmp);
 			i = end_vec_idx + 1;

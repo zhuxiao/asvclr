@@ -92,6 +92,7 @@ class Chrome{
 		void removeVarCandNodeClipReg(varCand *var_cand);
 		void chrFillVarseq();
 		void saveCallSV2File();
+		void saveCallSV2File02();
 		void chrLoadMateClipRegData();
 		void resetBlatVarcandFiles();
 
@@ -167,6 +168,7 @@ class Chrome{
 
 		// save SV to file
 		void saveCallIndelClipReg2File(string &outfilename_indel, string &outfilename_clipReg);
+		void saveCallIndelClipReg2File02(string &outfilename_indel, string &outfilename_clipReg);
 };
 
 #endif /* SRC_CHROME_H_ */

@@ -29,13 +29,13 @@ typedef struct clipAlnData_node{
 typedef struct{
 	string chrname;
 	int64_t startRefPos, endRefPos;
-	int32_t startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos, sv_len, dup_num; //, support_num, cov_num;
+	int32_t startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos, sv_len, dup_num: 24, gt_type; //, support_num, cov_num;
 	//int64_t ref_len, local_ref_len, query_len;
 	int8_t var_type, aln_orient;
 	int16_t query_id, blat_aln_id;
 	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
-	string refseq, altseq;
-	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag;
+	string refseq, altseq, gt_seq;
+	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag, query_pos_invalid_flag;
 }reg_t;
 
 // from clipReg.h
@@ -56,7 +56,7 @@ typedef struct{
 	int8_t leftClipRegNum, rightClipRegNum;
 
 	int32_t sv_type:8, dup_num:24;
-	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag;
+	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag, supp_num_valid_flag;
 	varCand *var_cand, *left_var_cand_tra, *right_var_cand_tra;  // TRA
 	string chrname_leftTra1, chrname_leftTra2, chrname_rightTra1, chrname_rightTra2;
 	int32_t leftClipPosTra1, leftClipPosTra2, rightClipPosTra1, rightClipPosTra2;
@@ -64,13 +64,19 @@ typedef struct{
 	string bnd_mate_reg_strs[4]; // mate strings for BND format: mate_reg_id1|clip_loc1|sup_num1|cov1,mate_reg_id2|clip_loc2|sup_num2|cov2;......
 }mateClipReg_t;
 
-
 //from covLoader.h
 struct alnSeg{
 	int64_t startRpos, startQpos;
 	int32_t seglen: 26, opflag : 6;
 	string seg_MD;
 };
+
+struct pafalnSeg{
+	int64_t startRpos, startQpos, startSubjectPos;
+	int32_t seglen: 26, opflag : 6;
+	string alt_seq, ref_seq;
+};
+
 //from covLoader.h
 struct MD_seg{
 	string seg;
@@ -105,7 +111,8 @@ typedef struct {
 	int32_t work_id, num_work, num_work_percent;  // 'work_id' starts from 1
 	int32_t *p_assemble_reg_workDone_num;   // pointer to the global variable which was declared in Paras.h
 	pthread_mutex_t *p_mtx_assemble_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
-	int32_t num_threads_per_assem_work, minClipEndSize;
+	int32_t num_threads_per_assem_work, minClipEndSize, assemSideExtSize, minConReadLen, min_sv_size;
+	double max_seg_size_ratio;
 
 	string inBamFile, technology, canu_version;
 	faidx_t *fai;
@@ -122,6 +129,23 @@ typedef struct{
 	int64_t ref_start, ref_end;  // reference positions
 }aln_seg_t;
 
+//from varCand.h
+typedef struct{
+	int64_t startRpos, endRpos;
+	int32_t startQpos, endQpos, svlen: 26;
+	//int8_t var_type;
+	string refseq, altseq;
+	string qname;
+}svpos_correction_t;
+
+// profile pattern
+typedef struct{
+	int32_t num;
+	vector<int32_t> svpos_id;
+	int64_t startRpos, sv_len;
+}svpos_match_t;
+
+
 // from varCand.h
 typedef struct{
 	//string query_name, subject_name;
@@ -129,7 +153,18 @@ typedef struct{
 	int32_t query_id:24, aln_orient:8;
 	bool head_hanging, tail_hanging, best_aln, valid_aln;  // default: false
 	vector<aln_seg_t*> aln_segs;
-} blat_aln_t;
+}blat_aln_t;
+
+// from varCand.h
+typedef struct{
+	//string query_name, subject_name;
+	int32_t minimap2_aln_id, query_len, subject_len, query_start, query_end, subject_start, subject_end, region_startRefPos, region_endRefPos;
+	//int32_t ref_start, ref_end;
+	int32_t query_id:24, relative_strand:8;
+	string cigar, charname;
+	vector<string> qname;
+	vector<struct pafalnSeg*> pafalnsegs;
+}minimap2_aln_t;
 
 // from varCand.h
 typedef struct{
@@ -172,6 +207,7 @@ typedef struct{
 // 2021-08-09
 struct alnScoreNode{
 	int32_t score: 29, path_val: 3;
+	bool ismissmatch;
 };
 
 typedef struct{
@@ -193,9 +229,38 @@ typedef struct{
 	int32_t max_proc_running_minutes;
 }procMonitor_op;
 
+// for process monitor killed minimap2 work
+typedef struct{
+	string alnfilename, ctgfilename, refseqfilename;
+}killedMinimap2Work_t;
+
 // for process monitor killed blat work
 typedef struct{
 	string alnfilename, ctgfilename, refseqfilename;
 }killedBlatWork_t;
+
+// single signature for genotype
+typedef struct gtSigNode{
+	int32_t sig_id: 24, cigar_op: 8, cigar_op_len;
+	bool reg_contain_flag;
+	int64_t ref_pos;
+	string chrname;
+	struct gtSigNode *mate_gtSig;
+}gtSig_t;
+
+// genotype signatures of a query
+typedef struct queryGtSigNode{
+	int32_t group_id;
+	bool seed_flag;
+	string queryname;
+	vector<int8_t> match_profile_vec;
+	vector<gtSig_t*> gtSig_vec;
+}queryGtSig_t;
+
+// profile pattern
+typedef struct profile_pat_node {
+	int32_t num;
+	vector<int8_t> match_profile_vec;
+}profile_pat_t;
 
 #endif /* SRC_STRUCTURES_H_ */

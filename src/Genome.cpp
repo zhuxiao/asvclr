@@ -16,6 +16,10 @@ using namespace std;
 Genome::Genome(Paras *paras){
 	this->paras = paras;
 	init();
+
+//	cout << "Checking BAM AlnSegs ..." << endl;
+//	testAlnSegVec(paras->inBamFile, fai);
+//	cout << "Checking BAM AlnSegs finished." << endl;
 }
 
 //Destructor
@@ -279,11 +283,15 @@ void Genome::estimateSVSizeNum(){
 
 	// fill the size data using each chromosome
 	paras->reg_sum_size_est = 0;
+	//paras->total_depth = 0;
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		chr->chrFillDataEst(SIZE_EST_OP);
 		if(paras->reg_sum_size_est>=paras->max_reg_sum_size_est) break;
+
+		//paras->total_depth += paras->chr_mean_depth;
 	}
+	//paras->chrome_num = chromeVector.size() - 1;
 	// size estimate
 	paras->estimate(SIZE_EST_OP);
 
@@ -534,7 +542,7 @@ int Genome::genomeLocalAssemble(){
 	//outputAssemWorkOptToFile_debug(paras->assem_work_vec);
 
 	// invoke the monitor of assemble work process
-	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_assemble, paras->max_proc_running_minutes_assemble);
+//	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_assemble, paras->max_proc_running_minutes_assemble);
 
 	// begin assemble
 	if(!paras->assem_work_vec.empty()) cout << "[" << time.getTime() << "]: start local assemble..." << endl;
@@ -600,7 +608,9 @@ int Genome::processAssembleWork(){
 
 	if(paras->assem_work_vec.empty()) return 0;  // no assemble work, then return directly
 
-	num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
+	//num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
+	num_threads_work = (paras->num_threads>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
+
 	if(num_threads_work<1) num_threads_work = 1;
 
 	if(paras->num_threads_per_assem_work==0)
@@ -625,6 +635,10 @@ int Genome::processAssembleWork(){
 			exit(1);
 		}
 
+//		if(assem_work_opt->refseqfilename.compare("output_spombe_tra_20230201/2_assemble/chr1/refseq_chr1_5577629-5579132.fa")==0){
+//			cout << "refseq=" << assem_work_opt->refseqfilename << endl;
+//		}else continue;
+
 		assem_work = new assembleWork();
 		assem_work->assem_work_opt = assem_work_opt;
 		assem_work->work_id = i;
@@ -634,6 +648,11 @@ int Genome::processAssembleWork(){
 		assem_work->p_mtx_assemble_reg_workDone_num = &(paras->mtx_assemble_reg_workDone_num);
 		assem_work->num_threads_per_assem_work = paras->num_threads_per_assem_work;
 		assem_work->minClipEndSize = paras->minClipEndSize;
+		if(assem_work_opt->clip_reg_flag==false) assem_work->assemSideExtSize = paras->assemSideExtSize;
+		else assem_work->assemSideExtSize = paras->assemSideExtSizeClip;
+		assem_work->minConReadLen = paras->minConReadLen;
+		assem_work->min_sv_size = paras->min_sv_size_usr;
+		assem_work->max_seg_size_ratio = paras->max_seg_size_ratio_usr;
 		assem_work->inBamFile = paras->inBamFile;
 		assem_work->fai = fai;
 		assem_work->var_cand_file = var_cand_file;
@@ -689,7 +708,8 @@ int Genome::genomeCall(){
 	Time time;
 
 	// initialize the variables for process monitor killed blat works
-	initMonitorKilledBlatWorkMem();
+	//initMonitorKilledBlatWorkMem();
+	//initMonitorKilledMinimap2WorkMem();
 
 	// load clipping region information
 	genomeLoadMateClipRegData();
@@ -701,11 +721,11 @@ int Genome::genomeCall(){
 	cout << "Number of regions to be processed: " << paras->call_work_num << endl;
 
 	// invoke the monitor of assemble work process
-	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_call, paras->max_proc_running_minutes_call);
+//	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_call, paras->max_proc_running_minutes_call);
 
 	// blat alignment work
 	time.setStartTime();
-	processBlatAlnWork();
+	processAlnWork();
 	time.printElapsedTime();
 
 	// process call work
@@ -750,9 +770,65 @@ int Genome::genomeCall(){
 	cout << "[" << time.getTime() << "]: compute variant NUMBER statistics... " << endl;
 	computeVarNumStatCall();
 
-	releaseMonitorKilledBlatWorkMem();
+	//releaseMonitorKilledBlatWorkMem();
+	releaseMonitorKilledMinimap2WorkMem();
 
 	return 0;
+}
+
+// initialize variables for monitor killed minimap2 work
+void Genome::initMonitorKilledMinimap2WorkMem(){
+	string line, alnfilename, contigfilename, refseqfilename, old_out_dir, killed_minimap2_work_filename, tmp_filename;
+	ifstream infile;
+	killedMinimap2Work_t *killed_minimap2_work;
+	vector<string> str_vec;
+	bool file_exist_flag;
+
+	pthread_mutex_init(&paras->mtx_killed_minimap2_work, NULL);
+
+	killed_minimap2_work_filename = out_dir + "/" + paras->killed_minimap2_work_filename;
+	file_exist_flag = isFileExist(killed_minimap2_work_filename);
+	if(file_exist_flag){
+		tmp_filename = killed_minimap2_work_filename + "_tmp";
+		rename(killed_minimap2_work_filename.c_str(), tmp_filename.c_str());
+	}
+
+	paras->killed_minimap2_work_file.open(killed_minimap2_work_filename);
+	if(!paras->killed_minimap2_work_file.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << paras->killed_minimap2_work_filename << endl;
+		exit(1);
+	}
+
+	if(file_exist_flag){
+		infile.open(tmp_filename);
+		if(!infile.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << tmp_filename << endl;
+			exit(1);
+		}
+		// read each line and save to the output file
+		while(getline(infile, line)){
+			if(line.size()>0 and line.at(0)!='#'){
+				str_vec = split(line, "\t");
+				if(str_vec.size()==3){
+					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_call);
+					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
+					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+
+					killed_minimap2_work = new killedMinimap2Work_t();
+					killed_minimap2_work->alnfilename = alnfilename;		// alnfilename;
+					killed_minimap2_work->ctgfilename = contigfilename;		// ctgfilename;
+					killed_minimap2_work->refseqfilename = refseqfilename;	// refseqfilename;
+
+					paras->killed_minimap2_work_vec.push_back(killed_minimap2_work);
+					paras->killed_minimap2_work_file << line << endl;
+				}
+			}
+		}
+		infile.close();
+
+		remove(tmp_filename.c_str());
+	}
 }
 
 // initialize variables for monitor killed blat work
@@ -811,6 +887,14 @@ void Genome::initMonitorKilledBlatWorkMem(){
 }
 
 // initialize variables for monitor killed blat work
+void Genome::releaseMonitorKilledMinimap2WorkMem(){
+	paras->killed_minimap2_work_file.close();
+
+	for(size_t i=0; i<paras->killed_minimap2_work_vec.size(); i++) delete paras->killed_minimap2_work_vec.at(i);
+	vector<killedMinimap2Work_t*>().swap(paras->killed_minimap2_work_vec);
+}
+
+// initialize variables for monitor killed blat work
 void Genome::releaseMonitorKilledBlatWorkMem(){
 	paras->killed_blat_work_file.close();
 
@@ -860,6 +944,52 @@ void Genome::genomeFinishCallWork(){
 		chr->resetBlatVarcandFiles();
 	}
 	vector<varCand*>().swap(paras->call_work_vec);
+}
+
+// call variants using thread pool
+int Genome::processAlnWork(){
+	callWork_opt *call_work_opt;
+	varCand *var_cand;
+	size_t num_work, num_work_percent;
+
+	if(paras->call_work_vec.empty()) return 0;  // no assemble work, then return directly
+
+	cout << "Begin sequence alignment ..." << endl;
+
+	hts_tpool *p = hts_tpool_init(paras->num_threads);
+	hts_tpool_process *q = hts_tpool_process_init(p, paras->num_threads*2, 1);
+
+	pthread_mutex_init(&paras->mtx_call_workDone_num, NULL);
+
+	paras->call_workDone_num = 0;
+	num_work = paras->call_work_vec.size();
+	num_work_percent = num_work / (paras->num_parts_progress >> 1);
+	if(num_work_percent==0) num_work_percent = 1;
+	for(size_t i=0; i<num_work; i++){
+		var_cand = paras->call_work_vec.at(i);
+
+		// DUP not precise (CCS30x): blat_contig_1_1180102-1180675.sim4, blat_contig_1_1183812-1185067.sim4, blat_contig_1_1317611-1318285.sim4
+//		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_1_1860801-1869285.sim4")!=0){
+//			continue;
+//		}
+
+		call_work_opt = new callWork_opt();
+		call_work_opt->var_cand = var_cand;
+		call_work_opt->work_id = i;
+		call_work_opt->num_work = num_work;
+		call_work_opt->num_work_percent = num_work_percent;
+		call_work_opt->p_call_workDone_num = &(paras->call_workDone_num);
+		call_work_opt->p_mtx_call_workDone_num = &(paras->mtx_call_workDone_num);
+
+		if(var_cand->clip_reg_flag) hts_tpool_dispatch(p, q, processSingleBlatAlnWork, call_work_opt);
+		else hts_tpool_dispatch(p, q, processSingleMinimap2AlnWork, call_work_opt);
+	}
+
+    hts_tpool_process_flush(q);
+    hts_tpool_process_destroy(q);
+    hts_tpool_destroy(p);
+
+	return 0;
 }
 
 // call variants using thread pool
@@ -930,8 +1060,11 @@ int Genome::processCallWork(){
 		var_cand = paras->call_work_vec.at(i);
 
 		// DUP not precise (CCS30x): blat_1_2936746-2942685.sim4, blat_contig_1_1180102-1180675.sim4, blat_contig_1_1183812-1185067.sim4, blat_contig_1_1317611-1318285.sim4, blat_1_1860801-1869285.sim4
-		// DUP check: blat_1_802003-808928.sim4
-//		if(var_cand->alnfilename.compare("output_ccs_v1.1.1_20211106/3_call/1/blat_1_843249-844905.sim4")!=0){
+		// DUP check: blat_1_802003-808928.sim4, blat_1_843249-844905.sim4
+		// diploid: blat_1_4480337-4489601.sim4, blat_1_5364079-5371326.sim4, blat_1_5727691-5736300.sim4 (good), blat_1_7613307-7613853.sim4
+		// blat_1_19156546-19164246.sim4, blat_1_2415202-2415425.sim4, tra_blat_1_2686251-2691837.sim4
+		// blat_contig_chr1_253768-256236.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_2068132-2073121.sim4
+//		if(var_cand->alnfilename.compare("output_spombe_dup_20230203/3_call/chr1/blat_contig_chr1_2399427-2406963.sim4")!=0){
 //			continue;
 //		}
 
@@ -1053,6 +1186,9 @@ void Genome::recallIndelsFromTRA(){
 										reg->short_sv_flag = false;
 										reg->zero_cov_flag = false;
 										reg->aln_seg_end_flag = false;
+										reg->query_pos_invalid_flag = false;
+										reg->gt_type = -1;
+										reg->gt_seq = "";
 
 										ref_dist = reg->endLocalRefPos - reg->startLocalRefPos + 1;
 										query_dist = reg->endQueryPos - reg->startQueryPos + 1;
@@ -1249,7 +1385,8 @@ void Genome::generateBlatAlnFilenameTra(){
 
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->decoy_flag==false and paras->include_decoy){
+		//if(chr->decoy_flag==false and paras->include_decoy){
+		if(chr->decoy_flag==false){
 			mate_clipReg_vec = chr->mateClipRegVector;
 			for(j=0; j<mate_clipReg_vec.size(); j++){
 				clip_reg = chr->mateClipRegVector.at(j);
@@ -1482,6 +1619,12 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->blat_aligned_info_vec = NULL;
 		var_cand_new->blat_var_cand_file = NULL;
 
+		var_cand_new->minimap2_aligned_info_vec = NULL;
+		var_cand_new->minimap2_var_cand_file = NULL;
+
+		var_cand_new->min_sv_size = paras->min_sv_size_usr;
+		var_cand_new->minReadsNumSupportSV = paras->minReadsNumSupportSV;
+
 		var_cand_new->assem_success = var_cand->assem_success;
 		var_cand_new->ctg_num = var_cand->ctg_num;
 
@@ -1498,11 +1641,20 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->sv_type = var_cand_tmp->sv_type;
 		var_cand_new->dup_num = var_cand_tmp->dup_num;
 
+		//set genotyping parameters
+		var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_alle_ratio, paras->gt_max_alle_ratio, paras->minReadsNumSupportSV);
+
 		// process monitor killed blat work
 		var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
 		var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
 		var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
 		var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
+
+		// process monitor killed minimap2 work
+		//var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
+		var_cand_tmp->killed_minimap2_work_vec = &paras->killed_minimap2_work_vec;
+		var_cand_tmp->killed_minimap2_work_file = &paras->killed_minimap2_work_file;
+		var_cand_tmp->mtx_killed_minimap2_work = &paras->mtx_killed_minimap2_work;
 	}
 
 	return var_cand_new;
@@ -2500,6 +2652,12 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				var_cand_tmp->blat_aligned_info_vec = NULL;
 				var_cand_tmp->blat_var_cand_file = NULL;
 
+				var_cand_tmp->minimap2_aligned_info_vec = NULL;
+				var_cand_tmp->minimap2_var_cand_file = NULL;
+
+				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
+				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
+
 				var_cand_tmp->leftClipRefPos = clip_reg->leftClipPosTra1;
 				//var_cand_tmp->rightClipRefPos = clip_reg->rightClipPosTra1;
 				var_cand_tmp->rightClipRefPos = clip_reg->leftClipPosTra2;
@@ -2514,6 +2672,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				reg->short_sv_flag = false;
 				reg->zero_cov_flag = false;
 				reg->aln_seg_end_flag = false;
+				reg->query_pos_invalid_flag = false;
+				reg->gt_type = -1;
+				reg->gt_seq = "";
 
 				var_cand_tmp->varVec.push_back(reg);
 
@@ -2524,14 +2685,24 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				var_cand_tmp->alnfilename = out_dir_tra  + "/" + "tra_blat_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".sim4";
 				tmpdir = out_dir_tra + "/" + "tmp_tra_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
 
+				//set genotyping parameters
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_alle_ratio, paras->gt_max_alle_ratio, paras->minReadsNumSupportSV);
+
 				// process monitor killed blat work
 				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
 				var_cand_tmp->killed_blat_work_vec = &paras->killed_blat_work_vec;
 				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
 				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
 
+				// process monitor killed blat work
+				//var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
+				var_cand_tmp->killed_minimap2_work_vec = &paras->killed_minimap2_work_vec;
+				var_cand_tmp->killed_minimap2_work_file = &paras->killed_minimap2_work_file;
+				var_cand_tmp->mtx_killed_minimap2_work = &paras->mtx_killed_minimap2_work;
+
 				for(i=0; i<3; i++){
-					assembly_extend_size = ASSEMBLE_SIDE_LEN * i;
+					//assembly_extend_size = ASSEMBLE_SIDE_LEN * i;
+					assembly_extend_size = paras->assemSideExtSizeClip * i;
 					// local assembly
 					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_assem_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
 
@@ -2595,9 +2766,15 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				var_cand_tmp->blat_aligned_info_vec = NULL;
 				var_cand_tmp->blat_var_cand_file = NULL;
 
+				var_cand_tmp->minimap2_aligned_info_vec = NULL;
+				var_cand_tmp->minimap2_var_cand_file = NULL;
+
 				//var_cand_tmp->leftClipRefPos = clip_reg->leftClipPosTra2;
 				var_cand_tmp->leftClipRefPos = clip_reg->rightClipPosTra1;
 				var_cand_tmp->rightClipRefPos = clip_reg->rightClipPosTra2;
+
+				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
+				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
 
 				reg = new reg_t();
 				//reg->chrname = clip_reg->chrname_leftTra2;
@@ -2610,6 +2787,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				reg->short_sv_flag = false;
 				reg->zero_cov_flag = false;
 				reg->aln_seg_end_flag = false;
+				reg->query_pos_invalid_flag = false;
+				reg->gt_type = -1;
+				reg->gt_seq = "";
 
 				var_cand_tmp->varVec.push_back(reg);
 
@@ -2626,8 +2806,18 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				var_cand_tmp->killed_blat_work_file = &paras->killed_blat_work_file;
 				var_cand_tmp->mtx_killed_blat_work = &paras->mtx_killed_blat_work;
 
+				// process monitor killed minimap2 work
+				//var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
+				var_cand_tmp->killed_minimap2_work_vec = &paras->killed_minimap2_work_vec;
+				var_cand_tmp->killed_minimap2_work_file = &paras->killed_minimap2_work_file;
+				var_cand_tmp->mtx_killed_minimap2_work = &paras->mtx_killed_minimap2_work;
+
+				//set genotyping parameters
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_alle_ratio, paras->gt_max_alle_ratio, paras->minReadsNumSupportSV);
+
 				for(i=0; i<3; i++){
-					assembly_extend_size = ASSEMBLE_SIDE_LEN * i;
+					//assembly_extend_size = ASSEMBLE_SIDE_LEN * i;
+					assembly_extend_size = paras->assemSideExtSizeClip * i;
 					// local assembly
 					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_assem_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
 
@@ -2679,7 +2869,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 // perform local assembly
 void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->min_input_cov_canu, paras->delete_reads_flag, paras->keep_failed_reads_flag, paras->minClipEndSize);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->min_input_cov_canu, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->max_seg_size_ratio_usr);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();
@@ -2688,7 +2878,8 @@ void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilena
 	local_assembly.extractReadsDataFromBAM();
 
 	// local assembly using Canu
-	local_assembly.localAssembleCanu();
+//	local_assembly.localAssembleCanu();
+	local_assembly.cnsByPoa();
 
 	// record assembly information
 	local_assembly.recordAssemblyInfo(assembly_info_file);
@@ -2874,7 +3065,8 @@ void Genome::genomeSaveCallSV2File(){
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		//if(chr->process_block_num)
-			chr->saveCallSV2File();
+			//chr->saveCallSV2File();
+			chr->saveCallSV2File02();
 	}
 
 	// save TRA
@@ -2898,7 +3090,7 @@ void Genome::saveTraCall2File(){
 		exit(1);
 	}
 
-	header_line_bedpe = getCallFileHeaderBedpe();
+	header_line_bedpe = getCallFileHeaderBedpe(paras->sample);
 	outfile_tra << header_line_bedpe << endl;
 
 	for(i=0; i<chromeVector.size(); i++){
@@ -2950,6 +3142,9 @@ void Genome::saveTraCall2File(){
 				if(clip_reg->altseq_tra2.size()>0) line += "\t" + clip_reg->altseq_tra2;
 				else line += "\t-";
 
+//				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
+//				line += "\t" + reg->gt_seq;
+
 				// size select
 				if((sv_len==-1 and sv_len2==-1) or (sv_len!=-1 and sv_len>=paras->min_sv_size_usr and sv_len<=paras->max_sv_size_usr) or (sv_len2!=-1 and sv_len2>=paras->min_sv_size_usr and sv_len2<=paras->max_sv_size_usr))
 					outfile_tra << line << endl;
@@ -2984,7 +3179,7 @@ void Genome::mergeCallResult(){
 	}
 
 	// header line
-	header_line_bed = getCallFileHeaderBed();
+	header_line_bed = getCallFileHeaderBed(paras->sample);
 	out_file_indel << header_line_bed << endl;
 	out_file_clipReg << header_line_bed << endl;
 
@@ -2997,7 +3192,7 @@ void Genome::mergeCallResult(){
 	out_file_clipReg.close();
 
 	// merge indels, clipping variants, translocations to single file
-	header_line_bedpe = getCallFileHeaderBedpe();
+	header_line_bedpe = getCallFileHeaderBedpe(paras->sample);
 	out_file_vars << header_line_bed << endl;
 	out_file_vars << header_line_bedpe << endl;
 	copySingleFile(out_filename_result_indel, out_file_vars); // indels
@@ -3084,6 +3279,9 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 				qual = ".";					// QUAL
 				filter = "PASS";			// FILTER
 
+				if(ref.compare("-")==0) ref = ".";
+				if(alt.compare("-")==0) alt = ".";
+
 				end_pos = str_vec.at(2);
 				sv_type = str_vec.at(3);
 				sv_len = str_vec.at(4);
@@ -3093,13 +3291,18 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 					dup_num = str_vec.at(5);
 					info += ";DUPNUM=" + dup_num;
 				}
-				if(str_vec.size()==MAX_BED_COLS_NUM){
+				if(str_vec.size()==MAX_BED_COLS_NUM){ // convert 'shortSV' to 'BLATINNER' into info
 					blat_inner = "BLATINNER";
 					info += ";" + blat_inner;
 				}
 
-				format = "GT";		// FORMAT and the values
-				format_val = "./.";
+//				format = "GT";		// FORMAT and the values
+//				format_val = "./.";
+//
+//				line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
+
+				format = str_vec.at(8);			// FORMAT
+				format_val = str_vec.at(9);		// gt_value
 
 				line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
 				outfile << line_vcf << endl;
@@ -3126,6 +3329,7 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 					// four regions
 					for(i=0; i<4; i++){
 						if(bnd_str_vec.at(i).compare("-")!=0){
+						//if(bnd_str_vec.at(i).compare("-")!=0 and tra_pos_arr[i]>0){
 							// right end
 							sub_bnd_vec = generateBNDItems(i, RIGHT_END, checked_arr, chrname1, chrname2, tra_pos_arr, bnd_str_vec, fai);
 							for(j=0; j<(int32_t)sub_bnd_vec.size(); j++) {
@@ -3478,8 +3682,8 @@ void Genome::outputResult(string &outfilename, vector<vector<SV_item*>> &subsets
 
 	// header line
 	if(filetype==0){ // BED format
-		header_line_bed = getCallFileHeaderBed();
-		header_line_bedpe = getCallFileHeaderBed();
+		header_line_bed = getCallFileHeaderBed(paras->sample);
+		header_line_bedpe = getCallFileHeaderBedpe(paras->sample);
 		outfile << header_line_bed << endl;
 		outfile << header_line_bedpe << endl;
 	}else if(filetype==1){ // VCF format

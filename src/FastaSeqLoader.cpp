@@ -30,9 +30,13 @@ void FastaSeqLoader::initFastaSeq(){
 				}
 			}else { // seq
 				fastaSeq += line;
+
+//				fastaSeqVec.push_back(fastaSeq); // save sequence
+//			    fastaSeq = "";
 			}
 		}
-	if(fastaSeq.size()>0) fastaSeqVec.push_back(fastaSeq); // save sequence
+	if(fastaSeq.size()>0)
+		fastaSeqVec.push_back(fastaSeq); // save sequence
 
 	infile.close();
 }
@@ -41,7 +45,7 @@ void FastaSeqLoader::initFastaSeq(){
 string FastaSeqLoader::getFastaSeq(size_t fa_id, size_t aln_orient){
 	string ret;
 	if(fa_id<0 or fa_id>=fastaSeqVec.size()) {
-		cerr << "FastaSeqLoader: invalid ctg_idx=" << fa_id << endl;
+		cerr << "FastaSeqLoader: invalid ctg_idx=" << fa_id << ", fastaSeqVec.size=" << fastaSeqVec.size() << endl;
 		exit(1);
 	}
 	ret = fastaSeqVec[fa_id];
@@ -102,3 +106,4 @@ string FastaSeqLoader::getFastaSeqNameByID(int32_t fa_id){
 	}
 	return fastaSeqNameVec.at(fa_id);
 }
+

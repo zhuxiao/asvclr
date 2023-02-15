@@ -2,7 +2,7 @@
 
 // allocate indel event
 indelEvent_t* allocateIndelEvent(uint32_t startPos, string& seq){
-	indelEvent_t* indelE = new indelEvent_t;
+	indelEvent_t* indelE = new indelEvent_t();
 	if(!indelE){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot allocate memory" << endl;
 		exit(1);
@@ -16,7 +16,7 @@ indelEvent_t* allocateIndelEvent(uint32_t startPos, string& seq){
 
 // allocate clipping event
 clipEvent_t* allocateClipEvent(uint32_t startPos, uint16_t opflag, uint16_t endFlag, string& seq){
-	clipEvent_t* clipE = new clipEvent_t;
+	clipEvent_t* clipE = new clipEvent_t();
 	if(!clipE){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot allocate memory" << endl;
 		exit(1);
