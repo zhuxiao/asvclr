@@ -1355,7 +1355,7 @@ void varCand::eraseFalsePositiveVariants(){
 	vector<struct alleleNode*> allele_vec;
 	vector<int32_t> supp_num_vec;
 	struct alleleNode *allele_node, *allele_node2;
-	double consistency, sim_val;
+	double consistency, val;
 
 	for(i=0; i<minimap2_aln_vec.size(); i++){
 		minimap2_aln = minimap2_aln_vec.at(i);
@@ -1490,16 +1490,16 @@ void varCand::eraseFalsePositiveVariants(){
 					overlap_flag = isOverlappedRegExtSize(allele_node->reg, allele_node2->reg, 5, 5);
 					if(overlap_flag){
 						if(allele_node->reg->var_type==allele_node2->reg->var_type){ // same variant type
-							sim_val = 0;
+							val = 0;
 							if(allele_node->reg->var_type==VAR_INS){ // INS
 								// compute consistency
-								sim_val = computeVarseqConsistency(allele_node->reg->altseq, allele_node2->reg->altseq); // ?
+								val = computeVarseqConsistency(allele_node->reg->altseq, allele_node2->reg->altseq); // ?
 							}else{ // DEL
-								if(allele_node->reg->refseq.size()<=allele_node2->reg->refseq.size()) sim_val = (double)allele_node->reg->refseq.size() / allele_node2->reg->refseq.size();
-								else sim_val = (double)allele_node2->reg->refseq.size() / allele_node->reg->refseq.size();
+								if(allele_node->reg->refseq.size()<=allele_node2->reg->refseq.size()) val = (double)allele_node->reg->refseq.size() / allele_node2->reg->refseq.size();
+								else val = (double)allele_node2->reg->refseq.size() / allele_node->reg->refseq.size();
 							}
 
-							if(sim_val<0.9){ // heterozygous
+							if(val<0.9){ // heterozygous
 								allele_node->mate_allele = allele_node2;
 								allele_node2->mate_allele = allele_node;
 								allele_node->reg->gt_type = GT_HETEROZYGOUS;
@@ -1527,9 +1527,22 @@ void varCand::eraseFalsePositiveVariants(){
 					}
 				}
 			}
-			if(flag==false){
-				allele_node->reg->gt_type = GT_HETEROZYGOUS;
-				allele_node->gt_type = GT_HETEROZYGOUS;
+
+			// no mate-allele, needs to genotyping according to Nsupp and Depth
+			if(flag==false){ //
+				val = (double)allele_node->supp_num / allele_node->depth;
+				if(val>=GT_HOMO_RATIO_THRES){
+					allele_node->reg->gt_type = GT_HOMOZYGOUS;
+					allele_node->gt_type = GT_HOMOZYGOUS;
+				}else if(val>=GT_HETER_RATIO_THRES){
+				//}else{
+					allele_node->reg->gt_type = GT_HETEROZYGOUS;
+					allele_node->gt_type = GT_HETEROZYGOUS;
+				}
+				else{
+					allele_node->reg->gt_type = GT_NOZYGOUS;
+					allele_node->gt_type = GT_NOZYGOUS;
+				}
 			}
 		}
 
@@ -1541,12 +1554,17 @@ void varCand::eraseFalsePositiveVariants(){
 		dp_str = ".";
 
 		if(allele_node->gt_type==GT_HOMOZYGOUS){
-			gt_str = "1/1";
-			ad_str1 = to_string(allele_node->supp_num);
-			ad_str2 = to_string(allele_node->depth-allele_node->supp_num);
+			gt_str = GT_HOMOZYGOUS_STR;
+			ad_str1 = to_string(allele_node->depth-allele_node->supp_num);
+			ad_str2 = to_string(allele_node->supp_num);
 			dp_str = to_string(allele_node->depth);
 		}else if(allele_node->gt_type==GT_HETEROZYGOUS){
-			gt_str = "0/1";
+			gt_str = GT_HETEROZYGOUS_STR;
+			ad_str1 = to_string(allele_node->depth-allele_node->supp_num);
+			ad_str2 = to_string(allele_node->supp_num);
+			dp_str = to_string(allele_node->depth);
+		}else if(allele_node->gt_type==GT_NOZYGOUS){
+			gt_str = GT_NOZYGOUS_STR;
 			ad_str1 = to_string(allele_node->depth-allele_node->supp_num);
 			ad_str2 = to_string(allele_node->supp_num);
 			dp_str = to_string(allele_node->depth);
@@ -1708,7 +1726,8 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 
 	// load the clipping data
 	clipAlnDataLoader data_loader(chrname, startRefPos_assembly, endRefPos_assembly, inBamFile, 200);
-	data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0);
+	data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0); //
+	//data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, 0, MAX_SEG_SIZE_RATIO);
 
 	var_num = 0;
 	if (clipAlnDataVector.size() > 0){// and startRefPos_assembly==9521824) {

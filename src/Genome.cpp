@@ -1147,7 +1147,7 @@ int Genome::processCallWork(){
 		// diploid: blat_1_4480337-4489601.sim4, blat_1_5364079-5371326.sim4, blat_1_5727691-5736300.sim4 (good), blat_1_7613307-7613853.sim4
 		// blat_1_19156546-19164246.sim4, blat_1_2415202-2415425.sim4, tra_blat_1_2686251-2691837.sim4
 		// blat_contig_chr1_253768-256236.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_2068132-2073121.sim4
-//		if(var_cand->alnfilename.compare("output_debug/3_call/1/minimap2_1_1378320-1379074.paf")!=0){
+//		if(var_cand->alnfilename.compare("output_debug/3_call/1/minimap2_1_4137779-4138576.paf")!=0){
 //			continue;
 //		}
 
