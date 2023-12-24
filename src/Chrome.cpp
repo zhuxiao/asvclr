@@ -479,7 +479,7 @@ void Chrome::processMateClipRegDetectWork(){
 		//if(clip_processed_flag_vec.at(i)==false){
 			reg = clipRegVector.at(i);
 
-//			if(i>=87)
+//			if(i>=65)
 //				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 //			else continue;
 
@@ -1123,193 +1123,28 @@ void Chrome::removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec)
 	reg_t *reg;
 	bool flag;
 
+	//size_t num = 0;
 	for(i=0; i<blockVector.size(); i++){
 		block = blockVector.at(i);
 		for(j=0; j<block->indelVector.size(); ){
 			reg = block->indelVector.at(j);
 			flag = isIndelInClipReg(reg, mate_clipReg_vec);
 			if(flag){
+				//num ++;
+				//printRegVec(block->indelVector, "indelVector");
 				delete reg;
 				block->indelVector.erase(block->indelVector.begin()+j);
 			}else j++;
 		}
 		for(j=0; j<block->snvVector.size(); ){
 			pos = block->snvVector.at(j);
-			flag = isSnvInClipReg(pos, mate_clipReg_vec);
+			flag = isSnvInClipReg(chrname, pos, mate_clipReg_vec);
 			if(flag) block->snvVector.erase(block->snvVector.begin()+j);
 			else j++;
 		}
 	}
-}
 
-// determine whether the indel region in a clipping region
-bool Chrome::isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_vec){
-	bool flag = false;
-	mateClipReg_t *clip_reg;
-	reg_t *reg_tmp;
-	string chrname_tmp, chrname_tmp2;
-	size_t start_pos, end_pos;
-
-	for(size_t i=0; i<mate_clipReg_vec.size(); i++){
-		clip_reg = mate_clipReg_vec.at(i);
-		if(clip_reg->valid_flag and clip_reg->reg_mated_flag){
-			if(clip_reg->sv_type==VAR_DUP or clip_reg->sv_type==VAR_INV){ // DUP or INV
-				chrname_tmp = "";
-				start_pos = end_pos = 0;
-				if(clip_reg->leftClipReg){
-					chrname_tmp = clip_reg->leftClipReg->chrname;
-					start_pos = clip_reg->leftClipReg->startRefPos;
-				}else if(clip_reg->leftClipReg2){
-					chrname_tmp = clip_reg->leftClipReg2->chrname;
-					start_pos = clip_reg->leftClipReg2->startRefPos;
-				}
-				if(clip_reg->rightClipReg){
-					chrname_tmp2 = clip_reg->rightClipReg->chrname;
-					end_pos = clip_reg->rightClipReg->endRefPos;
-				}else if(clip_reg->rightClipReg2){
-					chrname_tmp2 = clip_reg->rightClipReg2->chrname;
-					end_pos = clip_reg->rightClipReg2->endRefPos;
-				}
-
-				if(reg->chrname.compare(chrname_tmp)==0 and chrname_tmp.compare(chrname_tmp2)==0 and start_pos>0 and end_pos>0){
-					if(isOverlappedPos(reg->startRefPos, reg->endRefPos, start_pos, end_pos)){
-						flag = true;
-						break;
-					}
-				}
-			}else if(clip_reg->sv_type==VAR_TRA){  // TRA
-				// check left part
-				chrname_tmp = "";
-				start_pos = end_pos = 0;
-				if(clip_reg->leftClipRegNum==2){
-					chrname_tmp = clip_reg->leftClipReg->chrname;
-					start_pos = clip_reg->leftClipReg->startRefPos;
-					end_pos = clip_reg->leftClipReg2->endRefPos;
-				}else if(clip_reg->leftClipRegNum==1){
-					reg_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
-					chrname_tmp = reg_tmp->chrname;
-					start_pos = reg_tmp->startRefPos;
-					end_pos = reg_tmp->endRefPos;
-				}
-				if(reg->chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
-					if(isOverlappedPos(reg->startRefPos, reg->endRefPos, start_pos, end_pos)){
-						flag = true;
-						break;
-					}
-				}
-
-				// check right part
-				if(flag==false){
-					chrname_tmp = "";
-					start_pos = end_pos = 0;
-					if(clip_reg->rightClipRegNum==2){
-						chrname_tmp = clip_reg->rightClipReg->chrname;
-						start_pos = clip_reg->rightClipReg->startRefPos;
-						end_pos = clip_reg->rightClipReg2->endRefPos;
-					}else if(clip_reg->rightClipRegNum==1){
-						reg_tmp = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
-						chrname_tmp = reg_tmp->chrname;
-						start_pos = reg_tmp->startRefPos;
-						end_pos = reg_tmp->endRefPos;
-					}
-					if(reg->chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
-						if(isOverlappedPos(reg->startRefPos, reg->endRefPos, start_pos, end_pos)){
-							flag = true;
-							break;
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return flag;
-}
-
-// determine whether the SNV position in a clipping region
-bool Chrome::isSnvInClipReg(size_t pos, vector<mateClipReg_t*> &mate_clipReg_vec){
-	bool flag = false;
-	mateClipReg_t *clip_reg;
-	reg_t *reg_tmp;
-	string chrname_tmp, chrname_tmp2;
-	size_t start_pos, end_pos;
-
-	for(size_t i=0; i<mate_clipReg_vec.size(); i++){
-		clip_reg = mate_clipReg_vec.at(i);
-		if(clip_reg->valid_flag and clip_reg->reg_mated_flag){
-			if(clip_reg->sv_type==VAR_DUP or clip_reg->sv_type==VAR_INV){ // DUP or INV
-				chrname_tmp = "";
-				start_pos = end_pos = 0;
-				if(clip_reg->leftClipReg){
-					chrname_tmp = clip_reg->leftClipReg->chrname;
-					start_pos = clip_reg->leftClipReg->startRefPos;
-				}else if(clip_reg->leftClipReg2){
-					chrname_tmp = clip_reg->leftClipReg2->chrname;
-					start_pos = clip_reg->leftClipReg2->startRefPos;
-				}
-				if(clip_reg->rightClipReg){
-					chrname_tmp2 = clip_reg->rightClipReg->chrname;
-					end_pos = clip_reg->rightClipReg->endRefPos;
-				}else if(clip_reg->rightClipReg2){
-					chrname_tmp2 = clip_reg->rightClipReg2->chrname;
-					end_pos = clip_reg->rightClipReg2->endRefPos;
-				}
-
-				if(chrname.compare(chrname_tmp)==0 and chrname_tmp.compare(chrname_tmp2)==0 and start_pos>0 and end_pos>0){
-					if(pos>=start_pos and pos<=end_pos){
-						flag = true;
-						break;
-					}
-				}
-			}else if(clip_reg->sv_type==VAR_TRA){  // TRA
-				// check left part
-				chrname_tmp = "";
-				start_pos = end_pos = 0;
-				if(clip_reg->leftClipRegNum==2){
-					chrname_tmp = clip_reg->leftClipReg->chrname;
-					start_pos = clip_reg->leftClipReg->startRefPos;
-					end_pos = clip_reg->leftClipReg2->endRefPos;
-				}else if(clip_reg->leftClipRegNum==1){
-					reg_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
-					chrname_tmp = reg_tmp->chrname;
-					start_pos = reg_tmp->startRefPos;
-					end_pos = reg_tmp->endRefPos;
-				}
-
-				if(chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
-					if(pos>=start_pos and pos<=end_pos){
-						flag = true;
-						break;
-					}
-				}
-
-				// check right part
-				if(flag==false){
-					chrname_tmp = "";
-					start_pos = end_pos = 0;
-					if(clip_reg->rightClipRegNum==2){
-						chrname_tmp = clip_reg->rightClipReg->chrname;
-						start_pos = clip_reg->rightClipReg->startRefPos;
-						end_pos = clip_reg->rightClipReg2->endRefPos;
-					}else if(clip_reg->rightClipRegNum==1){
-						reg_tmp = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
-						chrname_tmp = reg_tmp->chrname;
-						start_pos = reg_tmp->startRefPos;
-						end_pos = reg_tmp->endRefPos;
-					}
-
-					if(chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
-						if(pos>=start_pos and pos<=end_pos){
-							flag = true;
-							break;
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return flag;
+	//cout << "+++++++++++++++++ num=" << num << endl;
 }
 
 // merge detect result to single file
@@ -1845,6 +1680,7 @@ void Chrome::chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> 
 				reg->sv_len = 0;
 				reg->query_id = -1;
 				reg->blat_aln_id = -1;
+				reg->minimap2_aln_id = -1;
 				reg->call_success_status = false;
 				reg->short_sv_flag = false;
 				reg->zero_cov_flag = false;
@@ -2560,6 +2396,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 						reg->var_type = VAR_UNC;
 						reg->query_id = -1;
 						reg->blat_aln_id = -1;
+						reg->minimap2_aln_id = -1;
 						reg->call_success_status = false;
 						reg->short_sv_flag = false;
 						reg->zero_cov_flag = false;
@@ -2842,6 +2679,7 @@ void Chrome::loadMisAlnRegData(){
 			reg->query_id = -1;
 			reg->sv_len = 0;
 			reg->blat_aln_id = -1;
+			reg->minimap2_aln_id = -1;
 			reg->call_success_status = false;
 			reg->short_sv_flag = false;
 			reg->zero_cov_flag = false;
@@ -3527,9 +3365,9 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 	for(i=0; i<var_cand_clipReg_vec.size(); i++){
 		var_cand = var_cand_clipReg_vec[i];
 
-		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_contig_1_1016017-1016409.sim4")==0){
-			cout << "line=" << __LINE__ << ", alnfilename=" << var_cand->alnfilename << endl;
-		}
+//		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_contig_1_1016017-1016409.sim4")==0){
+//			cout << "line=" << __LINE__ << ", alnfilename=" << var_cand->alnfilename << endl;
+//		}
 
 		if(var_cand->clip_reg_flag==false){ // indel
 			for(j=0; j<var_cand->varVec.size(); j++){
@@ -3683,12 +3521,12 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 	outfile_clipReg << header_line_bed << endl;
 
 	for(i=0; i<var_cand_vec.size(); i++){
-		var_cand = var_cand_vec[i];
-		if(i>0) var_cand_pre = var_cand_vec[i-1];
-		if(i>1) var_cand_pre_pre = var_cand_vec[i-2];
+		var_cand = var_cand_vec.at(i);
+		if(i>0) var_cand_pre = var_cand_vec.at(i-1);
+		if(i>1) var_cand_pre_pre = var_cand_vec.at(i-2);
 		for(j=0; j<var_cand->newVarVec.size(); j++){
 			no_existed = true;
-			reg = var_cand->newVarVec[j];
+			reg = var_cand->newVarVec.at(j);
 			// choose the size-selected variants
 //			ref_dist = reg->endRefPos - reg->startRefPos + 1;
 //			query_dist = reg->endQueryPos - reg->startQueryPos + 1;
@@ -3740,7 +3578,7 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 	}
 
 	for(i=0; i<var_cand_clipReg_vec.size(); i++){
-		var_cand = var_cand_clipReg_vec[i];
+		var_cand = var_cand_clipReg_vec.at(i);
 
 //		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_contig_1_1016017-1016409.sim4")==0){
 //			cout << "line=" << __LINE__ << ", alnfilename=" << var_cand->alnfilename << endl;
@@ -3748,7 +3586,7 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 
 		if(var_cand->clip_reg_flag==false){ // indel
 			for(j=0; j<var_cand->varVec.size(); j++){
-				reg = var_cand->varVec[j];
+				reg = var_cand->varVec.at(j);
 
 				// choose the size-selected variants
 				ref_dist = reg->endRefPos - reg->startRefPos + 1;
@@ -3867,152 +3705,6 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 			}
 		}
 	}
-
-/*
-	for(i=0; i<var_cand_clipReg_vec.size(); i++){
-		var_cand = var_cand_clipReg_vec[i];
-		if(i>0) var_cand_pre = var_cand_vec[i-1];
-		if(i>1) var_cand_pre_pre = var_cand_vec[i-2];
-
-		if(var_cand->alnfilename.compare("output_ccs_v1.0.1_20210528/3_call/1/blat_contig_1_1016017-1016409.sim4")==0){
-			cout << "line=" << __LINE__ << ", alnfilename=" << var_cand->alnfilename << endl;
-		}
-
-		if(var_cand->clip_reg_flag==false){ // indel
-			for(j=0; j<var_cand->newVarVec.size(); j++){
-				reg = var_cand->newVarVec[j];
-				no_existed = true;
-
-				// choose the size-selected variants
-//				ref_dist = reg->endRefPos - reg->startRefPos + 1;
-//				query_dist = reg->endQueryPos - reg->startQueryPos + 1;
-//				size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
-
-				size_satisfied = isSizeSatisfied2(reg->sv_len, paras->min_sv_size_usr, paras->max_sv_size_usr);
-
-				if(i>0) no_existed = isNotAlreadyExists(var_cand_pre->newVarVec, reg);
-				if(i>1 and no_existed) no_existed = isNotAlreadyExists(var_cand_pre_pre->newVarVec, reg);
-				if(no_existed) no_existed = isNotAlreadyExists(var_cand->newVarVec, reg, j);
-
-				if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied and no_existed){
-					file_id = 0;
-					switch(reg->var_type){
-						case VAR_UNC: sv_type = VAR_UNC_STR; break;
-						case VAR_INS: sv_type = VAR_INS_STR; break;
-						case VAR_DEL: sv_type = VAR_DEL_STR; break;
-						case VAR_DUP: sv_type = VAR_DUP_STR; file_id = 1; break;
-						case VAR_INV: sv_type = VAR_INV_STR; file_id = 1; break;
-						case VAR_TRA: sv_type = VAR_TRA_STR; file_id = 1; break;
-						default: sv_type = VAR_MIX_STR; break;
-					}
-					line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
-					if(reg->var_type!=VAR_TRA)
-						line += "\t" + to_string(reg->sv_len);
-					else
-						line += "\t-";
-					if(reg->var_type==VAR_DUP)
-						line += "\t" + to_string(reg->dup_num);
-					else
-						line += "\t-";
-					if(reg->refseq.size()) line += "\t" + reg->refseq;
-					else line += "\t-";
-					if(reg->altseq.size()) line += "\t" + reg->altseq;
-					else line += "\t-";
-
-					if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
-					line += "\t" + reg->gt_seq;
-
-					if(reg->short_sv_flag) line += "\tShortSV";
-
-					if(reg->var_type==VAR_UNC){
-						cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
-					}
-
-					//cout << "line=" << __LINE__ << ": " << line << endl;
-
-					if(file_id==0) outfile_indel << line << endl;
-					else outfile_clipReg << line << endl;
-				}
-			}
-		}else{ // cliping region
-			reg = var_cand->clip_reg;
-
-			// choose the size-selected variants
-			if(reg){
-//				ref_dist = reg->endRefPos - reg->startRefPos + 1;
-//				query_dist = reg->endQueryPos - reg->startQueryPos + 1;
-//				size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
-				size_satisfied = isSizeSatisfied2(reg->sv_len, paras->min_sv_size_usr, paras->max_sv_size_usr);
-
-				if(i>0) no_existed = isNotAlreadyExists(var_cand_pre->newVarVec, reg);
-				if(i>1 and no_existed) no_existed = isNotAlreadyExists(var_cand_pre_pre->newVarVec, reg);
-				//no_existed = isNotAlreadyExists(var_cand->newVarVec, reg, j);
-			}
-
-			if(reg and reg->var_type!=VAR_UNC and var_cand->call_success and size_satisfied and no_existed){
-				file_id = 1;
-				switch(reg->var_type){
-					case VAR_UNC: sv_type = VAR_UNC_STR; break;
-					case VAR_INS: sv_type = VAR_INS_STR; file_id = 0; break;
-					case VAR_DEL: sv_type = VAR_DEL_STR; file_id = 0; break;
-					case VAR_DUP: sv_type = VAR_DUP_STR; break;
-					case VAR_INV: sv_type = VAR_INV_STR; break;
-					case VAR_TRA: sv_type = VAR_TRA_STR; break;
-					default: sv_type = VAR_MIX_STR; break;
-				}
-
-				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
-				if(reg->var_type!=VAR_TRA)
-					line += "\t" + to_string(reg->sv_len);
-				else
-					line += "\t-";
-				if(reg->var_type==VAR_DUP)
-					line += "\t" + to_string(reg->dup_num);
-				else
-					line += "\t-";
-				if(reg->refseq.size()) line += "\t" + reg->refseq;
-				else line += "\t-";
-				if(reg->altseq.size()) line += "\t" + reg->altseq;
-				else line += "\t-";
-				//line += "\t" + reg->refseq + "\t" + reg->altseq;
-
-				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
-				line += "\t" + reg->gt_seq;
-
-				if(reg->short_sv_flag) line += "\tShortSV";
-
-				if(reg->var_type==VAR_UNC){
-					cout << "line=" << __LINE__ << ": " << line << endl << endl << endl;
-				}
-
-				//cout << "line=" << __LINE__ << ": " << line << endl;
-
-				if(file_id==1) outfile_clipReg << line << endl;
-				else outfile_indel << line << endl;
-			}else{ // not confirmed SV
-//				if(var_cand->sv_type!=VAR_UNC){
-//					file_id = 1;
-//					switch(var_cand->sv_type){
-//						case VAR_UNC: sv_type = "UNCERTAIN"; break;
-//						case VAR_INS: sv_type = "INS"; file_id = 0; break;
-//						case VAR_DEL: sv_type = "DEL"; file_id = 0; break;
-//						case VAR_DUP: sv_type = "DUP"; break;
-//						case VAR_INV: sv_type = "INV"; break;
-//						case VAR_TRA: sv_type = "TRA"; break;
-//						default: sv_type = "MIX"; break;
-//					}
-//					line = var_cand->chrname;
-//					if(var_cand->leftClipRefPos>0 and var_cand->rightClipRefPos>0) line += "\t" + to_string(var_cand->leftClipRefPos) + "\t" + to_string(var_cand->rightClipRefPos);
-//					else line += "\t-\t-";
-//					line += "\t.\t.\t" + sv_type + "\t.";
-//					if(file_id==1) outfile_clipReg << line << endl;
-//					else outfile_indel << line << endl;
-//				}
-			}
-
-		}
-	}
-*/
 
 	outfile_indel.close();
 	outfile_clipReg.close();

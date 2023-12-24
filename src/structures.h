@@ -32,7 +32,7 @@ typedef struct{
 	int32_t startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos, sv_len, dup_num: 24, gt_type; //, support_num, cov_num;
 	//int64_t ref_len, local_ref_len, query_len;
 	int8_t var_type, aln_orient;
-	int16_t query_id, blat_aln_id;
+	int8_t query_id, blat_aln_id, minimap2_aln_id;
 	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
 	string refseq, altseq, gt_seq;
 	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag, query_pos_invalid_flag;
@@ -111,7 +111,7 @@ typedef struct {
 	int32_t work_id, num_work, num_work_percent;  // 'work_id' starts from 1
 	int32_t *p_assemble_reg_workDone_num;   // pointer to the global variable which was declared in Paras.h
 	pthread_mutex_t *p_mtx_assemble_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
-	int32_t num_threads_per_assem_work, minClipEndSize, assemSideExtSize, minConReadLen, min_sv_size;
+	int32_t num_threads_per_assem_work, minClipEndSize, assemSideExtSize, minConReadLen, min_sv_size, min_supp_num;
 	double max_seg_size_ratio;
 
 	string inBamFile, technology, canu_version;
@@ -132,15 +132,14 @@ typedef struct{
 //from varCand.h
 typedef struct{
 	int64_t startRpos, endRpos;
-	int32_t startQpos, endQpos, svlen: 26;
-	//int8_t var_type;
+	int32_t startQpos, endQpos, svlen: 26, var_type: 6;
 	string refseq, altseq;
 	string qname;
 }svpos_correction_t;
 
 // profile pattern
 typedef struct{
-	int32_t num;
+	int32_t num, var_type;
 	vector<int32_t> svpos_id;
 	int64_t startRpos, sv_len;
 }svpos_match_t;
@@ -206,8 +205,7 @@ typedef struct{
 
 // 2021-08-09
 struct alnScoreNode{
-	int32_t score: 29, path_val: 3;
-	bool ismissmatch;
+	int32_t score: 27, path_val: 3, ismismatch: 2;
 };
 
 typedef struct{

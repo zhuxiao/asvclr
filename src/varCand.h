@@ -19,6 +19,7 @@
 #include "genotyping.h"
 #include "clipAlnDataLoader.h"
 #include "util.h"
+#include "consistency.h"
 
 
 using namespace std;
@@ -28,9 +29,9 @@ using namespace std;
 #define ALIGN_DEBUG							0
 
 #define MIN_VALID_BLAT_SEG_SIZE				200  // the minimal valid blat align segment size
-#define MIN_VALID_BLAT_SEG_FRATCION			0.6  // the minimal valid blat align segment fraction
+#define MIN_VALID_BLAT_SEG_FRATCION			0.6  //0.6 the minimal valid blat align segment fraction
 #define INVALID_COV_RATIO_THRES				0.5	 // the minimal coverage ratio to determine a invalid blat alignment
-#define MIN_AVER_SIZE_ALN_SEG				1000
+#define MIN_AVER_SIZE_ALN_SEG				200 //1000
 
 #define VAR_ALN_EXTEND_SIZE					1000	// 200
 #define SHORT_VAR_ALN_CHECK_EXTEND_SIZE		30	// 20
@@ -174,7 +175,7 @@ class varCand {
 		void determineIndelType();
 		void eraseFalsePositiveVariants();
 		void svPosCorrection(reg_t* reg);
-		bool searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_assembly, int64_t endRefPos_assembly, double size_ratio_match_thres);
+		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_assembly, int64_t endRefPos_assembly, double size_ratio_match_thres);
 		//vector<int32_t> computeQueryStartEndLocByRefPos(vector<struct alnSeg*> &query_alnSegs, bam1_t *b);
 		void destoryClipAlnData();
 		void destoryPosCorrectionVec();

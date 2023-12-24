@@ -384,6 +384,7 @@ void covLoader::computeDelNumFromDelVec(Base *baseArr){
 				if(pos_tmp<=endPos) baseArr[pos_tmp-startPos].extendDelVector.push_back(del_event);
 				else break;
 			}
+			baseArr[pos_tmp-startPos].extendDelVector.shrink_to_fit();
 		}
 	}
 }

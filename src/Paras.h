@@ -108,8 +108,8 @@ using namespace std;
 #define MAX_ALN_MINUTES						15
 
 //#define MAX_PROC_RUNNING_MINUTES				120
-#define MAX_PROC_RUNNING_MINUTES_ASSEMBLE		300
-#define MAX_PROC_RUNNING_MINUTES_CALL			120
+#define MAX_PROC_RUNNING_MINUTES_ASSEMBLE		30	//300
+#define MAX_PROC_RUNNING_MINUTES_CALL			30  //120
 #define MONITOR_WAIT_SECONDS					60
 #define ULTRA_LOW_PROC_RUNNING_MINUTES			30
 
@@ -126,13 +126,13 @@ using namespace std;
 #define ASSEMBLE_STEP_SIZE				10000
 #define ASSEMBLE_SIDE_EXT_SIZE			5000
 
-
 // program parameters
 class Paras
 {
 	public:
 		// user/system defined parameters
-		string command, refFile, inBamFile, outFilePrefix, sample, pg_cmd_str, canu_version, technology;
+		string command, refFile, inBamFile, outFilePrefix, sample, pg_cmd_str, technology;
+		string canu_version, minimap2_version, abpoa_version;
 		string outDir;
 		string out_dir_detect = "1_candidates";    // "1_candidates"
 		string out_dir_assemble = "2_assemble";  // "2_assemble"
@@ -143,7 +143,7 @@ class Paras
 		double max_seg_size_ratio_usr;
 		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy;
 		size_t misAlnRegLenSum = 0;
-		int64_t minReadsNumSupportSV; //, minClipReadsNumSupportSV;
+		int32_t minReadsNumSupportSV: 29, min_Nsupp_est_flag: 3; //, minClipReadsNumSupportSV; Nsupp_est_flag: 1 for estimated, 0 for user-specified
 
 		// process monitor
 		string monitoring_proc_names_assemble, monitoring_proc_names_call;
@@ -217,8 +217,10 @@ class Paras
 
 	private:
 		void init();
-		string getCanuVersion();
+		string getProgramVersion(const string &cmd_str);
 		bool isRecommendCanuVersion(string &canu_version, const string &recommend_version);
+//		string getMinimap2Version();
+//		string getAbpoaVersion();
 		int checkBamFile();
 		int parseParas(int argc, char **argv);
 		string getPgCmd(int argc, char **argv);

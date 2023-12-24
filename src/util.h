@@ -43,6 +43,10 @@ int32_t getOverlapSize(size_t startPos1, size_t endPos1, size_t startPos2, size_
 bool isAdjacent(size_t startPos1, size_t endPos1, size_t startPos2, size_t endPos2, int32_t dist_thres);
 bool isOverlappedMateClipReg(mateClipReg_t *mate_clip_reg1, mateClipReg_t *mate_clip_reg2);
 mateClipReg_t* getOverlappedMateClipReg(mateClipReg_t *mate_clip_reg_given, vector<mateClipReg_t*> &mateClipRegVec);
+bool isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_vec);
+bool isIndelInSingleClipReg(reg_t *reg, mateClipReg_t *clip_reg);
+bool isSnvInClipReg(string &chrname, size_t pos, vector<mateClipReg_t*> &mate_clipReg_vec);
+bool isSnvInSingleClipReg(string &chrname, size_t pos, mateClipReg_t *clip_reg);
 bam_hdr_t* loadSamHeader(string &inBamFile);
 bool isInReg(int32_t pos, vector<reg_t*> &vec);
 int32_t computeDisagreeNum(Base *baseArray, int32_t arr_size);
@@ -77,7 +81,7 @@ int32_t getItemIDFromAssemWorkVec(string &contigfilename, vector<assembleWork_op
 void *doit_canu(void *arg);
 int test_canu(int n, vector<string> &cmd_vec);
 void* processSingleAssembleWork(void *arg);
-void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t assembly_extend_size, ofstream &assembly_info_file, double expected_cov_assemble, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t assembly_extend_size, ofstream &assembly_info_file, double expected_cov_assemble, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 bool isReadableFile(string &filename);
 void* processSingleMinimap2AlnWork(void *arg);
 void* processSingleBlatAlnWork(void *arg);

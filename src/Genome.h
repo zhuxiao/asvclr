@@ -62,6 +62,7 @@ class Genome{
 		void removeRedundantTra();
 		void removeInvalidMateClipItem();
 		void removeOverlappedIndelFromMateClipReg();
+		void genomeRemoveFPIndelSnvInClipReg(Chrome *chr, vector<Chrome*> &chr_vec);
 		mateClipReg_t* genomeGetOverlappedMateClipReg(mateClipReg_t *clip_reg_given, vector<Chrome*> &chrome_vec);
 		mateClipReg_t* getSameClipRegTRA(mateClipReg_t *clip_reg_given, vector<Chrome*> &chrome_vec);
 		void saveDetectResultToFile();

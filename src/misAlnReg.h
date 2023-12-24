@@ -19,7 +19,7 @@ using namespace std;
 #define MIN_MIS_ALN_REG_NUM_THRES			2
 #define SUB_REG_MAX_MIS_ALN_NUM_THRES		2
 
-#define HIGH_CLIP_RATIO_THRES				(0.1f)
+#define HIGH_CLIP_RATIO_THRES				(0.2f)  // (0.1f) - 2023-12-18
 #define CLIP_SUPPORT_READS_NUM_THRES		3  // should be input parameter
 //#define HIGH_CLIP_BASE_NUM_THRES			2
 

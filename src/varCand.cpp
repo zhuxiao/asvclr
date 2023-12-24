@@ -6,7 +6,7 @@
 //pthread_mutex_t mutex_print_var_cand = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_write_blat_aln = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_write_minimap2_aln = PTHREAD_MUTEX_INITIALIZER;
-//static int32_t MIN_SVLEN = 20;
+extern pthread_mutex_t mutex_fai;
 
 varCand::varCand(){
 	this->chrname = "";
@@ -167,7 +167,7 @@ void varCand::alnCtg2Refseq(){
 
 	bool blat_aln_done_flag = getBlatAlnDoneFlag();
 
-//	if(alnfilename.compare("output_ccs_v1.1.3_20220127/3_call/1/blat_contig_1_2632630-2684576_1_2686251-2691837.sim4")==0){
+//	if(alnfilename.compare("test/3_call/chr2/blat_contig_chr2_3137591-3139007.sim4")==0){
 //		cout << "alnfilename=" << alnfilename << endl;
 //	}
 
@@ -296,9 +296,10 @@ void varCand::callVariants02(){
 
 			callIndelVariants02();
 		}else{ // call clipping variants
-			loadBlatAlnData(); // load align data
-
-			callClipRegVariants();
+// 20231114-annotated
+//			loadBlatAlnData(); // load align data
+//
+//			callClipRegVariants();
 
 			// call variants at align segment end
 			//callVariantsAlnSegEnd();
@@ -454,11 +455,6 @@ void varCand::minimap2Parse(){
 	// load query names
 	FastaSeqLoader ref_loader(refseqfilename);
 	ref_seq = ref_loader.getFastaSeq(0, ALN_PLUS_ORIENT);
-
-	/*// test pos and loc
-	FastaSeqLoader fa_loader02(refseqfilename);
-	string refseq = fa_loader02.getFastaSeq(0, 0);
-	cout<< "refseq = " << refseq << endl;*/
 
 	infile.open(alnfilename);
 	if(!infile.is_open()){
@@ -1275,6 +1271,7 @@ void varCand::determineIndelType(){
 								reg_tmp->query_id = blat_aln->query_id;
 								reg_tmp->sv_len = (endQueryPos-startQueryPos)-(endRefPos-startRefPos);
 								reg_tmp->blat_aln_id = i;
+								reg_tmp->minimap2_aln_id = -1;
 								reg_tmp->call_success_status = true;
 								reg_tmp->short_sv_flag = false;
 								reg_tmp->zero_cov_flag = false;
@@ -1302,6 +1299,7 @@ void varCand::determineIndelType(){
 							reg->query_id = blat_aln->query_id;
 							reg->sv_len = (endQueryPos-startQueryPos)-(endRefPos-startRefPos);
 							reg->blat_aln_id = i;
+							reg->minimap2_aln_id = -1;
 							reg->call_success_status = true;
 							reg->short_sv_flag = false;
 							reg->zero_cov_flag = false;
@@ -1338,18 +1336,29 @@ void varCand::determineIndelType(){
 }
 
 void varCand::eraseFalsePositiveVariants(){
-	int32_t  i, j, k;
+	size_t  i, j;
 	uint32_t op;
-	string chrname;
+	string chrname, gt_header, gt_str, dp_str, ad_str1, ad_str2;
 	minimap2_aln_t *minimap2_aln;
 	struct pafalnSeg* paf_alnseg;
-	bool falsePositive, flag;
+	bool flag, overlap_flag;
 	int64_t startRefPos_assembly, endRefPos_assembly, end_ref_pos;
 	reg_t *reg;
 	vector<string> qname_vec;
 
-	for(i=0; i<(int32_t)minimap2_aln_vec.size(); i++){
-		minimap2_aln = minimap2_aln_vec[i];
+	struct alleleNode{
+		reg_t *reg;
+		int32_t supp_num, depth : 27, gt_type: 5;
+		struct alleleNode *mate_allele;
+	};
+
+	vector<struct alleleNode*> allele_vec;
+	vector<int32_t> supp_num_vec;
+	struct alleleNode *allele_node, *allele_node2;
+	double consistency, sim_val;
+
+	for(i=0; i<minimap2_aln_vec.size(); i++){
+		minimap2_aln = minimap2_aln_vec.at(i);
 		startRefPos_assembly = minimap2_aln->region_startRefPos;
 		endRefPos_assembly = minimap2_aln->region_endRefPos;
 
@@ -1357,10 +1366,9 @@ void varCand::eraseFalsePositiveVariants(){
 //			cout<<"81863346"<<endl;
 //		}
 		chrname = minimap2_aln->charname;
-		falsePositive = true;
 		qname_vec = minimap2_aln->qname;
 		if(minimap2_aln->pafalnsegs.size()>0 ){//and startRefPos_assembly==9297630){
-			for(j=0; j<(int32_t)minimap2_aln->pafalnsegs.size(); j++){
+			for(j=0; j<minimap2_aln->pafalnsegs.size(); j++){
 				paf_alnseg = minimap2_aln->pafalnsegs.at(j);
 				op = paf_alnseg->opflag;
 				flag = false;
@@ -1373,21 +1381,22 @@ void varCand::eraseFalsePositiveVariants(){
 						case BAM_CINS:
 							if(paf_alnseg->seglen>=min_sv_size){
 								//search
-								falsePositive = searchVariantFromRegionAlnSegs(qname_vec, paf_alnseg, chrname, startRefPos_assembly, endRefPos_assembly, 0.7);
-								if(falsePositive==false){
+								supp_num_vec = computeSuppNumFromRegionAlnSegs(qname_vec, paf_alnseg, chrname, startRefPos_assembly, endRefPos_assembly, 0.7);
+								if(supp_num_vec.at(0)>=minReadsNumSupportSV){
 									//write to newVarVec
 									reg = new reg_t();
 									reg->var_type = VAR_INS;
 									reg->chrname = chrname;
-									reg->startRefPos = paf_alnseg->startRpos;
-									reg->endRefPos = paf_alnseg->startRpos;
-									reg->startLocalRefPos = paf_alnseg->startSubjectPos;
-									reg->endLocalRefPos = paf_alnseg->startSubjectPos;
-									reg->startQueryPos = paf_alnseg->startQpos;
-									reg->endQueryPos = paf_alnseg->startQpos + paf_alnseg->seglen - 1;
-									//reg->query_id = minimap2_aln->minimap2_aln_id;
+									reg->startRefPos = paf_alnseg->startRpos + 1;
+									reg->endRefPos = paf_alnseg->startRpos + 1;
+									reg->startLocalRefPos = paf_alnseg->startSubjectPos + 1;
+									reg->endLocalRefPos = paf_alnseg->startSubjectPos + 1;
+									reg->startQueryPos = paf_alnseg->startQpos + 1;
+									reg->endQueryPos = paf_alnseg->startQpos + paf_alnseg->seglen;
+									reg->query_id = minimap2_aln->query_id;
 									reg->sv_len = paf_alnseg->seglen;
-								  //reg->blat_aln_id = i;
+									//reg->blat_aln_id = i;
+									reg->minimap2_aln_id = minimap2_aln->minimap2_aln_id;
 									reg->call_success_status = true;
 									reg->short_sv_flag = false;
 									reg->zero_cov_flag = false;
@@ -1400,26 +1409,34 @@ void varCand::eraseFalsePositiveVariants(){
 									reg->altseq = paf_alnseg->alt_seq;
 									svPosCorrection(reg);
 									newVarVec.push_back(reg);
+
+									allele_node = new struct alleleNode();
+									allele_node->reg = reg;
+									allele_node->mate_allele = NULL;
+									allele_node->supp_num = supp_num_vec.at(0);
+									allele_node->depth = supp_num_vec.at(1);
+									allele_vec.push_back(allele_node);
 								}
 							}
 							break;
 						case BAM_CDEL:
 							if(paf_alnseg->seglen>=min_sv_size){
-								falsePositive = searchVariantFromRegionAlnSegs(qname_vec, paf_alnseg, chrname, startRefPos_assembly, endRefPos_assembly, 0.7);
-								if(falsePositive==false){
+								supp_num_vec = computeSuppNumFromRegionAlnSegs(qname_vec, paf_alnseg, chrname, startRefPos_assembly, endRefPos_assembly, 0.7);
+								if(supp_num_vec.at(0)>=minReadsNumSupportSV){
 									//write to newVarVec
 									reg = new reg_t();
 									reg->var_type = VAR_DEL;
 									reg->chrname = chrname;
-									reg->startRefPos = paf_alnseg->startRpos;
-									reg->endRefPos = paf_alnseg->startRpos + paf_alnseg->seglen - 1;
-									reg->startLocalRefPos = paf_alnseg->startSubjectPos;
-									reg->endLocalRefPos = paf_alnseg->startSubjectPos + paf_alnseg->seglen - 1;
-									reg->startQueryPos = paf_alnseg->startQpos;
-									reg->endQueryPos = paf_alnseg->startQpos;
-									//reg->query_id = minimap2_aln->minimap2_aln_id;
+									reg->startRefPos = paf_alnseg->startRpos + 1;
+									reg->endRefPos = paf_alnseg->startRpos + paf_alnseg->seglen;
+									reg->startLocalRefPos = paf_alnseg->startSubjectPos + 1;
+									reg->endLocalRefPos = paf_alnseg->startSubjectPos + paf_alnseg->seglen;
+									reg->startQueryPos = paf_alnseg->startQpos + 1;
+									reg->endQueryPos = paf_alnseg->startQpos + 1;
+									reg->query_id = minimap2_aln->query_id;
 									reg->sv_len = paf_alnseg->seglen;
 								  //reg->blat_aln_id = i;
+									reg->minimap2_aln_id = minimap2_aln->minimap2_aln_id;
 									reg->call_success_status = true;
 									reg->short_sv_flag = false;
 									reg->zero_cov_flag = false;
@@ -1433,6 +1450,13 @@ void varCand::eraseFalsePositiveVariants(){
 									svPosCorrection(reg);
 
 									newVarVec.push_back(reg);
+
+									allele_node = new struct alleleNode();
+									allele_node->reg = reg;
+									allele_node->mate_allele = NULL;
+									allele_node->supp_num = supp_num_vec.at(0);
+									allele_node->depth = supp_num_vec.at(1);
+									allele_vec.push_back(allele_node);
 								}
 							}
 							break;
@@ -1454,6 +1478,88 @@ void varCand::eraseFalsePositiveVariants(){
 		}
 	}
 
+	// genotyping
+	// get the mate allele
+	for(i=0; i<allele_vec.size(); i++){
+		allele_node = allele_vec.at(i);
+		flag = false;
+		if(allele_node->mate_allele==NULL){
+			for(j=i+1; j<allele_vec.size(); j++){
+				allele_node2 = allele_vec.at(j);
+				if(allele_node->reg->query_id!=allele_node2->reg->query_id){ // on different queries
+					overlap_flag = isOverlappedRegExtSize(allele_node->reg, allele_node2->reg, 5, 5);
+					if(overlap_flag){
+						if(allele_node->reg->var_type==allele_node2->reg->var_type){ // same variant type
+							sim_val = 0;
+							if(allele_node->reg->var_type==VAR_INS){ // INS
+								// compute consistency
+								sim_val = computeVarseqConsistency(allele_node->reg->altseq, allele_node2->reg->altseq); // ?
+							}else{ // DEL
+								if(allele_node->reg->refseq.size()<=allele_node2->reg->refseq.size()) sim_val = (double)allele_node->reg->refseq.size() / allele_node2->reg->refseq.size();
+								else sim_val = (double)allele_node2->reg->refseq.size() / allele_node->reg->refseq.size();
+							}
+
+							if(sim_val<0.9){ // heterozygous
+								allele_node->mate_allele = allele_node2;
+								allele_node2->mate_allele = allele_node;
+								allele_node->reg->gt_type = GT_HETEROZYGOUS;
+								allele_node2->reg->gt_type = GT_HETEROZYGOUS;
+								allele_node->gt_type = GT_HETEROZYGOUS;
+								allele_node2->gt_type = GT_HETEROZYGOUS;
+							}else{ // homozygous, merge the same variant
+								allele_node->reg->gt_type = GT_HOMOZYGOUS;
+								allele_node->gt_type = GT_HOMOZYGOUS;
+								allele_node->supp_num += allele_node2->supp_num;
+								allele_node2->reg->call_success_status = false;
+								delete allele_node2;
+								allele_vec.erase(allele_vec.begin()+j);
+							}
+						}else{ // different variant type, heterozygous
+							allele_node->mate_allele = allele_node2;
+							allele_node2->mate_allele = allele_node;
+							allele_node->reg->gt_type = GT_HETEROZYGOUS;
+							allele_node2->reg->gt_type = GT_HETEROZYGOUS;
+							allele_node->gt_type = GT_HETEROZYGOUS;
+							allele_node2->gt_type = GT_HETEROZYGOUS;
+						}
+						flag = true;
+						//break;
+					}
+				}
+			}
+			if(flag==false){
+				allele_node->reg->gt_type = GT_HETEROZYGOUS;
+				allele_node->gt_type = GT_HETEROZYGOUS;
+			}
+		}
+
+		// compute the genotype
+		gt_header = "GT:AD:DP";
+		gt_str = "./.";
+		ad_str1 = ".";
+		ad_str2 = ".";
+		dp_str = ".";
+
+		if(allele_node->gt_type==GT_HOMOZYGOUS){
+			gt_str = "1/1";
+			ad_str1 = to_string(allele_node->supp_num);
+			ad_str2 = to_string(allele_node->depth-allele_node->supp_num);
+			dp_str = to_string(allele_node->depth);
+		}else if(allele_node->gt_type==GT_HETEROZYGOUS){
+			gt_str = "0/1";
+			ad_str1 = to_string(allele_node->depth-allele_node->supp_num);
+			ad_str2 = to_string(allele_node->supp_num);
+			dp_str = to_string(allele_node->depth);
+		}else {
+			cout << "line=" << __LINE__ << ", unknown genotype=" << allele_node->gt_type << ", error!" << endl;
+			exit(1);
+		}
+		allele_node->reg->gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
+	}
+
+	for(i=0; i<allele_vec.size(); i++) delete allele_vec.at(i);
+	vector<struct alleleNode*>().swap(allele_vec);
+
 	//delete minimap2_aln_vec
 	destroyMinimap2AlnVec(minimap2_aln_vec);
 }
@@ -1474,22 +1580,27 @@ void varCand::destroyMinimap2AlnVec(vector<minimap2_aln_t*> &minimap2_aln_vec){
 }
 
 void varCand::svPosCorrection(reg_t* reg){
-	//bool no_svpcorrection = true;
 	vector<svpos_match_t*> svpos_match_vec;
 	svpos_match_t* svpos_match_node;
-	size_t i, j;
-	int64_t max_id, max_num, same_id;
-	bool exist_flag = false;
+	size_t i, j, k;
+	int64_t target_id, id, max_id, max_num, sec_id, sec_num, same_id, end_pos_tmp, svlen_tmp;
+	bool exist_flag = false, overlap_flag, flag;
+	double ratio;
+
 	//select location representative
 	if(svpos_correction_vec.size()==0){
-		cout<<"startRefPos:"<<reg->startRefPos<<endl;
-		cout<<"sv_len"<<reg->sv_len<<endl;
+//		cout<<"startRefPos:"<<reg->startRefPos<<endl;
+//		cout<<"sv_len"<<reg->sv_len<<endl;
+		return;
 	}
+
+	same_id = -1;
 	for(i=0; i<svpos_correction_vec.size(); i++){
 		for(j=0; j<svpos_match_vec.size(); j++){
-			if(svpos_correction_vec.at(i)->startRpos==svpos_match_vec.at(j)->startRpos and svpos_correction_vec.at(i)->svlen==svpos_match_vec.at(j)->sv_len){
+			if(svpos_correction_vec.at(i)->var_type==svpos_match_vec.at(j)->var_type and svpos_correction_vec.at(i)->startRpos==svpos_match_vec.at(j)->startRpos and ((double)svpos_correction_vec.at(i)->svlen/svpos_match_vec.at(j)->sv_len>=0.9 or (double)svpos_match_vec.at(j)->sv_len/svpos_correction_vec.at(i)->svlen<=0.9)){
 				same_id = j;
 				exist_flag = true;
+				break;
 			}else{
 				exist_flag = false;
 			}
@@ -1498,6 +1609,7 @@ void varCand::svPosCorrection(reg_t* reg){
 			svpos_match_node = new svpos_match_t();
 			svpos_match_node->svpos_id.push_back(i);
 			svpos_match_node->num = 1;
+			svpos_match_node->var_type = svpos_correction_vec.at(i)->var_type;
 			svpos_match_node->startRpos = svpos_correction_vec.at(i)->startRpos;
 			svpos_match_node->sv_len = svpos_correction_vec.at(i)->svlen;
 			svpos_match_vec.push_back(svpos_match_node);
@@ -1507,32 +1619,66 @@ void varCand::svPosCorrection(reg_t* reg){
 		}
 	}
 
-	max_num = svpos_match_vec.at(0)->num;
-	max_id = 0;
+	// get the maximum one and second maximum
+	max_num = 0;
+	max_id = -1;
+	sec_num = 0;
+	sec_id = -1;
 	for(i=0; i<svpos_match_vec.size(); i++){
 		if(max_num<svpos_match_vec.at(i)->num){
+			sec_id = max_id;
+			sec_num = max_num;
 			max_id = i;
 			max_num = svpos_match_vec.at(i)->num;
+		}else if(sec_num<svpos_match_vec.at(i)->num){
+			sec_id = i;
+			sec_num = svpos_match_vec.at(i)->num;
 		}
 	}
+
 	//ref_dis = abs(reg->startRefPos - svpos_match_vec.at(max_id)->startRpos);
 	//dif_len = abs(reg->sv_len - svpos_match_vec.at(max_id)->sv_len);
 	//if(svpos_match_vec.at(max_id)->num>svpos_correction_vec.size()*0.1){
-	if(reg->startRefPos!=svpos_match_vec.at(max_id)->startRpos or reg->sv_len!=svpos_match_vec.at(max_id)->sv_len){
-		//no_svpcorrection = false;
-		j = svpos_match_vec.at(max_id)->svpos_id.at(0);
-		reg->startRefPos = svpos_correction_vec.at(j)->startRpos;
-		reg->startQueryPos =svpos_correction_vec.at(j)->startQpos;
-		reg->endRefPos = svpos_correction_vec.at(j)->endRpos;
-		reg->endQueryPos = svpos_correction_vec.at(j)->endQpos;
-		reg->sv_len = svpos_correction_vec.at(j)->svlen;
-		//refseq
-		reg->refseq = svpos_correction_vec.at(j)->refseq;
-		//altseq
-		reg->altseq = svpos_correction_vec.at(j)->altseq;
-	}
-	//}
+	flag = false;
+	target_id = -1;
+	for(i=0; i<2; i++){
+		if(i==0) id = max_id;
+		else id = sec_id;
 
+		// same var type and overlapped
+		if(id!=-1 and svpos_match_vec.at(id)->var_type==reg->var_type){
+			end_pos_tmp = svpos_match_vec.at(id)->startRpos;
+			if(svpos_match_vec.at(id)->var_type==VAR_DEL) end_pos_tmp = svpos_match_vec.at(id)->startRpos + svpos_match_vec.at(id)->sv_len;
+			overlap_flag = isOverlappedPos(reg->startRefPos, reg->endRefPos, svpos_match_vec.at(id)->startRpos, end_pos_tmp);
+			if(overlap_flag){
+				target_id = id;
+				flag = true;
+				break;
+			}else{
+				ratio = (double) sec_num / max_num;
+				if(ratio<0.2 or sec_num<2){
+					target_id = max_id;
+					flag = true;
+					break;
+				}
+			}
+		}
+	}
+
+	if(flag){ // found
+		if(reg->startRefPos!=svpos_match_vec.at(target_id)->startRpos){
+			j = svpos_match_vec.at(target_id)->svpos_id.at(0);
+			reg->startRefPos = svpos_correction_vec.at(j)->startRpos;
+			reg->startQueryPos =svpos_correction_vec.at(j)->startQpos;
+			reg->endRefPos = svpos_correction_vec.at(j)->endRpos;
+			reg->endQueryPos = svpos_correction_vec.at(j)->endQpos;
+			//reg->sv_len = svpos_correction_vec.at(j)->svlen;
+			//refseq
+			reg->refseq = svpos_correction_vec.at(j)->refseq;
+			//altseq
+			reg->altseq = svpos_correction_vec.at(j)->altseq;
+		}
+	}
 	//destroy svpos_correction_vec and sv_natch_vec
 	if(svpos_correction_vec.size()>0) destoryPosCorrectionVec();
 	for(i=0; i<svpos_match_vec.size(); i++){
@@ -1540,12 +1686,10 @@ void varCand::svPosCorrection(reg_t* reg){
 		for(svp=svpos_match_vec.begin(); svp!=svpos_match_vec.end(); svp++) delete *svp;
 		vector<svpos_match_t*>().swap(svpos_match_vec);
 	}
-
-	//return no_svpcorrection;
 }
 
-bool varCand::searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_assembly, int64_t endRefPos_assembly, double size_ratio_match_thres){
-	bool falsePositive = true;
+vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_assembly, int64_t endRefPos_assembly, double size_ratio_match_thres){
+	vector<int32_t> supp_num_vec;
 	int32_t var_num, var_len, query_num;
 	size_t i, j, t;
 //	uint32_t op;
@@ -1556,7 +1700,7 @@ bool varCand::searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, stru
 	vector<clipAlnData_t*> query_aln_segs;
 	bool no_otherchrname_flag, flag;
 	double size_ratio;
-	int64_t noHardClipIdx, ref_distance, end_ref_pos;
+	int64_t noHardClipIdx, ref_distance, start_ref_pos, end_ref_pos;
 	vector<struct alnSeg*> query_alnSegs;
 	vector<struct alnSeg*>::iterator seg;
 	svpos_correction_t *svpos_correction_node;
@@ -1565,11 +1709,15 @@ bool varCand::searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, stru
 	// load the clipping data
 	clipAlnDataLoader data_loader(chrname, startRefPos_assembly, endRefPos_assembly, inBamFile, 200);
 	data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0);
+
+	var_num = 0;
 	if (clipAlnDataVector.size() > 0){// and startRefPos_assembly==9521824) {
 		for (i = 0; i < clipAlnDataVector.size(); i++) clipAlnDataVector.at(i)->query_checked_flag = false;
 
 		reg_str = chrname + ":" + to_string(startRefPos_assembly) + "-" + to_string(endRefPos_assembly);
+		pthread_mutex_lock(&mutex_fai);
 		p_seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
 		refseq = p_seq;
 		free(p_seq);
 
@@ -1579,7 +1727,6 @@ bool varCand::searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, stru
 			exit(1);
 		}
 
-		var_num = 0;
 		//average_varlen = 0;
 		query_num = 0;
 		for (i = 0; i < clipAlnDataVector.size(); i++) {//for each read query
@@ -1592,7 +1739,6 @@ bool varCand::searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, stru
 
 			if (clipAlnDataVector.at(i)->query_checked_flag == false) {
 				query_aln_segs = getQueryClipAlnSegs(qname, clipAlnDataVector); // get query clip align segments
-				//query_aln_segs = getQueryClipAlnSegs(qname, clipAlnDataVector); // get query clip align segments
 				no_otherchrname_flag = true;
 				noHardClipIdx = getNoHardClipAlnItem(query_aln_segs);
 				if (noHardClipIdx != -1) {
@@ -1625,7 +1771,7 @@ bool varCand::searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, stru
 						}
 						//compute query_num
 						if(paf_alnseg->startRpos>query_alnSegs.at(0)->startRpos and (paf_alnseg->startRpos+paf_alnseg->seglen)<(query_alnSegs.at(query_alnSegs.size()-1)->startRpos + query_alnSegs.at(query_alnSegs.size()-1)->seglen)){
-							query_num+=1;
+							query_num ++;
 						}
 
 						//find qname
@@ -1647,7 +1793,7 @@ bool varCand::searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, stru
 								if((*seg)->startRpos-1>=startRefPos_assembly and end_ref_pos-1<=endRefPos_assembly) flag = true;
 
 								if(flag and paf_alnseg->opflag==(*seg)->opflag){
-									if(paf_alnseg->seglen>min_sv_size and (*seg)->seglen>min_sv_size){
+									if(paf_alnseg->seglen>=min_sv_size and (*seg)->seglen>=min_sv_size){
 										if(paf_alnseg->seglen <= (*seg)->seglen) size_ratio = (double)paf_alnseg->seglen / (*seg)->seglen;
 										else size_ratio = (double)(*seg)->seglen / paf_alnseg->seglen;
 										if(size_ratio>=size_ratio_match_thres){
@@ -1662,7 +1808,7 @@ bool varCand::searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, stru
 
 												svpos_correction_node->svlen = (*seg)->seglen;
 												if(paf_alnseg->opflag==BAM_CINS){
-													//svpos_correction_node->var_type = VAR_INS;
+													svpos_correction_node->var_type = VAR_INS;
 													//svpos_correction_node->startRpos = (*seg)->startRpos;
 													svpos_correction_node->endQpos = svpos_correction_node->startQpos + (*seg)->seglen - 1;
 													//svpos_correction_node->refseq = refseq.substr((*seg)->startRpos - startRefPos_assembly, 1);
@@ -1673,7 +1819,7 @@ bool varCand::searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, stru
 													for(t=svpos_correction_node->startQpos-1; t<=svpos_correction_node->endQpos; t++) svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
 
 												}else{
-													//svpos_correction_node->var_type = VAR_DEL;
+													svpos_correction_node->var_type = VAR_DEL;
 													//svpos_correction_node->startRpos = (*seg)->startRpos + (*seg)->seglen - 1;
 													svpos_correction_node->endQpos = svpos_correction_node->startQpos;
 													//svpos_correction_node->refseq = refseq.substr((*seg)->startRpos - startRefPos_assembly, (*seg)->seglen);
@@ -1705,15 +1851,16 @@ bool varCand::searchVariantFromRegionAlnSegs(vector<string> &clu_qname_vec, stru
 		}
 
 		//if(var_num>=query_num*0.2 and var_num>0){//haploid*2 simulate>0.2,diploid simulated>0.01
-		if(var_num>=minReadsNumSupportSV){//support num
-			falsePositive = false;
-		}else{
+		if(var_num<minReadsNumSupportSV) //support num
 			if(svpos_correction_vec.size()>0) destoryPosCorrectionVec();
-		}
 
 		if(!clipAlnDataVector.empty()) destoryClipAlnData();
 	}
-	return falsePositive;
+
+	supp_num_vec.push_back(var_num);
+	supp_num_vec.push_back(query_num);
+
+	return supp_num_vec;
 }
 
 
@@ -3142,6 +3289,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 //				reg->endQueryPos = reg_tmp->endQueryPos + 1;
 				reg->query_id = reg_tmp->query_id;
 				reg->blat_aln_id = reg_tmp->blat_aln_id;
+				reg->minimap2_aln_id = reg_tmp->minimap2_aln_id;
 				reg->aln_orient = reg_tmp->aln_orient;
 				reg->zero_cov_flag = false;
 				reg->aln_seg_end_flag = false;
@@ -3425,6 +3573,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 							reg_new_3->chrname = reg_tmp->chrname;
 							reg_new_3->query_id = reg_tmp->query_id;
 							reg_new_3->blat_aln_id = reg_tmp->blat_aln_id;
+							reg_new_3->minimap2_aln_id = reg_tmp->minimap2_aln_id;
 							reg_new_3->aln_orient = reg_tmp->aln_orient;
 							reg_new_3->zero_cov_flag = false;
 							reg_new_3->aln_seg_end_flag = false;
@@ -3453,6 +3602,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 							reg_new_4->chrname = reg_tmp->chrname;
 							reg_new_4->query_id = reg_tmp->query_id;
 							reg_new_4->blat_aln_id = reg_tmp->blat_aln_id;
+							reg_new_4->minimap2_aln_id = reg_tmp->minimap2_aln_id;
 							reg_new_4->aln_orient = reg_tmp->aln_orient;
 							reg_new_4->zero_cov_flag = false;
 							reg_new_4->aln_seg_end_flag = false;
@@ -3508,6 +3658,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 							reg_new_1->chrname = reg->chrname;
 							reg_new_1->query_id = reg_tmp->query_id;
 							reg_new_1->blat_aln_id = reg->blat_aln_id;
+							reg_new_1->minimap2_aln_id = reg->minimap2_aln_id;
 							reg_new_1->aln_orient = reg->aln_orient;
 							reg_new_1->zero_cov_flag = false;
 							reg_new_1->aln_seg_end_flag = false;
@@ -3531,6 +3682,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 							reg_new_2->endQueryPos = reg_tmp->endQueryPos;
 							reg_new_2->query_id = reg_tmp->query_id;
 							reg_new_2->blat_aln_id = reg_tmp->blat_aln_id;
+							reg_new_2->minimap2_aln_id = reg_tmp->minimap2_aln_id;
 							reg_new_2->aln_orient = reg_tmp->aln_orient;
 							reg_new_2->zero_cov_flag = false;
 							reg_new_2->aln_seg_end_flag = false;
@@ -3586,6 +3738,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 							reg_new_1->chrname = reg->chrname;
 							reg_new_1->query_id = reg_tmp->query_id;
 							reg_new_1->blat_aln_id = reg->blat_aln_id;
+							reg_new_1->minimap2_aln_id = reg->minimap2_aln_id;
 							reg_new_1->aln_orient = reg->aln_orient;
 							reg_new_1->zero_cov_flag = false;
 							reg_new_1->aln_seg_end_flag = false;
@@ -3615,6 +3768,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 							reg_new_2->chrname = reg_tmp->chrname;
 							reg_new_2->query_id = reg_tmp->query_id;
 							reg_new_2->blat_aln_id = reg_tmp->blat_aln_id;
+							reg_new_2->minimap2_aln_id = reg_tmp->minimap2_aln_id;
 							reg_new_2->aln_orient = reg_tmp->aln_orient;
 							reg_new_2->zero_cov_flag = false;
 							reg_new_2->aln_seg_end_flag = false;
@@ -3643,6 +3797,7 @@ vector< vector<reg_t*> > varCand::dealWithTwoVariantSets(vector<reg_t*> &foundRe
 							reg_new_4->chrname = reg_tmp->chrname;
 							reg_new_4->query_id = reg_tmp->query_id;
 							reg_new_4->blat_aln_id = reg_tmp->blat_aln_id;
+							reg_new_4->minimap2_aln_id = reg_tmp->minimap2_aln_id;
 							reg_new_4->aln_orient = reg_tmp->aln_orient;
 							reg_new_4->zero_cov_flag = false;
 							reg_new_4->aln_seg_end_flag = false;
@@ -4780,6 +4935,7 @@ void varCand::determineClipRegInvType(){
 						clip_reg->var_type = sv_type;
 						clip_reg->query_id = blat_aln->query_id;
 						clip_reg->blat_aln_id = i;
+						clip_reg->minimap2_aln_id = -1;
 						clip_reg->call_success_status = true;
 						clip_reg->short_sv_flag = false;
 						clip_reg->zero_cov_flag = false;
@@ -5029,6 +5185,7 @@ reg_t* varCand::computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t 
 				clip_reg_ret->var_type = var_type;
 				clip_reg_ret->query_id = blat_aln->query_id;
 				clip_reg_ret->blat_aln_id = blat_aln->blat_aln_id;
+				clip_reg_ret->minimap2_aln_id = -1;
 				clip_reg_ret->call_success_status = true;
 				clip_reg_ret->short_sv_flag = false;
 				clip_reg_ret->zero_cov_flag = false;
@@ -5084,6 +5241,7 @@ reg_t* varCand::computeClipPos(blat_aln_t *blat_aln, aln_seg_t *seg1, aln_seg_t 
 			reg_new->endLocalRefPos = seg2->subject_start;
 			reg_new->endQueryPos = seg2->query_start;
 			reg_new->blat_aln_id = blat_aln->blat_aln_id;
+			reg_new->minimap2_aln_id = -1;
 			reg_new->query_id = blat_aln->query_id;
 			reg_new->aln_orient = blat_aln->aln_orient;
 			reg_new->short_sv_flag = false;
@@ -5375,6 +5533,7 @@ reg_t* varCand::computeClipPos2(vector<blat_aln_t*> &blat_aln_vec, size_t var_ty
 					clip_reg_ret->var_type = var_type;
 					clip_reg_ret->query_id = query_id;
 					clip_reg_ret->blat_aln_id = -1;
+					clip_reg_ret->minimap2_aln_id = -1;
 					clip_reg_ret->call_success_status = true;
 					clip_reg_ret->short_sv_flag = false;
 					clip_reg_ret->zero_cov_flag = false;
@@ -5419,6 +5578,7 @@ reg_t* varCand::computeClipPos2(vector<blat_aln_t*> &blat_aln_vec, size_t var_ty
 			clip_reg_ret->var_type = var_type;
 			clip_reg_ret->query_id = -1;
 			clip_reg_ret->blat_aln_id = -1;
+			clip_reg_ret->minimap2_aln_id = -1;
 			clip_reg_ret->call_success_status = true;
 			clip_reg_ret->short_sv_flag = false;
 			clip_reg_ret->zero_cov_flag = false;

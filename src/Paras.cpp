@@ -51,6 +51,7 @@ void Paras::init(){
 	min_clip_num_filt = 0;
 
 	mean_read_len = total_read_num_est = 0;
+	min_Nsupp_est_flag = 0;
 
 	reg_sum_size_est = 0;
 	max_reg_sum_size_est = MAX_REG_SUM_SIZE_EST;
@@ -63,9 +64,19 @@ void Paras::init(){
 	num_parts_progress = NUM_PARTS_PROGRESS;
 	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
 
-	canu_version = getCanuVersion();
+	canu_version = getProgramVersion("canu -version | awk '$1 ~/(Canu)|(canu)/' | awk '{print $2}'");
 	if(canu_version.empty()){
 		cerr << "Cannot find the 'Canu' assembler, please make sure it is correctly installed and the executable file 'canu' or its soft link is included in the '$PATH' directory." << endl;
+		exit(1);
+	}
+	minimap2_version = getProgramVersion("minimap2 -V | awk '{print $1}'");
+	if(canu_version.empty()){
+		cerr << "Cannot find the 'minimap2' program, please make sure it is correctly installed and the executable file 'minimap2' or its soft link is included in the '$PATH' directory." << endl;
+		exit(1);
+	}
+	abpoa_version = getProgramVersion("abpoa -v | awk '{print $1}'");
+	if(canu_version.empty()){
+		cerr << "Cannot find the 'abpoa' program, please make sure it is correctly installed and the executable file 'abpoa' or its soft link is included in the '$PATH' directory." << endl;
 		exit(1);
 	}
 
@@ -90,13 +101,13 @@ void Paras::init(){
 	gt_max_alle_ratio = GT_MAX_ALLE_RATIO_THRES;
 }
 
-// get the Canu program version
-string Paras::getCanuVersion(){
+// get the program version
+string Paras::getProgramVersion(const string &cmd_str){
 	FILE *stream;
 	char tmp[256], info[256] = {0};
 	string canu_version_str = "";
 
-	sprintf(tmp, "canu -version | awk '$1 ~/(Canu)|(canu)/' | awk '{print $2}'");
+	sprintf(tmp, "%s", cmd_str.c_str());
 	stream = popen(tmp, "r");
 	if(fread(info, 1, sizeof(info), stream)>0){
 		canu_version_str = info;
@@ -240,6 +251,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
+	min_Nsupp_est_flag = 1;
 	//minReadsNumSupportSV = -1;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
@@ -261,13 +273,15 @@ int Paras::parseDetectParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:e:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:n:M:e:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
-			case 'n': minReadsNumSupportSV = stoi(optarg); break;
+			case 'n': minReadsNumSupportSV = stoi(optarg);
+					min_Nsupp_est_flag = 0;
+					break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
@@ -342,6 +356,7 @@ int Paras::parseAssembleParas(int argc, char **argv){
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
+	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	maxVarRegSize = MAX_VAR_REG_SIZE;
 	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
@@ -382,7 +397,9 @@ int Paras::parseAssembleParas(int argc, char **argv){
 			//case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
-			case 'n': minReadsNumSupportSV = stoi(optarg); break;
+			case 'n': minReadsNumSupportSV = stoi(optarg);
+					min_Nsupp_est_flag = 0;
+					break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'x': expected_cov_assemble = stod(optarg); break;
@@ -451,6 +468,8 @@ int Paras::parseCallParas(int argc, char **argv){
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
+	min_Nsupp_est_flag = 1;
+	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
 	assemSideExtSize = ASM_CHUNK_SIZE_EXT_INDEL;
@@ -481,7 +500,9 @@ int Paras::parseCallParas(int argc, char **argv){
 			//case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
-			case 'n': minReadsNumSupportSV = stoi(optarg); break;
+			case 'n': minReadsNumSupportSV = stoi(optarg);
+					min_Nsupp_est_flag = 0;
+					break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
@@ -544,6 +565,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
+	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
@@ -592,7 +614,9 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 			//case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
-			case 'n': minReadsNumSupportSV = stoi(optarg); break;
+			case 'n': minReadsNumSupportSV = stoi(optarg);
+					min_Nsupp_est_flag = 0;
+					break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'x': expected_cov_assemble = stod(optarg); break;
@@ -749,6 +773,15 @@ void Paras::showAssembleUsage(){
 	cout << "Options: " << endl;
 	//cout << "   -s INT        Slide window size for 'detect' command  [" << SLIDESIZE <<"]" << endl;
 	//cout << "   -S INT        Slide window size for 'assemble' and 'call' command [" << ASSEM_SLIDE_SIZE << "]" << endl;
+	cout << "   -m INT        minimal SV size to report [" << MIN_SV_SIZE_USR << "]" << endl;
+	cout << "   -M INT        maximal SV size to report [" << MAX_SV_SIZE_USR << "]" << endl;
+	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
+	cout << "   -n INT        minimal number of reads supporting a SV [" << MIN_SUPPORT_READS_NUM_EST << "]." << endl;
+	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
+	cout << "                 estimated to be "<< MIN_SUPPORT_READS_NUM_FACTOR << " times of the sequencing depth of" << endl;
+	cout << "                 the data set (rounded)" << endl;
+	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
+	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
 	cout << "   -x FLOAT      expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
@@ -757,8 +790,6 @@ void Paras::showAssembleUsage(){
 	cout << "   -p STR        prefix of output result files [null]" << endl;
 	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
-	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
-	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   --threads-per-assem-work INT" << endl;
 	cout << "                 Limited number of threads for each assemble work [0]:" << endl;
 	cout << "                 0 for unlimited, and positive INT for the limited" << endl;
@@ -1004,7 +1035,7 @@ void Paras::outputParas(){
 	if(outFilePrefix.size()) cout << "Output result file prefix: " << outFilePrefix << endl;
 
 	cout << "Sample: " << sample << endl;
-	if(minReadsNumSupportSV != -1){
+	if(min_Nsupp_est_flag==0){ // user-specified
 		cout << "Number of reads supporting SV: " << minReadsNumSupportSV << endl;
 	}
 	cout << "Block size: " << blockSize << " bp" << endl;
@@ -1035,7 +1066,9 @@ void Paras::outputParas(){
 		cout << "Maximum monitored process running minutes for call: " << max_proc_running_minutes_call << endl;
 	if(include_decoy) cout << "Include decoy items: yes" << endl;
 	cout << "Sequencing technology: " << technology << endl;
-	cout << "Canu version: " << canu_version << endl << endl;
+	cout << "Canu version: " << canu_version << endl;
+	cout << "minimap2 version: " << minimap2_version << endl;
+	cout << "abPOA version: " << abpoa_version << endl << endl;
 
 	bool recommend_ver_flag = isRecommendCanuVersion(canu_version, CANU_RECOMMEND_VERSION);
 	if(recommend_ver_flag==false)
@@ -1049,7 +1082,7 @@ void Paras::outputParas(){
 void Paras::outputEstParas(string info){
 	cout << info << endl;
 	cout << "Mean read length: " << mean_read_len << " bp" << endl;
-	if(minReadsNumSupportSV != -1){
+	if(min_Nsupp_est_flag==1){ // estimated
 		cout << "Number of reads supporting SV: " << minReadsNumSupportSV << endl;
 	}
 
@@ -1096,7 +1129,10 @@ void Paras::estimate(size_t op_est){
 
 		//compute mean read depth
 		//if(minReadsNumSupportSV==-1) minReadsNumSupportSV =  round(((double)total_depth/chrome_num)*0.1);
-		if(minReadsNumSupportSV==-1) minReadsNumSupportSV = estimateMinReadsNumSupportSV(mean_depth_vec);
+		if(minReadsNumSupportSV==-1) {
+			min_Nsupp_est_flag = 1;
+			minReadsNumSupportSV = estimateMinReadsNumSupportSV(mean_depth_vec);
+		}
 
 
 	}else if(op_est==NUM_EST_OP){

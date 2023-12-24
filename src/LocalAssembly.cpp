@@ -3,9 +3,11 @@
 
 pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 extern pthread_mutex_t mutex_down_sample;
+extern pthread_mutex_t mutex_fai;
 //static int32_t MIN_SVLEN = 20;
+//extern int32_t sig_num_arr[1001];
 
-LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, double min_input_cov, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, double max_seg_size_ratio){
+LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, double min_input_cov, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio){
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
 	this->readsfilename = preprocessPipeChar(readsfilename);
@@ -18,6 +20,7 @@ LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, stri
 	this->minClipEndSize = minClipEndSize;
 	this->minConReadLen = minConReadLen;
 	this->min_sv_size = min_sv_size;
+	this->min_supp_num = min_supp_num;
 	this->max_seg_size_ratio = max_seg_size_ratio;
 	this->varVec = varVec;
 	this->fai = fai;
@@ -27,6 +30,9 @@ LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, stri
 	startRefPos_assembly = endRefPos_assembly = 0;
 	mean_read_len = 0;
 	use_poa_flag = true;
+
+	readsfilename_prefix = this->readsfilename.substr(0, this->readsfilename.size()-3);
+	readsfilename_suffix = this->readsfilename.substr(this->readsfilename.size()-3, 3);
 
 	ref_seq_size = reads_count_original = total_bases_original = reads_count = total_bases = 0;
 	local_cov_original = sampled_cov = 0;
@@ -50,8 +56,13 @@ LocalAssembly::LocalAssembly(string &readsfilename, string &contigfilename, stri
 
 LocalAssembly::~LocalAssembly() {
 	if(delete_reads_flag){
-		if(keep_failed_reads_flag==false or (keep_failed_reads_flag and assem_success_flag))
-			remove(readsfilename.c_str());	// delete the reads file to save disk space
+		if(keep_failed_reads_flag==false or (keep_failed_reads_flag and assem_success_flag)){
+			if(clip_reg_flag==false){ // indel region
+				for(size_t i=0; i<readsfilename_vec.size(); i++) remove(readsfilename_vec.at(i).c_str());
+			}else{
+				remove(readsfilename.c_str());	// delete the reads file to save disk space
+			}
+		}
 	}
 }
 
@@ -103,16 +114,9 @@ void LocalAssembly::destoryQueryCluVec(vector<struct querySeqInfoVec*> &query_cl
 }
 void LocalAssembly::destoryQuerySeqInfoAll(vector<struct querySeqInfoNode*> &query_seq_info_all){
 	struct querySeqInfoNode *q_node;
-	//vector<struct alnSeg*> query_alnSegs;
-	struct alnSeg *q_alnSeg;
 	for(size_t i=0; i<query_seq_info_all.size(); i++){
 		q_node = query_seq_info_all.at(i);
-		//destroyAlnSegs(query_seq_info_all.at(i)->query_alnSegs);
-		for(size_t j=0; j<query_seq_info_all.at(i)->query_alnSegs.size(); j++){
-			q_alnSeg = query_seq_info_all.at(i)->query_alnSegs.at(j);
-			delete q_alnSeg;
-		}
-		vector<struct alnSeg*>().swap(query_seq_info_all.at(i)->query_alnSegs);
+		destroyAlnSegs(q_node->query_alnSegs);
 		delete q_node;
 	}
 	vector<struct querySeqInfoNode*>().swap(query_seq_info_all);
@@ -180,6 +184,7 @@ void LocalAssembly::extractReadsDataFromBAM(){
 	struct alnSeg *q_alnSeg;
 	struct querySeqInfoVec *q_cluster_node;
 	vector<struct alnSeg*> alnSegs;
+	double expected_cov_cons;
 
 	startRefPos_assembly = varVec[0]->startRefPos - assembly_extend_size;
 	if(startRefPos_assembly<1) startRefPos_assembly = 1;
@@ -203,7 +208,9 @@ void LocalAssembly::extractReadsDataFromBAM(){
 		for(i=0; i<clipAlnDataVector.size(); i++) clipAlnDataVector.at(i)->query_checked_flag = false;
 
 		reg_str = varVec[0]->chrname + ":" + to_string(startRefPos_assembly) + "-" + to_string(endRefPos_assembly);
+		pthread_mutex_lock(&mutex_fai);
 		p_seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
 		refseq = p_seq;
 		free(p_seq);
 
@@ -258,9 +265,10 @@ void LocalAssembly::extractReadsDataFromBAM(){
 							//seqs.push_back(seq);
 							//prepare for smoothing
 							seq = query_seq_qual_vec.at(0);
-							q_node = new querySeqInfoNode();
+							q_node = new struct querySeqInfoNode();
 							q_node->qname = qname;
 							q_node->seq = seq;
+							q_node->selected_flag = true;
 							//q_node->seq_id = fq_node->seq_id;
 							switch(bam_type){
 								case BAM_CIGAR_NO_DIFF_MD:
@@ -311,6 +319,7 @@ void LocalAssembly::extractReadsDataFromBAM(){
 								q_node = new struct querySeqInfoNode();
 								q_node->qname = qname;
 								q_node->seq = seq;
+								q_node->selected_flag = true;
 								//q_node->seq_id = fq_node->seq_id;
 
 								switch(bam_type){
@@ -352,13 +361,26 @@ void LocalAssembly::extractReadsDataFromBAM(){
 			if(expected_cov!=0){
 				compensation_coefficient = computeCompensationCoefficient(startRefPos_assembly, endRefPos_assembly, mean_read_len);
 				//cout << compensation_coefficient << endl;
-				samplingReads(fq_seq_vec, expected_cov, compensation_coefficient);
+				samplingReadsClipReg(fq_seq_vec, expected_cov, compensation_coefficient);
 			}
 
 			// save sampled reads to file
 			saveSampledReads(readsfilename, fq_seq_vec);
 
 		}else{ // indel region
+			// sampling for ultra-high coverage indel regions
+			expected_cov_cons = 2 * expected_cov;
+			reads_count_original = query_seq_info_all.size();
+			total_bases_original = 0;
+			for(i=0; i<query_seq_info_all.size(); i++) total_bases_original += query_seq_info_all.at(i)->seq.size();
+			mean_read_len = (double)total_bases_original / query_seq_info_all.size();
+
+			if(expected_cov_cons!=0){
+				compensation_coefficient = computeCompensationCoefficient(startRefPos_assembly, endRefPos_assembly, mean_read_len);
+				//cout << compensation_coefficient << endl;
+				samplingReadsIndelReg(query_seq_info_all, expected_cov_cons, compensation_coefficient);
+			}
+
 			if(query_seq_info_all.size()){
 				if(query_seq_info_all.size()>1){
 					query_clu_vec = queryCluster(query_seq_info_all);
@@ -430,7 +452,6 @@ vector<struct querySeqInfoVec*> LocalAssembly::queryCluster(vector<struct queryS
 	vector<srmin_match_t*> srmin_match_vec;
 	srmin_match_t *srmin_match_node;
 	bool exist_flag;
-
 
 	for(i=0; i<query_seq_info_all.size(); i++){
 		query_seq_info_all.at(i)->cluster_finished_flag = false;
@@ -587,7 +608,7 @@ vector<struct querySeqInfoVec*> LocalAssembly::queryCluster(vector<struct queryS
 							q_cluster_a.push_back(query_seq_info_all.at(i));
 						}
 					}
-					delete seed_info_b;
+					//delete seed_info_b; // removed on 2023-11-23
 				}else{
 					if(seed_info_b->span_intersection>0){
 						score_ratio_b = computeScoreRatio(query_seq_info_all.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos);
@@ -605,6 +626,7 @@ vector<struct querySeqInfoVec*> LocalAssembly::queryCluster(vector<struct queryS
 //					}
 				}
 				delete seed_info_a;
+				delete seed_info_b; // added on 2023-11-23
 			}
 		}
 	}
@@ -624,6 +646,9 @@ vector<struct querySeqInfoVec*> LocalAssembly::queryCluster(vector<struct queryS
 					query_seq_info_all.at(i)->cluster_finished_flag = false;
 				}
 			}
+			// added on 2023-11-23
+			delete seed_info_a;
+			delete seed_info_b;
 		}
 	}
 
@@ -776,7 +801,7 @@ vector<int8_t> LocalAssembly::computeQcMatchProfileSingleQuery(queryCluSig_t *qu
 		for(j=1; j<colsNum; j++) scoreArr[j].path_val = 2;
 		for(i=1; i<rowsNum; i++) scoreArr[i*colsNum].path_val = 1;
 		// compute the scores of each element
-			for(i=1; i<rowsNum; i++){
+		for(i=1; i<rowsNum; i++){
 			for(j=1; j<colsNum; j++){
 				matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), QC_SIZE_RATIO_MATCH_THRES);
 				if(matchFlag) scoreIJ = matchScore;
@@ -792,7 +817,7 @@ vector<int8_t> LocalAssembly::computeQcMatchProfileSingleQuery(queryCluSig_t *qu
 				else
 					tmp_gapScore2 = gapScore;//-2
 
-				maxValue = INT_MIN;
+				maxValue = maxValue_ul = maxValue_u = maxValue_l = INT_MIN;
 				path_val = -1;
 				// compute the maximal score
 				if(scoreArr[(i-1)*colsNum+j-1].score+scoreIJ>maxValue) {// from (i-1, j-1)
@@ -813,9 +838,9 @@ vector<int8_t> LocalAssembly::computeQcMatchProfileSingleQuery(queryCluSig_t *qu
 
 				if(maxValue_ul>=maxValue_u and maxValue_ul>=maxValue_l){
 					if(matchFlag==false){
-						scoreArr[i*colsNum+j].ismissmatch = true;
+						scoreArr[i*colsNum+j].ismismatch = 1;
 					}else{
-						scoreArr[i*colsNum+j].ismissmatch = false;
+						scoreArr[i*colsNum+j].ismismatch = 0;
 					}
 				}
 				scoreArr[i*colsNum+j].score = maxValue;
@@ -835,42 +860,99 @@ vector<int8_t> LocalAssembly::qComputeSigMatchProfile(struct alnScoreNode *score
 	vector<int8_t> match_profile_vec;
 	int32_t i = rowsNum - 1, j = colsNum - 1, value;
 
-//	if(i==0 and j==0){
-//		match_profile_vec.push_back(1);
-//	}else if(i!=0 and j==0){
-//		match_profile_vec.push_back(0);
-//	}else if(i==0 and j!=0){
-//		match_profile_vec.push_back(0);
+//	if(rowsNum>=5 or colsNum>=5){
+//		cout << "\trowsNum=" << rowsNum << ", colsNum=" << colsNum << endl;
 //	}
+
+//	if(rowsNum>=colsNum){
+//		sig_num_arr[rowsNum-1] ++;
+//	}else{
+//		sig_num_arr[colsNum-1] ++;
+//	}
+
 	if(i==0 or j==0){
 		match_profile_vec.push_back(0);
+	}else{
+		while(i>0 or j>0){
+			value = scoreArr[i*colsNum+j].path_val;
+			if(value==0){ //from (i-1, j-1)
+				if(scoreArr[i*colsNum+j].ismismatch==1){
+					match_profile_vec.push_back(0);
+				}else{
+					match_profile_vec.push_back(1);
+				}
+				queryCluSig->qcSig_vec.at(i-1)->mate_qcSig = seed_qcQuery->qcSig_vec.at(j-1);
+				i--;
+				j--;
+			}
+			else if(value==1){ //from (i-1, j)
+				//?
+				match_profile_vec.push_back(0);
+				i--;
+			}
+			else{ //from (i, j-1)
+				match_profile_vec.push_back(0);
+				j--;
+			}
+			if(i==0 and j==0)
+				break;
+		}
+
+		reverse(match_profile_vec.begin(), match_profile_vec.end());
 	}
+
+//============================================
+#if POA_ALIGN_DEBUG
+	cout << "------------------- Profile -------------------" << endl;
+	// output the profile
+	vector<string> sigseq_vec1, sigseq_vec2;
+	string sig_str1, sig_str2;
+	i = rowsNum - 1; j = colsNum - 1;
 	while(i>0 or j>0){
 		value = scoreArr[i*colsNum+j].path_val;
 		if(value==0){ //from (i-1, j-1)
-			if(scoreArr[i*colsNum+j].ismissmatch){
-				match_profile_vec.push_back(0);
-			}else{
-				match_profile_vec.push_back(1);
-			}
-			queryCluSig->qcSig_vec.at(i-1)->mate_qcSig = seed_qcQuery->qcSig_vec.at(j-1);
+			sig_str1 = to_string(queryCluSig->qcSig_vec.at(i-1)->cigar_op_len) + "_" + to_string(queryCluSig->qcSig_vec.at(i-1)->cigar_op);
+			sig_str2 = to_string(seed_qcQuery->qcSig_vec.at(j-1)->cigar_op_len) + "_" + to_string(seed_qcQuery->qcSig_vec.at(j-1)->cigar_op);
+
+			sigseq_vec1.push_back(sig_str1);
+			sigseq_vec2.push_back(sig_str2);
+
 			i--;
 			j--;
 		}
 		else if(value==1){ //from (i-1, j)
 			//?
-			match_profile_vec.push_back(0);
+			//match_profile_vec.push_back(0);
+			sig_str1 = to_string(queryCluSig->qcSig_vec.at(i-1)->cigar_op_len) + "_" + to_string(queryCluSig->qcSig_vec.at(i-1)->cigar_op);
+			sigseq_vec1.push_back(sig_str1);
+			sigseq_vec2.push_back("-");
+
 			i--;
 		}
 		else{ //from (i, j-1)
-			match_profile_vec.push_back(0);
+			//match_profile_vec.push_back(0);
+			sig_str2 = to_string(seed_qcQuery->qcSig_vec.at(j-1)->cigar_op_len) + "_" + to_string(seed_qcQuery->qcSig_vec.at(j-1)->cigar_op);
+			sigseq_vec1.push_back("-");
+			sigseq_vec2.push_back(sig_str2);
+
 			j--;
 		}
 		if(i==0 and j==0)
 			break;
 	}
 
-	reverse(match_profile_vec.begin(), match_profile_vec.end());
+	reverse(sigseq_vec1.begin(), sigseq_vec1.end());
+	reverse(sigseq_vec2.begin(), sigseq_vec2.end());
+
+	size_t k;
+	for(k=0; k<sigseq_vec1.size(); k++) cout << sigseq_vec1.at(k) << "\t";
+	cout << endl;
+	for(k=0; k<sigseq_vec2.size(); k++) cout << sigseq_vec2.at(k) << "\t";
+	cout << endl;
+	for(k=0; k<match_profile_vec.size(); k++) cout << match_profile_vec.at(k) << "\t";
+	cout << endl;
+#endif
+//=====================================
 
 	return match_profile_vec;
 }
@@ -1151,17 +1233,18 @@ struct seqsVec *LocalAssembly::smoothQuerySeqData(string &refseq, vector<struct 
 
 double LocalAssembly::computeCompensationCoefficient(size_t startRefPos_assembly, size_t endRefPos_assembly, double mean_read_len){
 	size_t total_reg_size, refined_reg_size, reg_size_assemble;
-	double comp_coefficient;
+	double comp_coefficient = 1.0;
 
-	reg_size_assemble = endRefPos_assembly - startRefPos_assembly + 1;
-	total_reg_size = reg_size_assemble + 2 * mean_read_len;
-	refined_reg_size = reg_size_assemble + mean_read_len;  // flanking_area = (2 * mean_read_len) / 2
-	comp_coefficient = (double)total_reg_size / refined_reg_size;
-
+	if(clip_reg_flag){
+		reg_size_assemble = endRefPos_assembly - startRefPos_assembly + 1;
+		total_reg_size = reg_size_assemble + 2 * mean_read_len;
+		refined_reg_size = reg_size_assemble + mean_read_len;  // flanking_area = (2 * mean_read_len) / 2
+		comp_coefficient = (double)total_reg_size / refined_reg_size;
+	}
 	return comp_coefficient;
 }
 
-double LocalAssembly::computeLocalCov(vector<struct fqSeqNode*> &fq_seq_full_vec, double compensation_coefficient){
+double LocalAssembly::computeLocalCovClipReg(vector<struct fqSeqNode*> &fq_seq_full_vec, double compensation_coefficient){
 	double cov = 0, total;
 	struct fqSeqNode* fq_node;
 	size_t refined_reg_size;
@@ -1182,16 +1265,37 @@ double LocalAssembly::computeLocalCov(vector<struct fqSeqNode*> &fq_seq_full_vec
 	return cov;
 }
 
-void LocalAssembly::samplingReads(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val, double compensation_coefficient){
-	local_cov_original = computeLocalCov(fq_seq_vec, compensation_coefficient);
+double LocalAssembly::computeLocalCovIndelReg(vector<struct querySeqInfoNode*> &query_seq_info_all, double compensation_coefficient){
+	double cov = 0, total;
+	struct querySeqInfoNode* qseq_node;
+	size_t refined_reg_size;
+
+	refined_reg_size = endRefPos_assembly - startRefPos_assembly + 1 + 2 * mean_read_len;
+	if(refined_reg_size>0){
+		total = 0;
+		for(size_t i=0; i<query_seq_info_all.size(); i++){
+			qseq_node = query_seq_info_all.at(i);
+			total += qseq_node->seq.size();
+		}
+		cov = total / refined_reg_size * compensation_coefficient;
+		//cout << "total bases: " << total << " bp, local coverage: " << cov << endl;
+	}else{
+		cov = -1;
+		//cerr << "ERR: ref_seq_size=" << ref_seq_size << endl;
+	}
+	return cov;
+}
+
+void LocalAssembly::samplingReadsClipReg(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val, double compensation_coefficient){
+	local_cov_original = computeLocalCovClipReg(fq_seq_vec, compensation_coefficient);
 
 	if(local_cov_original>expect_cov_val){ // sampling
 		//cout << "sampling for " << readsfilename << ", original coverage: " << local_cov_original << ", expected coverage: " << expect_cov_val << ", compensation_coefficient: " << compensation_coefficient << endl;
-		samplingReadsOp(fq_seq_vec, expect_cov_val);
+		samplingReadsClipRegOp(fq_seq_vec, expect_cov_val);
 	}
 }
 
-void LocalAssembly::samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val){
+void LocalAssembly::samplingReadsClipRegOp(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val){
 	double expected_total_bases, total_bases;
 	size_t index, max_reads_num, reg_size;
 	struct fqSeqNode* fq_node;
@@ -1225,6 +1329,61 @@ void LocalAssembly::samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, doubl
 	sampling_flag = true;
 
 //	/cout << "After sampling, reads count: " << reads_count << ", total bases: " << total_bases << endl;
+}
+
+void LocalAssembly::samplingReadsIndelReg(vector<struct querySeqInfoNode*> &query_seq_info_all, double expect_cov_val, double compensation_coefficient){
+	local_cov_original = computeLocalCovIndelReg(query_seq_info_all, compensation_coefficient);
+
+	if(local_cov_original>expect_cov_val){ // sampling
+		//cout << "sampling for " << readsfilename << ", original coverage: " << local_cov_original << ", expected coverage: " << expect_cov_val << ", compensation_coefficient: " << compensation_coefficient << endl;
+		samplingReadsIndelRegOp(query_seq_info_all, expect_cov_val);
+	}
+}
+
+void LocalAssembly::samplingReadsIndelRegOp(vector<struct querySeqInfoNode*> &query_seq_info_all, double expect_cov_val){
+	double expected_total_bases, total_bases;
+	size_t index, max_reads_num, reg_size;
+	struct querySeqInfoNode* qseq_node;
+
+	// reverse the select flag
+	for(size_t i=0; i<query_seq_info_all.size(); i++){
+		qseq_node = query_seq_info_all.at(i);
+		qseq_node->selected_flag = false;
+	}
+
+	reg_size = endRefPos_assembly - startRefPos_assembly + 1 + mean_read_len;
+	expected_total_bases = reg_size * expect_cov_val;
+	max_reads_num = query_seq_info_all.size();
+
+	pthread_mutex_lock(&mutex_down_sample);
+	srand(1);
+	reads_count = 0;
+	total_bases = 0;
+	while(total_bases<=expected_total_bases and reads_count<=max_reads_num){
+		index = rand() % max_reads_num;
+		qseq_node = query_seq_info_all.at(index);
+		if(qseq_node->selected_flag==false){
+			qseq_node->selected_flag = true;
+
+			total_bases += qseq_node->seq.size();
+			reads_count ++;
+		}
+	}
+	pthread_mutex_unlock(&mutex_down_sample);
+	sampled_cov = total_bases / reg_size;
+	sampling_flag = true;
+
+//	/cout << "After sampling, reads count: " << reads_count << ", total bases: " << total_bases << endl;
+
+	// remove unselected items
+	for(size_t i=0; i<query_seq_info_all.size(); ){
+		qseq_node = query_seq_info_all.at(i);
+		if(qseq_node->selected_flag==false){
+			destroyAlnSegs(qseq_node->query_alnSegs);
+			delete qseq_node;
+			query_seq_info_all.erase(query_seq_info_all.begin()+i);
+		}else i++;
+	}
 }
 
 void LocalAssembly::saveSampledReads(string &readsfilename, vector<struct fqSeqNode*> &fq_seq_vec){
@@ -1647,41 +1806,14 @@ int32_t LocalAssembly::getLeftMostAlnSeg(vector<clipAlnData_t*> &query_aln_segs)
 	return left_most_idx;
 }
 
-//// get heter local consensus using abPOA
-//bool LocalAssembly::cnsByPoa(){
-//	bool flag;
-//	string poa_cmd, tmp_cons_filename, cmd1, cmd4;
-//
-//	// check the file
-//	flag = isFileExist(contigfilename);
-//	if(flag) return true; // cons was generated successfully previously
-//
-//	cmd1 = "mkdir -p " + tmpdir;
-//	cmd4 = "rm -rf " + tmpdir;  // delete files
-//
-//	tmp_cons_filename = tmpdir + "/cons.fa";
-//	system(cmd1.c_str());
-//
-//	poa_cmd = "abpoa -d " + readsfilename + " -o " + tmp_cons_filename + " > /dev/null 2>&1";
-//	system(poa_cmd.c_str());
-//
-//	flag = isFileExist(tmp_cons_filename);
-//	if(flag){ // consgenerated successfully
-//		assem_success_flag = true;
-//		rename(tmp_cons_filename.c_str(), contigfilename.c_str());
-//		system(cmd4.c_str());
-//	}else { // poa generated failed
-//		system(cmd4.c_str());  // remove temporary files
-//	}
-//	return flag;
-//}
-
 // get heter local consensus using abPOA
 bool LocalAssembly::cnsByPoa(){
 	bool flag;
-	string tmp_cons_filename, cmd1, cmd4;
-	ofstream outfile;
-	size_t k, serial_number;
+	string tmp_cons_filename, tmp_reads_filename, cons_header, cmd1, cmd2, cmd4;
+	ofstream cons_file;
+	ofstream reads_file;
+	size_t k, i, j, n_seqs, serial_number, cons_num;
+	int ret;
 
 	// check the file
 	flag = isFileExist(contigfilename);
@@ -1689,88 +1821,72 @@ bool LocalAssembly::cnsByPoa(){
 
 	cmd1 = "mkdir -p " + tmpdir;
 	cmd4 = "rm -rf " + tmpdir;  // delete files
-	tmp_cons_filename = tmpdir + "/cons.fa";
 
 	system(cmd1.c_str());
 
-// save the cons to file
-	outfile.open(tmp_cons_filename);
-	if(!outfile.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << tmp_cons_filename << endl;
+	// save the cons to file
+	cons_file.open(contigfilename);
+	if(!cons_file.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << contigfilename << endl;
 		exit(1);
 	}
 
-	for(k=0;k<seqs_vec.size();k++){
-		 // --- POA
-		uint n_seqs = seqs_vec.at(k)->seqs.size();
-		abpoa_t *ab = abpoa_init();
-		abpoa_para_t *abpt = abpoa_init_para();
-		abpt->disable_seeding = 1;
-		abpt->align_mode = 0; // global
-		abpt->out_msa = 0;
-		abpt->out_cons = 1;
-		abpt->out_gfa = 0;
-		// abpt->w = 6, abpt->k = 9;
-		// abpt->min_w = 10; // minimizer-based seeding and partition
-		// abpt->is_diploid = 1;
-		// abpt->min_freq = 0.3;
-		abpt->progressive_poa = 0;
-		abpoa_post_set_para(abpt);
+	for(k=0; k<seqs_vec.size(); k++){
+		tmp_reads_filename = readsfilename_prefix + "_" + to_string(k) + readsfilename_suffix;
+		readsfilename_vec.push_back(tmp_reads_filename);  // save read file names
+		reads_file.open(tmp_reads_filename);
+		if(!reads_file.is_open()){
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot open file " << tmp_reads_filename << endl;
+			exit(1);
+		}
 
-		int *seq_lens = (int *)malloc(sizeof(int) * n_seqs);
-		uint8_t **bseqs = (uint8_t **)malloc(sizeof(uint8_t *) * n_seqs);
-		for (uint i = 0; i < n_seqs; ++i) {
-			seq_lens[i] = seqs_vec.at(k)->seqs[i].size();
-			bseqs[i] = (uint8_t *)malloc(sizeof(uint8_t) * seq_lens[i]);
-			for (int j = 0; j < seq_lens[i]; ++j) {
-				bseqs[i][j] = nt4_table[(int)seqs_vec.at(k)->seqs[i][j]];
+		n_seqs = seqs_vec.at(k)->seqs.size();
+
+//		if(n_seqs>300){
+//			cout << "tmp_reads_filename=" << tmp_reads_filename << ", n_seqs=" << n_seqs << endl;
+//		}
+
+		if(n_seqs>=min_supp_num){ // only use sufficient reads data to generate consensus sequence
+			for (i = 0; i < n_seqs; ++i) {
+				reads_file << ">" << seqs_vec.at(k)->qname[i] << endl;
+				reads_file << seqs_vec.at(k)->seqs[i] << endl;
 			}
-		}
+			reads_file.close();
 
-		abpoa_msa(ab, abpt, n_seqs, NULL, seq_lens, bseqs, NULL, NULL);
+			tmp_cons_filename = tmpdir + "/consensus_" + to_string(k) + ".fa";
+			cmd2 = "abpoa " + tmp_reads_filename + " -o " + tmp_cons_filename + " > /dev/null 2>&1";
+			system(cmd2.c_str());
 
-		abpoa_cons_t *abc = ab->abc;
+			FastaSeqLoader fa_loader(tmp_cons_filename);
+			for(i=0; i<fa_loader.fastaSeqVec.size(); i++){
+				if(fa_loader.fastaSeqVec.at(i).size()>0){
+					serial_number = k + 1;
+					cons_header = ">Consensus_sequence_";
+					cons_header += to_string(serial_number) + "_"; //serial number
+					cons_header += to_string(seqs_vec.at(k)->seqs.size()) + "-";  //cluster_number
 
-		string cons = "";
-		if (abc->n_cons > 0) {
-			for (int j = 0; j < abc->cons_len[0]; ++j) {
-				cons += "ACGTN"[abc->cons_base[0][j]];
+					for(j=0; j<seqs_vec.at(k)->qname.size()-1; j++)
+						cons_header += seqs_vec.at(k)->qname.at(j) + "-";
+					cons_header += seqs_vec.at(k)->qname.at(seqs_vec.at(k)->qname.size()-1);
+
+					cons_file << cons_header << endl; // header
+					cons_file << fa_loader.fastaSeqVec.at(i) << endl;  // seq
+				}
 			}
+		}else{
+			reads_file.close();
 		}
-
-		serial_number = k + 1;
-		outfile << ">Consensus_sequence_" ;
-		outfile << serial_number << "_"; //serial number
-		outfile << seqs_vec.at(k)->seqs.size() << "-";  //cluster_number
-
-		for(uint i=0; i<seqs_vec.at(k)->qname.size()-1; i++){
-			outfile << seqs_vec.at(k)->qname.at(i) << "-";
-		}
-		outfile << seqs_vec.at(k)->qname.at(seqs_vec.at(k)->qname.size()-1) << endl;
-
-		outfile << cons << endl;  // seq
-
-
-		for (uint i = 0; i < n_seqs; ++i){
-			free(bseqs[i]);
-		}
-		free(bseqs);
-		free(seq_lens);
-		abpoa_free(ab);
-		abpoa_free_para(abpt);
 	}
 
-	outfile.close();
+	cons_file.close();
 	destorySeqsVec(seqs_vec);
 
 	flag = isFileExist(tmp_cons_filename);
 	if(flag){ // consgenerated successfully
 		assem_success_flag = true;
-		rename(tmp_cons_filename.c_str(), contigfilename.c_str());
-		system(cmd4.c_str());
-	}else { // poa generated failed
-		system(cmd4.c_str());  // remove temporary files
+		//rename(tmp_cons_filename.c_str(), contigfilename.c_str());
 	}
+	system(cmd4.c_str());  // remove temporary files
 
 	return flag;
 }

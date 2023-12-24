@@ -84,6 +84,7 @@ class Chrome{
 		void chrLoadDataAssemble();
 		int chrGenerateLocalAssembleWorkOpt();
 		void chrResetAssembleData();
+		Block *computeBlocByPos(int64_t begPos, vector<Block*> &block_vec);
 		void chrLoadDataCall();
 		void chrCollectCallWork();
 		int chrCall();
@@ -116,7 +117,6 @@ class Chrome{
 		void chrResetVarCandFiles();
 		void chrSetMisAlnRegFile();
 		void chrResetMisAlnRegFile();
-		Block *computeBlocByPos(int64_t begPos, vector<Block*> &block_vec);
 		int32_t computeBlocID(int64_t begPos, vector<Block*> &block_vec);
 		int chrGenerateLocalAssembleWorkOpt_st();
 		int chrGenerateLocalAssembleWorkOpt_mt();
@@ -146,8 +146,6 @@ class Chrome{
 		void removeRedundantVarItemsInNewCalledVarvec(reg_t *reg_idx, int32_t idx, vector<varCand*> &var_cand_vec);
 		void removeFPNewVarVec();
 		void removeFPNewVarVecIndel(vector<varCand*> &var_cand_vec);
-		bool isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_vec);
-		bool isSnvInClipReg(size_t pos, vector<mateClipReg_t*> &mate_clipReg_vec);
 
 		// DUP, INV, TRA
 		void chrComputeMateClipReg();

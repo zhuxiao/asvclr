@@ -1,17 +1,17 @@
 # ASVCLR
 
 ```
-     @@@             @@@@@          @@     @@@           @@@@@          @@@             @@@@@@  
-     @@@            @@@@@@@         @@@    @@@         @@@@@@@@         @@@             @@@@@@@ 
-    @@@@@           @@@             @@@   @@@          @@@              @@@             @@   @@ 
-    @@@@@           @@@             @@@   @@@         @@@               @@@             @@   @@ 
-   @@@ @@           @@@@             @@@ @@@          @@@               @@@             @@  @@@ 
-   @@@ @@@           @@@@@           @@@ @@@          @@@               @@@             @@@@@@  
-   @@@@@@@            @@@@@          @@@ @@@          @@@               @@@             @@@@@@  
-  @@@@@@@@@             @@@           @@@@@           @@@               @@@             @@  @@  
-  @@@   @@@         @   @@@           @@@@@            @@@   @          @@@             @@  @@@ 
- @@@    @@@         @@@@@@@            @@@             @@@@@@@@         @@@@@@@         @@   @@@
- @@@     @@          @@@@@             @@@               @@@@@          @@@@@@@         @@   @@@
+     @@@            @@@@@         @@     @@@          @@@@@         @@@            @@@@@@  
+     @@@           @@@@@@@        @@@    @@@        @@@@@@@@        @@@            @@@@@@@ 
+    @@@@@          @@@            @@@   @@@         @@@             @@@            @@   @@ 
+    @@@@@          @@@            @@@   @@@        @@@              @@@            @@   @@ 
+   @@@ @@          @@@@            @@@ @@@         @@@              @@@            @@  @@@ 
+   @@@ @@@          @@@@@          @@@ @@@         @@@              @@@            @@@@@@  
+   @@@@@@@           @@@@@         @@@ @@@         @@@              @@@            @@@@@@  
+  @@@@@@@@@            @@@          @@@@@          @@@              @@@            @@  @@  
+  @@@   @@@        @   @@@          @@@@@           @@@   @         @@@            @@  @@@ 
+ @@@    @@@        @@@@@@@           @@@            @@@@@@@@        @@@@@@@        @@   @@@
+ @@@     @@         @@@@@            @@@              @@@@@         @@@@@@@        @@   @@@
 ```
 
 Accurate Structural Variant Caller for Long Reads
@@ -22,12 +22,14 @@ ASVCLR is an accurate Structural Variant Caller for Long Reads, such as PacBio s
 ## Prerequisites
 ASVCLR depends on the following libraries and tools:
 * HTSlib (http://www.htslib.org/download/)
+* abPOA (https://github.com/yangao07/abPOA/releases)
+* minimap2 (https://github.com/lh3/minimap2/releases)
 * Canu 2.1 or higher (https://github.com/marbl/canu/releases)
 * BLAT (http://hgdownload.soe.ucsc.edu/admin/exe/linux.x86_64/blat/)
 * g++ (v4.7 or higher which supports c++11)
 * awk (https://pkgs.org/download/gawk)
 
-The above library and tools should be installed before compiling ASVCLR. Canu (2.1 or higher) and BLAT should be globally accessible in the computer system, these executable files `canu` and `blat` or their soft links should be included in the `$PATH` directory.
+The above library and tools should be installed before compiling ASVCLR. abPOA, minimap2, Canu (2.1 or higher) and BLAT should be globally accessible in the computer system, these executable files `abpoa`, `minimap2`, `canu` and `blat` or their soft links should be included in the `$PATH` directory.
 
 Note that: For different versions of Canu assembler, the v2.1 (and higher) is several times faster than v2.0 and previous versions. Besides, the running time of v1.7 is similar to v2.1, however, it has less ability to construct the assembly results (i.e. contigs) in some genomic regions due to the overlap failure during the assembly process. Therefore, Canu 2.1 and higher versions is highly recommended in ASVCLR.
 
@@ -67,27 +69,32 @@ $ asvclr all -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 Then, the following commands `detect`, `assemble` and `call` will be performed in turn. The help information can be shown:
 ```sh
 Program: ASVCLR (Accurate Structural Variant Caller for Long Reads)
-Version: 1.1.2 (using htslib 1.12)
+Version: 1.2.0 (using htslib 1.17)
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]
 
 Description:
    REF_FILE      Reference file (required)
    BAM_FILE      Coordinate-sorted file (required)
-   Region        Limit reference region to process: CHR|CHR:START-END.
+   Region        Reference regions to process: CHR|CHR:START-END.
                  If unspecified, all reference regions will be 
                  processed (optional)
 
 Options: 
    -b INT        block size [1000000]
    -s INT        Slide window size [500]
-   -m INT        minimal SV size to report [2]
+   -m INT        minimal SV size to report [20]
    -M INT        maximal SV size to report [50000]
                  Variants with size smaller than threshold will be ignored
-   -n INT        minimal number of reads supporting a SV [7]
+   -n INT        minimal number of reads supporting a SV [-1].
+                 When it is not specified, -1 means the value will be
+                 estimated to be 0.07 times of the sequencing depth of
+                 the data set (rounded)
+   -r FLOAT      minimal ratio threshold of the largest split-alignment segment
+                 of a read allowing for indel detection. [0.5]
    -e INT        minimal clipping end size [200]. Clipping events
                  with size smaller than threshold will be ignored
-   -x FLOAT      expected sampling coverage for local assemble [30], 
+   -x FLOAT      expected sampling coverage for local assemble [40], 
                  0 for no coverage sampling
    -o DIR        output directory [output]
    -p STR        prefix of output result files [null]
@@ -99,11 +106,23 @@ Options:
                  number of threads for each assemble work
    --assem-chunk-size INT
                  maximal reference chunk size to collect reads data to perform
-                 local assemble [10000]. Reads of variants with reference
+                 local assemble [1000]. Reads of variants with reference
                  distance < INT will be collected to perform local assemble
+   --assem-side-ext-size INT
+                 region extend size on both sides while generating consensus sequences
+                 [1000] bp.
+   --assem-side-ext-size-clip INT
+                 clip region extend size on both sides while generating assembly sequences
+                 [10000] bp.
+   --min-cons-read-size INT
+                 minimal read segment size to generate consensus sequences [100] bp.
    --keep-assemble-reads
                  Keep temporary reads from being deleted during local assemble.
                  This may take some additional disk space
+   --reassemble-failed-work
+                 Reperform previously failed local assemble work.
+   --min-input-cov-assemble FLOAT
+                 Minimum input coverage for local assemble [5]
    --monitor_proc_names_assemble STR
                  Process names to be monitored during Canu assemble. These processes may
                  have ultra-high CPU running time under some certain circumstances and
@@ -118,10 +137,10 @@ Options:
                  ["blat"]
    --max_proc_running_minutes_assemble INT
                  Monitored processes for assemble will be terminated if their CPU running
-                 time exceed INT minutes: [500]
+                 time exceed INT minutes: [30]
    --max_proc_running_minutes_call INT
                  Monitored processes for call will be terminated if their CPU running time
-                 exceed INT minutes: [120]
+                 exceed INT minutes: [30]
    --technology STR
                  Sequencing technology [pacbio]:
                    pacbio     : the PacBio CLR sequencing technology;
@@ -130,6 +149,22 @@ Options:
    --include-decoy
                  include decoy items in result
    --sample STR  Sample name ["sample"]
+   --gt_min_sig_size INT
+                 minimal signature size threshold for genotyping [3].
+                 Signatures with size larger than INT will be processed, otherwise, they will be ignored.
+   --gt_size_ratio_match FLOAT
+                 signature size ratio threshold for genotyping [0.7].
+                 Two signatures are match if the ratio of their sizes is larger than FLOAT.
+   --gt_min_alle_ratio FLOAT
+                 minimal allele ratio threshold for genotyping [0.3].
+                 Variation is homozygous if the ratio of allele count is less than FLOAT. 
+                 Variation is heterozygous if the ratio of allele count is larger than FLOAT
+                 and less than maximal allele ratio threshold (--gt_max_alle_ratio).
+   --gt_max_alle_ratio FLOAT
+                 maximal allele ratio threshold for genotyping [0.7].
+                 There is no genotype information if ratio of allele count is larger than FLOAT.
+                 Variation is heterozygous if the ratio of allele count is less than FLOAT
+                 and larger than minimal allele ratio threshold (--gt_min_alle_ratio).
    -v,--version  show version information
    -h,--help     show this help message and exit
 ```
@@ -140,22 +175,23 @@ Besides, the overall help information can be shown as below:
 ```sh
 $ asvclr
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.1.2 (using htslib 1.12)
+Version: 1.2.0 (using htslib 1.17)
 
 Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]
 
 Description:
-   REF_FILE      Reference file (required)
-   BAM_FILE      Coordinate-sorted BAM file (required)
-   Region        Reference regions to process: CHR|CHR:START-END.
-                 If unspecified, all reference regions will be 
-                 processed (optional)
+   REF_FILE          Reference file (required)
+   BAM_FILE          Coordinate-sorted BAM file (required)
+   Region            Reference regions to process: CHR|CHR:START-END.
+                     If unspecified, all reference regions will be 
+                     processed (optional)
 
 Commands:
-   detect        detect indel signatures in aligned reads
-   assemble      assemble candidate regions
-   call          call indels by alignments of local genome assemblies
-   all           run the above commands in turn
+   detect            detect indel signatures in aligned reads
+   assemble          assemble candidate regions
+   call              call indels by alignments of local genome assemblies
+   all               run the above commands in turn
+   detect-assemble   run 'detect' and 'assemble' commands in turn
 ```
 
 
@@ -185,7 +221,7 @@ And the help information are shown below:
 ```sh
 $ asvclr detect
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.1.2 (using htslib 1.12)
+Version: 1.2.0 (using htslib 1.17)
 
 Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -199,10 +235,13 @@ Description:
 Options: 
    -b INT        block size [1000000]
    -s INT        Slide window size [500]
-   -m INT        minimal SV size to report [2]
-   -M INT        maximal SV size to report [50000].
+   -m INT        minimal SV size to report [20]
+   -M INT        maximal SV size to report [50000]
                  Variants with size smaller than threshold will be ignored
-   -n INT        minimal number of reads supporting a SV [7]
+   -n INT        minimal number of reads supporting a SV [-1].
+                 When it is not specified, -1 means the value will be
+                 estimated to be 0.07 times of the sequencing depth of
+                 the data set (rounded)
    -e INT        minimal clipping end size [200]. Clipping events
                  with size smaller than threshold will be ignored
    -o DIR        output directory [output]
@@ -218,7 +257,9 @@ Options:
 
 ### `Assemble` Step
 
-Perform local assembly for the detected variant regions using Canu, and extract the corresponding local reference.
+In 'assemble' step, ASVCLR extracts the corresponding local reference first. And then, ASVCLR generate the contigs by different strategies.
+* For Indels in the inner-alignments, ASVCLR clusters the variation signatures by the modified NW (Needleman Wunsch) pairwise alignment algorithm, and for each cluster, ASVCLR extracts the read sequences and smoothing to remove sequence errors and short variation items. Then, ASVCLR performs the consensus operation by using abPOA to generate consensus sequences.
+* For variations in clipping regions, such as DUPs, INVs and TRAs, ASVCLR performs local assembly by using Canu.
 
 ```sh
 $ asvclr assemble -o out_dir hg38.fa hg38_ngmlr_sorted.bam
@@ -229,7 +270,7 @@ And the help information are shown below:
 ```sh
 $ asvclr assemble
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.1.2 (using htslib 1.12)
+Version: 1.2.0 (using htslib 1.17)
 
 Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>
 
@@ -238,9 +279,18 @@ Description:
    BAM_FILE      Coordinate-sorted BAM file (required)
 
 Options: 
+   -m INT        minimal SV size to report [20]
+   -M INT        maximal SV size to report [50000]
+                 Variants with size smaller than threshold will be ignored
+   -n INT        minimal number of reads supporting a SV [-1].
+                 When it is not specified, -1 means the value will be
+                 estimated to be 0.07 times of the sequencing depth of
+                 the data set (rounded)
+   -r FLOAT      minimal ratio threshold of the largest split-alignment segment
+                 of a read allowing for indel detection. [0.5]
    -e INT        minimal clipping end size [200]. Clipping events
                  with size smaller than threshold will be ignored
-   -x FLOAT      expected sampling coverage for local assemble [30], 
+   -x FLOAT      expected sampling coverage for local assemble [40], 
                  0 for no coverage sampling
    -o DIR        output directory [output]
    -p STR        prefix of output result files [null]
@@ -252,11 +302,23 @@ Options:
                  number of threads for each assemble work
    --assem-chunk-size INT
                  maximal reference chunk size to collect reads data to perform
-                 local assemble [10000]. Reads of variants with reference
+                 local assemble [1000]. Reads of variants with reference
                  distance < INT will be collected to perform local assemble
+   --assem-side-ext-size INT
+                 region extend size on both sides while generating consensus sequences
+                 [1000] bp.
+   --assem-side-ext-size-clip INT
+                 clip region extend size on both sides while generating assembly sequences
+                 [10000] bp.
+   --min-cons-read-size INT
+                 minimal read segment size to generate consensus sequences [100] bp.
    --keep-assemble-reads
                  Keep temporary reads from being deleted during local assemble.
                  This may take some additional disk space
+   --reassemble-failed-work
+                 Reperform previously failed local assemble work.
+   --min-input-cov-assemble FLOAT
+                 Minimum input coverage for local assemble [5]
    --monitor_proc_names_assemble STR
                  Process names to be monitored during Canu assemble. These processes may
                  have ultra-high CPU running time under some certain circumstances and
@@ -265,7 +327,7 @@ Options:
                  ["overlapInCore,falconsense"]
    --max_proc_running_minutes_assemble INT
                  Monitored processes for assemble will be terminated if their CPU running
-                 time exceed INT minutes: [500]
+                 time exceed INT minutes: [30]
    --technology STR
                  Sequencing technology [pacbio]:
                    pacbio     : the PacBio CLR sequencing technology;
@@ -284,7 +346,8 @@ Note that:
 
 ### `Call` Step
 
-Align the assembly result (contigs) to its local reference using BLAT to generate the sim4 formated alignments, and call each type variations using the BLAT alignments.
+* For Indel variations, the consensus sequences (contigs) are aligned onto the local reference to generate the PAF format alignment with CIGAR tag by using minimap2 with '-c' option, then the indels variations will be detected with their genotyes.
+* For variations in clipping regions, the assembly result (contigs) are aligned onto its local reference using BLAT to generate the sim4 formated alignments, and each type variations are detected according to the BLAT alignments.
 
 ```sh
 $ asvclr call -o out_dir hg38.fa hg38_ngmlr_sorted.bam
@@ -295,7 +358,7 @@ And the help information are shown below:
 ```sh
 $ asvclr call
 Program: asvclr (Accurate Structural Variant Caller for Long Reads)
-Version: 1.1.2 (using htslib 1.12)
+Version: 1.2.0 (using htslib 1.17)
 
 Usage: asvclr call [options] <REF_FILE> <BAM_FILE>
 
@@ -304,7 +367,7 @@ Description:
    BAM_FILE      Coordinate-sorted BAM file (required)
 
 Options: 
-   -m INT        minimal SV size to report [2]
+   -m INT        minimal SV size to report [20]
    -M INT        maximal SV size to report [50000]
                  Variants with size smaller than threshold will be ignored
    -e INT        minimal clipping end size [200]. Clipping events
@@ -321,10 +384,26 @@ Options:
                  ["blat"]
    --max_proc_running_minutes_call INT
                  Monitored processes for call will be terminated if their CPU running time
-                 exceed INT minutes: [120]
+                 exceed INT minutes: [30]
    --include-decoy
                  include decoy items in result
    --sample STR  Sample name ["sample"]
+   --gt_min_sig_size INT
+                 minimal signature size threshold for genotyping [3].
+                 Signatures with size larger than INT will be processed, otherwise, they will be ignored.
+   --gt_size_ratio_match FLOAT
+                 signature size ratio threshold for genotyping [0.7].
+                 Two signatures are match if the ratio of their sizes is larger than FLOAT.
+   --gt_min_alle_ratio FLOAT
+                 minimal allele ratio threshold for genotyping [0.3].
+                 Variation is homozygous if the ratio of allele count is less than FLOAT. 
+                 Variation is heterozygous if the ratio of allele count is larger than FLOAT
+                 and less than maximal allele ratio threshold (--gt_max_alle_ratio).
+   --gt_max_alle_ratio FLOAT
+                 maximal allele ratio threshold for genotyping [0.7].
+                 There is no genotype information if ratio of allele count is larger than FLOAT.
+                 Variation is heterozygous if the ratio of allele count is less than FLOAT
+                 and larger than minimal allele ratio threshold (--gt_min_alle_ratio).
    -v,--version  show version information
    -h,--help     show this help message and exit
 ```
@@ -332,7 +411,7 @@ Options:
 
 ## Output Result Description
 
-Variant detection results are reported in two kinds of file format: VCF format and BED/BEDPE format. And in ASVCLR, variants of these two formats are equivalent.
+Variant detection results are reported in two kinds of file format: VCF format and BED/BEDPE format.
 
 ### (1) VCF file format
 

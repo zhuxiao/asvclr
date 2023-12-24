@@ -50,7 +50,12 @@ Region::Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrl
 
 	// compute the local region coverage
 	localRegCov = computeMeanCovReg(startMidPartPos, endMidPartPos);
+	refinedLocalRegCov = computeRefinedMeanCovReg(startMidPartPos, endMidPartPos);
 	highIndelSubRegNum = 0;
+
+//	if(localRegCov>300){
+//		cout << "HHHHHHHHHHHHHHHHHHHHH " << chrname << ":" << startRPos << "-" << endRPos << ", localRegCov=" << localRegCov << endl;
+//	}
 
 	indelCandFlag = false;
 	difType = REG_DIF_NONE;
@@ -233,6 +238,7 @@ reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosR
 	reg->sv_len = 0;
 	reg->query_id = -1;
 	reg->blat_aln_id = -1;
+	reg->minimap2_aln_id = -1;
 	reg->call_success_status = false;
 	reg->short_sv_flag = false;
 	reg->zero_cov_flag = false;
@@ -255,6 +261,23 @@ double Region::computeMeanCovReg(int64_t startPosReg, int64_t endPosReg){
 	if(totalRefBaseNum) mean_cov = (double)totalReadBeseNum/totalRefBaseNum;
 	else mean_cov = 0;
 	return mean_cov;
+}
+
+// compute the refined mean coverage of the sub-region, excluding the gap region
+double Region::computeRefinedMeanCovReg(int64_t startPosReg, int64_t endPosReg){
+	int64_t i, j, totalReadBeseNum = 0, totalRefBaseNum = 0;
+	double refined_mean_cov;
+	for(i=startPosReg; i<=endPosReg; i++)
+		if(regBaseArr[i-startRPos].coverage.idx_RefBase!=4){ // excluding 'N'
+			totalReadBeseNum += regBaseArr[i-startRPos].coverage.num_bases[5] + regBaseArr[i-startRPos].delVector.size() + regBaseArr[i-startRPos].del_num_from_del_vec;
+			// inserted bases
+			for(j=0; j<regBaseArr[i-startRPos].insVector.size(); j++)
+				totalReadBeseNum += regBaseArr[i-startRPos].insVector.at(j)->seq.size();
+			totalRefBaseNum ++;
+		}
+	if(totalRefBaseNum) refined_mean_cov = (double)totalReadBeseNum/totalRefBaseNum;
+	else refined_mean_cov = 0;
+	return refined_mean_cov;
 }
 
 // compute the number of high indel events sub-regions
@@ -280,6 +303,38 @@ int32_t Region::computeReadIndelEventNumReg(int64_t startPosReg, int64_t endPosR
 		total += base->insVector.size() + base->delVector.size() + base->clipVector.size();
 	}
 	return total;
+}
+
+// compute the number of valid signatures in the sub-region, excluding the gap region
+int32_t Region::computeValidSigNumReg(int64_t startPosReg, int64_t endPosReg, int32_t min_sig_size){
+	int64_t i, j, totalValidSigNum = 0;
+	Base *base;
+	insEvent_t *ins;
+	delEvent_t *del;
+	clipEvent_t *clip;
+	for(i=startPosReg; i<=endPosReg; i++){
+		base = regBaseArr + i - startRPos;
+		if(base->coverage.idx_RefBase!=4){ // excluding 'N'
+			// indel vector
+			for(j=0; j<base->insVector.size(); j++){
+				ins = base->insVector.at(j);
+				if(ins->seq.size()>=min_sig_size) totalValidSigNum ++;
+			}
+			for(j=0; j<base->delVector.size(); j++){
+				del = base->delVector.at(j);
+				if(del->seq.size()>=min_sig_size) totalValidSigNum ++;
+			}
+			// clipping vector
+			for(j=0; j<base->clipVector.size(); j++){
+				clip = base->clipVector.at(j);
+				if(clip->seq.size()>=min_sig_size) totalValidSigNum ++;
+			}
+		}else{ // do not tolerate the gap region
+			totalValidSigNum = 0;
+			break;
+		}
+	}
+	return totalValidSigNum;
 }
 
 // detect SNVs for the region
@@ -415,7 +470,7 @@ void Region::detectIndelReg(){
 	int64_t i = startMidPartPos - subRegSize;
 	if(i<minRPos) i = minRPos;
 	while(i<endMidPartPos){
-//		if(i>2415000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
+//		if(i>868500)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
 //			cout << i << endl;
 		//if(i>14781000){
 		reg = getIndelReg(i);
@@ -435,10 +490,10 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 	reg_t *reg = NULL;
 	int32_t reg_size1, reg_size2, num1, num3, num4, extendSize, high_con_indel_base_num, large_indel_base_num;
 	vector<double> num_vec;
-	double high_indel_clip_ratio;
+	double tmp_cov, high_indel_clip_ratio;
 	int64_t i, checkPos, startPos1, endPos1, startPos2;
-	int64_t startPos_indel = -1, endPos_indel = -1;
-	bool indel_beg_flag, indel_end_flag;
+	int64_t startPos_indel = -1, endPos_indel = -1, valid_sig_num;
+	bool indel_beg_flag, indel_end_flag, valid_flag;
 
 	checkPos = startCheckPos;
 	while(checkPos<=endMidPartPos){
@@ -523,18 +578,34 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 		}
 		// allocate the indel region
 		if(indel_beg_flag and indel_end_flag){
-			high_con_indel_base_num = getHighConIndelNum(startPos_indel, endPos_indel, MIN_HIGH_INDEL_BASE_RATIO, IGNORE_POLYMER_RATIO_THRES);
-			large_indel_base_num = getLargeIndelBaseNum(startPos_indel, endPos_indel);
-			if(endPos_indel-startPos_indel+1>=paras->min_sv_size_usr or high_con_indel_base_num>=1 or large_indel_base_num>=1){
+			valid_flag = true;
+			// compute mean coverage, the number of SVs with valid size
+//			tmp_cov = computeMeanCovReg(startPos_indel, endPos_indel);  // localRegCov
+//			if(tmp_cov<paras->minReadsNumSupportSV) valid_flag = false;
+//			if(localRegCov<paras->minReadsNumSupportSV) valid_flag = false;
+//			if(valid_flag){
+				valid_sig_num = computeValidSigNumReg(startPos_indel, endPos_indel, paras->min_sv_size_usr);
+				//if(localRegCov<paras->minReadsNumSupportSV and valid_sig_num<paras->minReadsNumSupportSV) valid_flag = false;
+				if(localRegCov<paras->minReadsNumSupportSV or valid_sig_num<paras->minReadsNumSupportSV) valid_flag = false;
+//			}
+
+			if(valid_flag){
+				high_con_indel_base_num = getHighConIndelNum(startPos_indel, endPos_indel, MIN_HIGH_INDEL_BASE_RATIO, IGNORE_POLYMER_RATIO_THRES);
+				large_indel_base_num = getLargeIndelBaseNum(startPos_indel, endPos_indel);
+				if(endPos_indel-startPos_indel+1<paras->min_sv_size_usr and high_con_indel_base_num<1 and large_indel_base_num<1)
+					valid_flag = false;
+			}
+			//if(endPos_indel-startPos_indel+1>=paras->min_sv_size_usr or high_con_indel_base_num>=1 or large_indel_base_num>=1){
 			//if(endPos_indel-startPos_indel+1>=paras->min_sv_size_usr){
+			if(valid_flag){
 				num1 = getDisZeroCovNum(startPos_indel, endPos_indel);
 				//num2 = getMismatchBasesAround(startPos_indel, endPos_indel);
 				num_vec = getTotalHighIndelClipRatioBaseNum(regBaseArr+startPos_indel-startRPos, endPos_indel-startPos_indel+1);
 				num4 = num_vec.at(0);
 				high_indel_clip_ratio = num_vec.at(1);
 				//if(num1>0 or num2>=DISAGREE_NUM_THRES_REG or num3>0) {
-				if(num1>0 or num4>0 or high_indel_clip_ratio>=0.1f) {
-				//if(num1>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
+				//if(num1>0 or num4>0 or high_indel_clip_ratio>=0.1f) {
+				if(num1>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
 					reg = allocateReg(chrname, startPos_indel, endPos_indel);
 					break;
 				}else checkPos = endPos_indel + 1;
@@ -662,7 +733,7 @@ void Region::detectHighClipReg(){
 	int64_t i = startMidPartPos - SUB_CLIP_REG_SIZE;
 	if(i<1) i = 1;
 	while(i<endMidPartPos){
-//		if(i>999800)
+//		if(i>869400)
 //			cout << i << endl;
 
 		reg_t *reg = getClipReg(i);
@@ -707,16 +778,17 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 
 		if(startPos_clip!=-1 and endPos_clip!=-1){ // check disagreements
 			// compute the number of disagreements
-			int32_t disagreeNum = computeDisagreeNum(regBaseArr+startPos_clip-startRPos, endPos_clip-startPos_clip+1);
-			normal_reg_flag = haveNoClipSig(startPos_clip, endPos_clip, HIGH_CLIP_RATIO_THRES*3);
+			//int32_t disagreeNum = computeDisagreeNum(regBaseArr+startPos_clip-startRPos, endPos_clip-startPos_clip+1); // deleted on 2023-12-18
+			//normal_reg_flag = haveNoClipSig(startPos_clip, endPos_clip, HIGH_CLIP_RATIO_THRES*3);
 
-			if(disagreeNum>=1 or normal_reg_flag==false) {
+			//if(disagreeNum>=1 or normal_reg_flag==false) { // deleted on 2023-12-18
+			//if(normal_reg_flag==false) {
 				reg = allocateReg(chrname, startPos_clip, endPos_clip);
 				break;
 			}else{
 				clip_reg_flag = false;
 				startPos_clip = endPos_clip = -1;
-			}
+			//}
 		}
 
 		checkPos = endPos_tmp + 1;
@@ -890,14 +962,17 @@ bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_t
 		}
 	}
 
-	if(localRegCov>0){
-		ratio = clip_num / localRegCov;
+	//if(localRegCov>0){ // deleted on 2023-12-18
+	if(refinedLocalRegCov>=paras->minReadsNumSupportSV){
+		//ratio = clip_num / localRegCov; // deleted on 2023-12-18
+		ratio = clip_num / refinedLocalRegCov;
 		if(ratio>=clip_ratio_thres) flag = false;
 	}
 
 	if(flag){
 		for(i=startPos; i<=endPos; i++)
-			if((double)regBaseArr[i-startRPos].clipVector.size()/regBaseArr[i-startRPos].coverage.num_bases[5]>=clip_ratio_thres){
+			//if((double)regBaseArr[i-startRPos].clipVector.size()/regBaseArr[i-startRPos].coverage.num_bases[5]>=clip_ratio_thres){ // deleted on 2023-12-18
+			if(regBaseArr[i-startRPos].coverage.num_bases[5]+regBaseArr[i-startRPos].del_num_from_del_vec>0 and (double)regBaseArr[i-startRPos].clipVector.size()/(regBaseArr[i-startRPos].coverage.num_bases[5]+regBaseArr[i-startRPos].del_num_from_del_vec)>=clip_ratio_thres){
 				flag = false;
 				break;
 			}

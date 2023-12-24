@@ -263,11 +263,11 @@ void Block::blockDetect(){
 	// compute abnormal signatures
 	computeAbSigs();
 
-	//printRegVec(indelVector, "indelVector");
+//	printRegVec(indelVector, "indelVector");
 
 	removeFalseIndel();
 
-	//printRegVec(indelVector, "indelVector");
+//	printRegVec(indelVector, "indelVector");
 
 	// remove false SNV
 	removeFalseSNV();
@@ -536,7 +536,7 @@ int Block::computeAbSigs(){
 	updateZeroCovRegUsingIndelReg(zeroCovRegVector, indelVector);
 
 	// update indel regions
-	updateSVRegUsingLongZeroCov();
+	//updateSVRegUsingLongZeroCov(); // removed 2023-12-07
 
 	return 0;
 }
@@ -652,6 +652,7 @@ void Block::computeZeroCovReg(Region &reg){
 			reg_tmp->sv_len = 0;
 			reg_tmp->query_id = -1;
 			reg_tmp->blat_aln_id = -1;
+			reg_tmp->minimap2_aln_id = -1;
 			reg_tmp->call_success_status = false;
 			reg_tmp->short_sv_flag = false;
 			reg_tmp->zero_cov_flag = false;

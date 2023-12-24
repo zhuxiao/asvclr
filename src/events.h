@@ -2,6 +2,7 @@
 #define SRC_EVENTS_H_
 
 #include <iostream>
+#include <cstdint>
 #include <string>
 
 using namespace std;

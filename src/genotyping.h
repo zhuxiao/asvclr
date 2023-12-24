@@ -18,7 +18,11 @@ using namespace std;
 #define GT_SIG_GAP_SCORE					-2
 #define GT_SIG_GAP_OPEN_SCORE				-4
 
-#define GT_STR_DEFAULT						"GT:DP:AD\t./.:.:.,."
+#define GT_NOZYGOUS							-1
+#define GT_HOMOZYGOUS						1	// homozygous
+#define GT_HETEROZYGOUS						2	// heterozygous
+
+#define GT_STR_DEFAULT						"GT:AD:DP\t./.:.,.:."
 
 
 class genotyping{

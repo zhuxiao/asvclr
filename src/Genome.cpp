@@ -12,6 +12,8 @@ using namespace std;
 
 //class MultiThread;
 
+//int32_t sig_num_arr[1001] = {0};
+
 // Constructor with parameters
 Genome::Genome(Paras *paras){
 	this->paras = paras;
@@ -311,16 +313,23 @@ int Genome::genomeDetect(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
+//		if(chr->chrname =="1"){
 		if(chr->decoy_flag==false or paras->include_decoy)
 			chr->chrDetect();
+//		}
 	}
+
+	Time time;
+	cout << "[" << time.getTime() << "]: Finalizing detect ..." << endl;
 
 	// remove redundant translocations
 	removeRedundantTra();
 
+	//cout << "[" << time.getTime() << "]: removeOverlappedIndelFromMateClipReg() ..." << endl;
 	// remove overlapped indels from mate clipping regions
 	removeOverlappedIndelFromMateClipReg();
 
+	//cout << "[" << time.getTime() << "]: saveDetectResultToFile() ..." << endl;
 	// save detect result to file for each chrome
 	saveDetectResultToFile();
 
@@ -415,17 +424,84 @@ void Genome::removeInvalidMateClipItem(){
 }
 
 void Genome::removeOverlappedIndelFromMateClipReg(){
-	size_t i, j;
-	Chrome *chr, *chr_tmp;
-	for(i=0; i<chromeVector.size(); i++){
-		chr = chromeVector.at(i);
-		for(j=0; j<chromeVector.size(); j++){
-			if(j!=i){
-				chr_tmp = chromeVector.at(j);
-				chr->removeFPIndelSnvInClipReg(chr_tmp->mateClipRegVector);
+	for(size_t i=0; i<chromeVector.size(); i++)
+		genomeRemoveFPIndelSnvInClipReg(chromeVector.at(i), chromeVector);
+}
+
+// remove FP Indels and SNVs in clipping regions
+void Genome::genomeRemoveFPIndelSnvInClipReg(Chrome *chr, vector<Chrome*> &chr_vec){
+	size_t i, j, k;
+	Chrome *chr_tmp;
+	vector<mateClipReg_t*> mate_clip_reg_vec;
+	mateClipReg_t *mate_clip_reg;
+	string chrname_arr[4];
+	int64_t pos_arr[4], pos;
+	Chrome *chr_arr[4];
+	Block *block_arr[4], *block;
+	reg_t *reg;
+	bool flag;
+
+	//size_t num = 0;
+	mate_clip_reg_vec = chr->mateClipRegVector;
+	for(i=0; i<mate_clip_reg_vec.size(); i++){
+		mate_clip_reg = mate_clip_reg_vec.at(i);
+		for(j=0; j<4; j++) { chrname_arr[j] = ""; pos_arr[j] = 0; block_arr[j] = NULL; chr_arr[j] = NULL; }
+
+		// initialize
+		if(mate_clip_reg->leftClipReg) { chrname_arr[0] = mate_clip_reg->leftClipReg->chrname; pos_arr[0] = mate_clip_reg->leftClipReg->startRefPos; }
+		if(mate_clip_reg->leftClipReg2) { chrname_arr[1] = mate_clip_reg->leftClipReg2->chrname; pos_arr[1] = mate_clip_reg->leftClipReg2->startRefPos; }
+		if(mate_clip_reg->rightClipReg) { chrname_arr[2] = mate_clip_reg->rightClipReg->chrname; pos_arr[2] = mate_clip_reg->rightClipReg->startRefPos; }
+		if(mate_clip_reg->rightClipReg2) { chrname_arr[3] = mate_clip_reg->rightClipReg2->chrname; pos_arr[3] = mate_clip_reg->rightClipReg2->startRefPos; }
+
+		// get the chromes
+		for(j=0; j<4; j++){
+			if(j>0 and chrname_arr[j].compare(chrname_arr[j-1])==0){
+				chr_arr[j] = chr_arr[j-1];
+			}else{
+				for(k=0; k<chr_vec.size(); k++){
+					chr_tmp = chr_vec.at(k);
+					if(chr!=chr_tmp and chrname_arr[j].size()>0){
+						if(chr_tmp->chrname.compare(chrname_arr[j])==0){
+							chr_arr[j] = chr_tmp;
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		// get the blocks
+		for(j=0; j<4; j++){
+			chr_tmp = chr_arr[j];
+			if(chr_tmp){
+				block_arr[j] = chr_tmp->computeBlocByPos(pos_arr[j], chr_tmp->blockVector);
+			}
+		}
+
+		for(j=0; j<4; j++){
+			block = block_arr[j];
+			if(block){
+				for(k=0; k<block->indelVector.size(); ){
+					reg = block->indelVector.at(k);
+					flag = isIndelInSingleClipReg(reg, mate_clip_reg);
+					if(flag){
+						//printRegVec(block->indelVector, "indelVector");
+						delete reg;
+						block->indelVector.erase(block->indelVector.begin()+k);
+						//num ++;
+					}else k++;
+				}
+				for(k=0; k<block->snvVector.size(); ){
+					pos = block->snvVector.at(k);
+					flag = isSnvInSingleClipReg(block->chrname, pos, mate_clip_reg);
+					if(flag) block->snvVector.erase(block->snvVector.begin()+k);
+					else k++;
+				}
 			}
 		}
 	}
+
+	//cout << "------------- num=" << num << endl;
 }
 
 // get overlapped mate clip regions
@@ -542,11 +618,17 @@ int Genome::genomeLocalAssemble(){
 	//outputAssemWorkOptToFile_debug(paras->assem_work_vec);
 
 	// invoke the monitor of assemble work process
-//	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_assemble, paras->max_proc_running_minutes_assemble);
+	//startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_assemble, paras->max_proc_running_minutes_assemble);
 
 	// begin assemble
 	if(!paras->assem_work_vec.empty()) cout << "[" << time.getTime() << "]: start local assemble..." << endl;
 	processAssembleWork();
+
+//	for(size_t i=0; i<1001; i++){
+//		cout << i << "\t" << sig_num_arr[i] << endl;
+//	}
+
+	cout << "[" << time.getTime() << "]: Finalizing assemble ..." << endl;
 
 	computeVarNumStatAssemble(); // compute statistics for assemble command
 
@@ -635,8 +717,8 @@ int Genome::processAssembleWork(){
 			exit(1);
 		}
 
-//		if(assem_work_opt->refseqfilename.compare("output_spombe_tra_20230201/2_assemble/chr1/refseq_chr1_5577629-5579132.fa")==0){
-//			cout << "refseq=" << assem_work_opt->refseqfilename << endl;
+//		if(assem_work_opt->readsfilename.compare("output_debug/2_assemble/1/reads_1_4391857-4391874.fq")==0){
+//			cout << "readsfile=" << assem_work_opt->readsfilename << endl;
 //		}else continue;
 
 		assem_work = new assembleWork();
@@ -652,6 +734,7 @@ int Genome::processAssembleWork(){
 		else assem_work->assemSideExtSize = paras->assemSideExtSizeClip;
 		assem_work->minConReadLen = paras->minConReadLen;
 		assem_work->min_sv_size = paras->min_sv_size_usr;
+		assem_work->min_supp_num = paras->minReadsNumSupportSV;
 		assem_work->max_seg_size_ratio = paras->max_seg_size_ratio_usr;
 		assem_work->inBamFile = paras->inBamFile;
 		assem_work->fai = fai;
@@ -671,7 +754,7 @@ int Genome::processAssembleWork(){
 	hts_tpool_destroy(p);
 
 	// create the work finish file
-	generateFile(work_finish_filename);
+	//generateFile(work_finish_filename);
 
 	return 0;
 }
@@ -721,7 +804,7 @@ int Genome::genomeCall(){
 	cout << "Number of regions to be processed: " << paras->call_work_num << endl;
 
 	// invoke the monitor of assemble work process
-//	startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_call, paras->max_proc_running_minutes_call);
+	//startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_call, paras->max_proc_running_minutes_call);
 
 	// blat alignment work
 	time.setStartTime();
@@ -744,8 +827,8 @@ int Genome::genomeCall(){
 	cout << "[" << time.getTime() << "]: fill variant sequences... " << endl;
 	genomeFillVarseq();
 
-    // generate work process finish file
-    generateFile(work_finish_filename);
+	// generate work process finish file
+	//generateFile(work_finish_filename);
 
 	// save SV to file
 	cout << "5555555555555" << endl;
@@ -771,7 +854,7 @@ int Genome::genomeCall(){
 	computeVarNumStatCall();
 
 	//releaseMonitorKilledBlatWorkMem();
-	releaseMonitorKilledMinimap2WorkMem();
+	//releaseMonitorKilledMinimap2WorkMem();
 
 	return 0;
 }
@@ -1064,7 +1147,7 @@ int Genome::processCallWork(){
 		// diploid: blat_1_4480337-4489601.sim4, blat_1_5364079-5371326.sim4, blat_1_5727691-5736300.sim4 (good), blat_1_7613307-7613853.sim4
 		// blat_1_19156546-19164246.sim4, blat_1_2415202-2415425.sim4, tra_blat_1_2686251-2691837.sim4
 		// blat_contig_chr1_253768-256236.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_2068132-2073121.sim4
-//		if(var_cand->alnfilename.compare("output_spombe_dup_20230203/3_call/chr1/blat_contig_chr1_2399427-2406963.sim4")!=0){
+//		if(var_cand->alnfilename.compare("output_debug/3_call/1/minimap2_1_1378320-1379074.paf")!=0){
 //			continue;
 //		}
 
@@ -1181,7 +1264,9 @@ void Genome::recallIndelsFromTRA(){
 										reg->endQueryPos =  seg2->query_start;
 										reg->aln_orient = blat_aln->aln_orient;
 										reg->query_id = blat_aln->query_id;
-										reg->blat_aln_id = i;
+										//reg->blat_aln_id = i;
+										reg->blat_aln_id = k;
+										reg->minimap2_aln_id = -1;
 										reg->call_success_status = true;
 										reg->short_sv_flag = false;
 										reg->zero_cov_flag = false;
@@ -2869,7 +2954,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 // perform local assembly
 void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->min_input_cov_canu, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->max_seg_size_ratio_usr);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->min_input_cov_canu, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr);
 
 	// extract the corresponding refseq from reference
 	local_assembly.extractRefseq();

@@ -15,7 +15,7 @@
 using namespace std;
 
 
-#define CLIP_END_EXTEND_SIZE				300 // 100
+#define CLIP_END_EXTEND_SIZE				50 // 100  300
 #define MIN_CLIP_END_SIZE					200	// 50
 #define MIN_ALN_SIZE_SAME_ORIENT			200
 #define MIN_ALN_SIZE_DIFF_ORIENT			50
@@ -40,7 +40,8 @@ using namespace std;
 #define MAX_DIST_SAME_CLIP_END				100000
 
 #define MAX_ALN_SEG_NUM_PER_READ_TRA		4  // to be parameterized
-#define MAX_CLIP_REG_MERGE_DIST				50 // to be parameterized
+#define MAX_CLIP_REG_MERGE_DIST				50  // to be parameterized
+#define MAX_CLIP_REG_MERGE_DIST_ADJUST		500  //self
 #define MAX_INNER_MISSING_IGNORE_SIZE		100
 
 #define MIN_CLIP_REG_MATED_RATIO			(0.3f)
@@ -115,6 +116,9 @@ class clipReg {
 		void resetClipCheckFlag(vector<clipAlnData_t*> &clipAlnDataVector);
 		bool isSameChrome(vector<clipAlnData_t*> &query_aln_segs);
 		bool isSameOrient(vector<clipAlnData_t*> &query_aln_segs);
+		bool ischeckSameOrient(vector<clipAlnData_t*> &query_aln_segs);//self
+		bool Filteredbychrname(vector<clipAlnData_t*> &query_aln_segs);//self
+		void FilteredbyAlignmentSegment(vector<clipAlnData_t*> &query_aln_segs);//self
 //		bool isQuerySelfOverlap(vector<clipAlnData_t*> &query_aln_segs);
 //		bool isSegSelfOverlap(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2);
 		bool isSameAlnReg(vector<clipAlnData_t*> &query_aln_segs);

@@ -1,5 +1,7 @@
 #include "genotyping.h"
 
+extern pthread_mutex_t mutex_fai;
+
 genotyping::genotyping(reg_t *reg, faidx_t *fai, string &inBamFile, int32_t sig_size_thres, double size_ratio_match_thres, double min_dip_ratio_thres, double max_dip_ratio_thres, int32_t min_sup_num_recover){
 	this->reg = reg;
 	this->fai = fai;
@@ -182,7 +184,9 @@ vector<queryGtSig_t*> genotyping::extractGtSigVec(){
 		if(endPos>chrlen_tmp) endPos = chrlen_tmp;
 
 		reg_str = reg->chrname + ":" + to_string(startPos) + "-" + to_string(endPos);
+		pthread_mutex_lock(&mutex_fai);
 		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
 		refseq = seq;
 		free(seq);
 
@@ -737,17 +741,17 @@ vector<string> genotyping::computeGenotypeString(vector<queryGtSig_t*> &queryGtS
 	}
 
 	if(gt_str.compare("./.")!=0){
-		dp_str = to_string(queryGtSig_vec.size());
 		ad_str1 = to_string(noProfileQueryNum);
 		ad_str2 = to_string(queryGtSig_vec.size() - noProfileQueryNum);
+		dp_str = to_string(queryGtSig_vec.size());
 	}else{
-		dp_str = ".";
 		ad_str1 = ".";
 		ad_str2 = ".";
+		dp_str = ".";
 	}
 
-	gt_dp_ad_str.push_back("GT:DP:AD");
-	gt_dp_ad_str.push_back(gt_str + ":" + dp_str + ":" + ad_str1 + "," + ad_str2);
+	gt_dp_ad_str.push_back("GT:AD:DP");
+	gt_dp_ad_str.push_back(gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str);
 
 	return gt_dp_ad_str;
 }

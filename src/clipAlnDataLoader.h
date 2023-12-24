@@ -35,6 +35,7 @@ class clipAlnDataLoader {
 		void addAdjacentInfo(vector<clipAlnData_t*> &clipAlnDataVector);
 		void orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &query_aln_vec);
 		void removeClipAlnDataWithLowPrimarySegSizeRatio(vector<clipAlnData_t*> &clipAlnDataVector, double primary_seg_size_ratio);
+		void removeSingleItemClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, int32_t idx);
 };
 
 #endif /* SRC_CLIPALNDATALOADER_H_ */

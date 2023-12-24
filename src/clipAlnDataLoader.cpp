@@ -395,6 +395,13 @@ void clipAlnDataLoader::freeClipAlnData(vector<clipAlnData_t*> &clipAlnDataVecto
 	vector<clipAlnData_t*>().swap(clipAlnDataVector);
 }
 
+// remove single item in clipAlnDataVector
+void clipAlnDataLoader::removeSingleItemClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, int32_t idx){
+	bam_destroy1(clipAlnDataVector.at(idx)->bam);
+	delete clipAlnDataVector.at(idx);
+	clipAlnDataVector.erase(clipAlnDataVector.begin() + idx);
+}
+
 // add adjacent info of align segments
 void clipAlnDataLoader::addAdjacentInfo(vector<clipAlnData_t*> &clipAlnDataVector){
 	size_t i;
@@ -537,10 +544,7 @@ void clipAlnDataLoader::removeClipAlnDataWithLowPrimarySegSizeRatio(vector<clipA
 	//remove unreliable alignment segments
 	for(n=0; n<clipAlnDataVector.size();){
 		q = find(remove_qname_vec.begin(), remove_qname_vec.end(), clipAlnDataVector.at(n)->queryname);
-		if(q != remove_qname_vec.end()){
-			clipAlnDataVector.erase(clipAlnDataVector.begin() + n);
-		}else{
-			n++;
-		}
+		if(q != remove_qname_vec.end()) removeSingleItemClipAlnData(clipAlnDataVector, n);
+		else n++;
 	}
 }

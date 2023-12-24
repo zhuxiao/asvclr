@@ -15,7 +15,6 @@
 #include "structures.h"
 #include "RefSeqLoader.h"
 #include "util.h"
-#include "abpoa.h"
 
 using namespace std;
 
@@ -23,6 +22,8 @@ using namespace std;
 #define MIN_CANU_VERSION_HIFI			"1.9"
 #define MIN_CANU_VERSION_NO_GNPPLOT		"1.8"
 #define QC_SIZE_RATIO_MATCH_THRES		 0.7
+
+#define POA_ALIGN_DEBUG					0
 
 
 struct fqSeqNode{
@@ -34,7 +35,7 @@ struct fqSeqNode{
 struct querySeqInfoNode{
 	//size_t seq_id;
 	string qname, seq;
-	bool cluster_finished_flag;
+	bool cluster_finished_flag, selected_flag;
 	vector<struct alnSeg*> query_alnSegs;
 };
 
@@ -81,30 +82,13 @@ typedef struct queryCluSigNode{
 class LocalAssembly {
 	public:
 		string chrname, readsfilename, contigfilename, refseqfilename, tmpdir, inBamFile, technology, canu_version;
+		string readsfilename_prefix, readsfilename_suffix;
+		vector<string> readsfilename_vec;
 		int64_t chrlen, assembly_extend_size, startRefPos_assembly, endRefPos_assembly;
-		int32_t num_threads_per_assem_work, minClipEndSize, minConReadLen, min_sv_size;
+		int32_t num_threads_per_assem_work, minClipEndSize, minConReadLen, min_sv_size, min_supp_num;
 		double max_seg_size_ratio;
 		bool assem_success_preDone_flag, assem_success_flag, use_poa_flag, clip_reg_flag;
 		double min_input_cov_canu;
-
-		//AaCcGgTtNn ==> 0,1,2,3,4
-		unsigned char nt4_table[256] = {
-		    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-		    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 26, 26, 26, 26, 26,
-		    26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-		    26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-		    26, 0, 5, 1, 6, 7, 8, 2, 9, 10, 11, 12, 13, 14, 4, 15,
-		    16, 17, 18, 19, 3, 20, 21, 22, 23, 24, 25, 26, 26, 26, 26, 26,
-		    26, 0, 5, 1, 6, 7, 8, 2, 9, 10, 11, 12, 13, 14, 4, 15,
-		    16, 17, 18, 19, 3, 20, 21, 22, 23, 24, 25, 26, 26, 26, 26, 26,
-		    26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-		    26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-		    26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-		    26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-		    26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-		    26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-		    26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26,
-		    26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26, 26};
 
 		vector<struct seqsVec*> seqs_vec;
 		//vector<string> seqs;
@@ -130,7 +114,7 @@ class LocalAssembly {
 		vector<clipAlnData_t*> clipAlnDataVector;
 
 	public:
-		LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, double min_input_cov, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, double max_seg_size_ratio);
+		LocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, double expected_cov, double min_input_cov, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio);
 		virtual ~LocalAssembly();
 		void extractRefseq();
 		void extractReadsDataFromBAM();
@@ -160,9 +144,12 @@ class LocalAssembly {
 		//void destroyQueryCluSigVec(vector<queryCluSig_t*> &queryCluSig_vec);
 		struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNode*> &query_seq_info_vec);
 		double computeCompensationCoefficient(size_t startRefPos_assembly, size_t endRefPos_assembly, double mean_read_len);
-		double computeLocalCov(vector<struct fqSeqNode*> &fq_seq_vec, double compensation_coefficient);
-		void samplingReads(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val, double compensation_coefficient);
-		void samplingReadsOp(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val);
+		double computeLocalCovClipReg(vector<struct fqSeqNode*> &fq_seq_vec, double compensation_coefficient);
+		double computeLocalCovIndelReg(vector<struct querySeqInfoNode*> &query_seq_info_all, double compensation_coefficient);
+		void samplingReadsClipReg(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val, double compensation_coefficient);
+		void samplingReadsClipRegOp(vector<struct fqSeqNode*> &fq_seq_vec, double expect_cov_val);
+		void samplingReadsIndelReg(vector<struct querySeqInfoNode*> &query_seq_info_all, double expect_cov_val, double compensation_coefficient);
+		void samplingReadsIndelRegOp(vector<struct querySeqInfoNode*> &query_seq_info_all, double expect_cov_val);
 		void saveSampledReads(string &readsfilename, vector<struct fqSeqNode*> &fq_seq_vec);
 		int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &clipAlnDataVector);
 		void markHardClipSegs(size_t idx, vector<clipAlnData_t*> &query_aln_segs);

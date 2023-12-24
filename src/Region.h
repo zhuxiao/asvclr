@@ -41,7 +41,7 @@ class Region {
 		size_t regFlag, subRegSize;
 		bool wholeRefGapFlag; // true -- if all the bases in the region of reference are 'N'; false -- otherwise
 
-		double meanBlockCov, localRegCov;
+		double meanBlockCov, localRegCov, refinedLocalRegCov;
 		size_t highIndelSubRegNum;
 
 		// candidate flag
@@ -96,10 +96,12 @@ class Region {
 		int computeAbCovReg();
 		reg_t* allocateReg(string &chrname, int64_t startPosReg, int64_t endPosReg);
 		double computeMeanCovReg(int64_t startPosReg, int64_t endPosReg);
+		double computeRefinedMeanCovReg(int64_t startPosReg, int64_t endPosReg);
 		int computeHighIndelEventRegNum();
 		int32_t computeReadIndelEventNumReg(int64_t startPosReg, int64_t endPosReg);
 		bool computeSNVFlag(int64_t pos, int64_t startCheckPos, int64_t endCheckPos);
 		bool haveMuchShortIndelsAround(int64_t startCheckPos, int64_t endCheckPos);
+		int32_t computeValidSigNumReg(int64_t startPosReg, int64_t endPosReg, int32_t min_sig_size);
 		reg_t* getIndelReg(int64_t startCheckPos);
 		bool haveNoAbSigs(Base *base, int64_t pos);
 		int32_t getMismatchBasesAround(int64_t pos1, int64_t pos2);

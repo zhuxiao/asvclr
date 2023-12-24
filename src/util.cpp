@@ -690,6 +690,190 @@ mateClipReg_t* getOverlappedMateClipReg(mateClipReg_t *mate_clip_reg_given, vect
 	return mate_clip_reg_overlapped;
 }
 
+// determine whether the indel region in a clipping region
+bool isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_vec){
+	bool flag = false;
+	mateClipReg_t *clip_reg;
+
+	for(size_t i=0; i<mate_clipReg_vec.size(); i++){
+		clip_reg = mate_clipReg_vec.at(i);
+		flag = isIndelInSingleClipReg(reg, clip_reg);
+		if(flag) break;
+	}
+
+	return flag;
+}
+
+// determine whether the indel region in a clipping region
+bool isIndelInSingleClipReg(reg_t *reg, mateClipReg_t *clip_reg){
+	bool flag = false;
+	reg_t *reg_tmp;
+	string chrname_tmp, chrname_tmp2;
+	size_t start_pos, end_pos;
+
+	if(clip_reg->valid_flag and clip_reg->reg_mated_flag){
+		if(clip_reg->sv_type==VAR_DUP or clip_reg->sv_type==VAR_INV){ // DUP or INV
+			chrname_tmp = "";
+			start_pos = end_pos = 0;
+			if(clip_reg->leftClipReg){
+				chrname_tmp = clip_reg->leftClipReg->chrname;
+				start_pos = clip_reg->leftClipReg->startRefPos;
+			}else if(clip_reg->leftClipReg2){
+				chrname_tmp = clip_reg->leftClipReg2->chrname;
+				start_pos = clip_reg->leftClipReg2->startRefPos;
+			}
+			if(clip_reg->rightClipReg){
+				chrname_tmp2 = clip_reg->rightClipReg->chrname;
+				end_pos = clip_reg->rightClipReg->endRefPos;
+			}else if(clip_reg->rightClipReg2){
+				chrname_tmp2 = clip_reg->rightClipReg2->chrname;
+				end_pos = clip_reg->rightClipReg2->endRefPos;
+			}
+
+			if(reg->chrname.compare(chrname_tmp)==0 and chrname_tmp.compare(chrname_tmp2)==0 and start_pos>0 and end_pos>0){
+				if(isOverlappedPos(reg->startRefPos, reg->endRefPos, start_pos, end_pos)){
+					flag = true;
+				}
+			}
+		}else if(clip_reg->sv_type==VAR_TRA){  // TRA
+			// check left part
+			chrname_tmp = "";
+			start_pos = end_pos = 0;
+			if(clip_reg->leftClipRegNum==2){
+				chrname_tmp = clip_reg->leftClipReg->chrname;
+				start_pos = clip_reg->leftClipReg->startRefPos;
+				end_pos = clip_reg->leftClipReg2->endRefPos;
+			}else if(clip_reg->leftClipRegNum==1){
+				reg_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
+				chrname_tmp = reg_tmp->chrname;
+				start_pos = reg_tmp->startRefPos;
+				end_pos = reg_tmp->endRefPos;
+			}
+			if(reg->chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
+				if(isOverlappedPos(reg->startRefPos, reg->endRefPos, start_pos, end_pos)){
+					flag = true;
+				}
+			}
+
+			// check right part
+			if(flag==false){
+				chrname_tmp = "";
+				start_pos = end_pos = 0;
+				if(clip_reg->rightClipRegNum==2){
+					chrname_tmp = clip_reg->rightClipReg->chrname;
+					start_pos = clip_reg->rightClipReg->startRefPos;
+					end_pos = clip_reg->rightClipReg2->endRefPos;
+				}else if(clip_reg->rightClipRegNum==1){
+					reg_tmp = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
+					chrname_tmp = reg_tmp->chrname;
+					start_pos = reg_tmp->startRefPos;
+					end_pos = reg_tmp->endRefPos;
+				}
+				if(reg->chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
+					if(isOverlappedPos(reg->startRefPos, reg->endRefPos, start_pos, end_pos)){
+						flag = true;
+					}
+				}
+			}
+		}
+	}
+
+	return flag;
+}
+
+// determine whether the SNV position in a clipping region
+bool isSnvInClipReg(string &chrname, size_t pos, vector<mateClipReg_t*> &mate_clipReg_vec){
+	bool flag = false;
+	mateClipReg_t *clip_reg;
+
+	for(size_t i=0; i<mate_clipReg_vec.size(); i++){
+		clip_reg = mate_clipReg_vec.at(i);
+		flag = isSnvInSingleClipReg(chrname, pos, clip_reg);
+		if(flag) break;
+	}
+
+	return flag;
+}
+
+// determine whether the SNV position in a clipping region
+bool isSnvInSingleClipReg(string &chrname, size_t pos, mateClipReg_t *clip_reg){
+	bool flag = false;
+	reg_t *reg_tmp;
+	string chrname_tmp, chrname_tmp2;
+	size_t start_pos, end_pos;
+
+	if(clip_reg->valid_flag and clip_reg->reg_mated_flag){
+		if(clip_reg->sv_type==VAR_DUP or clip_reg->sv_type==VAR_INV){ // DUP or INV
+			chrname_tmp = "";
+			start_pos = end_pos = 0;
+			if(clip_reg->leftClipReg){
+				chrname_tmp = clip_reg->leftClipReg->chrname;
+				start_pos = clip_reg->leftClipReg->startRefPos;
+			}else if(clip_reg->leftClipReg2){
+				chrname_tmp = clip_reg->leftClipReg2->chrname;
+				start_pos = clip_reg->leftClipReg2->startRefPos;
+			}
+			if(clip_reg->rightClipReg){
+				chrname_tmp2 = clip_reg->rightClipReg->chrname;
+				end_pos = clip_reg->rightClipReg->endRefPos;
+			}else if(clip_reg->rightClipReg2){
+				chrname_tmp2 = clip_reg->rightClipReg2->chrname;
+				end_pos = clip_reg->rightClipReg2->endRefPos;
+			}
+
+			if(chrname.compare(chrname_tmp)==0 and chrname_tmp.compare(chrname_tmp2)==0 and start_pos>0 and end_pos>0){
+				if(pos>=start_pos and pos<=end_pos){
+					flag = true;
+				}
+			}
+		}else if(clip_reg->sv_type==VAR_TRA){  // TRA
+			// check left part
+			chrname_tmp = "";
+			start_pos = end_pos = 0;
+			if(clip_reg->leftClipRegNum==2){
+				chrname_tmp = clip_reg->leftClipReg->chrname;
+				start_pos = clip_reg->leftClipReg->startRefPos;
+				end_pos = clip_reg->leftClipReg2->endRefPos;
+			}else if(clip_reg->leftClipRegNum==1){
+				reg_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->leftClipReg2;
+				chrname_tmp = reg_tmp->chrname;
+				start_pos = reg_tmp->startRefPos;
+				end_pos = reg_tmp->endRefPos;
+			}
+
+			if(chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
+				if(pos>=start_pos and pos<=end_pos){
+					flag = true;
+				}
+			}
+
+			// check right part
+			if(flag==false){
+				chrname_tmp = "";
+				start_pos = end_pos = 0;
+				if(clip_reg->rightClipRegNum==2){
+					chrname_tmp = clip_reg->rightClipReg->chrname;
+					start_pos = clip_reg->rightClipReg->startRefPos;
+					end_pos = clip_reg->rightClipReg2->endRefPos;
+				}else if(clip_reg->rightClipRegNum==1){
+					reg_tmp = clip_reg->rightClipReg ? clip_reg->rightClipReg : clip_reg->rightClipReg2;
+					chrname_tmp = reg_tmp->chrname;
+					start_pos = reg_tmp->startRefPos;
+					end_pos = reg_tmp->endRefPos;
+				}
+
+				if(chrname.compare(chrname_tmp)==0 and start_pos>0 and end_pos>0){
+					if(pos>=start_pos and pos<=end_pos){
+						flag = true;
+					}
+				}
+			}
+		}
+	}
+
+	return flag;
+}
+
 // load sam/bam header
 bam_hdr_t* loadSamHeader(string &inBamFile)
 {
@@ -1552,7 +1736,7 @@ void* processSingleAssembleWork(void *arg){
 	for(i=0; i<assem_work_opt->arr_size; i++) varVec.push_back(assem_work_opt->var_array[i]);
 	for(i=0; i<assem_work_opt->limit_reg_array_size; i++) sub_limit_reg_vec.push_back(assem_work_opt->limit_reg_array[i]);
 
-	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->technology, assem_work->canu_version, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, assem_work->assemSideExtSize, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->min_input_cov_canu, assem_work->delete_reads_flag, assem_work->keep_failed_reads_flag, assem_work_opt->clip_reg_flag, assem_work->minClipEndSize,assem_work->minConReadLen, assem_work->min_sv_size, assem_work->max_seg_size_ratio, assem_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
+	performLocalAssembly(assem_work_opt->readsfilename, assem_work_opt->contigfilename, assem_work_opt->refseqfilename, assem_work_opt->tmpdir, assem_work->technology, assem_work->canu_version, assem_work->num_threads_per_assem_work, varVec, assem_work_opt->chrname, assem_work->inBamFile, assem_work->fai, assem_work->assemSideExtSize, *(assem_work->var_cand_file), assem_work->expected_cov_assemble, assem_work->min_input_cov_canu, assem_work->delete_reads_flag, assem_work->keep_failed_reads_flag, assem_work_opt->clip_reg_flag, assem_work->minClipEndSize,assem_work->minConReadLen, assem_work->min_sv_size, assem_work->min_supp_num, assem_work->max_seg_size_ratio, assem_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
 	// release memory
 	sub_limit_reg_vec.clear();
@@ -1582,9 +1766,9 @@ void* processSingleAssembleWork(void *arg){
 }
 
 
-void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t assembly_extend_size, ofstream &assembly_info_file, double expected_cov_assemble, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void performLocalAssembly(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t assembly_extend_size, ofstream &assembly_info_file, double expected_cov_assemble, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, expected_cov_assemble, min_input_cov_canu, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, max_seg_size_ratio);
+	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, expected_cov_assemble, min_input_cov_canu, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
 
 	local_assembly.setLimitRegs(limit_reg_process_flag, limit_reg_vec);
 	if(local_assembly.assem_success_preDone_flag==false){
@@ -1597,8 +1781,8 @@ void performLocalAssembly(string &readsfilename, string &contigfilename, string 
 
 		if(local_assembly.clip_reg_flag==false)
 			local_assembly.cnsByPoa(); // local consensus using abPOA
-		else
-			local_assembly.localAssembleCanu(); // local assembly using Canu
+//		else
+//			local_assembly.localAssembleCanu(); // local assembly using Canu
 	}
 
 	// record assembly information
@@ -1704,7 +1888,7 @@ void* processSingleCallWork(void *arg){
 	double percentage;
 	Time time;
 
-	//cout << var_cand->alnfilename << endl;
+	cout << var_cand->alnfilename << endl;
 
 	//var_cand->callVariants();
 	var_cand->callVariants02();
@@ -2783,9 +2967,6 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 	if(tra_pos_arr[reg_id]!=-1 or bnd_str_vec.at(reg_id).compare("-")!=0) {
 		sub_vec_id = (clip_end + 1) % 2;
 		if(checked_arr[reg_id][sub_vec_id]==0){ // unprocessed, then process it
-			bnd_item = new struct BND_Node();
-			mate_bnd_item = new struct BND_Node();
-
 			if(clip_end==RIGHT_END) bnd_pos = tra_pos_arr[reg_id] - 1;   // POS
 			else bnd_pos = tra_pos_arr[reg_id];
 
@@ -2806,6 +2987,9 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 
 			mate_reg_str = bnd_str_vec2.at(sub_vec_id); // "2+|.|.|."
 			if(mate_reg_str.compare("-")!=0){
+				bnd_item = new struct BND_Node();
+				mate_bnd_item = new struct BND_Node();
+
 				mate_str_vec = split(mate_reg_str, "|");
 				mate_reg_id = stoi(mate_str_vec.at(0).substr(0, 1));
 				mate_orient_ch = mate_str_vec.at(0).at(1);
@@ -3346,7 +3530,7 @@ void *processSingleMateClipRegDetectWork(void *arg){
 	pthread_mutex_t *p_mutex_mate_clip_reg = mate_clip_reg_work_opt->p_mutex_mate_clip_reg;
 	Time time;
 
-	//cout << "\t[" << time.getTime() << "], [" << mate_clip_reg_work_opt->work_id << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+//	cout << "\t[" << time.getTime() << "], [" << mate_clip_reg_work_opt->work_id << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
 	clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, paras->inBamFile, fai, paras);
 	clip_reg.computeMateClipReg();
@@ -3430,6 +3614,7 @@ void processClipRegs(int32_t work_id, mateClipReg_t &mate_clip_reg, reg_t *clip_
 			reg->sv_len = 0;
 			reg->query_id = -1;
 			reg->blat_aln_id = -1;
+			reg->minimap2_aln_id = -1;
 			reg->call_success_status = false;
 			reg->short_sv_flag = false;
 			reg->zero_cov_flag = false;
@@ -4395,17 +4580,22 @@ vector<struct pafalnSeg*> generatePafAlnSegs(minimap2_aln_t* minimap2_aln_item, 
 	uint32_t opflag, i;
 	bool cigar_int_flag = false;
 	int64_t startRpos, startQpos, startSubjectPos;
-	int32_t op_num;
-	int32_t *seglens = new int32_t[1000]();
-	uint32_t *opflags = new uint32_t[1000]();
-	char *opflags_char = new char[1000]();
-
+	int32_t op_num=0,op_nums=0;
 	cigar = minimap2_aln_item->cigar;
-	op_num = 0;
-
+	for(i = 0; i < cigar.length(); i++){
+			if(cigar.at(i) >= 'A' and cigar.at(i) <= 'Z'){
+				op_nums++;
+			}
+		}
+	int32_t *seglens = new int32_t[op_nums]();
+	uint32_t *opflags = new uint32_t[op_nums]();
+	char *opflags_char = new char[op_nums]();
+	//op_num = 0;
+//cout<<"cigar length:"<<cigar.length()<<endl;
 	for(i = 0; i < cigar.length(); i++){
 		if(cigar.at(i) >= '0' and cigar.at(i) <= '9'){
 			if(cigar_int_flag){//804M
+				//seglens.push_back(seglens[op_num]*10 + cigar.at(i) - '0');
 				seglens[op_num] = seglens[op_num]*10 + cigar.at(i) - '0';
 			}else{//8M
 				seglens[op_num] = cigar.at(i) - '0';
@@ -4417,7 +4607,7 @@ vector<struct pafalnSeg*> generatePafAlnSegs(minimap2_aln_t* minimap2_aln_item, 
 			if(cigar_int_flag) cigar_int_flag = false;
 		}
 	}
-
+//	cout<<"op_num:"<<op_num<<endl;
 	for(i = 0; i < op_num; i++){
 		switch(opflags_char[i]){
 			case 'M':
