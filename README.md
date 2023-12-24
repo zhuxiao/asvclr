@@ -257,7 +257,7 @@ Options:
 
 ### `Assemble` Step
 
-In 'assemble' step, ASVCLR extracts the corresponding local reference first. And then, ASVCLR generate the contigs by different strategies.
+In `assemble` step, ASVCLR extracts the corresponding local reference first. And then, ASVCLR generate the contigs by different strategies.
 * For Indels in the inner-alignments, ASVCLR clusters the variation signatures by the modified NW (Needleman Wunsch) pairwise alignment algorithm, and for each cluster, ASVCLR extracts the read sequences and smoothing to remove sequence errors and short variation items. Then, ASVCLR performs the consensus operation by using abPOA to generate consensus sequences.
 * For variations in clipping regions, such as DUPs, INVs and TRAs, ASVCLR performs local assembly by using Canu.
 
