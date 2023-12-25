@@ -56,6 +56,7 @@ Block::~Block(){
 	if(!snvVector.empty()) destroySnvVector();
 	if(!indelVector.empty()) destroyIndelVector();
 	if(!clipRegVector.empty()) destroyClipRegVector();
+	if(!zeroCovRegVector.empty()) destroyZeroCovRegVector();
 	if(!misAlnRegVector.empty()) destroyMisAlnRegVector();
 }
 
@@ -116,6 +117,14 @@ void Block::destroyIndelVector(){
 // destroy clip region vector
 void Block::destroyClipRegVector(){
 	vector<reg_t*>().swap(clipRegVector);
+}
+
+// destroy the indel vector
+void Block::destroyZeroCovRegVector(){
+	vector<reg_t*>::iterator it;
+	for(it=zeroCovRegVector.begin(); it!=zeroCovRegVector.end(); it++)
+		delete (*it);
+	vector<reg_t*>().swap(zeroCovRegVector);
 }
 
 // destroy misAln region vector

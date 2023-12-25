@@ -76,6 +76,7 @@ class Block{
 		void destroySnvVector();
 		void destroyIndelVector();
 		void destroyClipRegVector();
+		void destroyZeroCovRegVector();
 		void destroyMisAlnRegVector();
 		Base *initBaseArray();
 		int loadAlnData();

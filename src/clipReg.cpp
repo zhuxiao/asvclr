@@ -28,6 +28,7 @@ clipReg::clipReg(string &chrname, int64_t startRefPos, int64_t endRefPos, string
 	mate_clip_reg.valid_flag = false;
 	mate_clip_reg.sv_type = VAR_UNC;
 	mate_clip_reg.dup_num = 0;
+	mate_clip_reg.supp_num_valid_flag = false;
 
 	mate_clip_reg.var_cand = mate_clip_reg.left_var_cand_tra = mate_clip_reg.right_var_cand_tra = NULL;
 	mate_clip_reg.leftClipPosTra1 = mate_clip_reg.rightClipPosTra1 = mate_clip_reg.leftClipPosTra2 = mate_clip_reg.rightClipPosTra2 = 0;

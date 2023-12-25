@@ -3367,6 +3367,7 @@ void checkSuppNum(mateClipReg_t &mate_clip_reg, int32_t support_num_thres){
 	string support_num_str;
 	int32_t support_num;
 
+	mate_clip_reg.supp_num_valid_flag = true;
 	for(i=0; i<4; i++){
 		if(mate_clip_reg.bnd_mate_reg_strs[i].compare("-")!=0) {
 			mate_reg_str_vec = split(mate_clip_reg.bnd_mate_reg_strs[i], ",");
