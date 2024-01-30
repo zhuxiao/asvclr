@@ -72,8 +72,8 @@ Region::~Region(){
 }
 
 // set the output directory
-void Region::setOutputDir(string& out_dir_assemble_prefix){
-	out_dir_assemble = out_dir_assemble_prefix + "/" + chrname;
+void Region::setOutputDir(string& out_dir_cns_prefix){
+	out_dir_cns = out_dir_cns_prefix + "/" + chrname;
 }
 
 // determine if all the base in the region are 'N' bases in reference
@@ -244,8 +244,10 @@ reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosR
 	reg->zero_cov_flag = false;
 	reg->aln_seg_end_flag = false;
 	reg->query_pos_invalid_flag = false;
+	reg->large_indel_flag = false;
 	reg->gt_type = -1;
 	reg->gt_seq = "";
+	reg->AF = 0;
 	return reg;
 }
 
@@ -271,7 +273,7 @@ double Region::computeRefinedMeanCovReg(int64_t startPosReg, int64_t endPosReg){
 		if(regBaseArr[i-startRPos].coverage.idx_RefBase!=4){ // excluding 'N'
 			totalReadBeseNum += regBaseArr[i-startRPos].coverage.num_bases[5] + regBaseArr[i-startRPos].delVector.size() + regBaseArr[i-startRPos].del_num_from_del_vec;
 			// inserted bases
-			for(j=0; j<regBaseArr[i-startRPos].insVector.size(); j++)
+			for(j=0; j<(int64_t)regBaseArr[i-startRPos].insVector.size(); j++)
 				totalReadBeseNum += regBaseArr[i-startRPos].insVector.at(j)->seq.size();
 			totalRefBaseNum ++;
 		}
@@ -316,18 +318,18 @@ int32_t Region::computeValidSigNumReg(int64_t startPosReg, int64_t endPosReg, in
 		base = regBaseArr + i - startRPos;
 		if(base->coverage.idx_RefBase!=4){ // excluding 'N'
 			// indel vector
-			for(j=0; j<base->insVector.size(); j++){
+			for(j=0; j<(int64_t)base->insVector.size(); j++){
 				ins = base->insVector.at(j);
-				if(ins->seq.size()>=min_sig_size) totalValidSigNum ++;
+				if(ins->seq.size()>=(size_t)min_sig_size) totalValidSigNum ++;
 			}
-			for(j=0; j<base->delVector.size(); j++){
+			for(j=0; j<(int64_t)base->delVector.size(); j++){
 				del = base->delVector.at(j);
-				if(del->seq.size()>=min_sig_size) totalValidSigNum ++;
+				if(del->seq.size()>=(size_t)min_sig_size) totalValidSigNum ++;
 			}
 			// clipping vector
-			for(j=0; j<base->clipVector.size(); j++){
+			for(j=0; j<(int64_t)base->clipVector.size(); j++){
 				clip = base->clipVector.at(j);
-				if(clip->seq.size()>=min_sig_size) totalValidSigNum ++;
+				if(clip->seq.size()>=(size_t)min_sig_size) totalValidSigNum ++;
 			}
 		}else{ // do not tolerate the gap region
 			totalValidSigNum = 0;
@@ -490,7 +492,7 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 	reg_t *reg = NULL;
 	int32_t reg_size1, reg_size2, num1, num3, num4, extendSize, high_con_indel_base_num, large_indel_base_num;
 	vector<double> num_vec;
-	double tmp_cov, high_indel_clip_ratio;
+	double high_indel_clip_ratio;
 	int64_t i, checkPos, startPos1, endPos1, startPos2;
 	int64_t startPos_indel = -1, endPos_indel = -1, valid_sig_num;
 	bool indel_beg_flag, indel_end_flag, valid_flag;
@@ -586,7 +588,7 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 //			if(valid_flag){
 				valid_sig_num = computeValidSigNumReg(startPos_indel, endPos_indel, paras->min_sv_size_usr);
 				//if(localRegCov<paras->minReadsNumSupportSV and valid_sig_num<paras->minReadsNumSupportSV) valid_flag = false;
-				if(localRegCov<paras->minReadsNumSupportSV or valid_sig_num<paras->minReadsNumSupportSV) valid_flag = false;
+				if(localRegCov<paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR or valid_sig_num<paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR) valid_flag = false;
 //			}
 
 			if(valid_flag){
@@ -963,7 +965,7 @@ bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_t
 	}
 
 	//if(localRegCov>0){ // deleted on 2023-12-18
-	if(refinedLocalRegCov>=paras->minReadsNumSupportSV){
+	if(refinedLocalRegCov>=paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR){
 		//ratio = clip_num / localRegCov; // deleted on 2023-12-18
 		ratio = clip_num / refinedLocalRegCov;
 		if(ratio>=clip_ratio_thres) flag = false;

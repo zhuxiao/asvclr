@@ -9,7 +9,7 @@
 
 //pthread_mutex_t mutex_print = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_write_misAln = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_assem_work = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex_cns_work = PTHREAD_MUTEX_INITIALIZER;
 
 // Constructor with parameters
 Block::Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai,  Paras *paras){
@@ -40,9 +40,9 @@ Block::Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai,  Para
 	indelFilenameDetect = indelDetectPrefix_local + "_" + chrname_tmp + "_" + to_string(startPos) + "-" + to_string(endPos) + ".bed";
 	clipRegFilenameDetect = clipRegDetectPrefix_local + "_" + chrname_tmp + "_" + to_string(startPos) + "-" + to_string(endPos) + ".bed";
 
-	// assemble output files
-	indelAssemblePrefix_local = "contig";
-	indelFilenameAssemble = indelAssemblePrefix_local + "_" + chrname_tmp + "_" + to_string(startPos) + "-" + to_string(endPos) + ".fa";
+	// consensus output files
+	indelCnsPrefix_local = "contig";
+	indelFilenameCns = indelCnsPrefix_local + "_" + chrname_tmp + "_" + to_string(startPos) + "-" + to_string(endPos) + ".fa";
 
 	var_cand_indel_file = NULL;
 	misAln_reg_file = NULL;
@@ -61,9 +61,9 @@ Block::~Block(){
 }
 
 // set the output directory
-void Block::setOutputDir(string& out_dir_detect_prefix, string& out_dir_assemble_prefix, string& out_dir_call_prefix){
+void Block::setOutputDir(string& out_dir_detect_prefix, string& out_dir_cns_prefix, string& out_dir_call_prefix){
 	out_dir_detect = out_dir_detect_prefix;
-	out_dir_assemble = out_dir_assemble_prefix;
+	out_dir_cns = out_dir_cns_prefix;
 	out_dir_call = out_dir_call_prefix + "/" + chrname + "_" + to_string(startPos) + "-" + to_string(endPos);
 
 	out_dir_call = preprocessPipeChar(out_dir_call);
@@ -235,7 +235,6 @@ void Block::AddReadLenEstInfo(){
 
 void Block::AddCovDepthEstInfo(){
 	int64_t i, num, depth_all;
-	size_t j, len;
 	Base *base;
 
 	num = 0;
@@ -563,7 +562,7 @@ int Block::processSingleRegion(int64_t startRpos, int64_t endRPos, int64_t regFl
 	if(paras->limit_reg_process_flag){
 		if(sub_limit_reg_vec.size()){
 			//sub_limit_reg_vec_tmp = getSimpleRegs(chrname, startRpos, endRPos, sub_limit_reg_vec);
-			sub_limit_reg_vec_tmp = getOverlappedSimpleRegsExt(chrname, startRpos, endRPos, sub_limit_reg_vec, ASSEMBLE_SIDE_EXT_SIZE);
+			sub_limit_reg_vec_tmp = getOverlappedSimpleRegsExt(chrname, startRpos, endRPos, sub_limit_reg_vec, CNS_SIDE_EXT_SIZE);
 			if(sub_limit_reg_vec_tmp.size()==0) process_flag = false;
 		}else process_flag = false;
 	}
@@ -667,8 +666,10 @@ void Block::computeZeroCovReg(Region &reg){
 			reg_tmp->zero_cov_flag = false;
 			reg_tmp->aln_seg_end_flag = false;
 			reg_tmp->query_pos_invalid_flag = false;
+			reg_tmp->large_indel_flag = false;
 			reg_tmp->gt_type = -1;
 			reg_tmp->gt_seq = "";
+			reg_tmp->AF = 0;
 
 			zeroCovRegVector.push_back(reg_tmp);
 			i = end_vec_idx + 1;
@@ -864,13 +865,13 @@ void Block::saveSV2File(){
 	out_file.close();
 }
 
-// set assembly information file
+// set consensus information file
 void Block::setVarCandFiles(ofstream *var_cand_indel_file, ofstream *var_cand_clipReg_file){
 	this->var_cand_indel_file = var_cand_indel_file;
 	this->var_cand_clipReg_file = var_cand_clipReg_file;
 
 }
-// reset assembly information file
+// reset consensus information file
 void Block::resetVarCandFiles(){
 	var_cand_indel_file = NULL;
 	var_cand_clipReg_file = NULL;
@@ -885,18 +886,18 @@ void Block::resetMisAlnRegFile(){
 	misAln_reg_file = NULL;
 }
 
-// generate local assemble work
-void Block::blockGenerateLocalAssembleWorkOpt(){
+// generate local consensus work
+void Block::blockGenerateLocalConsWorkOpt(){
 //	pthread_mutex_lock(&mutex_print);
 //	cout << chrname << ":" << startPos << "-" << endPos << endl;
 //	pthread_mutex_unlock(&mutex_print);
 
-	blockGenerateLocalAssembleWorkOpt_Indel();
-	blockGenerateLocalAssembleWorkOpt_ClipReg();
+	blockGenerateLocalConsWorkOpt_Indel();
+	blockGenerateLocalConsWorkOpt_ClipReg();
 }
 
-// generate local assemble work for indel regions
-void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
+// generate local consensus work for indel regions
+void Block::blockGenerateLocalConsWorkOpt_Indel(){
 	int32_t i, j, k, beg_reg_id, end_reg_id, tmp_reg_id;
 	int32_t begPos, tmp_Pos;
 	vector<reg_t*> varVec;
@@ -913,7 +914,7 @@ void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
 		for(j=i+1; j<(int32_t)indelVector.size(); j++){
 			tmp_Pos = indelVector[j]->startRefPos;
 			//if(tmp_Pos-begPos<(int32_t)paras->slideSize*2){
-			if(tmp_Pos-begPos<paras->assemChunkSize){
+			if(tmp_Pos-begPos<paras->cnsChunkSize){
 				tmp_reg_id = j;
 			}else{
 				end_reg_id = tmp_reg_id;
@@ -931,18 +932,18 @@ void Block::blockGenerateLocalAssembleWorkOpt_Indel(){
 		// check limit process regions
 		generate_flag = true;
 		if(paras->limit_reg_process_flag){
-			sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+			sub_limit_reg_vec_work = computeLimitRegsForConsWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
 			if(sub_limit_reg_vec_work.empty()) generate_flag = false;
 		}
 		if(generate_flag)
-			generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, false);
+			generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, false);
 
 		i = end_reg_id + 1;
 	}
 }
 
-// generate local assemble work for clip regions
-void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
+// generate local consensus work for clip regions
+void Block::blockGenerateLocalConsWorkOpt_ClipReg(){
 	int32_t i, reg_len;
 	vector<reg_t*> varVec;
 	string readsfilename, contigfilename, refseqfilename, tmpdir, chrname_left, chrname_right;
@@ -955,129 +956,147 @@ void Block::blockGenerateLocalAssembleWorkOpt_ClipReg(){
 
 	for(i=0; i<(int32_t)mateClipRegVector.size(); i++){
 		clip_reg = mateClipRegVector.at(i);
-		reg1 = clip_reg->leftClipReg;
-		reg2 = clip_reg->leftClipReg2;
-		reg3 = clip_reg->rightClipReg;
-		reg4 = clip_reg->rightClipReg2;
+		if(clip_reg->valid_flag){
+			if(clip_reg->large_indel_flag==false){ // clip region
+				reg1 = clip_reg->leftClipReg;
+				reg2 = clip_reg->leftClipReg2;
+				reg3 = clip_reg->rightClipReg;
+				reg4 = clip_reg->rightClipReg2;
 
-		if(clip_reg->leftClipRegNum>=1 and clip_reg->rightClipRegNum>=1){
-			chrname_left = chrname_right = "";
-			if(clip_reg->leftClipRegNum==1) {
-				if(reg1) chrname_left = reg1->chrname;
-				else if(reg2) chrname_left = reg2->chrname;
-				else{
-					cerr << __func__ << ", line=" << __LINE__ << ": null left region, invalid!" << endl;
-					exit(1);
-				}
-			}else{
-				if(reg1->chrname.compare(reg2->chrname)==0) chrname_left = reg1->chrname;
-			}
-			if(clip_reg->rightClipRegNum==1){
-				if(reg3) chrname_right = reg3->chrname;
-				else if(reg4) chrname_right = reg4->chrname;
-				else{
-					cerr << __func__ << ", line=" << __LINE__ << ": null right region, invalid!" << endl;
-					exit(1);
-				}
-			}
-			else{
-				if(reg3->chrname.compare(reg4->chrname)==0) chrname_right = reg3->chrname;
-			}
-
-			if(chrname_left.size()>0 and chrname_right.size()>0){
-				varVec.clear();
-				if(reg1) varVec.push_back(reg1);
-				if(reg2) varVec.push_back(reg2);
-				if(reg3) varVec.push_back(reg3);
-				if(reg4) varVec.push_back(reg4);
-
-				// check limit process regions
-				generate_flag = true;
-				if(paras->limit_reg_process_flag){
-					sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
-					if(sub_limit_reg_vec_work.empty()) generate_flag = false;
-				}
-
-				if(generate_flag){
-					generate_new_flag = false;
-					if(clip_reg->reg_mated_flag and chrname_left.compare(chrname_right)==0){
-						if(reg1) start_pos = reg1->startRefPos;
-						else if(reg2) start_pos = reg2->startRefPos;
+				if(clip_reg->leftClipRegNum>=1 and clip_reg->rightClipRegNum>=1){
+					chrname_left = chrname_right = "";
+					if(clip_reg->leftClipRegNum==1) {
+						if(reg1) chrname_left = reg1->chrname;
+						else if(reg2) chrname_left = reg2->chrname;
 						else{
 							cerr << __func__ << ", line=" << __LINE__ << ": null left region, invalid!" << endl;
 							exit(1);
 						}
-						if(reg4) end_pos = reg4->endRefPos;
-						else if(reg3) end_pos = reg3->endRefPos;
+					}else{
+						if(reg1->chrname.compare(reg2->chrname)==0) chrname_left = reg1->chrname;
+					}
+					if(clip_reg->rightClipRegNum==1){
+						if(reg3) chrname_right = reg3->chrname;
+						else if(reg4) chrname_right = reg4->chrname;
 						else{
 							cerr << __func__ << ", line=" << __LINE__ << ": null right region, invalid!" << endl;
 							exit(1);
 						}
-
-						reg_len = end_pos - start_pos;
-						if(reg_len<0) reg_len = -reg_len;
-						if(reg_len<paras->maxVarRegSize)
-						//if(reg_len<paras->assemChunkSize)
-							generate_new_flag = true;
+					}
+					else{
+						if(reg3->chrname.compare(reg4->chrname)==0) chrname_right = reg3->chrname;
 					}
 
-					if(generate_new_flag){
-						generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
-					}else{
-						// assemble left regions
+					if(chrname_left.size()>0 and chrname_right.size()>0){
 						varVec.clear();
 						if(reg1) varVec.push_back(reg1);
 						if(reg2) varVec.push_back(reg2);
-						generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
-
-						// assemble right regions
-						varVec.clear();
 						if(reg3) varVec.push_back(reg3);
 						if(reg4) varVec.push_back(reg4);
-						generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+
+						// check limit process regions
+						generate_flag = true;
+						if(paras->limit_reg_process_flag){
+							sub_limit_reg_vec_work = computeLimitRegsForConsWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+							if(sub_limit_reg_vec_work.empty()) generate_flag = false;
+						}
+
+						if(generate_flag){
+							generate_new_flag = false;
+							if(clip_reg->reg_mated_flag and chrname_left.compare(chrname_right)==0){
+								if(reg1) start_pos = reg1->startRefPos;
+								else if(reg2) start_pos = reg2->startRefPos;
+								else{
+									cerr << __func__ << ", line=" << __LINE__ << ": null left region, invalid!" << endl;
+									exit(1);
+								}
+								if(reg4) end_pos = reg4->endRefPos;
+								else if(reg3) end_pos = reg3->endRefPos;
+								else{
+									cerr << __func__ << ", line=" << __LINE__ << ": null right region, invalid!" << endl;
+									exit(1);
+								}
+
+								reg_len = end_pos - start_pos;
+								if(reg_len<0) reg_len = -reg_len;
+								if(reg_len<=paras->maxVarRegSize)
+								//if(reg_len<paras->cnsChunkSize)
+									generate_new_flag = true;
+							}
+
+							if(generate_new_flag){
+								generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+							}else{
+								// cns left regions
+								varVec.clear();
+								if(reg1) varVec.push_back(reg1);
+								if(reg2) varVec.push_back(reg2);
+								generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+
+								// cns right regions
+								varVec.clear();
+								if(reg3) varVec.push_back(reg3);
+								if(reg4) varVec.push_back(reg4);
+								generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+							}
+						}
 					}
-				}
-			}
-		}else{
-//			pthread_mutex_lock(&mutex_print);
-//			cout << "############ leftClipRegNum=" << clip_reg->leftClipRegNum << ", rightClipRegNum=" << clip_reg->rightClipRegNum << endl << endl;
-//			pthread_mutex_unlock(&mutex_print);
+				}else{
+		//			pthread_mutex_lock(&mutex_print);
+		//			cout << "############ leftClipRegNum=" << clip_reg->leftClipRegNum << ", rightClipRegNum=" << clip_reg->rightClipRegNum << endl << endl;
+		//			pthread_mutex_unlock(&mutex_print);
 
-			varVec.clear();
-			if(reg1) varVec.push_back(reg1);
-			if(reg2) varVec.push_back(reg2);
-			if(reg3) varVec.push_back(reg3);
-			if(reg4) varVec.push_back(reg4);
-
-			// check limit process regions
-			generate_flag = true;
-			if(paras->limit_reg_process_flag){
-				sub_limit_reg_vec_work = computeLimitRegsForAssembleWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
-				if(sub_limit_reg_vec_work.empty()) generate_flag = false;
-			}
-			if(sub_limit_reg_vec_work.size()>0){
-				// assemble left regions
-				if(clip_reg->leftClipRegNum>=1){
 					varVec.clear();
 					if(reg1) varVec.push_back(reg1);
 					if(reg2) varVec.push_back(reg2);
-					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
-				}
-
-				// assemble right regions
-				if(clip_reg->rightClipRegNum>=1){
-					varVec.clear();
 					if(reg3) varVec.push_back(reg3);
 					if(reg4) varVec.push_back(reg4);
-					generateAssembleWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+
+					// check limit process regions
+					generate_flag = true;
+					if(paras->limit_reg_process_flag){
+						sub_limit_reg_vec_work = computeLimitRegsForConsWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+						if(sub_limit_reg_vec_work.empty()) generate_flag = false;
+					}
+					if(sub_limit_reg_vec_work.size()>0){
+						// cns left regions
+						if(clip_reg->leftClipRegNum>=1){
+							varVec.clear();
+							if(reg1) varVec.push_back(reg1);
+							if(reg2) varVec.push_back(reg2);
+							generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+						}
+
+						// cns right regions
+						if(clip_reg->rightClipRegNum>=1){
+							varVec.clear();
+							if(reg3) varVec.push_back(reg3);
+							if(reg4) varVec.push_back(reg4);
+							generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+						}
+					}
+				}
+			}else{ // large indel
+				varVec.clear();
+				if(clip_reg->largeIndelClipReg) varVec.push_back(clip_reg->largeIndelClipReg);
+
+				// check limit process regions
+				generate_flag = true;
+				if(paras->limit_reg_process_flag){
+					sub_limit_reg_vec_work = computeLimitRegsForConsWork(varVec, paras->limit_reg_process_flag, paras->limit_reg_vec);
+					if(sub_limit_reg_vec_work.empty()) generate_flag = false;
+				}
+				if(generate_flag){
+					if(clip_reg->largeIndelClipReg->sv_len<=paras->maxVarRegSize)
+						generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 				}
 			}
 		}
 	}
 }
 
-// compute limit process regions for local assemble work
-vector<simpleReg_t*> Block::computeLimitRegsForAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+// compute limit process regions for local consensus work
+vector<simpleReg_t*> Block::computeLimitRegsForConsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 	vector<simpleReg_t*> sub_limit_reg_vec_work, sub_limit_reg_vec_tmp;
 	simpleReg_t *simple_reg, *simple_reg2;
 	reg_t *reg;
@@ -1113,13 +1132,13 @@ vector<simpleReg_t*> Block::computeLimitRegsForAssembleWork(vector<reg_t*> &varV
 	return sub_limit_reg_vec_work;
 }
 
-// generate assemble work
-void Block::generateAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &sub_limit_reg_vec_work, bool clip_reg_flag){
+// generate consensus work
+void Block::generateCnsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &sub_limit_reg_vec_work, bool clip_reg_flag){
 	size_t i;
 	int64_t minRefPos, maxRefPos;
 	reg_t *reg;
 	string chrname_tmp, readsfilename, contigfilename, refseqfilename, tmpdir, file_prefix_str;
-	assembleWork_opt *assem_work_opt;
+	cnsWork_opt *cns_work_opt;
 
 	// get the minimum and maximum reference position
 	minRefPos = maxRefPos = -1;
@@ -1140,20 +1159,20 @@ void Block::generateAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_
 	if(minRefPos!=-1 and maxRefPos!=-1){
 		// construct the variant region
 		chrname_tmp = varVec.at(0)->chrname;
-		readsfilename = out_dir_assemble  + "/" + file_prefix_str + "reads_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fq";
-		contigfilename = out_dir_assemble  + "/" + file_prefix_str + "contig_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
-		refseqfilename = out_dir_assemble  + "/" + file_prefix_str + "refseq_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
-		tmpdir = out_dir_assemble + "/" + "tmp_" + file_prefix_str + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos);
+		readsfilename = out_dir_cns  + "/" + file_prefix_str + "reads_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fq";
+		contigfilename = out_dir_cns  + "/" + file_prefix_str + "cns_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
+		refseqfilename = out_dir_cns  + "/" + file_prefix_str + "refseq_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
+		tmpdir = out_dir_cns + "/" + "tmp_" + file_prefix_str + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos);
 
-		// check previously assembled information before assembly
-		assem_work_opt = allocateAssemWorkOpt(chrname_tmp, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, clip_reg_flag, limit_reg_process_flag, sub_limit_reg_vec_work);
-		if(assem_work_opt){
-			pthread_mutex_lock(&mutex_assem_work);
-			paras->assem_work_vec.push_back(assem_work_opt);
-			paras->assemble_reg_work_total ++;
-			pthread_mutex_unlock(&mutex_assem_work);
+		// check previously consensused information before consensus
+		cns_work_opt = allocateCnsWorkOpt(chrname_tmp, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, clip_reg_flag, limit_reg_process_flag, sub_limit_reg_vec_work);
+		if(cns_work_opt){
+			pthread_mutex_lock(&mutex_cns_work);
+			paras->cns_work_vec.push_back(cns_work_opt);
+			paras->cns_reg_work_total ++;
+			pthread_mutex_unlock(&mutex_cns_work);
 		}else{
-			cerr << __func__ << ", line=" << __LINE__ << ": cannot create assemble work, error!" << endl;
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot create consensus work, error!" << endl;
 			exit(1);
 		}
 	}

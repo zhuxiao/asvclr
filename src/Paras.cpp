@@ -35,10 +35,11 @@ void Paras::init(){
 	pg_cmd_str = "";
 	num_threads = 0;
 	delete_reads_flag = true;
-	keep_failed_reads_flag = reassemble_failed_work_flag = false;
+	keep_failed_reads_flag = recns_failed_work_flag = false;
 	maskMisAlnRegFlag = false;
-	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
-	assemSideExtSize = ASM_CHUNK_SIZE_EXT_INDEL;
+	cnsChunkSize = CNS_CHUNK_SIZE_INDEL;
+	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
+	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	minConReadLen = MIN_CONS_READ_LEN;
 	technology = SEQUENCING_TECH_DEFAULT;
 	include_decoy = false;
@@ -57,33 +58,33 @@ void Paras::init(){
 	max_reg_sum_size_est = MAX_REG_SUM_SIZE_EST;
 
 	min_input_cov_canu = MIN_INPUT_COV_CANU;
-	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
+	expected_cov_cns = EXPECTED_COV_CNS;
 	max_ultra_high_cov = MAX_ULTRA_HIGH_COV_THRES;
 
-	assemble_reg_preDone_num = assemble_reg_work_total = assemble_reg_workDone_num = 0;
+	cns_reg_preDone_num = cns_reg_work_total = cns_reg_workDone_num = 0;
 	num_parts_progress = NUM_PARTS_PROGRESS;
-	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
+	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
 
-	canu_version = getProgramVersion("canu -version | awk '$1 ~/(Canu)|(canu)/' | awk '{print $2}'");
-	if(canu_version.empty()){
-		cerr << "Cannot find the 'Canu' assembler, please make sure it is correctly installed and the executable file 'canu' or its soft link is included in the '$PATH' directory." << endl;
+	wtdbg2_version = getProgramVersion("wtdbg2 -V | awk '$1 ~/(wtdbg)|(wtdbg2)/' | awk '{print $2}'");
+	if(wtdbg2_version.empty()){
+		cerr << "Cannot find the 'wtdbg2', please make sure it is correctly installed and the executable file 'wtdbg2.pl' or its soft link is included in the '$PATH' directory." << endl;
 		exit(1);
 	}
 	minimap2_version = getProgramVersion("minimap2 -V | awk '{print $1}'");
-	if(canu_version.empty()){
-		cerr << "Cannot find the 'minimap2' program, please make sure it is correctly installed and the executable file 'minimap2' or its soft link is included in the '$PATH' directory." << endl;
+	if(minimap2_version.empty()){
+		cerr << "Cannot find the 'minimap2', please make sure it is correctly installed and the executable file 'minimap2' or its soft link is included in the '$PATH' directory." << endl;
 		exit(1);
 	}
 	abpoa_version = getProgramVersion("abpoa -v | awk '{print $1}'");
-	if(canu_version.empty()){
-		cerr << "Cannot find the 'abpoa' program, please make sure it is correctly installed and the executable file 'abpoa' or its soft link is included in the '$PATH' directory." << endl;
+	if(minimap2_version.empty()){
+		cerr << "Cannot find the 'abpoa', please make sure it is correctly installed and the executable file 'abpoa' or its soft link is included in the '$PATH' directory." << endl;
 		exit(1);
 	}
 
-	monitoring_proc_names_assemble = DEFAULT_MONITOR_PROC_NAMES_ASSEMBLE;
-	max_proc_running_minutes_assemble = MAX_PROC_RUNNING_MINUTES_ASSEMBLE;
-	monitoring_proc_names_call = DEFAULT_MONITOR_PROC_NAMES_CALL;
-	max_proc_running_minutes_call = MAX_PROC_RUNNING_MINUTES_CALL;
+	//monitoring_proc_names_cns = DEFAULT_MONITOR_PROC_NAMES_CNS;
+	//max_proc_running_minutes_cns = MAX_PROC_RUNNING_MINUTES_CNS;
+	//monitoring_proc_names_call = DEFAULT_MONITOR_PROC_NAMES_CALL;
+	//max_proc_running_minutes_call = MAX_PROC_RUNNING_MINUTES_CALL;
 
 	mem_total = getMemInfo("MemTotal", 2);
 	swap_total = getMemInfo("SwapTotal", 2);
@@ -97,25 +98,25 @@ void Paras::init(){
 
 	gt_min_sig_size = GT_SIG_SIZE_THRES;
 	gt_size_ratio_match = GT_SIZE_RATIO_MATCH_THRES;
-	gt_min_alle_ratio = GT_MIN_ALLE_RATIO_THRES;
-	gt_max_alle_ratio = GT_MAX_ALLE_RATIO_THRES;
+	gt_homo_ratio = GT_HOMO_RATIO_THRES;
+	gt_hete_ratio = GT_HETE_RATIO_THRES;
 }
 
 // get the program version
 string Paras::getProgramVersion(const string &cmd_str){
 	FILE *stream;
 	char tmp[256], info[256] = {0};
-	string canu_version_str = "";
+	string pg_version_str = "";
 
 	sprintf(tmp, "%s", cmd_str.c_str());
 	stream = popen(tmp, "r");
 	if(fread(info, 1, sizeof(info), stream)>0){
-		canu_version_str = info;
-		if(canu_version_str.at(canu_version_str.size()-1)=='\n') canu_version_str.at(canu_version_str.size()-1) = '\0';
+		pg_version_str = info;
+		if(pg_version_str.at(pg_version_str.size()-1)=='\n') pg_version_str.at(pg_version_str.size()-1) = '\0';
 	}
 	pclose(stream);
 
-	return canu_version_str;
+	return pg_version_str;
 }
 
 // check whether the canu version is recommended
@@ -194,28 +195,28 @@ int Paras::parseParas(int argc, char **argv){
 	// save program command line
 	pg_cmd_str = getPgCmd(argc, argv);
 
-	if (strcmp(argv[1], "detect")==0){
+	if (strcmp(argv[1], CMD_DET_STR)==0){
 		if(argc==2){ showDetectUsage(); exit(0); }
-		command = "detect";
+		command = CMD_DET_STR;
 		return parseDetectParas(argc-1, argv+1);
-	}else if(strcmp(argv[1], "assemble")==0){
-		if(argc==2){ showAssembleUsage(); exit(0); }
-		command = "assemble";
-		return parseAssembleParas(argc-1, argv+1);
-	}else if(strcmp(argv[1], "call")==0){
+	}else if(strcmp(argv[1], CMD_CNS_STR)==0){
+		if(argc==2){ showCnsUsage(); exit(0); }
+		command = CMD_CNS_STR;
+		return parseCnsParas(argc-1, argv+1);
+	}else if(strcmp(argv[1], CMD_CALL_STR)==0){
 		if(argc==2){ showCallUsage(); exit(0); }
-		command = "call";
+		command = CMD_CALL_STR;
 		return parseCallParas(argc-1, argv+1);
-	}else if(strcmp(argv[1], "all")==0){
-		if(argc==2){ showAllUsage("all"); exit(0); }
-		command = "all";
-		return parseAllParas(argc-1, argv+1, "all");
-	}else if(strcmp(argv[1], "detect-assemble")==0){
-		if(argc==2){ showDetectAssembleUsage(); exit(0); }
-		command = "detect-assemble";
-		return parseDetectAssembleParas(argc-1, argv+1);
+	}else if(strcmp(argv[1], CMD_ALL_STR)==0){
+		if(argc==2){ showAllUsage(CMD_ALL_STR); exit(0); }
+		command = CMD_ALL_STR;
+		return parseAllParas(argc-1, argv+1, CMD_ALL_STR);
+	}else if(strcmp(argv[1], CMD_DET_CNS_STR)==0){
+		if(argc==2){ showDetectCnsUsage(); exit(0); }
+		command = CMD_DET_CNS_STR;
+		return parseDetectCnsParas(argc-1, argv+1);
 	}else if (strcmp(argv[1], "--version") == 0 or strcmp(argv[1], "-v") == 0) {
-		showVersion();
+		show_version();
 		exit(0);
 	}else{
 		cerr << "Error: invalid command " << argv[1] << endl << endl;
@@ -238,9 +239,8 @@ string Paras::getPgCmd(int argc, char **argv){
 }
 
 // show version
-void Paras::showVersion(){
-	cout << PROG_NAME << " " << PROG_VERSION << endl;
-	cout << "Using htslib " << hts_version() << endl;
+void Paras::show_version(){
+	cout << PROG_VERSION << endl;
 }
 
 // parse the parameters for detect command
@@ -265,8 +265,9 @@ int Paras::parseDetectParas(int argc, char **argv){
 //		{ "dir", required_argument, NULL, 'd' },
 //		{ "out", required_argument, NULL, 'o' },
 //		{ "log", required_argument, NULL, 'l' },
+		{ "min-cons-read-size", required_argument, NULL, 0 },
 		{ "sample", required_argument, NULL, 0 },
-		{ "mask-noisy-region", no_argument, NULL, 0 },
+		//{ "mask-noisy-region", no_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
@@ -286,20 +287,20 @@ int Paras::parseDetectParas(int argc, char **argv){
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
-			case 'v': showVersion(); exit(0);
+			case 'v': show_version(); exit(0);
 			case 'h': showDetectUsage(); exit(0);
 			case '?':
 				if(optopt) cout << "unknown option '-" << (char)optopt << "'" << endl;
 				else{ // Bad long option
-                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
-                        cout << "unknown option '" << argv[optind-1] << "'" << endl;
+					if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+						cout << "unknown option '" << argv[optind-1] << "'" << endl;
 				}
 				exit(1);
 			case ':':
 				if(optopt) cout << "the option '-" << (char)optopt << "' needs a value" << endl;
 				else{
-                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
-                        cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
+					if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+						cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
 				}
 				exit(1);
 			case 0: // long options
@@ -309,7 +310,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 				}
 				break;
 			default:
-				cout << "Error: please specify the correct options for 'detect' command" << endl;
+				cout << "Error: please specify the correct options for 'det' command" << endl;
 				showDetectUsage();
 				return 1;
 		}
@@ -347,43 +348,38 @@ int Paras::parseDetectParas(int argc, char **argv){
 	return 0;
 }
 
-// parse the parameters for assemble command
-int Paras::parseAssembleParas(int argc, char **argv){
+// parse the parameters for 'cns' command
+int Paras::parseCnsParas(int argc, char **argv){
 	int opt, threadNum_tmp = 0, option_index;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
-	//assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	maxVarRegSize = MAX_VAR_REG_SIZE;
-	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
-	assemSideExtSize = ASM_CHUNK_SIZE_EXT_INDEL;
-	assemSideExtSizeClip = ASM_CHUNK_SIZE_EXT_CLIP;
+	cnsChunkSize = CNS_CHUNK_SIZE_INDEL;
+	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
+	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	minClipEndSize = MIN_CLIP_END_SIZE;
-	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
-	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
+	expected_cov_cns = EXPECTED_COV_CNS;
+	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
 	outDir = OUT_DIR;
 
 	static struct option lopts[] = {
-//		{ "daemon", no_argument, NULL, 'D' },
-//		{ "dir", required_argument, NULL, 'd' },
-//		{ "out", required_argument, NULL, 'o' },
-//		{ "log", required_argument, NULL, 'l' },
 		{ "sample", required_argument, NULL, 0 },
-		{ "threads-per-assem-work", required_argument, NULL, 0 },
-		{ "assem-chunk-size", required_argument, NULL, 0 },
-		{ "assem-side-ext-size", required_argument, NULL, 0 },
-		{ "assem-side-ext-size-clip", required_argument, NULL, 0 },
+		//{ "threads-per-cns-work", required_argument, NULL, 0 },
+		{ "cns-chunk-size", required_argument, NULL, 0 },
+		{ "cns-side-ext-size", required_argument, NULL, 0 },
+		{ "cns-side-ext-size-clip", required_argument, NULL, 0 },
 		{ "min-cons-read-size", required_argument, NULL, 0 },
-		{ "keep-assemble-reads", no_argument, NULL, 0 },
+		{ "keep-cns-reads", no_argument, NULL, 0 },
 		{ "keep-failed-reads", no_argument, NULL, 0 },
-		{ "reassemble-failed-work", no_argument, NULL, 0 },
-		{ "min-input-cov-assemble", required_argument, NULL, 0 },
-		{ "monitor_proc_names_assemble", required_argument, NULL, 0 },
-		{ "max_proc_running_minutes_assemble", required_argument, NULL, 0 },
+		{ "re-cns-failed-work", no_argument, NULL, 0 },
+		//{ "min-cov-cns", required_argument, NULL, 0 },
+		//{ "monitor-proc-names-cns", required_argument, NULL, 0 },
+		//{ "max_proc_running_minutes_cns", required_argument, NULL, 0 },
 		{ "technology", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
@@ -394,7 +390,6 @@ int Paras::parseAssembleParas(int argc, char **argv){
 	while( (opt = getopt_long(argc, argv, ":b:m:M:n:r:e:x:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
-			//case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
 			case 'n': minReadsNumSupportSV = stoi(optarg);
@@ -402,35 +397,35 @@ int Paras::parseAssembleParas(int argc, char **argv){
 					break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
-			case 'x': expected_cov_assemble = stod(optarg); break;
+			case 'x': expected_cov_cns = stod(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
-			case 'v': showVersion(); exit(0);
-			case 'h': showAssembleUsage(); exit(0);
+			case 'v': show_version(); exit(0);
+			case 'h': showCnsUsage(); exit(0);
 			case '?':
 				if(optopt) cout << "unknown option '-" << (char)optopt << "'" << endl;
 				else{ // Bad long option
-                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
-                        cout << "unknown option '" << argv[optind-1] << "'" << endl;
+					if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+						cout << "unknown option '" << argv[optind-1] << "'" << endl;
 				}
 				exit(1);
 			case ':':
 				if(optopt) cout << "the option '-" << (char)optopt << "' needs a value" << endl;
 				else{
-                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
-                        cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
+					if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+						cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
 				}
 				exit(1);
 			case 0: // long options
 				if(parse_long_opt(option_index, optarg, lopts)!=0){
-					showAssembleUsage();
+					showCnsUsage();
 					return 1;
 				}
 				break;
 			default:
-				cout << "Error: please specify the correct options for 'assemble' command" << endl;
-				showAssembleUsage();
+				cout << "Error: please specify the correct options for 'cns' command" << endl;
+				showCnsUsage();
 				return 1;
 		}
 	}
@@ -440,9 +435,9 @@ int Paras::parseAssembleParas(int argc, char **argv){
 	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 	maxVarRegSize = max_sv_size_usr;
 
-	if(num_threads*num_threads_per_assem_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
-		cout << "Warning: the user-specified total number of concurrent assemble work is " << num_threads << ", and the user-specified number of threads for each assemble work is " << num_threads_per_assem_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
-	}
+//	if(num_threads*num_threads_per_cns_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
+//		cout << "Warning: the user-specified total number of concurrent consensus work is " << num_threads << ", and the user-specified number of threads for each consensus work is " << num_threads_per_cns_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
+//	}
 
 	outDir = deleteTailPathChar(outDir);
 
@@ -452,7 +447,7 @@ int Paras::parseAssembleParas(int argc, char **argv){
 		inBamFile = argv[optind+1];
 	}else{
 		cout << "Error: Please specify the reference file and coordinate-sorted BAM file." << endl << endl;
-		showAssembleUsage();
+		showCnsUsage();
 		return 1;
 	}
 
@@ -464,7 +459,6 @@ int Paras::parseCallParas(int argc, char **argv){
 	int opt, threadNum_tmp = 0, option_index;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
-	//assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
@@ -472,23 +466,27 @@ int Paras::parseCallParas(int argc, char **argv){
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
-	assemSideExtSize = ASM_CHUNK_SIZE_EXT_INDEL;
-	assemSideExtSizeClip = ASM_CHUNK_SIZE_EXT_CLIP;
+	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
+	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	outDir = OUT_DIR;
+	gt_min_consistency_merge = GT_MIN_CONSIST_MERGE_THRES;
+	gt_homo_ratio = GT_HOMO_RATIO_THRES;
+	gt_hete_ratio = GT_HETE_RATIO_THRES;
 
 	static struct option lopts[] = {
 //		{ "daemon", no_argument, NULL, 'D' },
 //		{ "dir", required_argument, NULL, 'd' },
 //		{ "out", required_argument, NULL, 'o' },
 //		{ "log", required_argument, NULL, 'l' },
-		{ "monitor_proc_names_call", required_argument, NULL, 0 },
-		{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
+		//{ "monitor-proc-names-call", required_argument, NULL, 0 },
+		//{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
 		{ "sample", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
-		{ "gt_min_sig_size", required_argument, NULL, 0 },
-		{ "gt_size_ratio_match", required_argument, NULL, 0 },
-		{ "gt_min_alle_ratio", required_argument, NULL, 0 },
-		{ "gt_max_alle_ratio", required_argument, NULL, 0 },
+		{ "gt-min-sig-size", required_argument, NULL, 0 },
+		{ "gt-size-ratio-match", required_argument, NULL, 0 },
+		{ "gt-min-consist-merge", required_argument, NULL, 0 },
+		{ "gt-homo-ratio", required_argument, NULL, 0 },
+		{ "gt-hete-ratio", required_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -497,7 +495,6 @@ int Paras::parseCallParas(int argc, char **argv){
 	while( (opt = getopt_long(argc, argv, ":b:m:M:n:e:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
-			//case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
 			case 'n': minReadsNumSupportSV = stoi(optarg);
@@ -507,20 +504,20 @@ int Paras::parseCallParas(int argc, char **argv){
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
-			case 'v': showVersion(); exit(0);
+			case 'v': show_version(); exit(0);
 			case 'h': showCallUsage(); exit(0);
 			case '?':
 				if(optopt) cout << "unknown option '-" << (char)optopt << "'" << endl;
 				else{ // Bad long option
-                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
-                        cout << "unknown option '" << argv[optind-1] << "'" << endl;
+					if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+						cout << "unknown option '" << argv[optind-1] << "'" << endl;
 				}
 				exit(1);
 			case ':':
 				if(optopt) cout << "the option -'" << (char)optopt << "' needs a value" << endl;
 				else{
-                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
-                        cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
+					if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+						cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
 				}
 				exit(1);
 			case 0: // long options
@@ -561,47 +558,48 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	int opt, threadNum_tmp = 0, option_index;
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
-	//assemSlideSize = ASSEM_SLIDE_SIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
-	assemChunkSize = ASM_CHUNK_SIZE_INDEL;
-	assemSideExtSize = ASM_CHUNK_SIZE_EXT_INDEL;
-	assemSideExtSizeClip = ASM_CHUNK_SIZE_EXT_CLIP;
+	cnsChunkSize = CNS_CHUNK_SIZE_INDEL;
+	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
+	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	minClipEndSize = MIN_CLIP_END_SIZE;
-	expected_cov_assemble = EXPECTED_COV_ASSEMBLE;
-	num_threads_per_assem_work = NUM_THREADS_PER_ASSEM_WORK;
+	expected_cov_cns = EXPECTED_COV_CNS;
+	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
 	outDir = OUT_DIR;
+	gt_min_consistency_merge = GT_MIN_CONSIST_MERGE_THRES;
+	gt_homo_ratio = GT_HOMO_RATIO_THRES;
+	gt_hete_ratio = GT_HETE_RATIO_THRES;
+
 	simpleReg_t *simple_reg;
 	string simple_reg_str;
 
 	static struct option lopts[] = {
-//		{ "daemon", no_argument, NULL, 'D' },
-//		{ "dir", required_argument, NULL, 'd' },
-//		{ "out", required_argument, NULL, 'o' },
-//		{ "log", required_argument, NULL, 'l' },
 		{ "sample", required_argument, NULL, 0 },
-		{ "threads-per-assem-work", required_argument, NULL, 0 },
-		{ "assem-chunk-size", required_argument, NULL, 0 },
-		{ "keep-assemble-reads", no_argument, NULL, 0 },
-		{ "assem-side-ext-size", required_argument, NULL, 0 },
-		{ "assem-side-ext-size-clip", required_argument, NULL, 0 },
+		{ "min-cons-read-size", required_argument, NULL, 0 },
+		//{ "threads-per-cns-work", required_argument, NULL, 0 },
+		{ "cns-chunk-size", required_argument, NULL, 0 },
+		{ "keep-cns-reads", no_argument, NULL, 0 },
+		{ "cns-side-ext-size", required_argument, NULL, 0 },
+		{ "cns-side-ext-size-clip", required_argument, NULL, 0 },
 		{ "keep-failed-reads", no_argument, NULL, 0 },
-		{ "reassemble-failed-work", no_argument, NULL, 0 },
-		{ "mask-noisy-region", required_argument, NULL, 0 },
-		{ "monitor_proc_names_assemble", required_argument, NULL, 0 },
-		{ "monitor_proc_names_call", required_argument, NULL, 0 },
-		{ "max_proc_running_minutes_assemble", required_argument, NULL, 0 },
-		{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
+		{ "re-cns-failed-work", no_argument, NULL, 0 },
+		//{ "mask-noisy-region", required_argument, NULL, 0 },
+		//{ "monitor-proc-names-cns", required_argument, NULL, 0 },
+		//{ "monitor_proc_names_call", required_argument, NULL, 0 },
+		//{ "max_proc_running_minutes_cns", required_argument, NULL, 0 },
+		//{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
 		{ "technology", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
-		{ "gt_min_sig_size", required_argument, NULL, 0 },
-		{ "gt_size_ratio_match", required_argument, NULL, 0 },
-		{ "gt_min_alle_ratio", required_argument, NULL, 0 },
-		{ "gt_max_alle_ratio", required_argument, NULL, 0 },
+		{ "gt-min-sig-size", required_argument, NULL, 0 },
+		{ "gt-size-ratio-match", required_argument, NULL, 0 },
+		{ "gt-min-consist-merge", required_argument, NULL, 0 },
+		{ "gt-homo-ratio", required_argument, NULL, 0 },
+		{ "gt-hete-ratio", required_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
@@ -611,7 +609,6 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
-			//case 'S': assemSlideSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
 			case 'n': minReadsNumSupportSV = stoi(optarg);
@@ -619,25 +616,25 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 					break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
-			case 'x': expected_cov_assemble = stod(optarg); break;
+			case 'x': expected_cov_cns = stod(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
-			case 'v': showVersion(); exit(0);
+			case 'v': show_version(); exit(0);
 			case 'h': showAllUsage(cmd_str); exit(0);
 			case '?':
 				if(optopt) cout << "unknown option '-" << (char)optopt << "'" << endl;
 				else{ // Bad long option
-                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0) {
-                        cout << "unknown option '" << argv[optind-1] << "'" << endl;
-                    }
+					if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0) {
+						cout << "unknown option '" << argv[optind-1] << "'" << endl;
+					}
 				}
 				exit(1);
 			case ':':
 				if(optopt) cout << "the option '-" << (char)optopt << "' needs a value" << endl;
 				else{
-                    if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
-                        cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
+					if (optind > 0 && strncmp(argv[optind-1], "--", 2) == 0)
+						cout << "the option '" << argv[optind-1] << "' needs a value" << endl;
 				}
 				exit(1);
 			case 0: // long options
@@ -658,9 +655,9 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 	maxVarRegSize = max_sv_size_usr;
 
-	if(num_threads*num_threads_per_assem_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
-		cout << "Warning: the user-specified total number of concurrent assemble work is " << num_threads << ", and the user-specified number of threads for each assemble work is " << num_threads_per_assem_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
-	}
+//	if(num_threads*num_threads_per_cns_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
+//		cout << "Warning: the user-specified total number of concurrent consensus work is " << num_threads << ", and the user-specified number of threads for each consensus work is " << num_threads_per_cns_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
+//	}
 
 	outDir = deleteTailPathChar(outDir);
 
@@ -695,9 +692,9 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	return 0;
 }
 
-// parse the parameters for 'detect-assemble' command
-int Paras::parseDetectAssembleParas(int argc, char **argv){
-	parseAllParas(argc, argv, "detect-assemble");
+// parse the parameters for 'det-cns' command
+int Paras::parseDetectCnsParas(int argc, char **argv){
+	parseAllParas(argc, argv, CMD_DET_CNS_STR);
 	return 0;
 }
 
@@ -705,7 +702,7 @@ int Paras::parseDetectAssembleParas(int argc, char **argv){
 void Paras::showUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage:  asvclr  <command> [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
+	cout << "Usage:  asvclr <command> [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
 	cout << "   REF_FILE          Reference file (required)" << endl;
@@ -715,18 +712,18 @@ void Paras::showUsage(){
 	cout << "                     processed (optional)" << endl << endl;
 
 	cout << "Commands:" << endl;
-	cout << "   detect            detect indel signatures in aligned reads" << endl;
-	cout << "   assemble          assemble candidate regions" << endl;
-	cout << "   call              call indels by alignments of local genome assemblies" << endl;
+	cout << "   det               detect indel signatures in aligned reads" << endl;
+	cout << "   cns               consensus candidate regions" << endl;
+	cout << "   call              call indels by alignments of local consensus" << endl;
 	cout << "   all               run the above commands in turn" << endl;
-	cout << "   detect-assemble   run 'detect' and 'assemble' commands in turn" << endl;
+	cout << "   det-cns           run 'det' and 'cns' commands in turn" << endl;
 }
 
 // show the usage for detect command
 void Paras::showDetectUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage: asvclr detect [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
+	cout << "Usage: asvclr det [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
 	cout << "   REF_FILE      Reference file (required)" << endl;
@@ -750,8 +747,10 @@ void Paras::showDetectUsage(){
 	//cout << "   -r FILE       limit reference regions to process [null]: CHR|CHR:START-END" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
 	cout << "   -p STR        prefix of output result files [null]" << endl;
-	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
+	cout << "   -t INT        number of threads [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
+	cout << "   --min-cons-read-size INT" << endl;
+	cout << "                 minimal read segment size to generate consensus sequences " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
@@ -760,19 +759,17 @@ void Paras::showDetectUsage(){
 	cout << "   -h,--help     show this help message and exit" << endl;
 }
 
-// show the usage for assemble command
-void Paras::showAssembleUsage(){
+// show the usage for 'cns' command
+void Paras::showCnsUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
-	cout << "Usage: asvclr assemble [options] <REF_FILE> <BAM_FILE>" << endl << endl;
+	cout << "Usage: asvclr cns [options] <REF_FILE> <BAM_FILE>" << endl << endl;
 
 	cout << "Description:" << endl;
 	cout << "   REF_FILE      Reference file (required)" << endl;
 	cout << "   BAM_FILE      Coordinate-sorted BAM file (required)" << endl << endl;
 
 	cout << "Options: " << endl;
-	//cout << "   -s INT        Slide window size for 'detect' command  [" << SLIDESIZE <<"]" << endl;
-	//cout << "   -S INT        Slide window size for 'assemble' and 'call' command [" << ASSEM_SLIDE_SIZE << "]" << endl;
 	cout << "   -m INT        minimal SV size to report [" << MIN_SV_SIZE_USR << "]" << endl;
 	cout << "   -M INT        maximal SV size to report [" << MAX_SV_SIZE_USR << "]" << endl;
 	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
@@ -784,44 +781,44 @@ void Paras::showAssembleUsage(){
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
-	cout << "   -x FLOAT      expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
+	cout << "   -x FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
 	cout << "                 0 for no coverage sampling" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
 	cout << "   -p STR        prefix of output result files [null]" << endl;
-	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
+	cout << "   -t INT        number of threads [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
-	cout << "   --threads-per-assem-work INT" << endl;
-	cout << "                 Limited number of threads for each assemble work [0]:" << endl;
-	cout << "                 0 for unlimited, and positive INT for the limited" << endl;
-	cout << "                 number of threads for each assemble work" << endl;
-	cout << "   --assem-chunk-size INT" << endl;
+//	cout << "   --threads-per-cns-work INT" << endl;
+//	cout << "                 Limited number of threads for each consensus work [0]:" << endl;
+//	cout << "                 0 for unlimited, and positive INT for the limited" << endl;
+//	cout << "                 number of threads for each consensus work" << endl;
+	cout << "   --cns-chunk-size INT" << endl;
 	cout << "                 maximal reference chunk size to collect reads data to perform" << endl;
-	cout << "                 local assemble [" << ASM_CHUNK_SIZE_INDEL << "]. Reads of variants with reference" << endl;
-	cout << "                 distance < INT will be collected to perform local assemble" << endl;
-	cout << "   --assem-side-ext-size INT" << endl;
+	cout << "                 local consensus [" << CNS_CHUNK_SIZE_INDEL << "]. Reads of variants with reference" << endl;
+	cout << "                 distance < INT will be collected to perform local consensus" << endl;
+	cout << "   --cns-side-ext-size INT" << endl;
 	cout << "                 region extend size on both sides while generating consensus sequences" << endl;
-	cout << "                 [" << ASM_CHUNK_SIZE_EXT_INDEL << "] bp." << endl;
-	cout << "   --assem-side-ext-size-clip INT" << endl;
-	cout << "                 clip region extend size on both sides while generating assembly sequences" << endl;
-	cout << "                 [" << ASM_CHUNK_SIZE_EXT_CLIP << "] bp." << endl;
+	cout << "                 [" << CNS_CHUNK_SIZE_EXT_INDEL << "] bp." << endl;
+	cout << "   --cns-side-ext-size-clip INT" << endl;
+	cout << "                 clip region extend size on both sides while generating consensus sequences" << endl;
+	cout << "                 [" << CNS_CHUNK_SIZE_EXT_CLIP << "] bp." << endl;
 	cout << "   --min-cons-read-size INT" << endl;
 	cout << "                 minimal read segment size to generate consensus sequences " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
-	cout << "   --keep-assemble-reads" << endl;
-	cout << "                 Keep temporary reads from being deleted during local assemble." << endl;
+	cout << "   --keep-cns-reads" << endl;
+	cout << "                 Keep temporary reads from being deleted during local consensus." << endl;
 	cout << "                 This may take some additional disk space" << endl;
-	cout << "   --reassemble-failed-work" << endl;
-	cout << "                 Reperform previously failed local assemble work." << endl;
-	cout << "   --min-input-cov-assemble FLOAT" << endl;
-	cout << "                 Minimum input coverage for local assemble [" << MIN_INPUT_COV_CANU << "]" << endl;
-	cout << "   --monitor_proc_names_assemble STR" << endl;
-	cout << "                 Process names to be monitored during Canu assemble. These processes may" << endl;
-	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
-	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
-	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
-	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_ASSEMBLE << "\"]" << endl;
-	cout << "   --max_proc_running_minutes_assemble INT" << endl;
-	cout << "                 Monitored processes for assemble will be terminated if their CPU running" << endl;
-	cout << "                 time exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_ASSEMBLE << "]" << endl;
+	cout << "   --re-cns-failed-work" << endl;
+	cout << "                 Reperform previously failed local consensus work." << endl;
+//	cout << "   --min-cov-cns FLOAT" << endl;
+//	cout << "                 Minimum input coverage for local consensus [" << MIN_INPUT_COV_CANU << "]" << endl;
+//	cout << "   --monitor-proc-names-cns STR" << endl;
+//	cout << "                 Process names to be monitored during Canu consensus. These processes may" << endl;
+//	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
+//	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
+//	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
+//	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CNS << "\"]" << endl;
+//	cout << "   --max_proc_running_minutes_cns INT" << endl;
+//	cout << "                 Monitored processes for consensus will be terminated if their CPU running" << endl;
+//	cout << "                 time exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CNS << "]" << endl;
 	cout << "   --technology STR" << endl;
 	cout << "                 Sequencing technology [pacbio]:" << endl;
 	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
@@ -845,8 +842,6 @@ void Paras::showCallUsage(){
 	cout << "   BAM_FILE      Coordinate-sorted BAM file (required)" << endl << endl;
 
 	cout << "Options: " << endl;
-	//cout << "   -s INT        Slide window size for 'detect' command  [" << SLIDESIZE <<"]" << endl;
-	//cout << "   -S INT        Slide window size for 'assemble' and 'call' command [" << ASSEM_SLIDE_SIZE << "]" << endl;
 	cout << "   -m INT        minimal SV size to report [" << MIN_SV_SIZE_USR << "]" << endl;
 	cout << "   -M INT        maximal SV size to report [" << MAX_SV_SIZE_USR << "]" << endl;
 	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
@@ -854,37 +849,36 @@ void Paras::showCallUsage(){
 	cout << "                 with size smaller than threshold will be ignored" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
 	cout << "   -p STR        prefix of output result files [null]" << endl;
-	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
+	cout << "   -t INT        number of threads [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
-	cout << "   --monitor_proc_names_call STR" << endl;
-	cout << "                 Process names to be monitored during BLAT alignment. These processes may" << endl;
-	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
-	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
-	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
-	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CALL << "\"]" << endl;
-	cout << "   --max_proc_running_minutes_call INT" << endl;
-	cout << "                 Monitored processes for call will be terminated if their CPU running time" << endl;
-	cout << "                 exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CALL << "]" << endl;
+//	cout << "   --monitor_proc_names_call STR" << endl;
+//	cout << "                 Process names to be monitored during BLAT alignment. These processes may" << endl;
+//	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
+//	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
+//	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
+//	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CALL << "\"]" << endl;
+//	cout << "   --max_proc_running_minutes_call INT" << endl;
+//	cout << "                 Monitored processes for call will be terminated if their CPU running time" << endl;
+//	cout << "                 exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CALL << "]" << endl;
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 
-	cout << "   --gt_min_sig_size INT" << endl;
-	cout << "                 minimal signature size threshold for genotyping [" << GT_SIG_SIZE_THRES << "]." << endl;
-	cout << "                 Signatures with size larger than INT will be processed, otherwise, they will be ignored." << endl;
-	cout << "   --gt_size_ratio_match FLOAT" << endl;
-	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
-	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
-	cout << "   --gt_min_alle_ratio FLOAT" << endl;
-	cout << "                 minimal allele ratio threshold for genotyping [" << GT_MIN_ALLE_RATIO_THRES << "]." << endl;
-	cout << "                 Variation is homozygous if the ratio of allele count is less than FLOAT. " << endl;
-	cout << "                 Variation is heterozygous if the ratio of allele count is larger than FLOAT" << endl;
-	cout << "                 and less than maximal allele ratio threshold (--gt_max_alle_ratio)." << endl;
-	cout << "   --gt_max_alle_ratio FLOAT" << endl;
-	cout << "                 maximal allele ratio threshold for genotyping [" << GT_MAX_ALLE_RATIO_THRES << "]." << endl;
-	cout << "                 There is no genotype information if ratio of allele count is larger than FLOAT." << endl;
-	cout << "                 Variation is heterozygous if the ratio of allele count is less than FLOAT" << endl;
-	cout << "                 and larger than minimal allele ratio threshold (--gt_min_alle_ratio)." << endl;
+//	cout << "   --gt-min-sig-size INT" << endl;
+//	cout << "                 minimal signature size threshold for genotyping [" << GT_SIG_SIZE_THRES << "]." << endl;
+//	cout << "                 Signatures with size larger than INT will be processed, otherwise, they will be ignored." << endl;
+//	cout << "   --gt-size-ratio-match FLOAT" << endl;
+//	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
+//	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
+	cout << "   --gt-min-consist-merge FLOAT" << endl;
+	cout << "                 minimal sequence consistency threshold for allele merge [" << GT_MIN_CONSIST_MERGE_THRES << "]." << endl;
+	cout << "                 Allelic variations will be merged if their sequence consistency are larger than FLOAT. " << endl;
+	cout << "   --gt-homo-ratio FLOAT" << endl;
+	cout << "                 minimal allele ratio threshold for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
+	cout << "                 Variation is homozygous if the ratio of allele count is larger than FLOAT." << endl;
+	cout << "   --gt_hete_ratio FLOAT" << endl;
+	cout << "                 minimal allele ratio threshold for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
+	cout << "                 Variation is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
 
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl;
@@ -906,11 +900,9 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "Options: " << endl;
 	cout << "   -b INT        block size [1000000]" << endl;
 	cout << "   -s INT        Slide window size [" << SLIDESIZE <<"]" << endl;
-	//cout << "   -S INT        Slide window size for 'assemble' and 'call' command [" << ASSEM_SLIDE_SIZE << "]" << endl;
 	cout << "   -m INT        minimal SV size to report [" << MIN_SV_SIZE_USR << "]" << endl;
 	cout << "   -M INT        maximal SV size to report [" << MAX_SV_SIZE_USR << "]" << endl;
 	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
-	//cout << "   -n INT        minimal number of reads supporting a SV [" << MIN_SUPPORT_READS_NUM_EST << "]" << endl;
 	cout << "   -n INT        minimal number of reads supporting a SV [" << MIN_SUPPORT_READS_NUM_EST << "]." << endl;
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be "<< MIN_SUPPORT_READS_NUM_FACTOR << " times of the sequencing depth of" << endl;
@@ -919,60 +911,60 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
-	cout << "   -x FLOAT      expected sampling coverage for local assemble [" << EXPECTED_COV_ASSEMBLE << "], " << endl;
+	cout << "   -x FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
 	cout << "                 0 for no coverage sampling" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
 	cout << "   -p STR        prefix of output result files [null]" << endl;
-	cout << "   -t INT        number of concurrent work [0]. 0 for the maximal number" << endl;
+	cout << "   -t INT        number of threads [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
-	cout << "   --threads-per-assem-work INT" << endl;
-	cout << "                 Limited number of threads for each assemble work [0]:" << endl;
-	cout << "                 0 for unlimited, and positive INT for the limited" << endl;
-	cout << "                 number of threads for each assemble work" << endl;
-	cout << "   --assem-chunk-size INT" << endl;
+//	cout << "   --threads-per-cns-work INT" << endl;
+//	cout << "                 Limited number of threads for each consensus work [0]:" << endl;
+//	cout << "                 0 for unlimited, and positive INT for the limited" << endl;
+//	cout << "                 number of threads for each consensus work" << endl;
+	cout << "   --cns-chunk-size INT" << endl;
 	cout << "                 maximal reference chunk size to collect reads data to perform" << endl;
-	cout << "                 local assemble [" << ASM_CHUNK_SIZE_INDEL << "]. Reads of variants with reference" << endl;
-	cout << "                 distance < INT will be collected to perform local assemble" << endl;
-	cout << "   --assem-side-ext-size INT" << endl;
+	cout << "                 local consensus [" << CNS_CHUNK_SIZE_INDEL << "]. Reads of variants with reference" << endl;
+	cout << "                 distance < INT will be collected to perform local consensus" << endl;
+	cout << "   --cns-side-ext-size INT" << endl;
 	cout << "                 region extend size on both sides while generating consensus sequences" << endl;
-	cout << "                 [" << ASM_CHUNK_SIZE_EXT_INDEL << "] bp." << endl;
-	cout << "   --assem-side-ext-size-clip INT" << endl;
-	cout << "                 clip region extend size on both sides while generating assembly sequences" << endl;
-	cout << "                 [" << ASM_CHUNK_SIZE_EXT_CLIP << "] bp." << endl;
+	cout << "                 [" << CNS_CHUNK_SIZE_EXT_INDEL << "] bp." << endl;
+	cout << "   --cns-side-ext-size-clip INT" << endl;
+	cout << "                 clip region extend size on both sides while generating consensus sequences" << endl;
+	cout << "                 [" << CNS_CHUNK_SIZE_EXT_CLIP << "] bp." << endl;
 	cout << "   --min-cons-read-size INT" << endl;
 	cout << "                 minimal read segment size to generate consensus sequences " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
-	cout << "   --keep-assemble-reads" << endl;
-	cout << "                 Keep temporary reads from being deleted during local assemble." << endl;
+	cout << "   --keep-cns-reads" << endl;
+	cout << "                 Keep temporary reads from being deleted during local consensus." << endl;
 	cout << "                 This may take some additional disk space" << endl;
-	cout << "   --reassemble-failed-work" << endl;
-	cout << "                 Reperform previously failed local assemble work." << endl;
-	cout << "   --min-input-cov-assemble FLOAT" << endl;
-	cout << "                 Minimum input coverage for local assemble [" << MIN_INPUT_COV_CANU << "]" << endl;
-	cout << "   --monitor_proc_names_assemble STR" << endl;
-	cout << "                 Process names to be monitored during Canu assemble. These processes may" << endl;
-	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
-	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
-	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
-	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_ASSEMBLE << "\"]" << endl;
+	cout << "   --re-cns-failed-work" << endl;
+	cout << "                 Reperform previously failed local consensus work." << endl;
+//	cout << "   --min-cov-cns FLOAT" << endl;
+//	cout << "                 Minimum input coverage for local consensus [" << MIN_INPUT_COV_CANU << "]" << endl;
+//	cout << "   --monitor-proc-names-cns STR" << endl;
+//	cout << "                 Process names to be monitored during Canu consensus. These processes may" << endl;
+//	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
+//	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
+//	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
+//	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CNS << "\"]" << endl;
 
-	if(cmd_str.compare("all")==0){
-		cout << "   --monitor_proc_names_call STR" << endl;
-		cout << "                 Process names to be monitored during BLAT alignment. These processes may" << endl;
-		cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
-		cout << "                 should be terminated in advance if they are computation intensive works." << endl;
-		cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
-		cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CALL << "\"]" << endl;
-	}
+//	if(cmd_str.compare(CMD_ALL_STR)==0){
+//		cout << "   --monitor_proc_names_call STR" << endl;
+//		cout << "                 Process names to be monitored during BLAT alignment. These processes may" << endl;
+//		cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
+//		cout << "                 should be terminated in advance if they are computation intensive works." << endl;
+//		cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
+//		cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CALL << "\"]" << endl;
+//	}
 
-	cout << "   --max_proc_running_minutes_assemble INT" << endl;
-	cout << "                 Monitored processes for assemble will be terminated if their CPU running" << endl;
-	cout << "                 time exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_ASSEMBLE << "]" << endl;
-
-	if(cmd_str.compare("all")==0){
-		cout << "   --max_proc_running_minutes_call INT" << endl;
-		cout << "                 Monitored processes for call will be terminated if their CPU running time" << endl;
-		cout << "                 exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CALL << "]" << endl;
-	}
+//	cout << "   --max_proc_running_minutes_cns INT" << endl;
+//	cout << "                 Monitored processes for consensus will be terminated if their CPU running" << endl;
+//	cout << "                 time exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CNS << "]" << endl;
+//
+//	if(cmd_str.compare(CMD_ALL_STR)==0){
+//		cout << "   --max_proc_running_minutes_call INT" << endl;
+//		cout << "                 Monitored processes for call will be terminated if their CPU running time" << endl;
+//		cout << "                 exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CALL << "]" << endl;
+//	}
 
 	cout << "   --technology STR" << endl;
 	cout << "                 Sequencing technology [pacbio]:" << endl;
@@ -983,30 +975,29 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 
-	cout << "   --gt_min_sig_size INT" << endl;
-	cout << "                 minimal signature size threshold for genotyping [" << GT_SIG_SIZE_THRES << "]." << endl;
-	cout << "                 Signatures with size larger than INT will be processed, otherwise, they will be ignored." << endl;
-	cout << "   --gt_size_ratio_match FLOAT" << endl;
-	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
-	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
-	cout << "   --gt_min_alle_ratio FLOAT" << endl;
-	cout << "                 minimal allele ratio threshold for genotyping [" << GT_MIN_ALLE_RATIO_THRES << "]." << endl;
-	cout << "                 Variation is homozygous if the ratio of allele count is less than FLOAT. " << endl;
-	cout << "                 Variation is heterozygous if the ratio of allele count is larger than FLOAT" << endl;
-	cout << "                 and less than maximal allele ratio threshold (--gt_max_alle_ratio)." << endl;
-	cout << "   --gt_max_alle_ratio FLOAT" << endl;
-	cout << "                 maximal allele ratio threshold for genotyping [" << GT_MAX_ALLE_RATIO_THRES << "]." << endl;
-	cout << "                 There is no genotype information if ratio of allele count is larger than FLOAT." << endl;
-	cout << "                 Variation is heterozygous if the ratio of allele count is less than FLOAT" << endl;
-	cout << "                 and larger than minimal allele ratio threshold (--gt_min_alle_ratio)." << endl;
+//	cout << "   --gt-min-sig-size INT" << endl;
+//	cout << "                 minimal signature size threshold for genotyping [" << GT_SIG_SIZE_THRES << "]." << endl;
+//	cout << "                 Signatures with size larger than INT will be processed, otherwise, they will be ignored." << endl;
+//	cout << "   --gt-size-ratio-match FLOAT" << endl;
+//	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
+//	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
+	cout << "   --gt-min-consist-merge FLOAT" << endl;
+	cout << "                 minimal sequence consistency threshold for allele merge [" << GT_MIN_CONSIST_MERGE_THRES << "]." << endl;
+	cout << "                 Allelic variations will be merged if their sequence consistency are larger than FLOAT. " << endl;
+	cout << "   --gt-homo-ratio FLOAT" << endl;
+	cout << "                 minimal allele ratio threshold for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
+	cout << "                 Variation is homozygous if the ratio of allele count is larger than FLOAT." << endl;
+	cout << "   --gt_hete_ratio FLOAT" << endl;
+	cout << "                 minimal allele ratio threshold for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
+	cout << "                 Variation is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
 
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl;
 }
 
-// show the usage for detect-assemble command
-void Paras::showDetectAssembleUsage(){
-	showAllUsage("detect-assemble");
+// show the usage for det-cns command
+void Paras::showDetectCnsUsage(){
+	showAllUsage(CMD_DET_CNS_STR);
 }
 
 // output parameters
@@ -1036,43 +1027,57 @@ void Paras::outputParas(){
 
 	cout << "Sample: " << sample << endl;
 	if(min_Nsupp_est_flag==0){ // user-specified
-		cout << "Number of reads supporting SV: " << minReadsNumSupportSV << endl;
+		cout << "Minimal number of reads supporting SV: " << minReadsNumSupportSV << endl;
 	}
 	cout << "Block size: " << blockSize << " bp" << endl;
 	cout << "Slide size: " << slideSize << " bp" << endl;
 	cout << "Minimal SV size to report: " << min_sv_size_usr << " bp" << endl;
 	cout << "Maximal SV size to report: " << max_sv_size_usr << " bp" << endl;
-	cout << "Minimal ratio of max-segment for indel calling: " << max_seg_size_ratio_usr << endl;
+	if(command.compare(CMD_DET_STR)!=0)
+		cout << "Minimal ratio of max-segment for indel calling: " << max_seg_size_ratio_usr << endl; // not det
 	cout << "Minimal clipping end size: " << minClipEndSize << " bp" << endl;
-	cout << "Expected sampling coverage: " << expected_cov_assemble << endl;
-	cout << "Local assemble chunk size : " << assemChunkSize << " bp" << endl;
-	cout << "Local assemble chunk extend size for indels: " << assemSideExtSize << " bp" << endl;
-	cout << "Local assemble chunk extend size for clippings: " << assemSideExtSizeClip << " bp" << endl;
-	cout << "Minimal read segment size to generate consensus sequence: " << minConReadLen << " bp" << endl;
-	cout << "Number of concurrent works: " << num_threads << endl;
-	cout << "Limited number of threads for each assemble work: " << num_threads_per_assem_work << endl;
+	if(command.compare(CMD_CNS_STR)==0 or command.compare(CMD_ALL_STR)==0 or command.compare(CMD_DET_CNS_STR)==0){ // cns, all, det-cns
+		cout << "Expected sampling coverage: " << expected_cov_cns << endl;
+		cout << "Local consensus chunk size : " << cnsChunkSize << " bp" << endl;
+	}
+	if(command.compare(CMD_DET_STR)!=0){
+		cout << "Local consensus chunk extend size for indels: " << cnsSideExtSize << " bp" << endl; // not det
+		cout << "Local consensus chunk extend size for clippings: " << cnsSideExtSizeClip << " bp" << endl;
+	}
+	if(command.compare(CMD_CALL_STR)!=0){
+		cout << "Minimal read segment size to generate consensus sequence: " << minConReadLen << " bp" << endl;
+	}
+	cout << "Number of threads: " << num_threads << endl;
+	//cout << "Limited number of threads for each consensus work: " << num_threads_per_cns_work << endl;
 	if(maskMisAlnRegFlag) cout << "Mask noisy regions: yes" << endl;
 	if(delete_reads_flag==false) cout << "Retain local temporary reads: yes" << endl;
 	if(keep_failed_reads_flag) cout << "Retain failed local temporary reads: yes" << endl;
-	if(reassemble_failed_work_flag) cout << "Reperform previously failed local assemble work: yes" << endl;
-	cout << "Minimum input coverage for local assemble: " << min_input_cov_canu << endl;
-	if(command.compare("assemble")==0 or command.compare("all")==0 or command.compare("detect-assemble")==0)
-		cout << "Monitored process names for assemble: " << monitoring_proc_names_assemble << endl;
-	if(command.compare("call")==0 or command.compare("all")==0)
-		cout << "Monitored process names for call: " << monitoring_proc_names_call << endl;
-	if(command.compare("assemble")==0 or command.compare("all")==0 or command.compare("detect-assemble")==0)
-		cout << "Maximum monitored process running minutes for assemble: " << max_proc_running_minutes_assemble << endl;
-	if(command.compare("call")==0 or command.compare("all")==0)
-		cout << "Maximum monitored process running minutes for call: " << max_proc_running_minutes_call << endl;
+	if(recns_failed_work_flag) cout << "Reperform previously failed local consensus work: yes" << endl;
+	cout << "Minimum input coverage for local consensus: " << min_input_cov_canu << endl;
+//	if(command.compare("cns")==0 or command.compare("all")==0 or command.compare("det-cns")==0)
+//		cout << "Monitored process names for consensus: " << monitoring_proc_names_cns << endl;
+//	if(command.compare("call")==0 or command.compare("all")==0)
+//		cout << "Monitored process names for call: " << monitoring_proc_names_call << endl;
+//	if(command.compare("cns")==0 or command.compare("all")==0 or command.compare("det-cns")==0)
+//		cout << "Maximum monitored process running minutes for consensus: " << max_proc_running_minutes_cns << endl;
+//	if(command.compare("call")==0 or command.compare("all")==0)
+//		cout << "Maximum monitored process running minutes for call: " << max_proc_running_minutes_call << endl;
+
+	if(command.compare(CMD_CALL_STR)==0 or command.compare(CMD_ALL_STR)==0){
+		cout << "Minimal sequence consistency threshold for allele merge: " << gt_min_consistency_merge << endl;
+		cout << "Minimal allele ratio threshold for homozygous alleles: " << gt_homo_ratio << endl;
+		cout << "Minimal allele ratio threshold for heterozygous alleles: " << gt_hete_ratio << endl;
+	}
+
 	if(include_decoy) cout << "Include decoy items: yes" << endl;
 	cout << "Sequencing technology: " << technology << endl;
-	cout << "Canu version: " << canu_version << endl;
+	cout << "abPOA version: " << abpoa_version << endl;
 	cout << "minimap2 version: " << minimap2_version << endl;
-	cout << "abPOA version: " << abpoa_version << endl << endl;
+	cout << "wtdbg2 version: " << wtdbg2_version << endl << endl;
 
-	bool recommend_ver_flag = isRecommendCanuVersion(canu_version, CANU_RECOMMEND_VERSION);
-	if(recommend_ver_flag==false)
-		cout << "Warning: detected the installed canu version is " << canu_version << ", however, it is highly recommended to use the latest version or the version " << CANU_RECOMMEND_VERSION << " and higher." << endl;
+//	bool recommend_ver_flag = isRecommendCanuVersion(canu_version, CANU_RECOMMEND_VERSION);
+//	if(recommend_ver_flag==false)
+//		cout << "Warning: detected the installed canu version is " << canu_version << ", however, it is highly recommended to use the latest version or the version " << CANU_RECOMMEND_VERSION << " and higher." << endl;
 
 	string desc = "Regions to process:";
 	printLimitRegs(limit_reg_vec, desc);
@@ -1083,7 +1088,7 @@ void Paras::outputEstParas(string info){
 	cout << info << endl;
 	cout << "Mean read length: " << mean_read_len << " bp" << endl;
 	if(min_Nsupp_est_flag==1){ // estimated
-		cout << "Number of reads supporting SV: " << minReadsNumSupportSV << endl;
+		cout << "Minimal number of reads supporting SV: " << minReadsNumSupportSV << endl;
 	}
 
 	cout << "min_ins_size_filt: " << min_ins_size_filt << " bp" << endl;
@@ -1240,7 +1245,7 @@ int64_t Paras::estimateMinReadsNumSupportSV(vector<int64_t> &mean_depth_vec){
 // parse long options
 int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct option *lopts){
 	int ret = 0;
-	size_t find_pos;
+	//size_t find_pos;
 	string lower_str;
 
 	string opt_name_str = lopts[option_index].name;
@@ -1250,63 +1255,69 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 			cout << "Error: Please specify the correct sample name using --sample option." << endl << endl;
 			ret = 1;
 		}
-	}else if(opt_name_str.compare("threads-per-assem-work")==0){ // "threads-per-assem-work"
-		num_threads_per_assem_work = true;
-	}else if(opt_name_str.compare("keep-assemble-reads")==0){ // "keep-assemble-reads"
+	}
+//	else if(opt_name_str.compare("threads-per-cns-work")==0){ // "threads-per-cns-work"
+//		num_threads_per_cns_work = true;
+//	}
+	else if(opt_name_str.compare("keep-cns-reads")==0){ // "keep-cns-reads"
 		delete_reads_flag = false;
 	}else if(opt_name_str.compare("keep-failed-reads")==0){ // "keep-failed-reads"
 		keep_failed_reads_flag = true;
-	}else if(opt_name_str.compare("reassemble-failed-work")==0){ // "reassemble-failed-work"
-		reassemble_failed_work_flag = true;
-	}else if(opt_name_str.compare("min-input-cov-assemble")==0){ // "min-input-cov-assemble"
-		min_input_cov_canu = stoi(optarg);
-	}else if(opt_name_str.compare("mask-noisy-region")==0){ // "mask-noisy-region"
-		maskMisAlnRegFlag = true;
-	}else if(opt_name_str.compare("assem-chunk-size")==0){ // assem-chunk-size
-		assemChunkSize = stoi(optarg);
-	}else if(opt_name_str.compare("assem-side-ext-size")==0){ // assem-side-ext-size
-		assemSideExtSize = stoi(optarg);
-	}else if(opt_name_str.compare("assem-side-ext-size-clip")==0){ // assem-side-ext-size-clip
-		assemSideExtSizeClip = stoi(optarg);
+	}else if(opt_name_str.compare("re-cns-failed-work")==0){ // "re-cns-failed-work"
+		recns_failed_work_flag = true;
+	}
+//	else if(opt_name_str.compare("min-cov-cns")==0){ // "min-cov-cns"
+//		min_input_cov_canu = stoi(optarg);
+//	}else if(opt_name_str.compare("mask-noisy-region")==0){ // "mask-noisy-region"
+//		maskMisAlnRegFlag = true;
+//	}
+	else if(opt_name_str.compare("cns-chunk-size")==0){ // cns-chunk-size
+		cnsChunkSize = stoi(optarg);
+	}else if(opt_name_str.compare("cns-side-ext-size")==0){ // cns-side-ext-size
+		cnsSideExtSize = stoi(optarg);
+	}else if(opt_name_str.compare("cns-side-ext-size-clip")==0){ // cns-side-ext-size-clip
+		cnsSideExtSizeClip = stoi(optarg);
 	}else if(opt_name_str.compare("min-cons-read-size")==0){ // min-cons-read-size
 		minConReadLen = stoi(optarg);
-	}else if(opt_name_str.compare("monitor_proc_names_assemble")==0){ // monitor_proc_names_assemble
-		monitoring_proc_names_assemble = optarg;
-		if(monitoring_proc_names_assemble.size()>0){
-			find_pos = monitoring_proc_names_assemble.find(" ");
-			if(find_pos!=string::npos){
-				cout << "Error: Monitored process names for 'assemble' step should not include blank characters." << endl << endl;
-				ret = 1;
-			}
-		}else{
-			cout << "Error: Please specify the correct monitored process names using '--monitor_proc_names_assemble' option." << endl << endl;
-			ret = 1;
-		}
-	}else if(opt_name_str.compare("monitor_proc_names_call")==0){ // monitor_proc_names_call
-		monitoring_proc_names_call = optarg;
-		if(monitoring_proc_names_call.size()>0){
-			find_pos = monitoring_proc_names_call.find(" ");
-			if(find_pos!=string::npos){
-				cout << "Error: Monitored process names for 'call' step should not include blank characters." << endl << endl;
-				ret = 1;
-			}
-		}else{
-			cout << "Error: Please specify the correct monitored process names using '--monitor_proc_names_call' option." << endl << endl;
-			ret = 1;
-		}
-	}else if(opt_name_str.compare("max_proc_running_minutes_assemble")==0){ // max_proc_running_minutes_assemble
-		max_proc_running_minutes_assemble = stoi(optarg);
-		if(max_proc_running_minutes_assemble<ULTRA_LOW_PROC_RUNNING_MINUTES){
-			cout << "Error: The specified maximum process running minutes is too small '" << max_proc_running_minutes_assemble << "', please specify a larger one at least " << ULTRA_LOW_PROC_RUNNING_MINUTES << "." << endl << endl;
-			ret = 1;
-		}
-	}else if(opt_name_str.compare("max_proc_running_minutes_call")==0){ // max_proc_running_minutes_call
-		max_proc_running_minutes_call = stoi(optarg);
-		if(max_proc_running_minutes_call<ULTRA_LOW_PROC_RUNNING_MINUTES){
-			cout << "Error: The specified maximum process running minutes is too small '" << max_proc_running_minutes_call << "', please specify a larger one at least " << ULTRA_LOW_PROC_RUNNING_MINUTES << "." << endl << endl;
-			ret = 1;
-		}
-	}else if(opt_name_str.compare("technology")==0){ // technology
+	}
+//	else if(opt_name_str.compare("monitor-proc-names-cns")==0){ // monitor-proc-names-cns
+//		monitoring_proc_names_cns = optarg;
+//		if(monitoring_proc_names_cns.size()>0){
+//			find_pos = monitoring_proc_names_cns.find(" ");
+//			if(find_pos!=string::npos){
+//				cout << "Error: Monitored process names for 'cns' step should not include blank characters." << endl << endl;
+//				ret = 1;
+//			}
+//		}else{
+//			cout << "Error: Please specify the correct monitored process names using '--monitor-proc-names-cns' option." << endl << endl;
+//			ret = 1;
+//		}
+//	}else if(opt_name_str.compare("monitor_proc_names_call")==0){ // monitor_proc_names_call
+//		monitoring_proc_names_call = optarg;
+//		if(monitoring_proc_names_call.size()>0){
+//			find_pos = monitoring_proc_names_call.find(" ");
+//			if(find_pos!=string::npos){
+//				cout << "Error: Monitored process names for 'call' step should not include blank characters." << endl << endl;
+//				ret = 1;
+//			}
+//		}else{
+//			cout << "Error: Please specify the correct monitored process names using '--monitor-proc-names-call' option." << endl << endl;
+//			ret = 1;
+//		}
+//	}else if(opt_name_str.compare("max_proc_running_minutes_cns")==0){ // max_proc_running_minutes_cns
+//		max_proc_running_minutes_cns = stoi(optarg);
+//		if(max_proc_running_minutes_cns<ULTRA_LOW_PROC_RUNNING_MINUTES){
+//			cout << "Error: The specified maximum process running minutes is too small '" << max_proc_running_minutes_cns << "', please specify a larger one at least " << ULTRA_LOW_PROC_RUNNING_MINUTES << "." << endl << endl;
+//			ret = 1;
+//		}
+//	}else if(opt_name_str.compare("max_proc_running_minutes_call")==0){ // max_proc_running_minutes_call
+//		max_proc_running_minutes_call = stoi(optarg);
+//		if(max_proc_running_minutes_call<ULTRA_LOW_PROC_RUNNING_MINUTES){
+//			cout << "Error: The specified maximum process running minutes is too small '" << max_proc_running_minutes_call << "', please specify a larger one at least " << ULTRA_LOW_PROC_RUNNING_MINUTES << "." << endl << endl;
+//			ret = 1;
+//		}
+//	}
+	else if(opt_name_str.compare("technology")==0){ // technology
 		technology = optarg;
 		lower_str.resize(technology.size());
 		transform(technology.begin(), technology.end(), lower_str.begin(), ::tolower);
@@ -1318,16 +1329,19 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 		}
 	}else if(opt_name_str.compare("include-decoy")==0){ // include-decoy
 		include_decoy = true;
-	}else if(opt_name_str.compare("gt_min_sig_size")==0){ // "gt_min_sig_size"
-		gt_min_sig_size = stoi(optarg);
-	}else if(opt_name_str.compare("gt_size_ratio_match")==0){ // "gt_size_ratio_match"
-		gt_size_ratio_match = stof(optarg);
-	}else if(opt_name_str.compare("gt_min_alle_ratio")==0){ // "gt_min_alle_ratio"
-		gt_min_alle_ratio = stof(optarg);
-	}else if(opt_name_str.compare("gt_max_alle_ratio")==0){ // "gt_max_alle_ratio"
-		gt_max_alle_ratio = stof(optarg);
 	}
-
+//	else if(opt_name_str.compare("gt-min-sig-size")==0){ // "gt-min-sig-size"
+//		gt_min_sig_size = stoi(optarg);
+//	}else if(opt_name_str.compare("gt-size-ratio-match")==0){ // "gt-size-ratio-match"
+//		gt_size_ratio_match = stof(optarg);
+//	}
+	else if(opt_name_str.compare("gt-min-consist-merge")==0){ // "gt-min-consist-merge"
+		gt_min_consistency_merge = stof(optarg);
+	}else if(opt_name_str.compare("gt-homo-ratio")==0){ // "gt-homo-ratio"
+		gt_homo_ratio = stof(optarg);
+	}else if(opt_name_str.compare("gt-hete-ratio")==0){ // "gt-hete-ratio"
+		gt_hete_ratio = stof(optarg);
+	}
 
 	return ret;
 }

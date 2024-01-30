@@ -79,6 +79,7 @@ clipAlnData_t* clipAlnDataLoader::generateClipAlnData(bam1_t* b, bam_hdr_t *head
 	clip_aln->startRefPos = b->core.pos + 1;
 	clip_aln->endRefPos = bam_endpos(b);
 	clip_aln->left_aln = clip_aln->right_aln = NULL;
+	clip_aln->leftmost_flag = clip_aln->rightmost_flag = false;
 
 	c = bam_get_cigar(b);  // CIGAR
 	// left clip
@@ -217,12 +218,12 @@ double clipAlnDataLoader::computeLocalCov(vector<bam1_t*> &alnDataVector, double
 }
 
 double clipAlnDataLoader::computeCompensationCoefficient(size_t startRefPos, size_t endRefPos, double mean_read_len){
-	size_t total_reg_size, refined_reg_size, reg_size_assemble;
+	size_t total_reg_size, refined_reg_size, reg_size_cns;
 	double comp_coefficient;
 
-	reg_size_assemble = endRefPos - startRefPos + 1;
-	total_reg_size = reg_size_assemble + 2 * mean_read_len;
-	refined_reg_size = reg_size_assemble + mean_read_len;  // flanking_area = (2 * mean_read_len) / 2
+	reg_size_cns = endRefPos - startRefPos + 1;
+	total_reg_size = reg_size_cns + 2 * mean_read_len;
+	refined_reg_size = reg_size_cns + mean_read_len;  // flanking_area = (2 * mean_read_len) / 2
 	comp_coefficient = (double)total_reg_size / refined_reg_size;
 
 	return comp_coefficient;
@@ -417,6 +418,9 @@ void clipAlnDataLoader::addAdjacentInfo(vector<clipAlnData_t*> &clipAlnDataVecto
 
 		// order clipping segments
 		orderClipAlnSegsSingleQuery(query_aln_segs);
+
+		// assign side most flag
+		assignSideMostFlag(query_aln_segs);
 	}
 
 	// reset flags
@@ -448,7 +452,7 @@ void clipAlnDataLoader::orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &quer
 
 			if(valid_query_end_flag){
 				// deal with the mate clip end
-				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize);
+				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize, MAX_VAR_REG_SIZE);
 				mate_arr_idx = adjClipAlnSegInfo.at(0);
 				mate_clip_end_flag = adjClipAlnSegInfo.at(1);
 				if(mate_arr_idx!=-1){ // mated
@@ -480,7 +484,7 @@ void clipAlnDataLoader::orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &quer
 
 			if(valid_query_end_flag){
 				// deal with the mate clip end
-				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize);
+				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize, MAX_VAR_REG_SIZE);
 				mate_arr_idx = adjClipAlnSegInfo.at(0);
 				mate_clip_end_flag = adjClipAlnSegInfo.at(1);
 				if(mate_arr_idx!=-1){ // mated
@@ -503,12 +507,65 @@ void clipAlnDataLoader::orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &quer
 	}
 }
 
+// assign the side most flag
+void clipAlnDataLoader::assignSideMostFlag(vector<clipAlnData_t*> &query_aln_vec){
+	size_t i;
+	clipAlnData_t *clip_aln_seg;
+	bool flag;
+	int64_t min_id, max_id, minValue, maxValue, tmp_min, tmp_max;
+
+	flag = false;
+	for(i=0; i<query_aln_vec.size(); i++){
+		clip_aln_seg = query_aln_vec.at(i);
+		if(clip_aln_seg->leftmost_flag==true or clip_aln_seg->rightmost_flag==true){
+			flag = true;
+			break;
+		}
+	}
+
+	if(flag==false){
+		min_id = max_id = -1;
+		minValue = INT_MAX, maxValue = INT_MIN;
+		for(i=0; i<query_aln_vec.size(); i++){
+			clip_aln_seg = query_aln_vec.at(i);
+
+			if(clip_aln_seg->startQueryPos<clip_aln_seg->endQueryPos){
+				tmp_min = clip_aln_seg->startQueryPos;
+				tmp_max = clip_aln_seg->endQueryPos;
+			}else{
+				tmp_min = clip_aln_seg->endQueryPos;
+				tmp_max = clip_aln_seg->startQueryPos;
+			}
+
+			if(tmp_min<minValue){
+				min_id = i;
+				minValue = tmp_min;
+			}
+			if(tmp_max>maxValue){
+				max_id = i;
+				maxValue = tmp_max;
+			}
+		}
+		if(min_id!=-1 and max_id!=-1){
+			if(query_aln_vec.at(min_id)->startRefPos>query_aln_vec.at(max_id)->startRefPos){ // swap
+				query_aln_vec.at(max_id)->leftmost_flag = true;
+				query_aln_vec.at(min_id)->rightmost_flag = true;
+			}else{
+				query_aln_vec.at(min_id)->leftmost_flag = true;
+				query_aln_vec.at(max_id)->rightmost_flag = true;
+			}
+		}else{
+			cout << "line=" << __LINE__ << ", can not find the left and right most align segments, error!" << endl;
+			exit(1);
+		}
+	}
+}
+
 // remove clip alignment data with low primary segment size ratio
 void clipAlnDataLoader::removeClipAlnDataWithLowPrimarySegSizeRatio(vector<clipAlnData_t*> &clipAlnDataVector, double primary_seg_size_ratio){
 	size_t i, j, n;
 	string queryname;
 	vector<clipAlnData_t*> query_aln_segs;//query_aln_segs_no_SA;
-	clipAlnData_t *clip_aln_seg;
 	int64_t max_id, max_len;
 	vector<string> remove_qname_vec;
 	double max_primary_size_ratio;

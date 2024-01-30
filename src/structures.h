@@ -20,7 +20,7 @@ typedef struct clipAlnData_node{
 	int64_t startRefPos, endRefPos:60, aln_orient:4;
 	int32_t querylen, startQueryPos, endQueryPos, leftClipSize, rightClipSize;
 	int32_t ref_dist, query_dist;
-	bool leftHardClippedFlag, rightHardClippedFlag;
+	bool leftHardClippedFlag, rightHardClippedFlag, leftmost_flag, rightmost_flag;
 	bool left_clip_checked_flag, right_clip_checked_flag, query_checked_flag, SA_tag_flag;
 	struct clipAlnData_node *left_aln, *right_aln;
 }clipAlnData_t;
@@ -35,7 +35,9 @@ typedef struct{
 	int8_t query_id, blat_aln_id, minimap2_aln_id;
 	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
 	string refseq, altseq, gt_seq;
-	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag, query_pos_invalid_flag;
+	int32_t DP; // total depth
+	double AF; // allele frequency
+	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag, query_pos_invalid_flag, large_indel_flag;
 }reg_t;
 
 // from clipReg.h
@@ -56,12 +58,16 @@ typedef struct{
 	int8_t leftClipRegNum, rightClipRegNum;
 
 	int32_t sv_type:8, dup_num:24;
-	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag, supp_num_valid_flag;
+	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag, supp_num_valid_flag, large_indel_flag;
 	varCand *var_cand, *left_var_cand_tra, *right_var_cand_tra;  // TRA
 	string chrname_leftTra1, chrname_leftTra2, chrname_rightTra1, chrname_rightTra2;
 	int32_t leftClipPosTra1, leftClipPosTra2, rightClipPosTra1, rightClipPosTra2;
 	string refseq_tra, altseq_tra, refseq_tra2, altseq_tra2;
 	string bnd_mate_reg_strs[4]; // mate strings for BND format: mate_reg_id1|clip_loc1|sup_num1|cov1,mate_reg_id2|clip_loc2|sup_num2|cov2;......
+
+	// large indels
+	reg_t *largeIndelClipReg;
+	int32_t supp_num_largeIndel, depth_largeIndel;
 }mateClipReg_t;
 
 //from covLoader.h
@@ -102,24 +108,92 @@ typedef struct {
 	simpleReg_t **limit_reg_array;
 	uint32_t arr_size, limit_reg_array_size;
 	bool clip_reg_flag, limit_reg_process_flag;
-}assembleWork_opt;
+}cnsWork_opt;
 
 // from Paras.h
 typedef struct {
-	assembleWork_opt *assem_work_opt;
+	cnsWork_opt *cns_work_opt;
 
 	int32_t work_id, num_work, num_work_percent;  // 'work_id' starts from 1
-	int32_t *p_assemble_reg_workDone_num;   // pointer to the global variable which was declared in Paras.h
-	pthread_mutex_t *p_mtx_assemble_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
-	int32_t num_threads_per_assem_work, minClipEndSize, assemSideExtSize, minConReadLen, min_sv_size, min_supp_num;
+	int32_t *p_cns_reg_workDone_num;   // pointer to the global variable which was declared in Paras.h
+	pthread_mutex_t *p_mtx_cns_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
+	int32_t num_threads_per_cns_work, minClipEndSize, cnsSideExtSize, minConReadLen, min_sv_size, min_supp_num;
 	double max_seg_size_ratio;
 
 	string inBamFile, technology, canu_version;
 	faidx_t *fai;
 	ofstream *var_cand_file;
-	double expected_cov_assemble, min_input_cov_canu;
+	double expected_cov_cns, min_input_cov_canu;
 	bool delete_reads_flag, keep_failed_reads_flag;
-}assembleWork;
+}cnsWork;
+
+struct fqSeqNode{
+	size_t seq_id;
+	string seq_name, seq, qual;
+	bool selected_flag;
+};
+
+// single signature for cluster
+typedef struct qcSigNode{
+	int32_t sig_id: 24, cigar_op: 8, cigar_op_len;
+	bool reg_contain_flag, have_next_clip;
+	int64_t ref_pos, dist_next_clip;
+	string chrname, chrname_next_clip;
+	int64_t start_ref_pos, end_ref_pos; // -------
+	string refseq, altseq; //------
+	struct qcSigNode *mate_qcSig;
+}qcSig_t;
+
+struct querySeqInfoNode{
+	clipAlnData_t *clip_aln;
+	string qname, seq;
+	bool cluster_finished_flag, selected_flag;
+	vector<struct alnSeg*> query_alnSegs;
+};
+
+typedef struct qcSigListNode{
+	int64_t startSpanRefPos, endSpanRefPos;
+	vector<struct querySeqInfoNode*> query_seqs_vec;
+	vector<qcSig_t*> qcSig_vec;
+	vector<int8_t> match_profile_vec;
+	bool cluster_finished_flag;
+}qcSigList_t;
+
+typedef struct qcSigListVecNode{
+	vector<qcSigList_t*> qcSigList;
+}qcSigListVec_t;
+
+struct querySeqInfoVec{
+	vector<struct querySeqInfoNode*> query_seq_info_all;
+};
+
+struct seqsVec{
+	vector<string> qname;
+	vector<string> seqs;
+};
+
+struct seedQueryInfo{
+	int64_t startSpanPos, endSpanPos, span_intersection;
+	int32_t id;
+};
+
+//for q_cluster init B
+typedef struct{
+	int32_t num;
+	vector<int32_t> pos_id;
+	double SR;
+}srmin_match_t;
+
+
+// cluster signatures of a query
+typedef struct queryCluSigNode{
+	//int32_t group_id;
+	//bool seed_flag;
+	//string queryname;
+	//size_t seq_id;
+	vector<int8_t> match_profile_vec;
+	vector<qcSig_t*> qcSig_vec;
+}queryCluSig_t;
 
 // from varCand.h
 typedef struct{
@@ -160,7 +234,7 @@ typedef struct{
 	int32_t minimap2_aln_id, query_len, subject_len, query_start, query_end, subject_start, subject_end, region_startRefPos, region_endRefPos;
 	//int32_t ref_start, ref_end;
 	int32_t query_id:24, relative_strand:8;
-	string cigar, charname;
+	string cigar, chrname;
 	vector<string> qname;
 	vector<struct pafalnSeg*> pafalnsegs;
 }minimap2_aln_t;

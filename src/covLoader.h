@@ -35,14 +35,6 @@ class covLoader {
 	private:
 		int assignRefBase(Base *baseArray, faidx_t *fai);
 		void assignPolymerFlag(Base *baseArray);
-//		vector<struct alnSeg*> generateAlnSegs(bam1_t* b);
-//		vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, Base* BaseArr);
-//		struct alnSeg* allocateAlnSeg(int64_t startRpos, int64_t startQpos, int32_t seglen, uint32_t opFlag, string &seg_MD);
-//		void destroyAlnSegs(vector<struct alnSeg*> &alnSegs);
-//		int getBamType(bam1_t *b);
-//		vector<struct MD_seg*> extractMDSegs(bam1_t* b);
-//		struct MD_seg* allocateMDSeg(string& seg, uint32_t opflag);
-//		void destroyMDSeg(vector<struct MD_seg*> &segs_MD);
 		int updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs);
 		void updateBaseCovInfo(Base *baseArr);
 		void computeDelNumFromDelVec(Base *baseArr);

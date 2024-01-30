@@ -49,7 +49,7 @@ class Region {
 		size_t difType;
 
 		// output file
-		string out_dir_assemble;
+		string out_dir_cns;
 
 	private:
 		vector<int64_t> disagrePosVector;  // element: the reference position with disagreement
@@ -64,7 +64,7 @@ class Region {
 	public:
 		Region(string& chrname, int64_t startRpos, int64_t endRPos, int64_t chrlen, int64_t minRPos, int64_t maxRPos, Base *regBaseArr, size_t regFlag, Paras *paras, faidx_t *fai);
 		virtual ~Region();
-		void setOutputDir(string& out_dir_assemble_prefix);
+		void setOutputDir(string& out_dir_cns_prefix);
 
 	public:
 		void setMeanBlockCov(double meanBlockCov);

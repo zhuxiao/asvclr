@@ -42,13 +42,18 @@ void FastaSeqLoader::initFastaSeq(){
 }
 
 // get the query sequence
+string FastaSeqLoader::getFastaSeq(size_t fa_id){
+	return getFastaSeq(fa_id, ALN_PLUS_ORIENT);
+}
+
+// get the query sequence
 string FastaSeqLoader::getFastaSeq(size_t fa_id, size_t aln_orient){
 	string ret;
 	if(fa_id<0 or fa_id>=fastaSeqVec.size()) {
 		cerr << "FastaSeqLoader: invalid ctg_idx=" << fa_id << ", fastaSeqVec.size=" << fastaSeqVec.size() << endl;
 		exit(1);
 	}
-	ret = fastaSeqVec[fa_id];
+	ret = fastaSeqVec.at(fa_id);
 	if(aln_orient==ALN_MINUS_ORIENT) reverseComplement(ret);
 	return ret;
 }

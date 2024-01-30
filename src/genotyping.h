@@ -26,8 +26,14 @@ using namespace std;
 #define GT_HOMOZYGOUS_STR					"1/1"	// homozygous
 #define GT_HETEROZYGOUS_STR					"0/1"	// heterozygous
 
+#define GT_SIG_SIZE_THRES					3
+#define GT_SIZE_RATIO_MATCH_THRES			0.7
+#define GT_MIN_ALLE_RATIO_THRES				0.3
+#define GT_MAX_ALLE_RATIO_THRES				0.7
+
+#define GT_MIN_CONSIST_MERGE_THRES			(0.9f)
 #define GT_HOMO_RATIO_THRES					(0.75f)
-#define GT_HETER_RATIO_THRES				(0.2f)
+#define GT_HETE_RATIO_THRES					(0.2f)
 
 #define GT_STR_DEFAULT						"GT:AD:DP\t./.:.,.:."
 

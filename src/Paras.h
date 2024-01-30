@@ -16,9 +16,15 @@ using namespace std;
 
 // program variables
 #define PROG_NAME					"ASVCLR"
-#define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.2.0"
+#define PROG_DESC					"Accurate Structural Variation Caller for Long Reads"
+#define PROG_VERSION				"1.3.0"
 #define VCF_VERSION					"4.2"
+
+#define CMD_DET_STR					"det"
+#define CMD_CNS_STR					"cns"
+#define CMD_CALL_STR				"call"
+#define CMD_ALL_STR					"all"
+#define CMD_DET_CNS_STR				"det-cns"
 
 #define CANU_RECOMMEND_VERSION		"2.1"
 
@@ -60,12 +66,13 @@ using namespace std;
 //#define MIN_CLIP_READS_NUM_THRES	7
 #define MIN_SUPPORT_READS_NUM_EST		-1
 #define MIN_SUPPORT_READS_NUM_FACTOR	0.07f
+#define READS_NUM_SUPPORT_FACTOR		0.5f
 
 #define MAX_VAR_REG_SIZE			50000
-#define ASM_CHUNK_SIZE_INDEL		1000	// 10000
-#define ASM_CHUNK_SIZE_EXT_INDEL	1000	//1000
-//#define ASM_CHUNK_SIZE_CLIP			20000	// 10000
-#define ASM_CHUNK_SIZE_EXT_CLIP		10000	//1000, 20000
+#define CNS_CHUNK_SIZE_INDEL		1000	// 10000
+#define CNS_CHUNK_SIZE_EXT_INDEL	1000	//1000
+//#define CNS_CHUNK_SIZE_CLIP			20000	// 10000
+#define CNS_CHUNK_SIZE_EXT_CLIP		20000	//1000, 10000
 #define MIN_CONS_READ_LEN			100
 
 #define SIZE_PERCENTILE_EST			0.95
@@ -74,8 +81,8 @@ using namespace std;
 
 #define MAX_REG_SUM_SIZE_EST		500000
 
-#define ASSEMBLY_SUCCESS			"ASM_SUCCESS"
-#define ASSEMBLY_FAILURE			"ASM_FAILURE"
+#define CNS_SUCCESS					"CNS_SUCCESS"
+#define CNS_FAILURE					"CNS_FAILURE"
 #define ALIGN_SUCCESS				"ALN_SUCCESS"
 #define ALIGN_FAILURE				"ALN_FAILURE"
 #define CALL_SUCCESS				"CALL_SUCCESS"
@@ -89,10 +96,10 @@ using namespace std;
 #define LIMIT_REG_ALL_STR			"ALL"
 
 #define MIN_INPUT_COV_CANU			5  		// 2021-08-01
-#define EXPECTED_COV_ASSEMBLE		40.0f	// 30.0f
+#define EXPECTED_COV_CNS			40.0f	// 30.0f
 
 #define NUM_PARTS_PROGRESS			100
-#define NUM_THREADS_PER_ASSEM_WORK	0  		// 0: unspecify the limited number of threads for each Canu work
+#define NUM_THREADS_PER_CNS_WORK	0  		// 0: unspecify the limited number of threads for each CNS work
 
 #define OUT_DIR						"output"
 #define SAMPLE_DEFAULT				"sample"
@@ -104,27 +111,23 @@ using namespace std;
 #define MIN_HIGH_CONSENSUS_INS_RATIO		0.3f
 #define MIN_HIGH_CONSENSUS_DEL_RATIO		0.5f	// 0.4
 
-#define MAX_ASSEMBLE_MINUTES				15
+#define MAX_CNS_MINUTES						15
 #define MAX_ALN_MINUTES						15
 
 //#define MAX_PROC_RUNNING_MINUTES				120
-#define MAX_PROC_RUNNING_MINUTES_ASSEMBLE		30	//300
+#define MAX_PROC_RUNNING_MINUTES_CNS			30	//300
 #define MAX_PROC_RUNNING_MINUTES_CALL			30  //120
 #define MONITOR_WAIT_SECONDS					60
 #define ULTRA_LOW_PROC_RUNNING_MINUTES			30
 
 //#define DEFAULT_MONITOR_PROC_NAMES				"overlapInCore,falconsense,blat"
-#define DEFAULT_MONITOR_PROC_NAMES_ASSEMBLE		"overlapInCore,falconsense"
+#define DEFAULT_MONITOR_PROC_NAMES_CNS			"overlapInCore,falconsense"
 #define DEFAULT_MONITOR_PROC_NAMES_CALL			"blat"
 
-// assemble parameters
-//#define REFSEQ_SIDE_LEN					1000	// 10000, 20000
-//#define ASSEMBLE_SIDE_LEN				1000	// 10000
-//#define REFSEQ_SIDE_LEN					20000	// 10000, 20000
-//#define ASSEMBLE_SIDE_LEN				10000	// 10000
-#define ASSEMBLE_GENOME_SIZE_INITIAL	30000
-#define ASSEMBLE_STEP_SIZE				10000
-#define ASSEMBLE_SIDE_EXT_SIZE			5000
+// consensus parameters
+#define CNS_GENOME_SIZE_INITIAL				30000
+#define CNS_STEP_SIZE						10000
+#define CNS_SIDE_EXT_SIZE					5000
 
 // program parameters
 class Paras
@@ -132,29 +135,29 @@ class Paras
 	public:
 		// user/system defined parameters
 		string command, refFile, inBamFile, outFilePrefix, sample, pg_cmd_str, technology;
-		string canu_version, minimap2_version, abpoa_version;
+		string wtdbg2_version, minimap2_version, abpoa_version, canu_version;
 		string outDir;
 		string out_dir_detect = "1_candidates";    // "1_candidates"
-		string out_dir_assemble = "2_assemble";  // "2_assemble"
+		string out_dir_cns = "2_cns";		// "2_cns"
 		string out_dir_call = "3_call";      // "3_call"
 		string out_dir_tra = out_dir_call + "/" + "tra";
 		string out_dir_result = "4_results";	// "4_results"
-		int32_t blockSize, slideSize, min_sv_size_usr, max_sv_size_usr, num_threads, large_indel_size_thres; // , assemSlideSize;
+		int32_t blockSize, slideSize, min_sv_size_usr, max_sv_size_usr, num_threads, large_indel_size_thres;
 		double max_seg_size_ratio_usr;
 		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy;
 		size_t misAlnRegLenSum = 0;
 		int32_t minReadsNumSupportSV: 29, min_Nsupp_est_flag: 3; //, minClipReadsNumSupportSV; Nsupp_est_flag: 1 for estimated, 0 for user-specified
 
 		// process monitor
-		string monitoring_proc_names_assemble, monitoring_proc_names_call;
-		int32_t max_proc_running_minutes_assemble, max_proc_running_minutes_call;
+		string monitoring_proc_names_cns, monitoring_proc_names_call;
+		int32_t max_proc_running_minutes_cns, max_proc_running_minutes_call;
 
 		// limit SV regions, item format: CHR | CHR:START-END
 		vector<simpleReg_t*> limit_reg_vec;
 		bool limit_reg_process_flag = false;	// true for limit regions; default is false for disable limit regions (i.e. process all regions)
 		string limit_reg_filename = "limit_regions.bed";
 
-		int32_t maxVarRegSize, minClipEndSize, assemChunkSize, assemSideExtSize, assemSideExtSizeClip, minConReadLen;
+		int32_t maxVarRegSize, minClipEndSize, cnsChunkSize, cnsSideExtSize, cnsSideExtSizeClip, minConReadLen;
 
 		int64_t mean_read_len, total_read_num_est;
 		//int64_t chr_mean_depth, total_depth, chrome_num;
@@ -162,8 +165,8 @@ class Paras
 		int32_t reg_sum_size_est, max_reg_sum_size_est;
 
 		// reads sampling parameters
-		double expected_cov_assemble;
-		bool delete_reads_flag, keep_failed_reads_flag, reassemble_failed_work_flag;
+		double expected_cov_cns;
+		bool delete_reads_flag, keep_failed_reads_flag, recns_failed_work_flag;
 
 		double min_input_cov_canu;
 		//int32_t min_overlap_length_canu;
@@ -179,11 +182,11 @@ class Paras
 		int64_t insSizeEstArr[AUX_ARR_SIZE+1], delSizeEstArr[AUX_ARR_SIZE+1], clipSizeEstArr[AUX_ARR_SIZE+1];
 		int64_t insNumEstArr[AUX_ARR_SIZE+1], delNumEstArr[AUX_ARR_SIZE+1], clipNumEstArr[AUX_ARR_SIZE+1];
 
-		// assemble regions for thread pool
-		vector<assembleWork_opt*> assem_work_vec;
-		int32_t assemble_reg_preDone_num, assemble_reg_work_total, assemble_reg_workDone_num;
-		int16_t num_parts_progress, num_threads_per_assem_work;
-		pthread_mutex_t mtx_assemble_reg_workDone_num;
+		// consensus regions for thread pool
+		vector<cnsWork_opt*> cns_work_vec;
+		int32_t cns_reg_preDone_num, cns_reg_work_total, cns_reg_workDone_num;
+		int16_t num_parts_progress, num_threads_per_cns_work;
+		pthread_mutex_t mtx_cns_reg_workDone_num;
 
 		// call works for thread pool
 		vector<varCand*> call_work_vec;
@@ -203,8 +206,9 @@ class Paras
 		pthread_mutex_t mtx_killed_minimap2_work;
 
 		//genotyping parameters
-		int32_t gt_min_sig_size;
-		double gt_size_ratio_match, gt_min_alle_ratio, gt_max_alle_ratio;
+		int32_t gt_min_sig_size; // not used
+		double gt_min_consistency_merge, gt_homo_ratio, gt_hete_ratio;
+		double gt_size_ratio_match; // not used
 
 	public:
 		Paras();
@@ -224,18 +228,18 @@ class Paras
 		int checkBamFile();
 		int parseParas(int argc, char **argv);
 		string getPgCmd(int argc, char **argv);
-		void showVersion();
+		void show_version();
 		int parseDetectParas(int argc, char **argv);
-		int parseAssembleParas(int argc, char **argv);
+		int parseCnsParas(int argc, char **argv);
 		int parseCallParas(int argc, char **argv);
 		int parseAllParas(int argc, char **argv, const string &cmd_str);
-		int parseDetectAssembleParas(int argc, char **argv);
+		int parseDetectCnsParas(int argc, char **argv);
 		void showUsage();
 		void showDetectUsage();
-		void showAssembleUsage();
+		void showCnsUsage();
 		void showCallUsage();
 		void showAllUsage(const string &cmd_str);
-		void showDetectAssembleUsage();
+		void showDetectCnsUsage();
 		int64_t estimateSinglePara(int64_t *arr, int32_t n, double threshold, int32_t min_val);
 		int64_t estimateMinReadsNumSupportSV(vector<int64_t> &mean_depth_vec);
 		int parse_long_opt(int32_t option_index, const char *optarg, const struct option *lopts);

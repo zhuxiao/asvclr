@@ -5,6 +5,8 @@
 #include <string>
 #include <fstream>
 #include <vector>
+#include <sstream>
+#include <iomanip>
 #include <htslib/faidx.h>
 
 #include "structures.h"
@@ -33,7 +35,7 @@ class Chrome{
 		bool print_flag, decoy_flag;
 
 		// output directory
-		string out_dir_detect, out_dir_assemble, out_dir_call;
+		string out_dir_detect, out_dir_cns, out_dir_call;
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
 		string out_filename_call_snv, out_filename_call_indel, out_filename_call_clipReg;
 
@@ -59,7 +61,7 @@ class Chrome{
 		// call
 		vector<reg_t*> mis_aln_vec;
 
-		// assembly info and misAln region
+		// consensus info and misAln region
 		string var_cand_indel_filename, misAln_reg_filename, var_cand_clipReg_filename;
 		ofstream var_cand_indel_file, misAln_reg_file, var_cand_clipReg_file;
 
@@ -70,7 +72,7 @@ class Chrome{
 	public:
 		Chrome(string& chrname, int chrlen, faidx_t *fai, Paras *paras, vector<Chrome*> *chr_vec);
 		virtual ~Chrome();
-		void setOutputDir(string& out_dir_detect_prefix, string& out_dir_assemble_prefix, string& out_dir_call_prefix);
+		void setOutputDir(string& out_dir_detect_prefix, string& out_dir_cns_prefix, string& out_dir_call_prefix);
 		string getVarcandIndelFilename();
 		string getVarcandClipregFilename();
 		int generateChrBlocks();
@@ -80,10 +82,10 @@ class Chrome{
 		void removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec);
 		void chrMergeDetectResultToFile();
 		void chrMergeDetectResultToFile_debug();
-		void loadPrevAssembledInfo();
-		void chrLoadDataAssemble();
-		int chrGenerateLocalAssembleWorkOpt();
-		void chrResetAssembleData();
+		void loadPrevConsInfo();
+		void chrLoadDataCons();
+		int chrGenerateLocalConsWorkOpt();
+		void chrResetConsData();
 		Block *computeBlocByPos(int64_t begPos, vector<Block*> &block_vec);
 		void chrLoadDataCall();
 		void chrCollectCallWork();
@@ -91,6 +93,7 @@ class Chrome{
 		void mergeSameRegTRA();
 		void removeVarCandNodeIndel(varCand *var_cand);
 		void removeVarCandNodeClipReg(varCand *var_cand);
+		void mergeIdenticalVarClipReg();
 		void chrFillVarseq();
 		void saveCallSV2File();
 		void saveCallSV2File02();
@@ -106,9 +109,9 @@ class Chrome{
 		void destroyMisAlnVector();
 		void destroyClipRegVector();
 		void destroyMateClipRegVector();
-		void chrLoadIndelDataAssemble();
+		void chrLoadIndelDataCons();
 		void chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
-		void chrLoadClipRegDataAssemble();
+		void chrLoadClipRegDataCons();
 		int chrDetect_st();
 		int chrDetect_mt();
 		void removeRedundantIndelDetect();
@@ -118,11 +121,11 @@ class Chrome{
 		void chrSetMisAlnRegFile();
 		void chrResetMisAlnRegFile();
 		int32_t computeBlocID(int64_t begPos, vector<Block*> &block_vec);
-		int chrGenerateLocalAssembleWorkOpt_st();
-		int chrGenerateLocalAssembleWorkOpt_mt();
-		void outputAssemDataToFile(string &filename);
-		void loadPrevAssembledInfo2(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec, vector<assembleWork_opt*> &assem_work_vec);
-		string getAssembleFileHeaderLine();
+		int chrGenerateLocalConsWorkOpt_st();
+		int chrGenerateLocalConsWorkOpt_mt();
+		void outputCnsDataToFile(string &filename);
+		void loadPrevConsInfo2(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec, vector<cnsWork_opt*> &cns_work_vec);
+		string getCnsFileHeaderLine();
 
 		void chrCall_st();
 		void chrCall_mt();
@@ -134,7 +137,7 @@ class Chrome{
 		bool isVarCandDataSorted(vector<varCand*> &var_cand_vec);
 		void loadMisAlnRegData();
 		void sortMisAlnRegData();
-		void loadPrevBlatAlnItems(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+		void loadPrevMinimapAlnItems(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 		void setBlatVarcandFiles();
 		string getBlatVarcandFileHeaderLine();
 		//void resetBlatVarcandFiles();

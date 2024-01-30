@@ -32,22 +32,22 @@ bool Thread::startDetect()
 	return pthread_create(&tid, NULL, runDetect0, this) == 0;
 }
 
-void* Thread::runGenAssembleWorkOpt0(void* pVoid)
+void* Thread::runGenConsWorkOpt0(void* pVoid)
 {
 	Thread* p = (Thread*) pVoid;
-	p->runGenAssembleWorkOpt1();
+	p->runGenConsWorkOpt1();
 	return p;
 }
 
-void* Thread::runGenAssembleWorkOpt1()
+void* Thread::runGenConsWorkOpt1()
 {
-	runGenAssembleWorkOpt();
+	runGenConsWorkOpt();
 	pthread_exit(NULL);
 }
 
-bool Thread::startGenAssembleWorkOpt()
+bool Thread::startGenConsWorkOpt()
 {
-	return pthread_create(&tid, NULL, runGenAssembleWorkOpt0, this) == 0;
+	return pthread_create(&tid, NULL, runGenConsWorkOpt0, this) == 0;
 }
 
 void* Thread::runCall0(void* pVoid)
@@ -131,13 +131,13 @@ void MultiThread::runDetect(){
 	}
 }
 
-void MultiThread::runGenAssembleWorkOpt(){
+void MultiThread::runGenConsWorkOpt(){
 	size_t user_tid_tmp = getUserThreadID();
 	Block *bloc;
 	for (size_t i=0; i < blockVector->size(); i++){
 		if(i%num_threads==user_tid_tmp){
 			bloc = blockVector->at(i);
-			if(bloc->process_flag) bloc->blockGenerateLocalAssembleWorkOpt();
+			if(bloc->process_flag) bloc->blockGenerateLocalConsWorkOpt();
 		}
 	}
 }

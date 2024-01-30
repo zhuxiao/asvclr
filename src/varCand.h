@@ -54,7 +54,8 @@ using namespace std;
 #define MIN_SHORT_DUP_SIZE					30		// to be parameterized
 #define MIN_SHORT_INV_SIZE					30		// to be parameterized
 
-#define SIMILARITY_THRES_INV				(0.9)	// to be parameterized
+#define SIMILARITY_THRES_INV				(0.9f)	// to be parameterized
+
 
 #define EXT_SIZE_CHK_VAR_LOC				500		// 100
 
@@ -62,15 +63,6 @@ using namespace std;
 #define MAX_SHORT_MIS_REG_SIZE				1
 
 #define MIN_INNER_BLAT_SEG_SIZE				50
-
-//#define MIN_REF_DIST_DUP_NUM_EST			1000
-
-//#define MAX_SV_SIZE							5000
-
-#define GT_SIG_SIZE_THRES					3
-#define GT_SIZE_RATIO_MATCH_THRES			0.7
-#define GT_MIN_ALLE_RATIO_THRES				0.3
-#define GT_MAX_ALLE_RATIO_THRES				0.7
 
 
 class varCand {
@@ -81,16 +73,18 @@ class varCand {
 		bool limit_reg_process_flag, limit_reg_delete_flag;
 
 		string refseqfilename, ctgfilename, readsfilename, alnfilename;
-		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV;
+		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize;
 		vector<reg_t*> varVec, newVarVec;
-		bool assem_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
+		bool cns_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
 		vector<blat_aln_t*> blat_aln_vec;               	// blat aligned segments
 		vector<minimap2_aln_t*> minimap2_aln_vec;           // minimap2 aligned segments
+		vector<clipAlnData_t*> clipAlnDataVector;
 
 		// clippings
-		reg_t *clip_reg; //, *clip_reg_mate;
-		int32_t leftClipRefPos, rightClipRefPos, sv_type, dup_num; // leftClipQueryPos, rightClipQueryPos, aln_orient;
-		bool margin_adjusted_flag;
+		reg_t *clip_reg, *clip_reg_allele; //, *clip_reg_mate;
+		int32_t leftClipRefPos, rightClipRefPos, sv_type, dup_num, depth_largeIndel; // leftClipQueryPos, rightClipQueryPos, aln_orient;
+		string bnd_mate_reg_strs[4];
+		bool margin_adjusted_flag, large_indel_flag;
 //		int32_t sv_len;
 //		string chrname, refseq_var, altseq_var;
 
@@ -123,8 +117,9 @@ class varCand {
 		pthread_mutex_t *mtx_killed_minimap2_work;
 
 		//genotyping parameter
-		int32_t gt_min_sig_size, gt_min_sup_num_recover;
-		double gt_size_ratio_match, gt_min_alle_ratio, gt_max_alle_ratio;
+		int32_t gt_min_sig_size, gt_min_sup_num_recover; // not used
+		double gt_min_consistency_merge, gt_homo_ratio_thres, gt_hete_ratio_thres;
+		double gt_size_ratio_match; // not used
 
 		//SV position correction
 		vector<svpos_correction_t*> svpos_correction_vec;
@@ -136,7 +131,7 @@ class varCand {
 		void callVariants02();
 		void setBlatVarcandFile(ofstream *blat_var_cand_file, vector<varCand*> *blat_aligned_info_vec);
 		void resetBlatVarcandFile();
-		void setGtParas(int32_t gt_min_sig_size, double gt_size_ratio_match, double gt_min_alle_ratio, double gt_max_alle_ratio, int32_t min_sup_num_recover);
+		void setGtParas(int32_t gt_min_sig_size, double gt_size_ratio_match, double gt_min_consistency_merge, double gt_homo_ratio_thres, double gt_hete_ratio_thres, int32_t min_sup_num_recover);
 		vector<int32_t> computeDisagreeNumAndHighIndelBaseNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 		void adjustVarLocSlightly();
 		void fillVarseq();
@@ -160,6 +155,7 @@ class varCand {
 		void callIndelVariants();
 		void callIndelVariants02();
 		void callClipRegVariants();
+		void callClipRegVariants02();
 		void minimap2Parse();
 		//allocatePafInDelAlnSeg
 		void getMissingPafInDelsAtAlnSegEnd(vector<struct pafalnSeg*> &all_pafalnsegs, vector<struct pafalnSeg*> &pafalnsegs, int32_t region_refstart, int32_t region_refend, int32_t querystart, int32_t queryend, int32_t query_len, int32_t subjectlen, int32_t subjectstart, int32_t subjectend, int32_t match_base_num, int32_t match_ref_len, string cons_seq, string ref_seq, int32_t aln_orient);
@@ -175,11 +171,9 @@ class varCand {
 		void determineIndelType();
 		void eraseFalsePositiveVariants();
 		void svPosCorrection(reg_t* reg);
-		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_assembly, int64_t endRefPos_assembly, double size_ratio_match_thres);
-		//vector<int32_t> computeQueryStartEndLocByRefPos(vector<struct alnSeg*> &query_alnSegs, bam1_t *b);
+		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres);
 		void destoryClipAlnData();
 		void destoryPosCorrectionVec();
-		int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &query_aln_segs);
 		void callShortVariants();
 		bool isUnsplitAln(reg_t *reg);
 		bool determineQueryidReg(reg_t *reg);
@@ -219,6 +213,7 @@ class varCand {
 		vector<double> computeDisagreeNumAndHighIndelBaseNumAndClipNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 
 		// clippings
+		void computeClipRegVarLoc();
 		void determineClipRegVarType();
 		void determineClipRegDupType();
 		void determineClipRegInvType();
@@ -250,8 +245,6 @@ class varCand {
 		void printSV();
 		void outputNewVarcandVec();
 		void outputMultiBlatAlnBlocks();
-
-		vector<clipAlnData_t*> clipAlnDataVector;
 };
 
 #endif /* SRC_VARCAND_H_ */

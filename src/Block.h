@@ -13,8 +13,8 @@
 #include "structures.h"
 #include "Paras.h"
 #include "misAlnReg.h"
-#include "LocalAssembly.h"
 #include "alnDataLoader.h"
+#include "LocalCns.h"
 
 //#define MIN_ADJACENT_REG_DIST		50
 
@@ -49,22 +49,22 @@ class Block{
 		double meanCov;  // excluding the gap regions filled by Ns
 
 		// output file
-		string out_dir_detect, out_dir_assemble, out_dir_call;
+		string out_dir_detect, out_dir_cns, out_dir_call;
 		string snvDetectPrefix_local, indelDetectPrefix_local, clipRegDetectPrefix_local, snvFilenameDetect, indelFilenameDetect, clipRegFilenameDetect;
 
-		string indelAssemblePrefix_local, indelFilenameAssemble;
+		string indelCnsPrefix_local, indelFilenameCns;
 		ofstream *var_cand_indel_file, *misAln_reg_file, *var_cand_clipReg_file;
 
 	public:
 		Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai, Paras *paras);
 		virtual ~Block();
-		void setOutputDir(string& out_dir_detect_prefix, string& out_dir_assemble_prefix, string& out_dir_call_prefix);
+		void setOutputDir(string& out_dir_detect_prefix, string& out_dir_cns_prefix, string& out_dir_call_prefix);
 		void setLimitRegs(vector<simpleReg_t*> &sub_limit_reg_vec);
 		void setProcessFlag(bool process_flag);
 		void setRegIngFlag(bool headIgnFlag, bool tailIgnFlag);
 		void blockFillDataEst(size_t op_est);
 		void blockDetect();
-		void blockGenerateLocalAssembleWorkOpt();
+		void blockGenerateLocalConsWorkOpt();
 		void setVarCandFiles(ofstream *var_cand_indel_file, ofstream *var_cand_clipReg_file);
 		void resetVarCandFiles();
 		void setMisAlnRegFile(ofstream *misAln_reg_file);
@@ -103,11 +103,11 @@ class Block{
 		void removeFalseIndel();
 		void removeFalseSNV();
 		//void sortRegVec(vector<reg_t*> &regVector);
-		void blockGenerateLocalAssembleWorkOpt_Indel();
-		void blockGenerateLocalAssembleWorkOpt_ClipReg();
+		void blockGenerateLocalConsWorkOpt_Indel();
+		void blockGenerateLocalConsWorkOpt_ClipReg();
 		void saveSV2File();
-		vector<simpleReg_t*> computeLimitRegsForAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
-		void generateAssembleWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &sub_limit_reg_vec_work, bool clip_reg_flag);
+		vector<simpleReg_t*> computeLimitRegsForConsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+		void generateCnsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &sub_limit_reg_vec_work, bool clip_reg_flag);
 
 		// duplication and inversion
 		void mergeOverlappedClipReg();

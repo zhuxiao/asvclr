@@ -43,20 +43,20 @@ void Genome::init(){
 		createDir(out_dir);   // create the output directory
 
 		out_dir_detect = out_dir + "/" + paras->out_dir_detect;
-		out_dir_assemble = out_dir + "/" + paras->out_dir_assemble;
+		out_dir_cns = out_dir + "/" + paras->out_dir_cns;
 		out_dir_call = out_dir + "/" + paras->out_dir_call;
 		out_dir_tra = out_dir + "/" + paras->out_dir_tra;
 		out_dir_result = out_dir + "/" + paras->out_dir_result;
 	}else{
 		out_dir_detect = paras->out_dir_detect;
-		out_dir_assemble = paras->out_dir_assemble;
+		out_dir_cns = paras->out_dir_cns;
 		out_dir_call = paras->out_dir_call;
 		out_dir_tra = paras->out_dir_tra;
 		out_dir_result = paras->out_dir_result;
 	}
 
 	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create the directory  for detect command
-	mkdir(out_dir_assemble.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create directory for assemble command
+	mkdir(out_dir_cns.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create directory for consensus command
 	mkdir(out_dir_call.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create directory for call command
 	mkdir(out_dir_tra.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create the directory for TRA
 
@@ -79,7 +79,7 @@ void Genome::init(){
 
 	if(paras->limit_reg_process_flag) saveLimitRegsToFile(limit_reg_filename, paras->limit_reg_vec);
 	else {
-		if(paras->command.compare("detect")==0 or paras->command.compare("all")==0){
+		if(paras->command.compare(CMD_DET_STR)==0 or paras->command.compare(CMD_ALL_STR)==0 or paras->command.compare(CMD_DET_CNS_STR)==0){
 			if(isFileExist(limit_reg_filename)) remove(limit_reg_filename.c_str());
 		}else loadLimitRegs();
 	}
@@ -98,7 +98,7 @@ void Genome::init(){
 	for(int i=0; i<header->n_targets; i++){
 		chrname_tmp = header->target_name[i];
 		chr = allocateChrome(chrname_tmp, header->target_len[i], fai);
-		chr->setOutputDir(out_dir_detect, out_dir_assemble, out_dir_call);
+		chr->setOutputDir(out_dir_detect, out_dir_cns, out_dir_call);
 		chr_vec_tmp.push_back(chr);
 	}
 	chr_vec_tmp.shrink_to_fit();
@@ -243,8 +243,7 @@ void Genome::sortChromes(vector<Chrome*> &chr_vec, vector<Chrome*> &chr_vec_tmp)
 }
 
 // get genome size
-int Genome::getGenomeSize()
-{
+int Genome::getGenomeSize(){
     genomeSize = 0;
     for(int i=0; i<header->n_targets; i++) genomeSize += header->target_len[i];
 	return genomeSize;
@@ -324,6 +323,9 @@ int Genome::genomeDetect(){
 
 	// remove redundant translocations
 	removeRedundantTra();
+
+	// remove redundant mate clipping regions
+	removeRedundantMateClipReg();
 
 	//cout << "[" << time.getTime() << "]: removeOverlappedIndelFromMateClipReg() ..." << endl;
 	// remove overlapped indels from mate clipping regions
@@ -413,12 +415,49 @@ void Genome::removeInvalidMateClipItem(){
 				if(clip_reg->leftClipReg2) { delete clip_reg->leftClipReg2; clip_reg->leftClipReg2 = NULL; }
 				if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; }
 				if(clip_reg->rightClipReg2) { delete clip_reg->rightClipReg2; clip_reg->rightClipReg2 = NULL; }
+				if(clip_reg->largeIndelClipReg) { delete clip_reg->largeIndelClipReg; clip_reg->largeIndelClipReg = NULL; }
 				if(clip_reg->var_cand) { chr->removeVarCandNodeClipReg(clip_reg->var_cand); clip_reg->var_cand = NULL; } // free item
 				if(clip_reg->left_var_cand_tra) { chr->removeVarCandNodeClipReg(clip_reg->left_var_cand_tra); clip_reg->left_var_cand_tra = NULL; }  // free item
 				if(clip_reg->right_var_cand_tra) { chr->removeVarCandNodeClipReg(clip_reg->right_var_cand_tra); clip_reg->right_var_cand_tra = NULL; }  // free item
 				delete clip_reg;
 				chr->mateClipRegVector.erase(chr->mateClipRegVector.begin()+j);
 			}else j++;
+		}
+	}
+}
+
+// remove redundant mate clipping regions
+void Genome::removeRedundantMateClipReg(){
+	for(size_t i=0; i<chromeVector.size(); i++)
+		genomeRemoveRedundantClipReg(chromeVector.at(i), chromeVector);
+
+	// remove invalid elements
+	removeInvalidMateClipItem();
+}
+
+// remove redundant mate clipping regions
+void Genome::genomeRemoveRedundantClipReg(Chrome *chr, vector<Chrome*> &chr_vec){
+	size_t i;
+	vector<mateClipReg_t*> mate_clip_reg_vec;
+	mateClipReg_t *mate_clip_reg, *mate_clip_reg_ret;
+	int32_t clipPosNum, clipPosNum_overlapped;
+
+	mate_clip_reg_vec = chr->mateClipRegVector;
+	for(i=0; i<mate_clip_reg_vec.size(); i++){
+		mate_clip_reg = mate_clip_reg_vec.at(i);
+		if(mate_clip_reg->valid_flag){
+			mate_clip_reg_ret = genomeGetOverlappedMateClipReg(mate_clip_reg, chromeVector);
+			if(mate_clip_reg_ret){
+				if(mate_clip_reg->large_indel_flag==false and mate_clip_reg_ret->large_indel_flag==false){ // clipping regions
+					clipPosNum = mate_clip_reg->leftClipPosNum + mate_clip_reg->leftClipPosNum2 + mate_clip_reg->rightClipPosNum + mate_clip_reg->rightClipPosNum2;
+					clipPosNum_overlapped = mate_clip_reg_ret->leftClipPosNum + mate_clip_reg_ret->leftClipPosNum2 + mate_clip_reg_ret->rightClipPosNum + mate_clip_reg_ret->rightClipPosNum2;
+				}else if(mate_clip_reg->large_indel_flag==true and mate_clip_reg_ret->large_indel_flag==true){ // large indel
+					clipPosNum = mate_clip_reg->supp_num_largeIndel;
+					clipPosNum_overlapped = mate_clip_reg_ret->supp_num_largeIndel;
+				}
+				if(clipPosNum>=clipPosNum_overlapped) mate_clip_reg_ret->valid_flag = false;
+				else mate_clip_reg->valid_flag = false;
+			}
 		}
 	}
 }
@@ -604,45 +643,43 @@ void Genome::mergeDetectResult(){
 	out_file_clipReg.close();
 }
 
-// local assembly for genome
-int Genome::genomeLocalAssemble(){
+// local consensus for genome
+int Genome::genomeLocalCons(){
 	Chrome *chr;
 	Time time;
 
-	// load assemble data
-	genomeLoadDataAssemble();
+	// load consensus data
+	genomeLoadDataCons();
 
-	cout << "Number of previously assembled regions: " << paras->assemble_reg_preDone_num << endl;
-	cout << "Number of regions to be assembled: " << paras->assemble_reg_work_total << endl;
+	cout << "Number of previously processed regions: " << paras->cns_reg_preDone_num << endl;
+	cout << "Number of regions to be processed: " << paras->cns_reg_work_total << endl;
 
-	//outputAssemWorkOptToFile_debug(paras->assem_work_vec);
+	// invoke the monitor of conseneus work process
+	//startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_cns, paras->max_proc_running_minutes_cns);
 
-	// invoke the monitor of assemble work process
-	//startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_assemble, paras->max_proc_running_minutes_assemble);
-
-	// begin assemble
-	if(!paras->assem_work_vec.empty()) cout << "[" << time.getTime() << "]: start local assemble..." << endl;
-	processAssembleWork();
+	// begin consensus
+	if(!paras->cns_work_vec.empty()) cout << "[" << time.getTime() << "]: start local consensus ..." << endl;
+	processConsWork();
 
 //	for(size_t i=0; i<1001; i++){
 //		cout << i << "\t" << sig_num_arr[i] << endl;
 //	}
 
-	cout << "[" << time.getTime() << "]: Finalizing assemble ..." << endl;
+	cout << "[" << time.getTime() << "]: Finalizing consensus ..." << endl;
 
-	computeVarNumStatAssemble(); // compute statistics for assemble command
+	computeVarNumStatCons(); // compute statistics for cns command
 
-	if(!paras->assem_work_vec.empty()) destroyAssembleWorkOptVec(paras->assem_work_vec);
+	if(!paras->cns_work_vec.empty()) destroyConsWorkOptVec(paras->cns_work_vec);
 
-	// reset assemble data
+	// reset consensus data
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->chrResetAssembleData();
+		chr->chrResetConsData();
 	}
 	return 0;
 }
 
-void Genome::genomeLoadDataAssemble(){
+void Genome::genomeLoadDataCons(){
 	Chrome *chr;
 
 	if(chromeVector.size()==0) return;
@@ -652,12 +689,12 @@ void Genome::genomeLoadDataAssemble(){
 		chr = chromeVector.at(i);
 		if(chr->decoy_flag==false or paras->include_decoy==false){ // non-decoy
 			if(chr->chrname.compare(CHR_X_STR1)==0 or chr->chrname.compare(CHR_X_STR2)==0 or chr->chrname.compare(CHR_Y_STR1)==0 or chr->chrname.compare(CHR_Y_STR2)==0){
-				chr->chrLoadDataAssemble();  // load the variant data
-				chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
+				chr->chrLoadDataCons();  // load the variant data
+				chr->chrGenerateLocalConsWorkOpt();     // generate local consensus work
 			}
 		}else if(chr->decoy_flag and paras->include_decoy){ // decoy
-			chr->chrLoadDataAssemble();  // load the variant data
-			chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
+			chr->chrLoadDataCons();  // load the variant data
+			chr->chrGenerateLocalConsWorkOpt();     // generate local consensus work
 		}
 	}
 
@@ -668,85 +705,85 @@ void Genome::genomeLoadDataAssemble(){
 		if(chr->decoy_flag==false) // non-decoy
 		{
 			if(chr->chrname.compare(CHR_X_STR1)!=0 and chr->chrname.compare(CHR_X_STR2)!=0 and chr->chrname.compare(CHR_Y_STR1)!=0 and chr->chrname.compare(CHR_Y_STR2)!=0){
-				chr->chrLoadDataAssemble();  // load the variant data
-				chr->chrGenerateLocalAssembleWorkOpt();     // generate local assemble work
+				chr->chrLoadDataCons();  // load the variant data
+				chr->chrGenerateLocalConsWorkOpt();     // generate local consensus work
 			}
 		}
 	}
 
-	// load previously assembled information
+	// load previously consensus information
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->loadPrevAssembledInfo();
+		chr->loadPrevConsInfo();
 	}
 }
 
-// process assemble work using thread pool
-int Genome::processAssembleWork(){
-	assembleWork_opt *assem_work_opt;
-	assembleWork *assem_work;
+// process consensus work using thread pool
+int Genome::processConsWork(){
+	cnsWork_opt *cns_work_opt;
+	cnsWork *cns_work;
 	ofstream *var_cand_file;
 	size_t num_threads_work, num_work, num_work_percent;
 
-	if(paras->assem_work_vec.empty()) return 0;  // no assemble work, then return directly
+	if(paras->cns_work_vec.empty()) return 0;  // no consensus work, then return directly
 
 	//num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
 	num_threads_work = (paras->num_threads>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
 
 	if(num_threads_work<1) num_threads_work = 1;
 
-	if(paras->num_threads_per_assem_work==0)
-		cout << "Local assemble will be processed using " << num_threads_work << " concurrent works, and each work will use the default number of threads of assembler" << endl;
-	else
-		cout << "Local assemble will be processed using " << num_threads_work << " concurrent works, and each work will be limited to " << paras->num_threads_per_assem_work << " threads" << endl;
+//	if(paras->num_threads_per_cns_work==0)
+//		cout << "Local consensus will be processed using " << num_threads_work << " threads, and each work will use the default number of threads" << endl;
+//	else
+//		cout << "Local consensus will be processed using " << num_threads_work << " concurrent works, and each work will be limited to " << paras->num_threads_per_cns_work << " threads" << endl;
 
 	hts_tpool *p = hts_tpool_init(num_threads_work);
 	hts_tpool_process *q = hts_tpool_process_init(p, num_threads_work*2, 1);
 
-	pthread_mutex_init(&paras->mtx_assemble_reg_workDone_num, NULL);
+	pthread_mutex_init(&paras->mtx_cns_reg_workDone_num, NULL);
 
-	paras->assemble_reg_workDone_num = 0;
-	num_work = paras->assem_work_vec.size();
-	num_work_percent = num_work / paras->num_parts_progress;
+	paras->cns_reg_workDone_num = 0;
+	num_work = paras->cns_work_vec.size();
+	num_work_percent = num_work / (paras->num_parts_progress >> 1);
 	if(num_work_percent==0) num_work_percent = 1;
 	for(size_t i=0; i<num_work; i++){
-		assem_work_opt = paras->assem_work_vec.at(i);
-		var_cand_file = getVarcandFile(assem_work_opt->chrname, chromeVector, assem_work_opt->clip_reg_flag);
+		cns_work_opt = paras->cns_work_vec.at(i);
+		var_cand_file = getVarcandFile(cns_work_opt->chrname, chromeVector, cns_work_opt->clip_reg_flag);
 		if(var_cand_file==NULL){
-			cerr << __func__ << ", line=" << __LINE__ << ": cannot get car_cand file for CHR: " << assem_work_opt->chrname << ", error!" << endl;
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot get car_cand file for CHR: " << cns_work_opt->chrname << ", error!" << endl;
 			exit(1);
 		}
-
-//		if(assem_work_opt->readsfilename.compare("output_debug/2_assemble/1/reads_1_4391857-4391874.fq")==0){
-//			cout << "readsfile=" << assem_work_opt->readsfilename << endl;
+		//clipReg_reads_1_26966226-26974816.fq, clipReg_reads_1_21506254-21506762.fq
+//		if(cns_work_opt->readsfilename.compare("output_debug/2_cns/1/clipReg_reads_1_155160984-155161842.fq")==0){
+//			cout << "readsfile=" << cns_work_opt->readsfilename << endl;
 //		}else continue;
 
-		assem_work = new assembleWork();
-		assem_work->assem_work_opt = assem_work_opt;
-		assem_work->work_id = i;
-		assem_work->num_work = num_work;
-		assem_work->num_work_percent = num_work_percent;
-		assem_work->p_assemble_reg_workDone_num = &(paras->assemble_reg_workDone_num);
-		assem_work->p_mtx_assemble_reg_workDone_num = &(paras->mtx_assemble_reg_workDone_num);
-		assem_work->num_threads_per_assem_work = paras->num_threads_per_assem_work;
-		assem_work->minClipEndSize = paras->minClipEndSize;
-		if(assem_work_opt->clip_reg_flag==false) assem_work->assemSideExtSize = paras->assemSideExtSize;
-		else assem_work->assemSideExtSize = paras->assemSideExtSizeClip;
-		assem_work->minConReadLen = paras->minConReadLen;
-		assem_work->min_sv_size = paras->min_sv_size_usr;
-		assem_work->min_supp_num = paras->minReadsNumSupportSV;
-		assem_work->max_seg_size_ratio = paras->max_seg_size_ratio_usr;
-		assem_work->inBamFile = paras->inBamFile;
-		assem_work->fai = fai;
-		assem_work->var_cand_file = var_cand_file;
-		assem_work->expected_cov_assemble = paras->expected_cov_assemble;
-		assem_work->min_input_cov_canu = paras->min_input_cov_canu;
-		assem_work->delete_reads_flag = paras->delete_reads_flag;
-		assem_work->keep_failed_reads_flag = paras->keep_failed_reads_flag;
-		assem_work->technology = paras->technology;
-		assem_work->canu_version = paras->canu_version;
+		cns_work = new cnsWork();
+		cns_work->cns_work_opt = cns_work_opt;
+		cns_work->work_id = i;
+		cns_work->num_work = num_work;
+		cns_work->num_work_percent = num_work_percent;
+		cns_work->p_cns_reg_workDone_num = &(paras->cns_reg_workDone_num);
+		cns_work->p_mtx_cns_reg_workDone_num = &(paras->mtx_cns_reg_workDone_num);
+		cns_work->num_threads_per_cns_work = paras->num_threads_per_cns_work;
+		cns_work->minClipEndSize = paras->minClipEndSize;
+		if(cns_work_opt->clip_reg_flag==false) cns_work->cnsSideExtSize = paras->cnsSideExtSize;
+		else cns_work->cnsSideExtSize = paras->cnsSideExtSizeClip;
+		cns_work->minConReadLen = paras->minConReadLen;
+		cns_work->min_sv_size = paras->min_sv_size_usr;
+		cns_work->min_supp_num = paras->minReadsNumSupportSV;
+		cns_work->max_seg_size_ratio = paras->max_seg_size_ratio_usr;
+		cns_work->inBamFile = paras->inBamFile;
+		cns_work->fai = fai;
+		cns_work->var_cand_file = var_cand_file;
+		cns_work->expected_cov_cns = paras->expected_cov_cns;
+		cns_work->min_input_cov_canu = paras->min_input_cov_canu;
+		cns_work->delete_reads_flag = paras->delete_reads_flag;
+		cns_work->keep_failed_reads_flag = paras->keep_failed_reads_flag;
+		cns_work->technology = paras->technology;
+		cns_work->canu_version = paras->canu_version;
 
-		hts_tpool_dispatch(p, q, processSingleAssembleWork, assem_work);
+		hts_tpool_dispatch(p, q, processSingleConsWork, cns_work);
 	}
 
 	hts_tpool_process_flush(q);
@@ -803,7 +840,7 @@ int Genome::genomeCall(){
 
 	cout << "Number of regions to be processed: " << paras->call_work_num << endl;
 
-	// invoke the monitor of assemble work process
+	// invoke the monitor of consensus work process
 	//startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_call, paras->max_proc_running_minutes_call);
 
 	// blat alignment work
@@ -817,13 +854,13 @@ int Genome::genomeCall(){
 	time.printElapsedTime();
 
 	// finish call work
-	genomeFinishCallWork();
+	//genomeFinishCallWork();
 
 	// call TRA according to mate clip regions
-	genomeCallTra();
+	//genomeCallTra(); // 2023-12-25
 
 	// fill variation sequence
-	cout << "4444444444444" << endl;
+	//cout << "4444444444444" << endl;
 	cout << "[" << time.getTime() << "]: fill variant sequences... " << endl;
 	genomeFillVarseq();
 
@@ -831,12 +868,12 @@ int Genome::genomeCall(){
 	//generateFile(work_finish_filename);
 
 	// save SV to file
-	cout << "5555555555555" << endl;
+	//cout << "5555555555555" << endl;
 	cout << "[" << time.getTime() << "]: save call result to file... " << endl;
 	genomeSaveCallSV2File();
 
 	// merge call results into single file
-	cout << "6666666666666" << endl;
+	//cout << "6666666666666" << endl;
 	cout << "[" << time.getTime() << "]: merge call result... " << endl;
 	mergeCallResult();
 
@@ -1022,6 +1059,7 @@ void Genome::genomeCollectCallWork(){
 
 void Genome::genomeFinishCallWork(){
 	Chrome *chr;
+
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		chr->resetBlatVarcandFiles();
@@ -1035,7 +1073,7 @@ int Genome::processAlnWork(){
 	varCand *var_cand;
 	size_t num_work, num_work_percent;
 
-	if(paras->call_work_vec.empty()) return 0;  // no assemble work, then return directly
+	if(paras->call_work_vec.empty()) return 0;  // no align work, then return directly
 
 	cout << "Begin sequence alignment ..." << endl;
 
@@ -1064,8 +1102,7 @@ int Genome::processAlnWork(){
 		call_work_opt->p_call_workDone_num = &(paras->call_workDone_num);
 		call_work_opt->p_mtx_call_workDone_num = &(paras->mtx_call_workDone_num);
 
-		if(var_cand->clip_reg_flag) hts_tpool_dispatch(p, q, processSingleBlatAlnWork, call_work_opt);
-		else hts_tpool_dispatch(p, q, processSingleMinimap2AlnWork, call_work_opt);
+		hts_tpool_dispatch(p, q, processSingleMinimap2AlnWork, call_work_opt);
 	}
 
     hts_tpool_process_flush(q);
@@ -1081,7 +1118,7 @@ int Genome::processBlatAlnWork(){
 	varCand *var_cand;
 	size_t num_work, num_work_percent;
 
-	if(paras->call_work_vec.empty()) return 0;  // no assemble work, then return directly
+	if(paras->call_work_vec.empty()) return 0;  // no align work, then return directly
 
 	cout << "Begin blat alignment ..." << endl;
 
@@ -1126,7 +1163,7 @@ int Genome::processCallWork(){
 	varCand *var_cand;
 	size_t num_work, num_work_percent;
 
-	if(paras->call_work_vec.empty()) return 0;  // no assemble work, then return directly
+	if(paras->call_work_vec.empty()) return 0;  // no call work, then return directly
 
 	cout << "Begin variants call ..." << endl;
 
@@ -1147,7 +1184,8 @@ int Genome::processCallWork(){
 		// diploid: blat_1_4480337-4489601.sim4, blat_1_5364079-5371326.sim4, blat_1_5727691-5736300.sim4 (good), blat_1_7613307-7613853.sim4
 		// blat_1_19156546-19164246.sim4, blat_1_2415202-2415425.sim4, tra_blat_1_2686251-2691837.sim4
 		// blat_contig_chr1_253768-256236.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_2068132-2073121.sim4
-//		if(var_cand->alnfilename.compare("output_debug/3_call/1/minimap2_1_4137779-4138576.paf")!=0){
+		// minimap2_1_2213173-2214000.paf, minimap2_contig_1_26966226-26974816.paf, minimap2_contig_1_21506254-21506762.paf,minimap2_contig_1_29382165-29382465.paf
+//		if(var_cand->alnfilename.compare("output_hg002_chr1_20240129/3_call/1/minimap2_cns_1_26966226-26974816.paf")!=0){
 //			continue;
 //		}
 
@@ -1272,8 +1310,10 @@ void Genome::recallIndelsFromTRA(){
 										reg->zero_cov_flag = false;
 										reg->aln_seg_end_flag = false;
 										reg->query_pos_invalid_flag = false;
+										reg->large_indel_flag = false;
 										reg->gt_type = -1;
 										reg->gt_seq = "";
+										reg->AF = 0;
 
 										ref_dist = reg->endLocalRefPos - reg->startLocalRefPos + 1;
 										query_dist = reg->endQueryPos - reg->startQueryPos + 1;
@@ -1710,7 +1750,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->min_sv_size = paras->min_sv_size_usr;
 		var_cand_new->minReadsNumSupportSV = paras->minReadsNumSupportSV;
 
-		var_cand_new->assem_success = var_cand->assem_success;
+		var_cand_new->cns_success = var_cand->cns_success;
 		var_cand_new->ctg_num = var_cand->ctg_num;
 
 		for(size_t k=0; k<var_cand_tmp->varVec.size(); k++) var_cand_new->varVec.push_back(var_cand_tmp->varVec.at(k));
@@ -1727,7 +1767,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->dup_num = var_cand_tmp->dup_num;
 
 		//set genotyping parameters
-		var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_alle_ratio, paras->gt_max_alle_ratio, paras->minReadsNumSupportSV);
+		var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_consistency_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 		// process monitor killed blat work
 		var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
@@ -1748,7 +1788,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 // compute variant location
 vector<int32_t> Genome::computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, mateClipReg_t *clip_reg, int32_t round_num){
 	size_t i, j, aln_orient, missing_size_head, missing_size_inner, missing_size_tail;
-	int32_t start_query_pos, end_query_pos, start_mate_query_pos, end_mate_query_pos;
+	int32_t start_query_pos, end_query_pos;
 	int32_t maxValue, maxIdx, secValue, query_dist, query_part_flag_maxValue, query_part_flag_secValue;  // query_part_flag: 0-head, 1-inner, 2-tail
 	int32_t tra_blat_aln_idx, start_tra_aln_seg_idx, end_tra_aln_seg_idx, value_tmp, query_part_flag;
 	blat_aln_t *blat_aln, *blat_aln_mate;
@@ -1865,15 +1905,15 @@ vector<int32_t> Genome::computeTraLoc(varCand *var_cand, varCand *var_cand_tmp, 
 					mate_aln_idx_vec = getMateTraReg(blat_aln->query_id, start_query_pos, end_query_pos, var_cand_tmp);
 					if(mate_aln_idx_vec.at(0)!=-1){
 						blat_aln_mate = var_cand_tmp->blat_aln_vec.at(mate_aln_idx_vec.at(0));
-						aln_seg1 = blat_aln_mate->aln_segs.at(mate_aln_idx_vec.at(1));
-						aln_seg2 = blat_aln_mate->aln_segs.at(mate_aln_idx_vec.at(2));
-						if(blat_aln_mate->aln_orient==ALN_PLUS_ORIENT){ // plus orient
-							start_mate_query_pos = aln_seg1->query_start;
-							end_mate_query_pos = aln_seg2->query_end;
-						}else{ // minus orient
-							start_mate_query_pos = blat_aln_mate->query_len - aln_seg1->query_end + 1;
-							end_mate_query_pos = blat_aln_mate->query_len - aln_seg2->query_start + 1;
-						}
+//						aln_seg1 = blat_aln_mate->aln_segs.at(mate_aln_idx_vec.at(1));
+//						aln_seg2 = blat_aln_mate->aln_segs.at(mate_aln_idx_vec.at(2));
+//						if(blat_aln_mate->aln_orient==ALN_PLUS_ORIENT){ // plus orient
+//							start_mate_query_pos = aln_seg1->query_start;
+//							end_mate_query_pos = aln_seg2->query_end;
+//						}else{ // minus orient
+//							start_mate_query_pos = blat_aln_mate->query_len - aln_seg1->query_end + 1;
+//							end_mate_query_pos = blat_aln_mate->query_len - aln_seg2->query_start + 1;
+//						}
 
 						//cout << "mate TRA: " << "start_mate_query_pos=" << start_mate_query_pos << ", end_mate_query_pos=" << end_mate_query_pos << endl;
 
@@ -2671,12 +2711,12 @@ vector<int32_t> Genome::computeDistsTra(mateClipReg_t *clip_reg1, mateClipReg_t 
 
 // fill variant sequences
 void Genome::genomeFillVarseq(){
-	Chrome *chr;
-	for(size_t i=0; i<chromeVector.size(); i++){
-		chr = chromeVector.at(i);
-		if(chr->process_block_num)
-			chr->chrFillVarseq();
-	}
+//	Chrome *chr;
+//	for(size_t i=0; i<chromeVector.size(); i++){
+//		chr = chromeVector.at(i);
+//		if(chr->process_block_num)
+//			chr->chrFillVarseq();
+//	}
 
 	// fill sequences for TRA
 	genomeFillVarseqTra();
@@ -2686,13 +2726,13 @@ void Genome::genomeFillVarseqTra(){
 	size_t i, j;
 	Chrome *chr;
 	mateClipReg_t *clip_reg;
-	ofstream assembly_info_file;
-	string assembly_info_filename_tra;
+	ofstream cns_info_file;
+	string cns_info_filename_tra;
 
-	assembly_info_filename_tra = out_dir_tra + "/" + "tra_assembly_info";
-	assembly_info_file.open(assembly_info_filename_tra);
-	if(!assembly_info_file.is_open()){
-		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << assembly_info_filename_tra << endl;
+	cns_info_filename_tra = out_dir_tra + "/" + "tra_cns_info";
+	cns_info_file.open(cns_info_filename_tra);
+	if(!cns_info_file.is_open()){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << cns_info_filename_tra << endl;
 		exit(1);
 	}
 
@@ -2701,21 +2741,20 @@ void Genome::genomeFillVarseqTra(){
 		for(j=0; j<chr->mateClipRegVector.size(); j++){
 			clip_reg = chr->mateClipRegVector.at(j);
 			if(clip_reg->valid_flag and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA)
-				fillVarseqSingleMateClipReg(clip_reg, assembly_info_file);
+				fillVarseqSingleMateClipReg(clip_reg, cns_info_file);
 		}
 	}
-
-	assembly_info_file.close();
+	cns_info_file.close();
 }
 
-void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &assembly_info_file){
+void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_info_file){
 	varCand *var_cand_tmp;
 	string tmpdir;
 	reg_t *reg;
 	vector<int32_t> ref_shift_size_vec;
 	vector<size_t> query_loc_vec; // [0]-blat_aln_id, [1]-query_id, [2]-start_query_pos, [3]-end_query_pos, [4]-start_local_ref_pos, [5]-end_loal_ref_pos, [6]-start_ref_pos, [7]-end_ref_pos
 	blat_aln_t *blat_aln;
-	size_t i, assembly_extend_size;
+	size_t i, cns_extend_size;
 
 	if(clip_reg->valid_flag){
 		if(clip_reg->sv_type==VAR_TRA){
@@ -2758,8 +2797,10 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				reg->zero_cov_flag = false;
 				reg->aln_seg_end_flag = false;
 				reg->query_pos_invalid_flag = false;
+				reg->large_indel_flag = false;
 				reg->gt_type = -1;
 				reg->gt_seq = "";
+				reg->AF = 0;
 
 				var_cand_tmp->varVec.push_back(reg);
 
@@ -2771,7 +2812,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				tmpdir = out_dir_tra + "/" + "tmp_tra_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
 
 				//set genotyping parameters
-				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_alle_ratio, paras->gt_max_alle_ratio, paras->minReadsNumSupportSV);
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_consistency_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 				// process monitor killed blat work
 				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
@@ -2786,10 +2827,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				var_cand_tmp->mtx_killed_minimap2_work = &paras->mtx_killed_minimap2_work;
 
 				for(i=0; i<3; i++){
-					//assembly_extend_size = ASSEMBLE_SIDE_LEN * i;
-					assembly_extend_size = paras->assemSideExtSizeClip * i;
-					// local assembly
-					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_assem_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
+					cns_extend_size = paras->cnsSideExtSizeClip * i;
+					// local consensus
+					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -2800,10 +2840,10 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 					var_cand_tmp->margin_adjusted_flag = false;
 					var_cand_tmp->ctg_num = getCtgCount(var_cand_tmp->ctgfilename);
 
-					// assembly status
-					if (isFileExist(var_cand_tmp->ctgfilename)) var_cand_tmp->assem_success = true;
-					else var_cand_tmp->assem_success = false;
-					if(var_cand_tmp->assem_success){
+					// consensus status
+					if (isFileExist(var_cand_tmp->ctgfilename)) var_cand_tmp->cns_success = true;
+					else var_cand_tmp->cns_success = false;
+					if(var_cand_tmp->cns_success){
 
 						var_cand_tmp->loadBlatAlnData(); // BLAT align
 						if(var_cand_tmp->align_success){
@@ -2873,8 +2913,10 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				reg->zero_cov_flag = false;
 				reg->aln_seg_end_flag = false;
 				reg->query_pos_invalid_flag = false;
+				reg->large_indel_flag = false;
 				reg->gt_type = -1;
 				reg->gt_seq = "";
+				reg->AF = 0;
 
 				var_cand_tmp->varVec.push_back(reg);
 
@@ -2898,13 +2940,12 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 				var_cand_tmp->mtx_killed_minimap2_work = &paras->mtx_killed_minimap2_work;
 
 				//set genotyping parameters
-				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_alle_ratio, paras->gt_max_alle_ratio, paras->minReadsNumSupportSV);
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_consistency_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 				for(i=0; i<3; i++){
-					//assembly_extend_size = ASSEMBLE_SIDE_LEN * i;
-					assembly_extend_size = paras->assemSideExtSizeClip * i;
-					// local assembly
-					performLocalAssemblyTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_assem_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, assembly_extend_size, assembly_info_file);
+					cns_extend_size = paras->cnsSideExtSizeClip * i;
+					// local consensus
+					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -2915,10 +2956,10 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 					var_cand_tmp->margin_adjusted_flag = false;
 					var_cand_tmp->ctg_num = getCtgCount(var_cand_tmp->ctgfilename);
 
-					// assembly status
-					if (isFileExist(var_cand_tmp->ctgfilename)) var_cand_tmp->assem_success = true;
-					else var_cand_tmp->assem_success = false;
-					if(var_cand_tmp->assem_success){
+					// consensus status
+					if (isFileExist(var_cand_tmp->ctgfilename)) var_cand_tmp->cns_success = true;
+					else var_cand_tmp->cns_success = false;
+					if(var_cand_tmp->cns_success){
 
 						var_cand_tmp->loadBlatAlnData(); // BLAT align
 						if(var_cand_tmp->align_success){
@@ -2951,23 +2992,23 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &asse
 	}
 }
 
-// perform local assembly
-void Genome::performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file){
+// perform local consensus
+void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
 
-	LocalAssembly local_assembly(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_assem_work, varVec, chrname, inBamFile, fai, assembly_extend_size, paras->expected_cov_assemble, paras->min_input_cov_canu, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr);
+	LocalCns local_cns(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr);
 
 	// extract the corresponding refseq from reference
-	local_assembly.extractRefseq();
+	local_cns.extractRefseq();
 
 	// extract the reads data from BAM file
-	local_assembly.extractReadsDataFromBAM();
+	local_cns.extractReadsDataFromBAM();
 
-	// local assembly using Canu
-//	local_assembly.localAssembleCanu();
-	local_assembly.cnsByPoa();
+	// local consensus
+//	local_cns.localCnsCanu();
+	local_cns.cnsByPoa();
 
-	// record assembly information
-	local_assembly.recordAssemblyInfo(assembly_info_file);
+	// record consensus information
+	local_cns.recordCnsInfo(cns_info_file);
 
 	// empty the varVec
 	//varVec.clear();
@@ -3316,7 +3357,7 @@ void Genome::saveResultVCF(){
 // save indel in VCF file format for detect command
 void Genome::saveResultToVCF(string &in, string &out_vcf){
 	string line, line_vcf, chr, start_pos, id, ref, alt, qual, filter, info, format, format_val, sample, reg;
-	string end_pos, sv_type, sv_len, dup_num, blat_inner;
+	string end_pos, sv_type, sv_len, dup_num, blat_inner, extra_info;
 	ifstream infile;
 	ofstream outfile;
 	vector<string> str_vec;
@@ -3361,6 +3402,7 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 				id = ".";					// ID
 				ref = str_vec.at(6);		// REF
 				alt = str_vec.at(7);		// ALT
+				extra_info = str_vec.at(8);	// ExtraInfo
 				qual = ".";					// QUAL
 				filter = "PASS";			// FILTER
 
@@ -3376,6 +3418,7 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 					dup_num = str_vec.at(5);
 					info += ";DUPNUM=" + dup_num;
 				}
+				info += ";" + extra_info; // DP=xx;AF=yy
 				if(str_vec.size()==MAX_BED_COLS_NUM){ // convert 'shortSV' to 'BLATINNER' into info
 					blat_inner = "BLATINNER";
 					info += ";" + blat_inner;
@@ -3386,8 +3429,8 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 //
 //				line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
 
-				format = str_vec.at(8);			// FORMAT
-				format_val = str_vec.at(9);		// gt_value
+				format = str_vec.at(9);			// FORMAT
+				format_val = str_vec.at(10);		// gt_value
 
 				line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
 				outfile << line_vcf << endl;
@@ -3551,7 +3594,9 @@ void Genome::saveVCFHeader(ofstream &fp, string &sample_str){
 	fp << "##INFO=<ID=DUPNUM,Number=1,Type=Integer,Description=\"Copy number of DUP\">" << endl;
 	fp << "##INFO=<ID=MATEID,Number=.,Type=String,Description=\"ID of mate breakends\">" << endl;
 	fp << "##INFO=<ID=MATEDIST,Number=1,Type=Integer,Description=\"Distance to the mate breakend for mates on the same contig\">" << endl;
-	fp << "##INFO=<ID=BLATINNER,Number=1,Type=Flag,Description=\"variants called from inner parts of BLAT align segment\">" << endl;
+	fp << "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Total Depth\">" << endl;
+	fp << "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele Frequency\">" << endl;
+	//fp << "##INFO=<ID=BLATINNER,Number=1,Type=Flag,Description=\"variants called from inner parts of BLAT align segment\">" << endl;
 //	fp << "##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of Samples With Data\">" << endl;
 //	fp << "##FILTER=<ID=q10,Description=\"Quality below 10\">" << endl;
 	fp << "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">" << endl;
@@ -3584,8 +3629,8 @@ void Genome::computeVarNumStatDetect(){
 	cout << "\t" << clipReg_num << " candidate clipping regions" << endl;
 }
 
-// compute statistics for 'assemble' command
-void Genome::computeVarNumStatAssemble(){
+// compute statistics for 'cns' command
+void Genome::computeVarNumStatCons(){
 	int32_t total, total_indel, total_clipReg, total_succ_indel, total_fail_indel, total_succ_clipReg, total_fail_clipReg, succ_tmp, fail_tmp;
 	vector<int32_t> num_vec;
 	Chrome *chr;
@@ -3596,7 +3641,7 @@ void Genome::computeVarNumStatAssemble(){
 		chr = chromeVector.at(i);
 
 		filename = chr->getVarcandIndelFilename();
-		num_vec = getSuccFailNumAssemble(filename);
+		num_vec = getSuccFailNumCns(filename);
 		succ_tmp = num_vec.at(0);
 		fail_tmp = num_vec.at(1);
 		total_succ_indel += succ_tmp;
@@ -3604,7 +3649,7 @@ void Genome::computeVarNumStatAssemble(){
 		total_indel += succ_tmp + fail_tmp;
 
 		filename = chr->getVarcandClipregFilename();
-		num_vec = getSuccFailNumAssemble(filename);
+		num_vec = getSuccFailNumCns(filename);
 		succ_tmp = num_vec.at(0);
 		fail_tmp = num_vec.at(1);
 		total_succ_clipReg += succ_tmp;
@@ -3613,13 +3658,13 @@ void Genome::computeVarNumStatAssemble(){
 	}
 	total = total_indel + total_clipReg;
 
-	cout << "############## Brief statistics for local assembly ##############" << endl;
-	cout << "There are " << total << " local assembled regions in total:" << endl;
+	cout << "############## Brief statistics for local consensus ##############" << endl;
+	cout << "There are " << total << " regions in total:" << endl;
 	cout << "\t" << total_indel << " indel regions: " << total_succ_indel << " successful, " << total_fail_indel << " failed" << endl;
 	cout << "\t" << total_clipReg << " clipping regions: " << total_succ_clipReg << " successful, " << total_fail_clipReg << " failed" << endl;
 }
 
-vector<int32_t> Genome::getSuccFailNumAssemble(string &filename){
+vector<int32_t> Genome::getSuccFailNumCns(string &filename){
 	ifstream infile;
 	string line;
 	vector<string> str_vec;
@@ -3638,7 +3683,7 @@ vector<int32_t> Genome::getSuccFailNumAssemble(string &filename){
 		while(getline(infile, line))
 			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
-				if(str_vec.at(5).compare(ASSEMBLY_SUCCESS)==0) num_succ ++;
+				if(str_vec.at(5).compare(CNS_SUCCESS)==0) num_succ ++;
 				else num_fail ++;
 			}
 

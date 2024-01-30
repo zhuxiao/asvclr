@@ -6,11 +6,13 @@
 #include <vector>
 #include <limits.h>
 #include <htslib/sam.h>
+//#include <pthread.h>
 
 #include "structures.h"
 #include "alnDataLoader.h"
 #include "varCand.h"
 #include "covLoader.h"
+#include "Block.h"
 
 using namespace std;
 
@@ -39,12 +41,14 @@ using namespace std;
 
 #define MAX_DIST_SAME_CLIP_END				100000
 
-#define MAX_ALN_SEG_NUM_PER_READ_TRA		4  // to be parameterized
-#define MAX_CLIP_REG_MERGE_DIST				50  // to be parameterized
+#define MAX_ALN_SEG_NUM_PER_READ_TRA		5  // to be parameterized, 4
+#define MAX_CLIP_REG_MERGE_DIST				50  // to be parameterized, 50
 #define MAX_CLIP_REG_MERGE_DIST_ADJUST		500  //self
 #define MAX_INNER_MISSING_IGNORE_SIZE		100
 
-#define MIN_CLIP_REG_MATED_RATIO			(0.3f)
+#define MIN_CLIP_REG_MATED_RATIO			(0.1f) // 0.3
+
+#define MAX_REF_DIST_SAME_CHR				500
 
 
 class clipReg {
@@ -58,9 +62,15 @@ class clipReg {
 		mateClipReg_t mate_clip_reg;
 
 		vector<clipAlnData_t*> clipAlnDataVector, clipAlnDataVector2, rightClipAlnDataVector, rightClipAlnDataVector2;
-		vector<clipPos_t*> leftClipPosVector, rightClipPosVector;
-		vector<clipPos_t*> leftClipPosVector2, rightClipPosVector2;
-		bool left_part_changed, right_part_changed;
+		vector<clipPos_t*> leftClipPosVector, leftClipPosVector2, rightClipPosVector, rightClipPosVector2;
+		bool left_part_changed, right_part_changed, large_indel_flag;
+
+		// large indels
+		reg_t *largeIndelClipReg;
+		int32_t supp_num_largeIndel, depth_largeIndel;
+		vector<clipPos_t*> largeIndelClipPosVector;
+//		vector<Block*> *blockVector;
+//		pthread_mutex_t *p_mutex_mate_clip_reg;
 
 		//string bnd_mate_reg_strs[4]; // mate region strings for BND format
 
@@ -85,6 +95,9 @@ class clipReg {
 		int32_t getMeanDistSingleVec(clipPos_t *clip_pos_item, vector<clipPos_t*> &clip_pos_vec);
 		clipPos_t* getClipPosSameAlnSeg(clipPos_t *clip_pos_item, vector<clipPos_t*> &clip_pos_vec);
 		void splitClipPosVec();
+		int32_t computeBPConsistencyFlag(clipAlnData_t *clip_aln, int32_t clip_end, clipAlnData_t *adj_aln, int32_t adj_clip_end, vector<clipPos_t*> &clip_pos_vec);
+		void AdjustClipPosVecByBPConsistency(vector<clipPos_t*> &clip_pos_vec, int32_t vec_id);
+		void AdjustClipPosVecByBPConsistencySingleVec(vector<clipPos_t*> &clip_pos_vec, vector<clipPos_t*> &clip_pos_vec_main);
 		vector<clipPos_t*> getClipPosItemsByQueryname(string &queryname, vector<clipPos_t*> &clip_pos_vec);
 		clipPos_t* getMinDistClipPosItem(clipPos_t *clip_pos, vector<clipPos_t*> &clip_pos_vec);
 		int32_t getClipPosVecId(clipAlnData_t *clip_aln, int32_t clip_end);
@@ -103,6 +116,7 @@ class clipReg {
 		string computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, int32_t vec_id, string &chrname_clip, int64_t meanClipPos);
 		int32_t computeCovNumClipPos(string &chrname, int64_t meanClipPos, int32_t clip_end, faidx_t *fai, Paras *paras);
 		void computeClipRegs();
+		void determineLargeIndelReg();
 		reg_t* computeClipRegSingleVec(vector<clipPos_t*> &clipPosVector);
 		int32_t getItemIdxClipPosVec(clipPos_t *item, vector<clipPos_t*> &vec);
 		void removeBNDUnmatedClipRegs();
@@ -112,20 +126,18 @@ class clipReg {
 		size_t computeMeanClipPos(vector<clipPos_t*> &clipPosVector);
 		void removeFPClipSingleEnd(mateClipReg_t &mate_clip_reg);
 		void checkLocOrder(mateClipReg_t &mate_clip_reg);
-		void computeVarTypeClipReg(mateClipReg_t &mate_clip_reg, string &inBamFile);
+		void computeVarTypeClipReg(mateClipReg_t &mate_clip_reg);
 		void resetClipCheckFlag(vector<clipAlnData_t*> &clipAlnDataVector);
 		bool isSameChrome(vector<clipAlnData_t*> &query_aln_segs);
 		bool isSameOrient(vector<clipAlnData_t*> &query_aln_segs);
 		bool ischeckSameOrient(vector<clipAlnData_t*> &query_aln_segs);//self
 		bool Filteredbychrname(vector<clipAlnData_t*> &query_aln_segs);//self
 		void FilteredbyAlignmentSegment(vector<clipAlnData_t*> &query_aln_segs);//self
-//		bool isQuerySelfOverlap(vector<clipAlnData_t*> &query_aln_segs);
-//		bool isSegSelfOverlap(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2);
 		bool isSameAlnReg(vector<clipAlnData_t*> &query_aln_segs);
 		void sortQueryAlnSegs(vector<clipAlnData_t*> &query_aln_segs);
 		bool isAdjacentClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, size_t dist_thres);
 		bool containCompleteDup(vector<clipAlnData_t*> &query_aln_segs, mateClipReg_t &mate_clip_reg);
-		size_t extractVarType(size_t dup_type_num, size_t inv_type_num, size_t tra_type_num, size_t min_reads_thres);
+		size_t extractVarType(mateClipReg_t &mate_clip_reg, size_t dup_type_num, size_t inv_type_num, size_t tra_type_num, size_t min_reads_thres);
 		size_t computeDupNumClipReg(vector<size_t> &dup_num_vec);
 		void printClipVecs(string head_info);
 		void printSingleClipVec(vector<clipPos_t*> &clip_pos_vec);

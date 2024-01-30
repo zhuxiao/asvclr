@@ -19,8 +19,8 @@ class Thread
 		size_t user_tid;   // 0-based: 0, 1, 2, 3, ...
 		static void* runDetect0(void* pVoid);  // the pointer to executing function
 		void* runDetect1();  // inner executing method
-		static void* runGenAssembleWorkOpt0(void* pVoid);  // the pointer to executing function
-		void* runGenAssembleWorkOpt1();  // inner executing method
+		static void* runGenConsWorkOpt0(void* pVoid);  // the pointer to executing function
+		void* runGenConsWorkOpt1();  // inner executing method
 		static void* runCall0(void* pVoid);  // the pointer to executing function
 		void* runCall1();  // inner executing method
 		static void* runBlatAlnTra0(void* pVoid);  // the pointer to executing function
@@ -34,11 +34,11 @@ class Thread
 		Thread();
 		virtual ~Thread();
 		virtual void runDetect() = 0;  // thread running entity
-		virtual void runGenAssembleWorkOpt() = 0;  // thread running entity
+		virtual void runGenConsWorkOpt() = 0;  // thread running entity
 		virtual void runCall() = 0;  // thread running entity
 		virtual void runBlatAlnTra() = 0;  // thread running entity
 		bool startDetect();  // start the thread for detection
-		bool startGenAssembleWorkOpt();  // start the thread for detection
+		bool startGenConsWorkOpt();  // start the thread for detection
 		bool startCall();  // start the thread for detection
 		bool startBlatAlnTra();  // start the thread for detection
 		pthread_t getThreadID();
@@ -56,7 +56,7 @@ class MultiThread: public Thread {
 	public:
 		size_t num_threads = 0;
 		void runDetect();
-		void runGenAssembleWorkOpt();
+		void runGenConsWorkOpt();
 		void runCall();
 		void runBlatAlnTra();
 		//void runFillVarSeq();

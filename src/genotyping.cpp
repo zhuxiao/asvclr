@@ -56,7 +56,7 @@ void genotyping::computeGenotype(){
 //	}
 
 	// recover variants
-	if(queryGtSig_vec.size()>min_sup_num_recover)
+	if(queryGtSig_vec.size()>(size_t)min_sup_num_recover)
 		recoverVariants(reg, match_profile_pat_vec, seed_gtQuery, queryGtSig_vec, validGtSigFlagVec);
 
 	data_loader.freeAlnData(alnDataVector);
@@ -66,15 +66,13 @@ void genotyping::computeGenotype(){
 void genotyping::filterInvalidAlnData(vector<bam1_t*> &alnDataVector, double valid_summed_size_ratio_read){
 	bam1_t *b, *b2;
 	string queryname, queryname2;
-	int64_t start_pos, end_pos, aln_size, querylen, leftClipSize, rightClipSize;
+	int64_t aln_size, querylen;
 	double len_ratio;
 	vector<bam1_t*> query_aln_segs;
 
 	for(size_t i=0; i<alnDataVector.size(); ){
 		b = alnDataVector.at(i);
 		queryname = bam_get_qname(b);
-		start_pos = b->core.pos;
-		end_pos = bam_endpos(b);
 
 		query_aln_segs = getQueryAlnSegs(alnDataVector, queryname);
 		aln_size = getAlnSizeSingleQuery(query_aln_segs);
@@ -190,7 +188,7 @@ vector<queryGtSig_t*> genotyping::extractGtSigVec(){
 		refseq = seq;
 		free(seq);
 
-		bam_type = getBamType(alnDataVector.at(0));
+		bam_type = getBamType(alnDataVector);
 		if(bam_type==BAM_INVALID){
 			cerr << __func__ << ": unknown bam type, error!" << endl;
 			exit(1);
@@ -239,8 +237,6 @@ vector<queryGtSig_t*> genotyping::extractGtSigVec(){
 vector<gtSig_t*> genotyping::extractGtSigsFromAlnSegsSingleQuery(vector<struct alnSeg*> &alnSegs, int64_t startPos, int64_t endPos, string &refseq, int32_t sig_size_thres, int32_t clip_size_thres){
 	vector<gtSig_t*> sig_vec;
 	gtSig_t *gt_sig;
-	int64_t pos, epos, tmp_endPos, misbase;
-	int32_t idx, endflag, position, len;
 	vector<struct alnSeg*>::iterator seg;
 	string str;
 
@@ -459,7 +455,7 @@ void genotyping::computeGtMatchProfile(vector<queryGtSig_t*> &queryGtSig_vec, qu
 vector<int8_t> genotyping::computeGtMatchProfileSingleQuery(queryGtSig_t *queryGtSig, queryGtSig_t *seed_gtQuery){
 	vector<int8_t> match_profile_vec;
 	int32_t rowsNum, colsNum, matchScore, mismatchScore, gapScore, gapOpenScore;
-	int32_t scoreIJ, tmp_gapScore1, tmp_gapScore2, maxValue, path_val, op_len_tmp;
+	int32_t scoreIJ, tmp_gapScore1, tmp_gapScore2, maxValue, path_val;
 	struct alnScoreNode *scoreArr;
 	int64_t i, j, arrSize;
 	bool matchFlag;
@@ -764,8 +760,8 @@ vector<bool> genotyping::computeValidGtSigFlags(queryGtSig_t *seed_gtQuery, reg_
 
 	vector<bool> valid_gtSig_flag_vec;
 	size_t i, j;
-	gtSig_t *gtSig, *seed_gt_sig;
-	int64_t end_pos, num, reg_size, gtSig_size, loc_dif;
+	gtSig_t *gtSig;
+	int64_t end_pos, reg_size, gtSig_size, loc_dif;
 	bool overlap_flag, exist_overlap_flag = false, type_match_flag, size_match_flag;
 	double ratio;
 	struct loc_dif_node *loc_dif_item;
@@ -1058,15 +1054,13 @@ int32_t genotyping::getSigLen(gtSig_t *gt_sig){
 
 //compare and make decision
 void genotyping::compareAndUpdateVarReg(reg_t *reg, gtSig_t *target_sig, vector<int64_t> &aver_pos_vec){
-	int64_t start_pos_aver, end_pos_aver, dist_aver, sig_len;
+	int64_t start_pos_aver, end_pos_aver;
 	int64_t start_pos_reg_tmp, end_pos_reg_tmp, start_pos_aver_tmp, end_pos_aver_tmp, reg_size, aver_reg_size;
-	bool valid_flag = false, overlap_flag, var_type_flag = false;
+	bool valid_flag = false, overlap_flag;
 	double ratio;
 
 	start_pos_aver = aver_pos_vec.at(0);
 	end_pos_aver = aver_pos_vec.at(1);
-	sig_len = aver_pos_vec.at(2);
-	dist_aver = end_pos_aver - start_pos_aver + 1;
 
 	start_pos_reg_tmp = reg->startRefPos - clip_extend_match_thres;
 	end_pos_reg_tmp = reg->endRefPos + clip_extend_match_thres;

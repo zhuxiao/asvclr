@@ -139,7 +139,7 @@ void covLoader::generateBaseCoverage(Base *baseArr, vector<bam1_t*> &alnDataVect
 
 	if(alnDataVector.empty()) return; // tolerate zero coverage regions
 
-	bam_type = getBamType(alnDataVector.at(0));
+	bam_type = getBamType(alnDataVector);
 	if(bam_type==BAM_INVALID){
 		cerr << __func__ << ": unknown bam type, error!" << endl;
 		exit(1);

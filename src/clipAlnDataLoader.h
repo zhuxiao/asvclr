@@ -34,6 +34,7 @@ class clipAlnDataLoader {
 		bool isSameClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2);
 		void addAdjacentInfo(vector<clipAlnData_t*> &clipAlnDataVector);
 		void orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &query_aln_vec);
+		void assignSideMostFlag(vector<clipAlnData_t*> &query_aln_vec);
 		void removeClipAlnDataWithLowPrimarySegSizeRatio(vector<clipAlnData_t*> &clipAlnDataVector, double primary_seg_size_ratio);
 		void removeSingleItemClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, int32_t idx);
 };

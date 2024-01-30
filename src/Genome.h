@@ -15,7 +15,7 @@
 using namespace std;
 
 #define MIN_VALID_TRA_RATIO			(0.95f)
-#define MAX_BED_COLS_NUM			11		//	maximum column number of BED file
+#define MAX_BED_COLS_NUM			12		//	maximum column number of BED file
 
 
 class Genome{
@@ -27,7 +27,7 @@ class Genome{
 		int64_t genomeSize;
 
 		// output directory and files
-		string out_dir, out_dir_detect, out_dir_assemble, out_dir_call, out_dir_tra, out_dir_result;
+		string out_dir, out_dir_detect, out_dir_cns, out_dir_call, out_dir_tra, out_dir_result;
 
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
 		string out_filename_result_snv, out_filename_result_indel, out_filename_result_clipReg, out_filename_result_tra, out_filename_result_vars, out_filename_result_vars_vcf;
@@ -45,7 +45,7 @@ class Genome{
 		int generateGenomeBlocks();
 		void saveGenomeBlocksToFile();
 		int genomeDetect();
-		int genomeLocalAssemble();
+		int genomeLocalCons();
 		int genomeCall();
 		void estimateSVSizeNum();
 		void saveResultVCF();
@@ -61,14 +61,16 @@ class Genome{
 		int computeCoverage();
 		void removeRedundantTra();
 		void removeInvalidMateClipItem();
+		void removeRedundantMateClipReg();
+		void genomeRemoveRedundantClipReg(Chrome *chr, vector<Chrome*> &chr_vec);
 		void removeOverlappedIndelFromMateClipReg();
 		void genomeRemoveFPIndelSnvInClipReg(Chrome *chr, vector<Chrome*> &chr_vec);
 		mateClipReg_t* genomeGetOverlappedMateClipReg(mateClipReg_t *clip_reg_given, vector<Chrome*> &chrome_vec);
 		mateClipReg_t* getSameClipRegTRA(mateClipReg_t *clip_reg_given, vector<Chrome*> &chrome_vec);
 		void saveDetectResultToFile();
 		void mergeDetectResult();
-		void genomeLoadDataAssemble();
-		int processAssembleWork();
+		void genomeLoadDataCons();
+		int processConsWork();
 		ofstream* getVarcandFile(string &chrname, vector<Chrome*> &chrome_vec, bool clip_reg_flag);
 		void generateFile(string &filename);
 
@@ -105,8 +107,8 @@ class Genome{
 		vector<int32_t> computeDistsTra(mateClipReg_t *clip_reg1, mateClipReg_t *clip_reg2);
 		void genomeFillVarseq();
 		void genomeFillVarseqTra();
-		void fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &assembly_info_file);
-		void performLocalAssemblyTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_assem_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t assembly_extend_size, ofstream &assembly_info_file);
+		void fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_info_file);
+		void performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file);
 		vector<int32_t> getRefShiftSize(string &refseqfilename);
 		vector<size_t> computeQueryLocTra(varCand *var_cand, mateClipReg_t *clip_reg, size_t end_flag);
 		void genomeSaveCallSV2File();
@@ -121,8 +123,8 @@ class Genome{
 
 		// output statistics
 		void computeVarNumStatDetect();
-		void computeVarNumStatAssemble();
-		vector<int32_t> getSuccFailNumAssemble(string &filename);
+		void computeVarNumStatCons();
+		vector<int32_t> getSuccFailNumCns(string &filename);
 		void computeVarNumStatCall();
 		size_t getSVTypeSingleLine(string &line);
 		void sortVarResults(string &infilename, int32_t filetype);
