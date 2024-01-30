@@ -18,10 +18,12 @@ Accurate Structural Variant Caller for Long Reads
 
 -------------------
 ASVCLR is an Accurate Structural Variation (SV) Caller for Long Reads, such as PacBio sequencing and Oxford Nanopore sequencing. ASVCLR can detect both simple indels (insertions and deletions) and the hard-to-call complex structural varitions (SVs) (e.g. >=20 bp), such as tandem duplications, inversions and translocations, and producing fewer false positives with high precise variant margins. 
-The main description of ASVCLR can be summarized as follows:
-* ASVCLR detect candidate variation regions according to the variation signatures and categorizes the candidate variation region as indel regions and clipping regions. The indel regions typically have much more indel events within the align segments while the clipping regions typically have much clipping ends (soft- and hard-clipping). ASVCLR was designed to infer the variations in the indel regions and clipping regions, respectively.
-* ASVCLR consists of three steps (or commands): `det`, `cns` and `call`. In `det` step, the indel regions and and clipping genomic regions are detected as candidate variation regions; and subsequently, the `cns` (consensus) step will be used to perform the consensus operation to generate the consensus sequences by using abPOA and wtdbg2 for these candidate indel regions and clipping regions, respectively; and finally, in the `call` step, these consensus sequences derived from indel regions and clipping regions will be aligned back to reference by minimap2 to infer the variation margin and sequences.
+
+The main features of ASVCLR can be summarized as follows:
+* ASVCLR detects candidate variation regions according to the variation signatures and categorizes these regions as indel regions and clipping regions. The indel regions typically have much more indel events within the intra-aligned segments whereas the clipping regions typically have much more clipping events (soft- and hard-clippings). ASVCLR was designed to infer the variations in the indel regions and clipping regions, respectively.
+* ASVCLR consists of three steps (or commands): `det`, `cns` and `call`. In `det` (setect) step, the indel regions and clipping regions are detected as candidate variation regions; and subsequently, in the `cns` (consensus) step, ASVCLR performs the consensus operation to generate the consensus sequences by using abPOA and wtdbg2 for these candidate indel regions and clipping regions, respectively; and finally, in the `call` step, these consensus sequences derived from indel regions and clipping regions are aligned back to reference by using minimap2 to infer the variation margins and sequences.
 * ASVCLR extracts variation features in indel regions and clipping regions, respectively, and adopts an allele-aware clustering for these region to avoid the interfere impact of different alleles to generate more accurate variation call results.
+
 For more detailed experiment information, please refer to [asvclr-experiments](https://github.com/zhuxiao/asvclr-experiments/).
 
 ## Prerequisites
@@ -47,7 +49,7 @@ And the binary file `asvclr` will be output into the folder `bin` in this packag
 
 Besides, it is recommanded to create the link of `asvclr` in `bin` directory to the `$PATH` directory.
 ```sh
-# create soft-link of asvclr to `~/bin` which should be already exist or make a new one
+# create soft-link of asvclr to '~/bin' which should be already exist or create a new one
 $ mkdir ~/bin
 $ ln -s $PWD/bin/asvclr ~/bin
 # or, create soft-link of asvclr to /usr/local/bin, which needs the sudo permission
@@ -83,7 +85,7 @@ Moreover, ASVCLR can be used to detect variations for some user-specified region
 # call variations in user-specified regions of hg38: chr1, chr2:10000000-20000000, chr3:50000000-100000000
 $ asvclr all -o out_dir hg38.fa hg38_ngmlr_sorted.bam chr1 chr2:10000000-20000000 chr3:50000000-100000000
 ```
-Then, only the three regions `chr1`, `chr2:10000000-20000000`, `chr3:50000000-100000000` will be processed.
+Then, only the three regions `chr1`, `chr2:10000000-20000000` and `chr3:50000000-100000000` will be processed.
 
 The help information can be shown:
 ```sh
@@ -368,7 +370,7 @@ Options:
 
 ## Output Result Description
 
-Variant detection results are reported in VCF file format.
+Variation detection results are reported in VCF file format.
 
 ### VCF file format
 
@@ -413,7 +415,7 @@ Variants can be reported in VCF file format, and specifically, translocations ar
 1	1005000	BND.1:1005000-1:2004999	C	]1:2004999]C	.	PASS	SVTYPE=BND;MATEID=BND.1:2004999-1:1005000;MATEDIST=999999	GT:AD:DP	./.:44,1:45
 1	2004999	BND.1:2004999-1:1005000	G	G[1:1005000[	.	PASS	SVTYPE=BND;MATEID=BND.1:1005000-1:2004999;MATEDIST=999999	GT:AD:DP	./.:44,1:45
 ```
-The last 8 variant items corresponds to a translocation which locates between chr1:1000001-2005000 and chr2:2000002-2005000
+The last 8 variant items corresponds to a translocation which locates between 1:1000001-2005000 and 2:2000002-2005000
 
 ------------------
 
