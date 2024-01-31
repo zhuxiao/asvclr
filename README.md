@@ -89,6 +89,7 @@ Then, only the three regions `chr1`, `chr2:10000000-20000000` and `chr3:50000000
 
 The help information can be shown:
 ```sh
+$ asvclr all
 Program: ASVCLR (Accurate Structural Variation Caller for Long Reads)
 Version: 1.3.0 (using htslib 1.17)
 
@@ -157,6 +158,13 @@ Options:
                  Variation is heterozygous if the ratio of allele count is larger than FLOAT.
    -v,--version  show version information
    -h,--help     show this help message and exit
+
+Example:
+   # run the pipeline on the whole genome
+   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam
+
+   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000
+   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000
 ```
 where, the htslib version is the version of HTSlib installed on the machine.
 
@@ -182,6 +190,13 @@ Commands:
    call              call indels by alignments of local genome assemblies
    all               run the above commands in turn
    det-cns           run 'det' and 'cns' commands in turn
+
+Example:
+   # run the pipeline on the whole genome
+   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam
+
+   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000
+   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000
 ```
 
 
@@ -245,6 +260,13 @@ Options:
    --sample STR  Sample name ["sample"]
    -v,--version  show version information
    -h,--help     show this help message and exit
+
+Example:
+   # run 'det' command on the whole genome
+   $ asvclr det -t 32 -m 20 -o output ref.fa genome_sorted.bam
+
+   # run 'det' command to analyze the user-specified regions: chr1, chr2:10000000-20000000
+   $ asvclr det -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000
 ```
 
 ### `Cns` Step
@@ -315,6 +337,10 @@ Options:
    --sample STR  Sample name ["sample"]
    -v,--version  show version information
    -h,--help     show this help message and exit
+
+Example:
+   # run 'cns' command on the whole genome or the user-specified regions according to previous 'det' command.
+   $ asvclr cns -t 32 -m 20 -o output ref.fa genome_sorted.bam
 ```
 
 Note that: the `cns` step can be re-run from last stop to avoid unnecessary recomputation, and the `-x` option can be used to sampling high local coverage to a relative lower coverage to accelerate assemble process if the expected sampling coverage option `-x` is specified as a positive value.
@@ -365,6 +391,9 @@ Options:
    -v,--version  show version information
    -h,--help     show this help message and exit
 
+Example:
+   # run 'call' command on the whole genome or the user-specified regions according to previous 'det' command.
+   $ asvclr call -t 32 -m 20 -o output ref.fa genome_sorted.bam
 ```
 
 
