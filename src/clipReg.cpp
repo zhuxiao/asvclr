@@ -128,7 +128,8 @@ bool clipReg::isValidClipReg(){
 		}
 	}
 
-	if(seg_num_non_SA>0 and longer_seg_num_non_SA>=LONGER_NON_SA_SEG_NUM_THRES and (double)longer_seg_num_non_SA/seg_num_non_SA>=LONGER_NON_SA_SEG_RATIO_THRES) valid_flag = true;
+	//if(seg_num_non_SA>0 and longer_seg_num_non_SA>=LONGER_NON_SA_SEG_NUM_THRES and (double)longer_seg_num_non_SA/seg_num_non_SA>=LONGER_NON_SA_SEG_RATIO_THRES) valid_flag = true;
+	if(longer_seg_num_non_SA>=paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR and (double)longer_seg_num_non_SA/seg_num_non_SA>=LONGER_NON_SA_SEG_RATIO_THRES) valid_flag = true;
 	if(clipAlnDataVector.size()<=10 and seg_num_non_SA>0 and (double)longer_seg_num_non_SA/seg_num_non_SA>=LONGER_NON_SA_SEG_RATIO_THRES) valid_flag = true;//The number of CliPVs is small
 	//double ratio = (double)longer_seg_num_non_SA / seg_num_non_SA;
 	//cout << "longer_non_seg_ratio=" << ratio << ", valid_flag=" << valid_flag << endl;

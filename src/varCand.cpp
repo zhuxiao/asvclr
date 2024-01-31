@@ -1757,7 +1757,8 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 										else size_ratio = (double)(*seg)->seglen / paf_alnseg->seglen;
 										if(size_ratio>=size_ratio_match_thres){
 											ref_distance = abs(paf_alnseg->startRpos - (*seg)->startRpos);
-											if(ref_distance<200){
+											//if(ref_distance<200){
+											if(ref_distance<=MAX_REF_DIST_SAME_CHR){
 												svpos_correction_node = new svpos_correction_t();
 												svpos_correction_node->qname = qname;
 												//svpos_correction_node->startRpos = (*seg)->startRpos;

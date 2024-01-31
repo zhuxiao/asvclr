@@ -25,7 +25,7 @@ using namespace std;
 #define MIN_CLIP_DIST_THRES					1000
 #define GROUP_DIST_THRES					1000
 
-#define LONGER_NON_SA_SEG_NUM_THRES			5  // to be parameterized
+//#define LONGER_NON_SA_SEG_NUM_THRES			5  // to be parameterized
 #define LONGER_NON_SA_SEG_RATIO_THRES		(0.1f)
 //#define MIN_VALID_CLIP_POS_RATIO			0.7
 

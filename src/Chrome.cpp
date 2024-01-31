@@ -481,7 +481,7 @@ void Chrome::processMateClipRegDetectWork(){
 
 			//cout << "[" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
-//			if(i>=122 and i<=200)
+//			if(i>=20 and i<=21)
 //				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 //			else continue;
 

@@ -484,57 +484,59 @@ void Genome::genomeRemoveFPIndelSnvInClipReg(Chrome *chr, vector<Chrome*> &chr_v
 	mate_clip_reg_vec = chr->mateClipRegVector;
 	for(i=0; i<mate_clip_reg_vec.size(); i++){
 		mate_clip_reg = mate_clip_reg_vec.at(i);
-		for(j=0; j<4; j++) { chrname_arr[j] = ""; pos_arr[j] = 0; block_arr[j] = NULL; chr_arr[j] = NULL; }
+		if(mate_clip_reg->valid_flag){
+			for(j=0; j<4; j++) { chrname_arr[j] = ""; pos_arr[j] = 0; block_arr[j] = NULL; chr_arr[j] = NULL; }
 
-		// initialize
-		if(mate_clip_reg->leftClipReg) { chrname_arr[0] = mate_clip_reg->leftClipReg->chrname; pos_arr[0] = mate_clip_reg->leftClipReg->startRefPos; }
-		if(mate_clip_reg->leftClipReg2) { chrname_arr[1] = mate_clip_reg->leftClipReg2->chrname; pos_arr[1] = mate_clip_reg->leftClipReg2->startRefPos; }
-		if(mate_clip_reg->rightClipReg) { chrname_arr[2] = mate_clip_reg->rightClipReg->chrname; pos_arr[2] = mate_clip_reg->rightClipReg->startRefPos; }
-		if(mate_clip_reg->rightClipReg2) { chrname_arr[3] = mate_clip_reg->rightClipReg2->chrname; pos_arr[3] = mate_clip_reg->rightClipReg2->startRefPos; }
+			// initialize
+			if(mate_clip_reg->leftClipReg) { chrname_arr[0] = mate_clip_reg->leftClipReg->chrname; pos_arr[0] = mate_clip_reg->leftClipReg->startRefPos; }
+			if(mate_clip_reg->leftClipReg2) { chrname_arr[1] = mate_clip_reg->leftClipReg2->chrname; pos_arr[1] = mate_clip_reg->leftClipReg2->startRefPos; }
+			if(mate_clip_reg->rightClipReg) { chrname_arr[2] = mate_clip_reg->rightClipReg->chrname; pos_arr[2] = mate_clip_reg->rightClipReg->startRefPos; }
+			if(mate_clip_reg->rightClipReg2) { chrname_arr[3] = mate_clip_reg->rightClipReg2->chrname; pos_arr[3] = mate_clip_reg->rightClipReg2->startRefPos; }
 
-		// get the chromes
-		for(j=0; j<4; j++){
-			if(j>0 and chrname_arr[j].compare(chrname_arr[j-1])==0){
-				chr_arr[j] = chr_arr[j-1];
-			}else{
-				for(k=0; k<chr_vec.size(); k++){
-					chr_tmp = chr_vec.at(k);
-					if(chr!=chr_tmp and chrname_arr[j].size()>0){
-						if(chr_tmp->chrname.compare(chrname_arr[j])==0){
-							chr_arr[j] = chr_tmp;
-							break;
+			// get the chromes
+			for(j=0; j<4; j++){
+				if(j>0 and chrname_arr[j].compare(chrname_arr[j-1])==0){
+					chr_arr[j] = chr_arr[j-1];
+				}else{
+					for(k=0; k<chr_vec.size(); k++){
+						chr_tmp = chr_vec.at(k);
+						if(chr!=chr_tmp and chrname_arr[j].size()>0){
+							if(chr_tmp->chrname.compare(chrname_arr[j])==0){
+								chr_arr[j] = chr_tmp;
+								break;
+							}
 						}
 					}
 				}
 			}
-		}
 
-		// get the blocks
-		for(j=0; j<4; j++){
-			chr_tmp = chr_arr[j];
-			if(chr_tmp){
-				block_arr[j] = chr_tmp->computeBlocByPos(pos_arr[j], chr_tmp->blockVector);
-			}
-		}
-
-		for(j=0; j<4; j++){
-			block = block_arr[j];
-			if(block){
-				for(k=0; k<block->indelVector.size(); ){
-					reg = block->indelVector.at(k);
-					flag = isIndelInSingleClipReg(reg, mate_clip_reg);
-					if(flag){
-						//printRegVec(block->indelVector, "indelVector");
-						delete reg;
-						block->indelVector.erase(block->indelVector.begin()+k);
-						//num ++;
-					}else k++;
+			// get the blocks
+			for(j=0; j<4; j++){
+				chr_tmp = chr_arr[j];
+				if(chr_tmp){
+					block_arr[j] = chr_tmp->computeBlocByPos(pos_arr[j], chr_tmp->blockVector);
 				}
-				for(k=0; k<block->snvVector.size(); ){
-					pos = block->snvVector.at(k);
-					flag = isSnvInSingleClipReg(block->chrname, pos, mate_clip_reg);
-					if(flag) block->snvVector.erase(block->snvVector.begin()+k);
-					else k++;
+			}
+
+			for(j=0; j<4; j++){
+				block = block_arr[j];
+				if(block){
+					for(k=0; k<block->indelVector.size(); ){
+						reg = block->indelVector.at(k);
+						flag = isIndelInSingleClipReg(reg, mate_clip_reg);
+						if(flag){
+							//printRegVec(block->indelVector, "indelVector");
+							delete reg;
+							block->indelVector.erase(block->indelVector.begin()+k);
+							//num ++;
+						}else k++;
+					}
+					for(k=0; k<block->snvVector.size(); ){
+						pos = block->snvVector.at(k);
+						flag = isSnvInSingleClipReg(block->chrname, pos, mate_clip_reg);
+						if(flag) block->snvVector.erase(block->snvVector.begin()+k);
+						else k++;
+					}
 				}
 			}
 		}
@@ -1185,7 +1187,7 @@ int Genome::processCallWork(){
 		// blat_1_19156546-19164246.sim4, blat_1_2415202-2415425.sim4, tra_blat_1_2686251-2691837.sim4
 		// blat_contig_chr1_253768-256236.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_2068132-2073121.sim4
 		// minimap2_1_2213173-2214000.paf, minimap2_contig_1_26966226-26974816.paf, minimap2_contig_1_21506254-21506762.paf,minimap2_contig_1_29382165-29382465.paf
-//		if(var_cand->alnfilename.compare("output_hg002_chr1_20240129/3_call/1/minimap2_cns_1_26966226-26974816.paf")!=0){
+//		if(var_cand->alnfilename.compare("output_debug/3_call/4/minimap2_4_1020099-1020099.paf")!=0){
 //			continue;
 //		}
 

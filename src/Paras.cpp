@@ -716,7 +716,14 @@ void Paras::showUsage(){
 	cout << "   cns               consensus candidate regions" << endl;
 	cout << "   call              call indels by alignments of local consensus" << endl;
 	cout << "   all               run the above commands in turn" << endl;
-	cout << "   det-cns           run 'det' and 'cns' commands in turn" << endl;
+	cout << "   det-cns           run 'det' and 'cns' commands in turn" << endl << endl;
+
+	cout << "Example:" << endl;
+	cout << "   # run the pipeline on the whole genome" << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
+
+	cout << "   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for detect command
@@ -756,7 +763,14 @@ void Paras::showDetectUsage(){
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 
 	cout << "   -v,--version  show version information" << endl;
-	cout << "   -h,--help     show this help message and exit" << endl;
+	cout << "   -h,--help     show this help message and exit" << endl << endl;
+
+	cout << "Example:" << endl;
+	cout << "   # run 'det' command on the whole genome" << endl;
+	cout << "   $ asvclr det -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
+
+	cout << "   # run 'det' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr det -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for 'cns' command
@@ -828,7 +842,11 @@ void Paras::showCnsUsage(){
 	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 	cout << "   -v,--version  show version information" << endl;
-	cout << "   -h,--help     show this help message and exit" << endl;
+	cout << "   -h,--help     show this help message and exit" << endl << endl;
+
+	cout << "Example:" << endl;
+	cout << "   # run 'cns' command on the whole genome or the user-specified regions according to previous 'det' command." << endl;
+	cout << "   $ asvclr cns -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl;
 }
 
 // show the usage for call command
@@ -881,7 +899,11 @@ void Paras::showCallUsage(){
 	cout << "                 Variation is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
 
 	cout << "   -v,--version  show version information" << endl;
-	cout << "   -h,--help     show this help message and exit" << endl;
+	cout << "   -h,--help     show this help message and exit" << endl << endl;
+
+	cout << "Example:" << endl;
+	cout << "   # run 'call' command on the whole genome or the user-specified regions according to previous 'det' command." << endl;
+	cout << "   $ asvclr call -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl;
 }
 
 // show the usage for all command
@@ -975,6 +997,7 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 
+if(cmd_str.compare(CMD_CALL_STR)==0 or cmd_str.compare(CMD_ALL_STR)==0){
 //	cout << "   --gt-min-sig-size INT" << endl;
 //	cout << "                 minimal signature size threshold for genotyping [" << GT_SIG_SIZE_THRES << "]." << endl;
 //	cout << "                 Signatures with size larger than INT will be processed, otherwise, they will be ignored." << endl;
@@ -990,9 +1013,25 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "   --gt_hete_ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio threshold for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
 	cout << "                 Variation is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
+}
 
 	cout << "   -v,--version  show version information" << endl;
-	cout << "   -h,--help     show this help message and exit" << endl;
+	cout << "   -h,--help     show this help message and exit" << endl << endl;
+
+	cout << "Example:" << endl;
+if(cmd_str.compare(CMD_ALL_STR)==0){
+	cout << "   # run the pipeline on the whole genome" << endl;
+}else{
+	cout << "   # run the '" << cmd_str << "' command on the whole genome" << endl;
+}
+	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
+
+if(cmd_str.compare(CMD_ALL_STR)==0){
+	cout << "   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
+}else{
+	cout << "   # run the '" << cmd_str << "' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
+}
+	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for det-cns command

@@ -2325,7 +2325,7 @@ void* processSingleCallWork(void *arg){
 	double percentage;
 	Time time;
 
-//	cout << var_cand->alnfilename << endl;
+	//cout << var_cand->alnfilename << endl;
 
 	//var_cand->callVariants();
 	var_cand->callVariants02();
