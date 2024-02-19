@@ -8,7 +8,9 @@
 #include "covLoader.h"
 #include "util.h"
 #include "Block.h"
-#include "LocalCns.h"
+#include "localCns.h"
+
+extern pthread_mutex_t mutex_fai;
 
 // string split function
 vector<string> split(const string& s, const string& delim)
@@ -219,6 +221,9 @@ reg_t* dupVarReg(reg_t *reg){
 		reg_ret->refseq = reg->refseq;
 		reg_ret->altseq = reg->altseq;
 		reg_ret->AF = reg->AF;
+		reg_ret->supp_num = reg->supp_num;
+		reg_ret->DP = reg->DP;
+		reg_ret->discover_level = VAR_DISCOV_L_UNUSED;
 	}
 
 	return reg_ret;
@@ -978,16 +983,17 @@ void mergeOverlappedReg(vector<reg_t*> &regVector){
 
 	for(i=0; i<regVector.size(); i++){
 		reg1 = regVector.at(i);
-		if(reg1->call_success_status){
+		//if(reg1->call_success_status){
 			for(j=i+1; j<regVector.size(); ){
 				reg2 = regVector.at(j);
-				if(reg2->call_success_status and isOverlappedReg(reg1, reg2) and reg1->query_id!=-1 and reg1->query_id==reg2->query_id){ // same reference region and query
+				//if(reg2->call_success_status and isOverlappedReg(reg1, reg2) and reg1->query_id!=-1 and reg1->query_id==reg2->query_id){ // deleted 2024-02-05
+				if(isOverlappedReg(reg1, reg2)){ // same reference region and query
 					updateReg(reg1, reg2);
 					delete reg2;
 					regVector.erase(regVector.begin()+j);
 				}else j++;
 			}
-		}
+		//}
 	}
 	regVector.shrink_to_fit();
 }
@@ -2030,33 +2036,35 @@ vector<int32_t> computeQueryStartEndLocByRefPos(bam1_t *b, int64_t startRefPos, 
 // remove head align segments
 void removeHeadTailAlnSegs(vector<struct alnSeg*> &alnSegs){
 	uint32_t op;
-	op = alnSegs.at(0)->opflag;
-	switch (op) {
-		case BAM_CMATCH:
-			break;
-		case BAM_CINS:
-			delete *alnSegs.begin();
-			alnSegs.erase(alnSegs.begin());
-			break;
-		case BAM_CDEL:
-			delete *alnSegs.begin();
-			alnSegs.erase(alnSegs.begin());
-			break;
-		case BAM_CSOFT_CLIP:
-		case BAM_CHARD_CLIP:
-			delete *alnSegs.begin();
-			alnSegs.erase(alnSegs.begin());
-			break;
-		case BAM_CEQUAL:
-		case BAM_CDIFF:
-			break;
-		case BAM_CREF_SKIP:
-			// unexpected events
-		case BAM_CPAD:
-		case BAM_CBACK:
-		default:
-			cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
-			exit(1);
+	if(alnSegs.size()>0){
+		op = alnSegs.at(0)->opflag;
+		switch (op) {
+			case BAM_CMATCH:
+				break;
+			case BAM_CINS:
+				delete *alnSegs.begin();
+				alnSegs.erase(alnSegs.begin());
+				break;
+			case BAM_CDEL:
+				delete *alnSegs.begin();
+				alnSegs.erase(alnSegs.begin());
+				break;
+			case BAM_CSOFT_CLIP:
+			case BAM_CHARD_CLIP:
+				delete *alnSegs.begin();
+				alnSegs.erase(alnSegs.begin());
+				break;
+			case BAM_CEQUAL:
+			case BAM_CDIFF:
+				break;
+			case BAM_CREF_SKIP:
+				// unexpected events
+			case BAM_CPAD:
+			case BAM_CBACK:
+			default:
+				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
+				exit(1);
+		}
 	}
 	if(alnSegs.size()>0){
 		op = alnSegs.at(alnSegs.size() - 1)->opflag;
@@ -2088,16 +2096,16 @@ void removeHeadTailAlnSegs(vector<struct alnSeg*> &alnSegs){
 				exit(1);
 		}
 	}
-
 }
 
-cnsWork_opt* allocateCnsWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, vector<reg_t*> &varVec, bool clip_reg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+cnsWork_opt* allocateCnsWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, vector<reg_t*> &varVec, bool clip_reg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 	cnsWork_opt *cns_work_opt;
 	cns_work_opt = new cnsWork_opt();
 	cns_work_opt->chrname = chrname;
 	cns_work_opt->readsfilename = readsfilename;
 	cns_work_opt->contigfilename = contigfilename;
 	cns_work_opt->refseqfilename = refseqfilename;
+	cns_work_opt->clusterfilename = clusterfilename;
 	cns_work_opt->tmpdir = tmpdir;
 	cns_work_opt->clip_reg_flag = clip_reg_flag;
 
@@ -2168,13 +2176,13 @@ void* processSingleConsWork(void *arg){
 	Time time;
 
 //	pthread_mutex_lock(cns_work->p_mtx_cns_reg_workDone_num);
-//	cout << "consensus region [" << cns_work->work_id << "]: " << cns_work_opt->readsfilename << endl;
+//	cout << "consensus region [" << cns_work->work_id << "]: " << cns_work_opt->contigfilename << endl;
 //	pthread_mutex_unlock(cns_work->p_mtx_cns_reg_workDone_num);
 
 	for(i=0; i<cns_work_opt->arr_size; i++) varVec.push_back(cns_work_opt->var_array[i]);
 	for(i=0; i<cns_work_opt->limit_reg_array_size; i++) sub_limit_reg_vec.push_back(cns_work_opt->limit_reg_array[i]);
 
-	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->canu_version, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
+	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->clusterfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->canu_version, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
 	// release memory
 	sub_limit_reg_vec.clear();
@@ -2204,9 +2212,9 @@ void* processSingleConsWork(void *arg){
 }
 
 
-void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 
-	LocalCns local_cns(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
 
 	local_cns.setLimitRegs(limit_reg_process_flag, limit_reg_vec);
 	if(local_cns.cns_success_preDone_flag==false){
@@ -2719,7 +2727,7 @@ vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_s
 		ratio = (double)(indel_num + clip_num) / total_cov;
 		if(ratio>=HIGH_INDEL_CLIP_RATIO_THRES) total ++;
 		//if(ratio>=SECOND_INDEL_CLIP_RATIO_THRES) total2 ++;
-		if(ratio>=0.1f) total2 ++;
+		if(ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) total2 ++;
 	}
 
 	ratio = (double)total2 / arr_size;
@@ -3327,8 +3335,8 @@ vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, ve
 	clipAlnData_t *clip_aln, *clip_aln_based, *clip_aln_other_end;
 	int32_t clip_pos_based, clip_ref_pos_based, mate_clip_end, dist, ref_dist, min_dist, min_ref_dist, idx_min_dist, end_flag, min_dist_same_chr, min_ref_dist_same_chr, idx_min_dist_same_chr, end_flag_same_chr;
 	string pre_chrname;
-	int32_t qpos_increase_direction; // -1 for unused, 0 for increase, 1 for decrease
-	vector<int32_t> adjClipAlnSegInfo; // [0]: array index of minimal distance; [1]: segment end flag; [2]: minimal query distance; [3]: minimal reference distance; [4]: array index of minimal distance in the same chromosome; [5]: segment end flag in the same chromosome; [6]: minimal query distance in the same chromosome; [7]: minimal reference distance in the same chromosome
+	int32_t qpos_increase_direction, rpos_increase_direction; // -1 for unused, 0 for increase, 1 for decrease
+	vector<int32_t> adjClipAlnSegInfo; // [0]: array index of minimal distance; [1]: segment end flag; [2]: minimal query distance; [3]: minimal reference distance; [4]: array index of minimal distance in the same chromosome; [5]: segment end flag in the same chromosome; [6]: minimal query distance in the same chromosome; [7]: minimal reference distance in the same chromosome; [8] rpos increase direction: -1 for unused, 0 for increase, 1 for decrease
 
 	if(arr_idx!=-1){ // valid based segment
 		clip_aln_based = query_aln_segs.at(arr_idx);
@@ -3341,6 +3349,7 @@ vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, ve
 				qpos_increase_direction = 1; // decrease direction
 			else
 				qpos_increase_direction = 0; // increase direction
+			rpos_increase_direction  = 1; // decrease direction
 		}else {
 			clip_pos_based = clip_aln_based->endQueryPos;
 			clip_ref_pos_based = clip_aln_based->endRefPos;
@@ -3349,6 +3358,7 @@ vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, ve
 				qpos_increase_direction = 0; // increase direction
 			else
 				qpos_increase_direction = 1; // decrease direction
+			rpos_increase_direction = 0; // increase direction
 		}
 
 		pre_chrname = clip_aln_based->chrname;
@@ -3446,6 +3456,7 @@ vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, ve
 	adjClipAlnSegInfo.push_back(end_flag_same_chr);
 	adjClipAlnSegInfo.push_back(min_dist_same_chr);
 	adjClipAlnSegInfo.push_back(min_ref_dist_same_chr);
+	adjClipAlnSegInfo.push_back(rpos_increase_direction);
 
 	return adjClipAlnSegInfo;
 }
@@ -3511,7 +3522,9 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 				cout << "line=" << __LINE__ << ", bnd_pos=" << bnd_pos << ", error." << endl;
 
 			reg_str = chrname1 + ":" + to_string(bnd_pos) + "-" + to_string(bnd_pos);
+			pthread_mutex_lock(&mutex_fai);
 			seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+			pthread_mutex_unlock(&mutex_fai);
 			seq_str = seq;
 			free(seq);
 
@@ -3545,7 +3558,9 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 					if(mate_orient_ch=='+'){ // same orient
 						mate_clip_end = LEFT_END;
 						reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						pthread_mutex_lock(&mutex_fai);
 						seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+						pthread_mutex_unlock(&mutex_fai);
 
 						seq2_str = seq2;
 						mate_bnd_str = seq_str + "[" + chrname2 + ":" + to_string(mate_bnd_pos) + "[";
@@ -3554,7 +3569,9 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 						mate_clip_end = RIGHT_END;
 						mate_bnd_pos --;
 						reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						pthread_mutex_lock(&mutex_fai);
 						seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+						pthread_mutex_unlock(&mutex_fai);
 
 						seq2_str = seq2;
 						mate_bnd_str = seq_str + "]" + chrname2 + ":" + to_string(mate_bnd_pos) + "]";
@@ -3565,7 +3582,9 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 						mate_clip_end = RIGHT_END;
 						mate_bnd_pos --;
 						reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						pthread_mutex_lock(&mutex_fai);
 						seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+						pthread_mutex_unlock(&mutex_fai);
 
 						seq2_str = seq2;
 						mate_bnd_str = "]" + chrname2 + ":" + to_string(mate_bnd_pos) + "]" + seq_str;
@@ -3574,7 +3593,9 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 					}else{ // different orient
 						mate_clip_end = LEFT_END;
 						reg_str = chrname2 + ":" + to_string(mate_bnd_pos) + "-" + to_string(mate_bnd_pos);
+						pthread_mutex_lock(&mutex_fai);
 						seq2 = fai_fetch(fai, reg_str.c_str(), &seq_len2);
+						pthread_mutex_unlock(&mutex_fai);
 
 						seq2_str = seq2;
 						mate_bnd_str =  "[" + chrname2 + ":" + to_string(mate_bnd_pos) + "[" + seq_str;
@@ -4238,6 +4259,8 @@ void processClipRegs(int32_t work_id, mateClipReg_t &mate_clip_reg, reg_t *clip_
 			reg->gt_type = -1;
 			reg->gt_seq = "";
 			reg->AF = 0;
+			reg->supp_num = reg->DP = 0;
+			reg->discover_level = VAR_DISCOV_L_UNUSED;
 
 			// get position
 			pthread_mutex_lock(p_mutex_mate_clip_reg);
@@ -5676,7 +5699,9 @@ void testAlnSegVec(string &inBamFile, faidx_t *fai){
 		startPos = 1;
 		endPos = header->target_len[i];
 		reg_str = chr_name + ":" + to_string(startPos) + "-" + to_string(endPos);
+		pthread_mutex_lock(&mutex_fai);
 		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
 		refseq = seq;
 		free(seq);
 
@@ -5897,22 +5922,37 @@ int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len){
 	return end_query_pos;
 }
 
-bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, double size_ratio_match_thres){
+bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double consist_ratio_match_thres){
 	bool match_flag = false;
-	double size_ratio;
+	double size_ratio, consist_val;
 	int64_t ref_distance;
 
 	if(qc_sig and seed_qc_sig){
 		if(qc_sig->chrname.compare(seed_qc_sig->chrname)==0){
-		 // same cigar_op, ratio of signature size less than 0.7
+		 // same cigar_op, ratio of signature size less than 0.7, and sequence consistency >=0.8
 			if(qc_sig->cigar_op==seed_qc_sig->cigar_op){
 				if(qc_sig->cigar_op_len>0 and seed_qc_sig->cigar_op_len>0) {
 					if(qc_sig->cigar_op_len <= seed_qc_sig->cigar_op_len) size_ratio = (double)qc_sig->cigar_op_len / seed_qc_sig->cigar_op_len;
 					else size_ratio = (double)seed_qc_sig->cigar_op_len / qc_sig->cigar_op_len;
 					if(size_ratio>=size_ratio_match_thres){
 						ref_distance = abs(qc_sig->ref_pos - seed_qc_sig->ref_pos);
-						if(ref_distance<100){
-							match_flag = true;
+						if(qc_sig->cigar_op==BAM_CINS){
+							if(qc_sig->altseq.size()>0 and seed_qc_sig->altseq.size()>0){
+								consist_val = computeVarseqConsistency(qc_sig->altseq, seed_qc_sig->altseq);
+								//cout << "consist_val=" << consist_val << endl;
+								if(ref_distance<max_ref_dist_match and consist_val>=consist_ratio_match_thres){
+									match_flag = true;
+								}
+							}else{
+								if(ref_distance<max_ref_dist_match){
+									match_flag = true;
+								}
+							}
+						}else{
+							//if(ref_distance<100){
+							if(ref_distance<max_ref_dist_match){
+								match_flag = true;
+							}
 						}
 					}
 				}
@@ -5940,6 +5980,8 @@ vector<qcSig_t*> extractQcSigsFromAlnSegsSingleQuery(struct querySeqInfoNode *qu
 					if((*seg)->seglen>=min_sv_size){
 						qc_sig = allocateQcSigNode(*seg);
 						qc_sig->chrname = chrname;
+						qc_sig->aln_orient = query_seq_info_node->clip_aln->aln_orient;
+						qc_sig->altseq = (*seg)->seg_MD;
 						sig_vec.push_back(qc_sig);
 					}
 				}
@@ -5949,6 +5991,8 @@ vector<qcSig_t*> extractQcSigsFromAlnSegsSingleQuery(struct querySeqInfoNode *qu
 					if((*seg)->seglen>=min_sv_size){
 						qc_sig = allocateQcSigNode(*seg);
 						qc_sig->chrname = chrname;
+						qc_sig->aln_orient = query_seq_info_node->clip_aln->aln_orient;
+						qc_sig->refseq = (*seg)->seg_MD;
 						sig_vec.push_back(qc_sig);
 					}
 				}
@@ -5991,6 +6035,7 @@ qcSig_t *allocateQcSigNode(struct alnSeg *aln_seg){
 	qc_sig->cigar_op_len = aln_seg->seglen;
 	qc_sig->reg_contain_flag = false;
 	qc_sig->ref_pos = aln_seg->startRpos;
+	qc_sig->query_pos = aln_seg->startQpos;
 	qc_sig->sig_id = -1;
 	qc_sig->chrname = "";
 	qc_sig->mate_qcSig = NULL;

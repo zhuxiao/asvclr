@@ -72,17 +72,19 @@ class varCand {
 		vector<simpleReg_t*> sub_limit_reg_vec;
 		bool limit_reg_process_flag, limit_reg_delete_flag;
 
-		string refseqfilename, ctgfilename, readsfilename, alnfilename;
+		string refseqfilename, ctgfilename, readsfilename, alnfilename, clusterfilename;
+//		string rescue_refseqfilename, rescue_cnsfilename, rescue_readsfilename, rescue_alnfilename;
 		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize;
 		vector<reg_t*> varVec, newVarVec;
 		bool cns_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
 		vector<blat_aln_t*> blat_aln_vec;               	// blat aligned segments
 		vector<minimap2_aln_t*> minimap2_aln_vec;           // minimap2 aligned segments
-		vector<clipAlnData_t*> clipAlnDataVector;
+		//vector<clipAlnData_t*> clipAlnDataVector;
 
 		// clippings
 		reg_t *clip_reg, *clip_reg_allele; //, *clip_reg_mate;
-		int32_t leftClipRefPos, rightClipRefPos, sv_type, dup_num, depth_largeIndel; // leftClipQueryPos, rightClipQueryPos, aln_orient;
+		int64_t leftClipRefPos, rightClipRefPos;
+		int32_t sv_type, dup_num, depth_largeIndel; // leftClipQueryPos, rightClipQueryPos, aln_orient;
 		string bnd_mate_reg_strs[4];
 		bool margin_adjusted_flag, large_indel_flag;
 //		int32_t sv_len;
@@ -157,6 +159,7 @@ class varCand {
 		void callClipRegVariants();
 		void callClipRegVariants02();
 		void minimap2Parse();
+		vector<minimap2_aln_t*> minimap2Parse(string &alnfilename, string &cnsfilename, string &refseqfilename);
 		//allocatePafInDelAlnSeg
 		void getMissingPafInDelsAtAlnSegEnd(vector<struct pafalnSeg*> &all_pafalnsegs, vector<struct pafalnSeg*> &pafalnsegs, int32_t region_refstart, int32_t region_refend, int32_t querystart, int32_t queryend, int32_t query_len, int32_t subjectlen, int32_t subjectstart, int32_t subjectend, int32_t match_base_num, int32_t match_ref_len, string cons_seq, string ref_seq, int32_t aln_orient);
 		void blatParse();
@@ -172,7 +175,7 @@ class varCand {
 		void eraseFalsePositiveVariants();
 		void svPosCorrection(reg_t* reg);
 		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres);
-		void destoryClipAlnData();
+		void destoryClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void destoryPosCorrectionVec();
 		void callShortVariants();
 		bool isUnsplitAln(reg_t *reg);
@@ -214,6 +217,14 @@ class varCand {
 
 		// clippings
 		void computeClipRegVarLoc();
+		vector<reg_t*> computeClipRegVarLocOp(string &alnfilename, string &refseqfilename, string &cnsfilename, string &clusterfilename, vector<minimap2_aln_t*> &minimap2_aln_vec, bool rescue_flag);
+		void computeGenotypeClipReg(vector<reg_t*> &var_vec);
+		vector<reg_t*> rescueDupInvClipReg();
+		vector<reg_t*> rescueLargeIndelClipReg();
+		vector<vector<string>> getClusterInfo(string &clusterfilename);
+		vector<int32_t> getMinimapItemIdVec(vector<string> &queryname_vec, vector<minimap2_aln_t*> &minimap2_aln_vec);
+		vector<int32_t> getLeftRightMinimapItemId(int64_t leftClipRefPos, int64_t rightClipRefPos, vector<int32_t> &minimap2_item_id_vec, vector<minimap2_aln_t*> &minimap2_aln_vec);
+		vector<int32_t> getLeftRightClipAlnId(int64_t leftClipRefPos, int64_t rightClipRefPos, vector<clipAlnData_t*> &query_aln_segs);
 		void determineClipRegVarType();
 		void determineClipRegDupType();
 		void determineClipRegInvType();

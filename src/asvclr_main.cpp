@@ -46,12 +46,12 @@ int main(int argc, char **argv) {
 	// call
 	if(paras.command.compare(CMD_CALL_STR)==0 or paras.command.compare(CMD_ALL_STR)==0){
 		time.setStartTime();
-		cout << "[" << time.getTime() << "]: call variants ..." << endl;
+		cout << "[" << time.getTime() << "]: call variations ..." << endl;
 
-		// call variants
+		// call variations
 		genome.genomeCall();
 
-		cout << "[" << time.getTime() << "]: call variants finished." << endl;
+		cout << "[" << time.getTime() << "]: call variations finished." << endl;
 		time.printSubCmdElapsedTime();
 	}
 

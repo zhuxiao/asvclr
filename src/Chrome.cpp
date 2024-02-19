@@ -7,6 +7,7 @@
 #include <htslib/thread_pool.h>
 
 pthread_mutex_t mutex_mate_clip_reg = PTHREAD_MUTEX_INITIALIZER;
+extern pthread_mutex_t mutex_fai;
 
 // Constructor with parameters
 Chrome::Chrome(string& chrname, int chrlen, faidx_t *fai, Paras *paras, vector<Chrome*> *chr_vec){
@@ -239,7 +240,9 @@ void Chrome::chrFillDataEst(size_t op_est){
 			begPos = pos - BLOCK_SIZE_EST/2;
 			endPos = begPos + BLOCK_SIZE_EST - 1;
 			reg = chrname + ":" + to_string(begPos) + "-" + to_string(endPos);
+			pthread_mutex_lock(&mutex_fai);
 			seq = fai_fetch(fai, reg.c_str(), &seq_len);
+			pthread_mutex_unlock(&mutex_fai);
 			for(i=0; i<seq_len; i++){
 				if(seq[i]=='N' or seq[i]=='n'){
 					flag = false;
@@ -481,7 +484,7 @@ void Chrome::processMateClipRegDetectWork(){
 
 			//cout << "[" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
-//			if(i>=20 and i<=21)
+//			if(i>=43 and i<=44)
 //				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 //			else continue;
 
@@ -1903,6 +1906,8 @@ void Chrome::chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> 
 				reg->gt_type = -1;
 				reg->gt_seq = "";
 				reg->AF = 0;
+				reg->supp_num = reg->DP = 0;
+				reg->discover_level = VAR_DISCOV_L_UNUSED;
 				//cout << "blocID=" << computeBlocID(begPos, blockVector) << ", reg:" << begPos << "-" << endPos << endl;
 
 				tmp_bloc->indelVector.push_back(reg);  // add the variation
@@ -1945,13 +1950,13 @@ void Chrome::chrLoadMateClipRegDataOp(bool limit_reg_process_flag, vector<simple
 			str_vec = split(line, "\t");
 
 			chrname1 = str_vec.at(0);
-			if(chrname1.compare("-")!=0) { reg1 = new reg_t(); reg1->chrname = chrname1; reg1->startRefPos = stoi(str_vec.at(1)); reg1->endRefPos = stoi(str_vec.at(2)); reg1->zero_cov_flag = false; reg1->aln_seg_end_flag = false; reg1->query_pos_invalid_flag = false; reg1->large_indel_flag = false; reg1->gt_type = -1; reg1->gt_seq = ""; reg1->AF = 0; }
+			if(chrname1.compare("-")!=0) { reg1 = new reg_t(); reg1->chrname = chrname1; reg1->startRefPos = stoi(str_vec.at(1)); reg1->endRefPos = stoi(str_vec.at(2)); reg1->zero_cov_flag = false; reg1->aln_seg_end_flag = false; reg1->query_pos_invalid_flag = false; reg1->large_indel_flag = false; reg1->gt_type = -1; reg1->gt_seq = ""; reg1->AF = 0; reg1->supp_num = reg1->DP = 0; reg1->discover_level = VAR_DISCOV_L_UNUSED; }
 			chrname2 = str_vec.at(3);
-			if(chrname2.compare("-")!=0) { reg2 = new reg_t(); reg2->chrname = chrname2; reg2->startRefPos = stoi(str_vec.at(4)); reg2->endRefPos = stoi(str_vec.at(5)); reg2->zero_cov_flag = false; reg2->aln_seg_end_flag = false; reg2->query_pos_invalid_flag = false; reg2->large_indel_flag = false; reg2->gt_type = -1; reg2->gt_seq = ""; reg2->AF = 0; }
+			if(chrname2.compare("-")!=0) { reg2 = new reg_t(); reg2->chrname = chrname2; reg2->startRefPos = stoi(str_vec.at(4)); reg2->endRefPos = stoi(str_vec.at(5)); reg2->zero_cov_flag = false; reg2->aln_seg_end_flag = false; reg2->query_pos_invalid_flag = false; reg2->large_indel_flag = false; reg2->gt_type = -1; reg2->gt_seq = ""; reg2->AF = 0; reg2->supp_num = reg2->DP = 0; reg2->discover_level = VAR_DISCOV_L_UNUSED; }
 			chrname3 = str_vec.at(6);
-			if(chrname3.compare("-")!=0) { reg3 = new reg_t(); reg3->chrname = chrname3; reg3->startRefPos = stoi(str_vec.at(7)); reg3->endRefPos = stoi(str_vec.at(8)); reg3->zero_cov_flag = false; reg3->aln_seg_end_flag = false; reg3->query_pos_invalid_flag = false; reg3->large_indel_flag = false; reg3->gt_type = -1; reg3->gt_seq = ""; reg3->AF = 0; }
+			if(chrname3.compare("-")!=0) { reg3 = new reg_t(); reg3->chrname = chrname3; reg3->startRefPos = stoi(str_vec.at(7)); reg3->endRefPos = stoi(str_vec.at(8)); reg3->zero_cov_flag = false; reg3->aln_seg_end_flag = false; reg3->query_pos_invalid_flag = false; reg3->large_indel_flag = false; reg3->gt_type = -1; reg3->gt_seq = ""; reg3->AF = 0; reg3->supp_num = reg3->DP = 0; reg3->discover_level = VAR_DISCOV_L_UNUSED; }
 			chrname4 = str_vec.at(9);
-			if(chrname4.compare("-")!=0) { reg4 = new reg_t(); reg4->chrname = chrname4; reg4->startRefPos = stoi(str_vec.at(10)); reg4->endRefPos = stoi(str_vec.at(11)); reg4->zero_cov_flag = false; reg4->aln_seg_end_flag = false; reg4->query_pos_invalid_flag = false; reg4->large_indel_flag = false; reg4->gt_type = -1; reg4->gt_seq = ""; reg4->AF = 0; }
+			if(chrname4.compare("-")!=0) { reg4 = new reg_t(); reg4->chrname = chrname4; reg4->startRefPos = stoi(str_vec.at(10)); reg4->endRefPos = stoi(str_vec.at(11)); reg4->zero_cov_flag = false; reg4->aln_seg_end_flag = false; reg4->query_pos_invalid_flag = false; reg4->large_indel_flag = false; reg4->gt_type = -1; reg4->gt_seq = ""; reg4->AF = 0; reg4->supp_num = reg4->DP = 0; reg4->discover_level = VAR_DISCOV_L_UNUSED; }
 
 			if(str_vec.at(12).compare("0")==0) mate_flag = false;
 			else mate_flag = true;
@@ -2411,7 +2416,7 @@ int Chrome::chrCall(){
 	// set blat var_cand files
 	setBlatVarcandFiles();
 
-	// call variants
+	// call variations
 	if(paras->num_threads<=1) chrCall_st();  // single thread
 	else chrCall_mt();  // multiple threads
 
@@ -2422,24 +2427,24 @@ int Chrome::chrCall(){
 	if(!blat_aligned_chr_varCand_vec.empty()) destroyVarCandVector(blat_aligned_chr_varCand_vec);
 	if(!blat_aligned_chr_clipReg_varCand_vec.empty()) destroyVarCandVector(blat_aligned_chr_clipReg_varCand_vec);
 
-//	// remove redundant new called variants
+//	// remove redundant new called variations
 //	cout << "--[" << time.getTime() << "]: aaaaaaaaaaaaa: removeRedundantVar..." << endl;
 //	removeRedundantVar();
 //
-//	// remove FPs of new called variants
+//	// remove FPs of new called variations
 //	cout << "--[" << time.getTime() << "]: bbbbbbbbbbbbb: removeFPNewVarVec..." << endl;
 //	removeFPNewVarVec();
 
 	return 0;
 }
 
-// call variants for chrome using single thread
+// call variations for chrome using single thread
 void Chrome::chrCall_st(){
 	chrCallVariants(var_cand_vec);
 	chrCallVariants(var_cand_clipReg_vec);
 }
 
-// call variants according to variant candidates
+// call variations according to variation candidates
 void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
@@ -2453,7 +2458,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	}
 }
 
-// call variants for chrome using multiple threads
+// call variations for chrome using multiple threads
 void Chrome::chrCall_mt(){
 	int32_t i;
 	MultiThread mt[paras->num_threads];
@@ -2513,7 +2518,7 @@ void Chrome::chrLoadMateClipRegData(){
 }
 
 void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var_cand_filename, bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
-	string line, alnfilename, str_tmp, chrname_str, old_out_dir, refseqfilename, contigfilename, readsfilename, pattern_str;
+	string line, alnfilename, str_tmp, chrname_str, old_out_dir, refseqfilename, contigfilename, readsfilename, clusterfilename, pattern_str;
 	string chrname_mate_clip_reg, dirname_call_mate_clip_reg;
 	vector<string> line_vec, var_str, var_str1, var_str2;
 	vector<string> str_vec, str_vec2, str_vec3;
@@ -2549,6 +2554,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 			refseqfilename = getUpdatedItemFilename(line_vec.at(0), paras->outDir, old_out_dir);
 			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
 			readsfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
+			clusterfilename = getUpdatedItemFilename(line_vec.at(3), paras->outDir, old_out_dir);
 			chrname_mate_clip_reg = getChrnameByFilename(contigfilename);
 
 			//if(refseqfilename.compare("output_20210418/2_cns/chr1/clipReg_refseq_chr1_1127942-1132735.fa")==0){
@@ -2564,7 +2570,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
 				if(sub_limit_reg_vec.size()==0) {
 					flag = false;
-					prev_limit_reg_vec = extractSimpleRegsByStr(line_vec.at(8));
+					prev_limit_reg_vec = extractSimpleRegsByStr(line_vec.at(9));
 					for(i=0; i<prev_limit_reg_vec.size(); i++){
 						prev_simple_reg = prev_limit_reg_vec.at(i);
 						//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
@@ -2598,8 +2604,9 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				var_cand_tmp->refseqfilename = refseqfilename;	// refseq file name
 				var_cand_tmp->ctgfilename = contigfilename;	// contig file name
 				var_cand_tmp->readsfilename = readsfilename;	// reads file name
-				var_cand_tmp->ref_left_shift_size = stoi(line_vec[3]);	// ref_left_shift_size
-				var_cand_tmp->ref_right_shift_size = stoi(line_vec[4]);	// ref_right_shift_size
+				var_cand_tmp->clusterfilename = clusterfilename; // cluster file name
+				var_cand_tmp->ref_left_shift_size = stoi(line_vec.at(4));	// ref_left_shift_size
+				var_cand_tmp->ref_right_shift_size = stoi(line_vec.at(5));	// ref_right_shift_size
 
 				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
@@ -2610,15 +2617,15 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				var_cand_tmp->minimap2_aligned_info_vec = NULL;
 				var_cand_tmp->minimap2_var_cand_file = NULL;
 
-				if(line_vec[5].compare(CNS_SUCCESS)==0) var_cand_tmp->cns_success = true;
+				if(line_vec.at(6).compare(CNS_SUCCESS)==0) var_cand_tmp->cns_success = true;
 				else var_cand_tmp->cns_success = false;
 
 				// get the number of contigs
 				var_cand_tmp->ctg_num = getCtgCount(var_cand_tmp->ctgfilename);
 
 				// load variations
-				if(line_vec.at(6).compare("-")!=0){
-					var_str = split(line_vec.at(6), ";");
+				if(line_vec.at(7).compare("-")!=0){
+					var_str = split(line_vec.at(7), ";");
 					for(i=0; i<var_str.size(); i++){
 						var_str1 = split(var_str.at(i), ":");
 						var_str2 = split(var_str1.at(1), "-");
@@ -2643,6 +2650,8 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 						reg->gt_type = -1;
 						reg->gt_seq = "";
 						reg->AF = 0;
+						reg->supp_num = reg->DP = 0;
+						reg->discover_level = VAR_DISCOV_L_UNUSED;
 						var_cand_tmp->varVec.push_back(reg);  // variation vector
 					}
 					var_cand_tmp->varVec.shrink_to_fit();
@@ -2661,7 +2670,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				}
 
 				// generate alignment file names
-				str_vec = split(line_vec[1], "/");
+				str_vec = split(line_vec.at(1), "/");
 				str_tmp = str_vec[str_vec.size()-1];  // contig file
 				str_vec2 = split(str_tmp, "_");
 
@@ -2670,14 +2679,14 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 //				else
 					alnfilename = dirname_call_mate_clip_reg + "/minimap2";
 				for(i=1; i<str_vec2.size()-1; i++)
-					alnfilename += "_" + str_vec2[i];
+					alnfilename += "_" + str_vec2.at(i);
 
-				str_tmp = str_vec2[str_vec2.size()-1];
+				str_tmp = str_vec2.at(str_vec2.size()-1);
 				str_vec3 = split(str_tmp, ".");
 
-				alnfilename += "_" + str_vec3[0];
+				alnfilename += "_" + str_vec3.at(0);
 				for(i=1; i<str_vec3.size()-1; i++)
-					alnfilename += "." + str_vec3[i];
+					alnfilename += "." + str_vec3.at(i);
 //				if(clipReg_flag) alnfilename += ".sim4";
 //				else
 					alnfilename += ".paf";
@@ -2862,7 +2871,7 @@ mateClipReg_t* Chrome::getMateClipRegOp(reg_t *reg1, reg_t *reg2, int32_t *clip_
 						}
 					}
 				}else{
-					cerr << __func__ << ", line=" << __LINE__ << ", invalid variant type=" << mate_clip_reg->sv_type << ", error!" << endl;
+					cerr << __func__ << ", line=" << __LINE__ << ", invalid sv_type=" << mate_clip_reg->sv_type << ", error!" << endl;
 					exit(1);
 				}
 				if(idx!=-1) break;
@@ -2955,6 +2964,8 @@ void Chrome::loadMisAlnRegData(){
 			reg->gt_type = -1;
 			reg->gt_seq = "";
 			reg->AF = 0;
+			reg->supp_num = reg->DP = 0;
+			reg->discover_level = VAR_DISCOV_L_UNUSED;
 			mis_aln_vec.push_back(reg);
 		}
 	}
@@ -3411,7 +3422,7 @@ void Chrome::chrFillVarseqSingleVec(vector<varCand*> &var_cand_vec){
 	}
 }
 
-// remove redundant called variants
+// remove redundant called variations
 void Chrome::removeRedundantVar(){
 	removeRedundantIndel(var_cand_vec);
 	//removeRedundantClipReg(var_cand_clipReg_vec);
@@ -3768,7 +3779,7 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 	ofstream outfile;
 	varCand *var_cand, *var_cand_pre, *var_cand_pre_pre;
 	reg_t *reg;
-	string line, sv_type, header_line_bed;
+	string line, sv_type, header_line_bed, discov_level_str;
 	int32_t ref_dist, query_dist;
 	bool size_satisfied, no_existed;
 
@@ -3825,6 +3836,22 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 				stringstream ss;
 				ss << setprecision(3) << reg->AF;
 				line += "\tDP=" + to_string(reg->DP) + ";AF=" + ss.str();
+
+				discov_level_str = "";
+				switch(reg->discover_level){
+					case VAR_DISCOV_L_UNUSED:
+						break;
+					case VAR_DISCOV_L_CNS_ALN:
+						discov_level_str = VAR_DISCOV_L_CNS_ALN_STR;
+						break;
+					case VAR_DISCOV_L_RESCUE_CNS_ALN:
+						discov_level_str = VAR_DISCOV_L_RESCUE_CNS_ALN_STR;
+						break;
+					case VAR_DISCOV_L_READS:
+						discov_level_str = VAR_DISCOV_L_READS_STR;
+						break;
+				}
+				if(discov_level_str.size()>0) line = line + ";" + VAR_DISCOV_L_TITLE_STR + "=" + discov_level_str;
 
 				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
 				line += "\t" + reg->gt_seq;
@@ -3894,6 +3921,22 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 				stringstream ss;
 				ss << setprecision(3) << reg->AF;
 				line += "\tDP=" + to_string(reg->DP) + ";AF=" + ss.str();
+
+				discov_level_str = "";
+				switch(reg->discover_level){
+					case VAR_DISCOV_L_UNUSED:
+						break;
+					case VAR_DISCOV_L_CNS_ALN:
+						discov_level_str = VAR_DISCOV_L_CNS_ALN_STR;
+						break;
+					case VAR_DISCOV_L_RESCUE_CNS_ALN:
+						discov_level_str = VAR_DISCOV_L_RESCUE_CNS_ALN_STR;
+						break;
+					case VAR_DISCOV_L_READS:
+						discov_level_str = VAR_DISCOV_L_READS_STR;
+						break;
+				}
+				if(discov_level_str.size()>0) line = line + ";" + VAR_DISCOV_L_TITLE_STR + "=" + discov_level_str;
 
 				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
 				line += "\t" + reg->gt_seq;

@@ -62,15 +62,15 @@ void Genome::init(){
 
 	result_prefix = "";
 	if(paras->outFilePrefix.size()) result_prefix = paras->outFilePrefix + "_";
-	out_filename_detect_snv = out_dir_detect + "/" + result_prefix + "genome_SNV_candidates";
-	out_filename_detect_indel = out_dir_detect + "/" + result_prefix + "genome_INDEL_candidate";
-	out_filename_detect_clipReg = out_dir_detect + "/" + result_prefix + "genome_clipReg_candidate";
-	out_filename_result_snv = out_dir_result + "/" + result_prefix + "genome_SNV";
-	out_filename_result_indel = out_dir_result + "/" + result_prefix + "genome_INDEL.bed";
-	out_filename_result_clipReg = out_dir_result + "/" + result_prefix + "genome_clipReg.bed";
-	out_filename_result_tra = out_dir_result + "/" + result_prefix + "genome_TRA.bedpe";
-	out_filename_result_vars = out_dir_result + "/" + result_prefix + "genome_variants.bed";
-	out_filename_result_vars_vcf = out_dir_result + "/" + result_prefix + "genome_variants.vcf";
+	out_filename_detect_snv = out_dir_detect + "/" + result_prefix + "SNV_candidates";
+	out_filename_detect_indel = out_dir_detect + "/" + result_prefix + "INDEL_candidate";
+	out_filename_detect_clipReg = out_dir_detect + "/" + result_prefix + "clipReg_candidate";
+	out_filename_result_snv = out_dir_result + "/" + result_prefix + "SNV";
+	out_filename_result_indel = out_dir_result + "/" + result_prefix + "INDEL.bed";
+	out_filename_result_clipReg = out_dir_result + "/" + result_prefix + "clipReg.bed";
+	out_filename_result_tra = out_dir_result + "/" + result_prefix + "TRA.bedpe";
+	out_filename_result_vars = out_dir_result + "/" + result_prefix + "variants.bed";
+	out_filename_result_vars_vcf = out_dir_result + "/" + result_prefix + "variants.vcf";
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
 	work_finish_filename = out_dir + "/" + "work_finished";
@@ -726,6 +726,7 @@ int Genome::processConsWork(){
 	cnsWork *cns_work;
 	ofstream *var_cand_file;
 	size_t num_threads_work, num_work, num_work_percent;
+	int64_t ref_dist;
 
 	if(paras->cns_work_vec.empty()) return 0;  // no consensus work, then return directly
 
@@ -755,9 +756,9 @@ int Genome::processConsWork(){
 			cerr << __func__ << ", line=" << __LINE__ << ": cannot get car_cand file for CHR: " << cns_work_opt->chrname << ", error!" << endl;
 			exit(1);
 		}
-		//clipReg_reads_1_26966226-26974816.fq, clipReg_reads_1_21506254-21506762.fq
-//		if(cns_work_opt->readsfilename.compare("output_debug/2_cns/1/clipReg_reads_1_155160984-155161842.fq")==0){
-//			cout << "readsfile=" << cns_work_opt->readsfilename << endl;
+		//clipReg_reads_1_26966226-26974816.fq, clipReg_reads_1_21506254-21506762.fq, clipReg_cns_16_209822-210880.fa, clipReg_cns_1_197756788-197757987.fa (INV)
+//		if(cns_work_opt->contigfilename.compare("output_debug/2_cns/6/clipReg_cns_6_167411081-167411400.fa")==0){
+//			cout << "cnsfilename=" << cns_work_opt->contigfilename << endl;
 //		}else continue;
 
 		cns_work = new cnsWork();
@@ -769,8 +770,15 @@ int Genome::processConsWork(){
 		cns_work->p_mtx_cns_reg_workDone_num = &(paras->mtx_cns_reg_workDone_num);
 		cns_work->num_threads_per_cns_work = paras->num_threads_per_cns_work;
 		cns_work->minClipEndSize = paras->minClipEndSize;
-		if(cns_work_opt->clip_reg_flag==false) cns_work->cnsSideExtSize = paras->cnsSideExtSize;
-		else cns_work->cnsSideExtSize = paras->cnsSideExtSizeClip;
+		if(cns_work_opt->clip_reg_flag==false){
+			ref_dist = cns_work_opt->var_array[cns_work_opt->arr_size-1]->endRefPos - cns_work_opt->var_array[0]->startRefPos;
+			if(ref_dist>paras->cnsChunkSize)
+				cns_work->cnsSideExtSize = paras->cnsSideExtSize * CNS_EXT_INDEL_FACTOR_1K;
+			else if(ref_dist>0.5*paras->cnsChunkSize)
+				cns_work->cnsSideExtSize = paras->cnsSideExtSize * CNS_EXT_INDEL_FACTOR_500BP;
+			else
+				cns_work->cnsSideExtSize = paras->cnsSideExtSize;
+		}else cns_work->cnsSideExtSize = paras->cnsSideExtSizeClip;
 		cns_work->minConReadLen = paras->minConReadLen;
 		cns_work->min_sv_size = paras->min_sv_size_usr;
 		cns_work->min_supp_num = paras->minReadsNumSupportSV;
@@ -1186,8 +1194,9 @@ int Genome::processCallWork(){
 		// diploid: blat_1_4480337-4489601.sim4, blat_1_5364079-5371326.sim4, blat_1_5727691-5736300.sim4 (good), blat_1_7613307-7613853.sim4
 		// blat_1_19156546-19164246.sim4, blat_1_2415202-2415425.sim4, tra_blat_1_2686251-2691837.sim4
 		// blat_contig_chr1_253768-256236.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_2068132-2073121.sim4
-		// minimap2_1_2213173-2214000.paf, minimap2_contig_1_26966226-26974816.paf, minimap2_contig_1_21506254-21506762.paf,minimap2_contig_1_29382165-29382465.paf
-//		if(var_cand->alnfilename.compare("output_debug/3_call/4/minimap2_4_1020099-1020099.paf")!=0){
+		// minimap2_1_2213173-2214000.paf, minimap2_contig_1_26966226-26974816.paf, minimap2_contig_1_21506254-21506762.paf, minimap2_contig_1_29382165-29382465.paf
+		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf
+//		if(var_cand->alnfilename.compare("output_debug/3_call/Y/minimap2_cns_Y_28806057-28806057.paf")!=0){
 //			continue;
 //		}
 
@@ -1316,6 +1325,8 @@ void Genome::recallIndelsFromTRA(){
 										reg->gt_type = -1;
 										reg->gt_seq = "";
 										reg->AF = 0;
+										reg->supp_num = reg->DP = 0;
+										reg->discover_level = VAR_DISCOV_L_UNUSED;
 
 										ref_dist = reg->endLocalRefPos - reg->startLocalRefPos + 1;
 										query_dist = reg->endQueryPos - reg->startQueryPos + 1;
@@ -2803,11 +2814,13 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				reg->gt_type = -1;
 				reg->gt_seq = "";
 				reg->AF = 0;
+				reg->supp_num = reg->DP = 0;
+				reg->discover_level = VAR_DISCOV_L_UNUSED;
 
 				var_cand_tmp->varVec.push_back(reg);
 
 				// construct the variant region
-				var_cand_tmp->readsfilename = out_dir_tra  + "/" + "tra_reads_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".fq";
+				var_cand_tmp->readsfilename = out_dir_tra  + "/" + "tra_reads_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".fa";
 				var_cand_tmp->ctgfilename = out_dir_tra  + "/" + "tra_contig_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".fa";
 				var_cand_tmp->refseqfilename = out_dir_tra  + "/" + "tra_refseq_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".fa";
 				var_cand_tmp->alnfilename = out_dir_tra  + "/" + "tra_blat_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".sim4";
@@ -2831,7 +2844,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				for(i=0; i<3; i++){
 					cns_extend_size = paras->cnsSideExtSizeClip * i;
 					// local consensus
-					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
+					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -2919,11 +2932,13 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				reg->gt_type = -1;
 				reg->gt_seq = "";
 				reg->AF = 0;
+				reg->supp_num = reg->DP = 0;
+				reg->discover_level = VAR_DISCOV_L_UNUSED;
 
 				var_cand_tmp->varVec.push_back(reg);
 
 				// construct the variant region
-				var_cand_tmp->readsfilename = out_dir_tra  + "/" + "tra_reads_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".fq";
+				var_cand_tmp->readsfilename = out_dir_tra  + "/" + "tra_reads_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".fa";
 				var_cand_tmp->ctgfilename = out_dir_tra  + "/" + "tra_contig_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".fa";
 				var_cand_tmp->refseqfilename = out_dir_tra  + "/" + "tra_refseq_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".fa";
 				var_cand_tmp->alnfilename = out_dir_tra  + "/" + "tra_blat_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + ".sim4";
@@ -2947,7 +2962,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				for(i=0; i<3; i++){
 					cns_extend_size = paras->cnsSideExtSizeClip * i;
 					// local consensus
-					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
+					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -2995,9 +3010,12 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 }
 
 // perform local consensus
-void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
+void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
 
-	LocalCns local_cns(readsfilename, contigfilename, refseqfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr);
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr);
+
+	//localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
+
 
 	// extract the corresponding refseq from reference
 	local_cns.extractRefseq();
@@ -3590,12 +3608,13 @@ void Genome::saveVCFHeader(ofstream &fp, string &sample_str){
 //	fp << "##ALT=<ID=TRA,Description=\"Translocation\">" << endl;
 //	fp << "##ALT=<ID=BND,Description=\"Breakend\">" << endl;
 //	fp << "##INFO=<ID=CHR2,Number=1,Type=String,Description=\"Chromosome for END coordinate in case of a translocation\">" << endl;
-	fp << "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant described in this record\">" << endl;
+	fp << "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variation described in this record\">" << endl;
 	fp << "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">" << endl;
 	fp << "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Difference in length between REF and ALT alleles\">" << endl;
 	fp << "##INFO=<ID=DUPNUM,Number=1,Type=Integer,Description=\"Copy number of DUP\">" << endl;
 	fp << "##INFO=<ID=MATEID,Number=.,Type=String,Description=\"ID of mate breakends\">" << endl;
 	fp << "##INFO=<ID=MATEDIST,Number=1,Type=Integer,Description=\"Distance to the mate breakend for mates on the same contig\">" << endl;
+	fp << "##INFO=<ID=LDISCOV,Number=1,Type=String,Description=\"Variation discover level: ALN for variations are discovered from consensus alignments, RES-ALN for variations are discovered from rescued consensus alignments around variation regions, READS for variations are discovered from reads alignments directly\">" << endl;
 	fp << "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Total Depth\">" << endl;
 	fp << "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele Frequency\">" << endl;
 	//fp << "##INFO=<ID=BLATINNER,Number=1,Type=Flag,Description=\"variants called from inner parts of BLAT align segment\">" << endl;
@@ -3685,7 +3704,7 @@ vector<int32_t> Genome::getSuccFailNumCns(string &filename){
 		while(getline(infile, line))
 			if(line.size()>0 and line.at(0)!='#'){
 				str_vec = split(line, "\t");
-				if(str_vec.at(5).compare(CNS_SUCCESS)==0) num_succ ++;
+				if(str_vec.at(6).compare(CNS_SUCCESS)==0) num_succ ++;
 				else num_fail ++;
 			}
 

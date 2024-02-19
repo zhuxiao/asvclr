@@ -670,6 +670,8 @@ void Block::computeZeroCovReg(Region &reg){
 			reg_tmp->gt_type = -1;
 			reg_tmp->gt_seq = "";
 			reg_tmp->AF = 0;
+			reg_tmp->supp_num = reg_tmp->DP = 0;
+			reg_tmp->discover_level = VAR_DISCOV_L_UNUSED;
 
 			zeroCovRegVector.push_back(reg_tmp);
 			i = end_vec_idx + 1;
@@ -956,7 +958,9 @@ void Block::blockGenerateLocalConsWorkOpt_ClipReg(){
 
 	for(i=0; i<(int32_t)mateClipRegVector.size(); i++){
 		clip_reg = mateClipRegVector.at(i);
-		if(clip_reg->valid_flag){
+		//if(clip_reg->valid_flag){
+		if(clip_reg->valid_flag and (clip_reg->sv_type!=VAR_TRA and clip_reg->sv_type!=VAR_BND and clip_reg->sv_type!=VAR_INV_TRA)){ // excludes TRAs
+
 			if(clip_reg->large_indel_flag==false){ // clip region
 				reg1 = clip_reg->leftClipReg;
 				reg2 = clip_reg->leftClipReg2;
@@ -1137,7 +1141,7 @@ void Block::generateCnsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag,
 	size_t i;
 	int64_t minRefPos, maxRefPos;
 	reg_t *reg;
-	string chrname_tmp, readsfilename, contigfilename, refseqfilename, tmpdir, file_prefix_str;
+	string chrname_tmp, readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, file_prefix_str;
 	cnsWork_opt *cns_work_opt;
 
 	// get the minimum and maximum reference position
@@ -1157,15 +1161,16 @@ void Block::generateCnsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag,
 	else file_prefix_str = "clipReg_";
 
 	if(minRefPos!=-1 and maxRefPos!=-1){
-		// construct the variant region
+		// construct the variation region
 		chrname_tmp = varVec.at(0)->chrname;
-		readsfilename = out_dir_cns  + "/" + file_prefix_str + "reads_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fq";
+		readsfilename = out_dir_cns  + "/" + file_prefix_str + "reads_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
 		contigfilename = out_dir_cns  + "/" + file_prefix_str + "cns_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
 		refseqfilename = out_dir_cns  + "/" + file_prefix_str + "refseq_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
+		clusterfilename = out_dir_cns  + "/" + file_prefix_str + "cluster_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos);
 		tmpdir = out_dir_cns + "/" + "tmp_" + file_prefix_str + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos);
 
 		// check previously consensused information before consensus
-		cns_work_opt = allocateCnsWorkOpt(chrname_tmp, readsfilename, contigfilename, refseqfilename, tmpdir, varVec, clip_reg_flag, limit_reg_process_flag, sub_limit_reg_vec_work);
+		cns_work_opt = allocateCnsWorkOpt(chrname_tmp, readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, varVec, clip_reg_flag, limit_reg_process_flag, sub_limit_reg_vec_work);
 		if(cns_work_opt){
 			pthread_mutex_lock(&mutex_cns_work);
 			paras->cns_work_vec.push_back(cns_work_opt);

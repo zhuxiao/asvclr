@@ -31,11 +31,11 @@ typedef struct{
 	int64_t startRefPos, endRefPos;
 	int32_t startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos, sv_len, dup_num: 24, gt_type; //, support_num, cov_num;
 	//int64_t ref_len, local_ref_len, query_len;
-	int8_t var_type, aln_orient;
+	int8_t var_type, aln_orient, discover_level;
 	int8_t query_id, blat_aln_id, minimap2_aln_id;
 	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
 	string refseq, altseq, gt_seq;
-	int32_t DP; // total depth
+	int32_t supp_num, DP; // supp_num, total depth
 	double AF; // allele frequency
 	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag, query_pos_invalid_flag, large_indel_flag;
 }reg_t;
@@ -103,7 +103,7 @@ typedef struct {
 
 // from Paras.h
 typedef struct {
-	string chrname, readsfilename, contigfilename, refseqfilename, tmpdir;
+	string chrname, readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir;
 	reg_t **var_array;
 	simpleReg_t **limit_reg_array;
 	uint32_t arr_size, limit_reg_array_size;
@@ -135,12 +135,13 @@ struct fqSeqNode{
 
 // single signature for cluster
 typedef struct qcSigNode{
-	int32_t sig_id: 24, cigar_op: 8, cigar_op_len;
+	int32_t sig_id: 24, cigar_op: 8, cigar_op_len: 28, aln_orient: 4; // align_orient not used
 	bool reg_contain_flag, have_next_clip;
-	int64_t ref_pos, dist_next_clip;
+	int64_t ref_pos, query_pos, dist_next_clip; // query_pos not used
 	string chrname, chrname_next_clip;
-	int64_t start_ref_pos, end_ref_pos; // -------
-	string refseq, altseq; //------
+	int64_t start_ref_pos, end_ref_pos; // ------- not used
+	string refseq, altseq; //------ not used
+	//vector<int32_t> adjClipAlnSegInfo;
 	struct qcSigNode *mate_qcSig;
 }qcSig_t;
 

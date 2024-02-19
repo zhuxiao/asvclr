@@ -108,7 +108,7 @@ class Genome{
 		void genomeFillVarseq();
 		void genomeFillVarseqTra();
 		void fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_info_file);
-		void performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file);
+		void performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file);
 		vector<int32_t> getRefShiftSize(string &refseqfilename);
 		vector<size_t> computeQueryLocTra(varCand *var_cand, mateClipReg_t *clip_reg, size_t end_flag);
 		void genomeSaveCallSV2File();

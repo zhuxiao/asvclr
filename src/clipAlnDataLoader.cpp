@@ -348,6 +348,8 @@ void clipAlnDataLoader::parseSingleAlnStrSA(clipAlnData_t &clip_aln_ret, string 
 			case 'S':
 			case 'H':
 				break;
+			case '=':
+			case 'X':
 			case 'M':
 				ref_aln_size += op_len;
 				query_aln_size += op_len;

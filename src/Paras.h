@@ -17,7 +17,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION				"1.3.0"
+#define PROG_VERSION				"1.4.0"
 #define VCF_VERSION					"4.2"
 
 #define CMD_DET_STR					"det"
@@ -40,6 +40,17 @@ using namespace std;
 #define CHR_X_STR2					"X"
 #define CHR_Y_STR1					"chrY"
 #define CHR_Y_STR2					"Y"
+
+#define VAR_DISCOV_L_UNUSED					0
+#define VAR_DISCOV_L_CNS_ALN				1
+#define VAR_DISCOV_L_RESCUE_CNS_ALN			2
+#define VAR_DISCOV_L_READS					3
+
+#define VAR_DISCOV_L_TITLE_STR				"LDISCOV"
+#define VAR_DISCOV_L_UNUSED_STR				"UNC"
+#define VAR_DISCOV_L_CNS_ALN_STR			"ALN"
+#define VAR_DISCOV_L_RESCUE_CNS_ALN_STR		"RESCUE_ALN"
+#define VAR_DISCOV_L_READS_STR				"READS"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -71,7 +82,8 @@ using namespace std;
 #define MAX_VAR_REG_SIZE			50000
 #define CNS_CHUNK_SIZE_INDEL		1000	// 10000
 #define CNS_CHUNK_SIZE_EXT_INDEL	1000	//1000
-//#define CNS_CHUNK_SIZE_CLIP			20000	// 10000
+#define CNS_EXT_INDEL_FACTOR_500BP	2	// side extend size factor for mid chunk (> 500bp)
+#define CNS_EXT_INDEL_FACTOR_1K		5	// side extend size factor for large chunk (> 1kb)
 #define CNS_CHUNK_SIZE_EXT_CLIP		20000	//1000, 10000
 #define MIN_CONS_READ_LEN			100
 
@@ -103,6 +115,7 @@ using namespace std;
 
 #define OUT_DIR						"output"
 #define SAMPLE_DEFAULT				"sample"
+#define RESULT_PREFIX_DEFAULT		"genome"
 
 #define MAX_ULTRA_HIGH_COV_THRES	300		// maximal coverage threshold for ultra-high coverage
 

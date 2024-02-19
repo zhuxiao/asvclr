@@ -29,7 +29,7 @@ Paras::~Paras(){
 void Paras::init(){
 	command = "";
 	inBamFile = "";
-	outFilePrefix = "";
+	outFilePrefix = RESULT_PREFIX_DEFAULT;
 	outDir = OUT_DIR;
 	sample = SAMPLE_DEFAULT;
 	pg_cmd_str = "";
@@ -256,6 +256,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
 	outDir = OUT_DIR;
+	outFilePrefix = RESULT_PREFIX_DEFAULT;
 	//max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	simpleReg_t *simple_reg;
 	string simple_reg_str, opt_name_str;
@@ -366,6 +367,7 @@ int Paras::parseCnsParas(int argc, char **argv){
 	expected_cov_cns = EXPECTED_COV_CNS;
 	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
 	outDir = OUT_DIR;
+	outFilePrefix = RESULT_PREFIX_DEFAULT;
 
 	static struct option lopts[] = {
 		{ "sample", required_argument, NULL, 0 },
@@ -469,6 +471,7 @@ int Paras::parseCallParas(int argc, char **argv){
 	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
 	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	outDir = OUT_DIR;
+	outFilePrefix = RESULT_PREFIX_DEFAULT;
 	gt_min_consistency_merge = GT_MIN_CONSIST_MERGE_THRES;
 	gt_homo_ratio = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio = GT_HETE_RATIO_THRES;
@@ -571,6 +574,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	expected_cov_cns = EXPECTED_COV_CNS;
 	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
 	outDir = OUT_DIR;
+	outFilePrefix = RESULT_PREFIX_DEFAULT;
 	gt_min_consistency_merge = GT_MIN_CONSIST_MERGE_THRES;
 	gt_homo_ratio = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio = GT_HETE_RATIO_THRES;

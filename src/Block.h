@@ -14,7 +14,7 @@
 #include "Paras.h"
 #include "misAlnReg.h"
 #include "alnDataLoader.h"
-#include "LocalCns.h"
+#include "localCns.h"
 
 //#define MIN_ADJACENT_REG_DIST		50
 
