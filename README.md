@@ -76,14 +76,14 @@ $ sudo dnf install gcc-c++
 
 Simply, ASVCLR can be run by typing the `all` command:
 ```sh
-$ asvclr all -o out_dir hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr all -p hg38_asvclr -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 ```
 Then, the following commands `det`, `cns`, `call`, `all` and `det-cns` will be performed in turn.
 
 Moreover, ASVCLR can be used to detect variations for some user-specified regions.
 ```sh
 # call variations in user-specified regions of hg38: chr1, chr2:10000000-20000000, chr3:50000000-100000000
-$ asvclr all -o out_dir hg38.fa hg38_ngmlr_sorted.bam chr1 chr2:10000000-20000000 chr3:50000000-100000000
+$ asvclr all -p hg38_asvclr -o out_dir hg38.fa hg38_ngmlr_sorted.bam chr1 chr2:10000000-20000000 chr3:50000000-100000000
 ```
 Then, only the three regions `chr1`, `chr2:10000000-20000000` and `chr3:50000000-100000000` will be processed.
 
@@ -91,7 +91,7 @@ The help information can be shown:
 ```sh
 $ asvclr all
 Program: ASVCLR (Accurate Structural Variation Caller for Long Reads)
-Version: 1.4.0 (using htslib 1.17)
+Version: 1.4.1 (using htslib 1.17)
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -116,6 +116,8 @@ Options:
                  of a read allowing for indel detection. [0.5]
    -e INT        minimal clipping end size [200]. Clipping events
                  with size smaller than threshold will be ignored
+   -q INT        minimal read mapping quality [0]
+                 Reads with mapping quality smaller than threshold will be ignored
    -x FLOAT      expected sampling coverage for local consensus [40], 
                  0 for no coverage sampling
    -o DIR        output directory [output]
@@ -161,10 +163,10 @@ Options:
 
 Example:
    # run the pipeline on the whole genome
-   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam
+   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam
 
    # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000
-   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000
+   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000
 ```
 where, the htslib version is the version of HTSlib installed on the machine.
 
@@ -172,8 +174,8 @@ Besides, the overall help information can be shown as below:
 
 ```sh
 $ asvclr
-Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 1.4.0 (using htslib 1.17)
+Program: ASVCLR (Accurate Structural Variation Caller for Long Reads)
+Version: 1.4.1 (using htslib 1.17)
 
 Usage:  asvclr <command> [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -187,16 +189,16 @@ Description:
 Commands:
    det               detect indel signatures in aligned reads
    cns               consensus candidate regions
-   call              call indels by alignments of local genome assemblies
+   call              call indels by alignments of local consensus
    all               run the above commands in turn
    det-cns           run 'det' and 'cns' commands in turn
 
 Example:
    # run the pipeline on the whole genome
-   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam
+   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam
 
    # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000
-   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000
+   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000
 ```
 
 
@@ -207,7 +209,7 @@ Alternatively, there are three steps to run ASVCLR: `det`, `cns` and `call`.
 ```sh
 $ asvclr det -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 $ asvclr cns -o out_dir hg38.fa hg38_ngmlr_sorted.bam
-$ asvclr call -o out_dir hg38.fa hg38_ngmlr_sorted.bam
+$ asvclr call -p hg38_asvclr -o out_dir hg38.fa hg38_ngmlr_sorted.bam
 ```
 
 The reference and an sorted BAM file will be the input of ASVCLR, and the variants stored in the VCF file format will be generated as the output.
@@ -225,8 +227,8 @@ And the help information are shown below:
 
 ```sh
 $ asvclr det
-Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 1.4.0 (using htslib 1.17)
+Program: ASVCLR (Accurate Structural Variation Caller for Long Reads)
+Version: 1.4.1 (using htslib 1.17)
 
 Usage: asvclr det [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -249,6 +251,8 @@ Options:
                  the data set (rounded)
    -e INT        minimal clipping end size [200]. Clipping events
                  with size smaller than threshold will be ignored
+   -q INT        minimal read mapping quality [0]
+                 Reads with mapping quality smaller than threshold will be ignored
    -o DIR        output directory [output]
    -p STR        prefix of output result files [null]
    -t INT        number of threads [0]. 0 for the maximal number
@@ -283,8 +287,8 @@ And the help information are shown below:
 
 ```sh
 $ asvclr cns
-Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 1.4.0 (using htslib 1.17)
+Program: ASVCLR (Accurate Structural Variation Caller for Long Reads)
+Version: 1.4.1 (using htslib 1.17)
 
 Usage: asvclr cns [options] <REF_FILE> <BAM_FILE>
 
@@ -304,6 +308,8 @@ Options:
                  of a read allowing for indel detection. [0.5]
    -e INT        minimal clipping end size [200]. Clipping events
                  with size smaller than threshold will be ignored
+   -q INT        minimal read mapping quality [0]
+                 Reads with mapping quality smaller than threshold will be ignored
    -x FLOAT      expected sampling coverage for local consensus [40], 
                  0 for no coverage sampling
    -o DIR        output directory [output]
@@ -357,8 +363,8 @@ And the help information are shown below:
 
 ```sh
 $ asvclr call
-Program: asvclr (Accurate Structural Variation Caller for Long Reads)
-Version: 1.4.0 (using htslib 1.17)
+Program: ASVCLR (Accurate Structural Variation Caller for Long Reads)
+Version: 1.4.1 (using htslib 1.17)
 
 Usage: asvclr call [options] <REF_FILE> <BAM_FILE>
 
@@ -372,6 +378,8 @@ Options:
                  Variants with size smaller than threshold will be ignored
    -e INT        minimal clipping end size [200]. Clipping events
                  with size smaller than threshold will be ignored
+   -q INT        minimal read mapping quality [0]
+                 Reads with mapping quality smaller than threshold will be ignored
    -o DIR        output directory [output]
    -p STR        prefix of output result files [null]
    -t INT        number of threads [0]. 0 for the maximal number
@@ -393,7 +401,7 @@ Options:
 
 Example:
    # run 'call' command on the whole genome or the user-specified regions according to previous 'det' command.
-   $ asvclr call -t 32 -m 20 -o output ref.fa genome_sorted.bam
+   $ asvclr call -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam
 ```
 
 
@@ -407,10 +415,10 @@ Variants can be reported in VCF file format, and specifically, translocations ar
 
 ```sh
 ##fileformat=VCFv4.2
-##fileDate=20240220
-##source=ASVCLR 1.4.0
+##fileDate=20240426
+##source=ASVCLR 1.4.1
 ##reference=hs37d5.fa
-##PG="asvclr all -o output hs37d5.fa hg002_ngmlr_sorted.bam"
+##PG="asvclr all -p hg002_ngmlr_hs37d5_asvclr -o output hs37d5.fa hg002_ngmlr_sorted.bam"
 ##contig=<ID=1,length=249250621>
 ##contig=<ID=2,length=243199373>
 ##contig=<ID=3,length=198022430>
@@ -451,6 +459,6 @@ The last 8 variant items corresponds to a translocation which locates between 1:
 
 ## Contact
 
-If you have problems or some suggestions, please contact: zhuxiao_hit@yeah.net without hesitation. 
+If you have problems or some suggestions, please contact: xzhu@ytu.edu.cn without hesitation. 
 
 ---- Enjoy !!! -----
