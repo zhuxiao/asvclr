@@ -324,6 +324,27 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 								case 'T': idx = 3; break;
 								case 'n':
 								case 'N': idx = 4; break;
+								case '=':
+								case 'M':
+								case 'm':
+								case 'R':
+								case 'r':
+								case 'S':
+								case 's':
+								case 'V':
+								case 'v':
+								case 'W':
+								case 'w':
+								case 'Y':
+								case 'y':
+								case 'H':
+								case 'h':
+								case 'K':
+								case 'k':
+								case 'D':
+								case 'd':
+								case 'B':
+								case 'b': idx = 5; break;
 								default:
 									cerr << __func__ << ", line=" << __LINE__ << ": invalid base " << int(misbase) << endl;
 									exit(1);

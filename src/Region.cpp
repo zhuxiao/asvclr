@@ -213,7 +213,8 @@ int Region::computeAbCovReg(){
 		covRatio2block = tmp_cov / meanBlockCov;
 		covRatio2local = tmp_cov / localRegCov;
 		if((covRatio2block<0.6 and covRatio2local<0.6) or (covRatio2block>2 and covRatio2local>2)) {  // abnormal coverage condition
-			reg = allocateReg(chrname, startPosSubReg, endPosSubReg);
+			//reg = allocateReg(chrname, startPosSubReg, endPosSubReg); // delete on 2024-04-06
+			reg = allocateReg(chrname, startPosSubReg, endPosSubReg, 0);
 			abCovRegVector.push_back(reg);
 		}
 	}
@@ -223,7 +224,7 @@ int Region::computeAbCovReg(){
 }
 
 // allocate reg
-reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosReg){
+reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosReg, int32_t sv_len){
 	reg_t *reg = new reg_t();
 	if(!reg){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot allocate memory" << endl;
@@ -235,7 +236,7 @@ reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosR
 	reg->startLocalRefPos = reg->endLocalRefPos = 0;
 	reg->startQueryPos = reg->endQueryPos = 0;
 	reg->var_type = VAR_UNC;
-	reg->sv_len = 0;
+	reg->sv_len = sv_len;
 	reg->query_id = -1;
 	reg->blat_aln_id = -1;
 	reg->minimap2_aln_id = -1;
@@ -357,12 +358,12 @@ void Region::detectSNV(){
 
 		SNV_flag = computeSNVFlag(*disagr, startCheckPos, endCheckPos);
 		if(SNV_flag){
-			if(haveMuchShortIndelsAround(startCheckPos, endCheckPos))  // further check around
-				indelVector.push_back(allocateReg(chrname, *disagr, *disagr));
-			else{
+//			if(haveMuchShortIndelsAround(startCheckPos, endCheckPos))  // further check around
+//				indelVector.push_back(allocateReg(chrname, *disagr, *disagr));
+//			else{
 				snvVector.push_back(*disagr); // add the SNV
 				disagr = disagrePosVector.erase(disagr);
-			}
+//			}
 		}else disagr ++;
 	}
 	snvVector.shrink_to_fit();
@@ -475,7 +476,7 @@ void Region::detectIndelReg(){
 	if(i<minRPos) i = minRPos;
 	while(i<endMidPartPos){
 
-//		if(i>131115500)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
+//		if(i>1413900)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
 //			cout << i << endl;
 
 		reg = getIndelReg(i);
@@ -492,7 +493,7 @@ void Region::detectIndelReg(){
 // get the indel region given the start checking chromosome position
 reg_t* Region::getIndelReg(int64_t startCheckPos){
 	reg_t *reg = NULL;
-	int32_t reg_size1, reg_size2, num1, num3, num4, extendSize, high_con_indel_base_num, large_indel_base_num;
+	int32_t reg_size1, reg_size2, num1, num3, num4, extendSize, high_con_indel_base_num, large_indel_base_num, sv_len;
 	vector<double> num_vec;
 	double high_indel_clip_ratio;
 	int64_t i, checkPos, startPos1, endPos1, startPos2;
@@ -611,7 +612,9 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 				//if(num1>0 or num4>0 or high_indel_clip_ratio>=0.1f) {
 				//if(num1>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) { // deleted 2024-02-05
 				if(valid_sig_num>paras->minReadsNumSupportSV or num1>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
-					reg = allocateReg(chrname, startPos_indel, endPos_indel);
+					sv_len = computeEstSVLen(startPos_indel, endPos_indel);
+					//reg = allocateReg(chrname, startPos_indel, endPos_indel); // delete on 2024-04-06
+					reg = allocateReg(chrname, startPos_indel, endPos_indel, sv_len);
 					break;
 				}else checkPos = endPos_indel + 1;
 			}else checkPos = endPos_indel + 1;
@@ -707,6 +710,49 @@ int32_t Region::getHighConIndelNum(int64_t startPos, int64_t endPos, float thres
 	return high_con_indel_base_num;
 }
 
+// compute estimate sv size
+int32_t Region::computeEstSVLen(int64_t startPos, int64_t endPos){
+	int64_t i, j, start_pos, end_pos, sum, num, mean_sv_len;
+	vector<insEvent_t*> insVector;
+	vector<delEvent_t*> delVector;
+	Base *base;
+	insEvent_t *ins_event;
+	delEvent_t *del_event;
+
+	start_pos = startPos - subRegSize;
+	if(start_pos<minRPos) start_pos = minRPos;
+	end_pos = endPos + subRegSize;
+	if(end_pos>maxRPos) end_pos = maxRPos;
+
+	sum = num = 0;
+	for(i=start_pos; i<=end_pos; i++){
+		base = regBaseArr + i - startRPos;
+		// insVector
+		insVector = base->insVector;
+		for(j=0; j<(int64_t)insVector.size(); j++){
+			ins_event = insVector.at(j);
+			if(ins_event->seq.size()>=(size_t)paras->min_sv_size_usr){
+				sum += ins_event->seq.size();
+				num ++;
+			}
+		}
+		// delVector
+		delVector = base->delVector;
+		for(j=0; j<(int64_t)delVector.size(); j++){
+			del_event = delVector.at(j);
+			if(del_event->seq.size()>=(size_t)paras->min_sv_size_usr){
+				sum += del_event->seq.size();
+				num ++;
+			}
+		}
+	}
+
+	if(num>0) mean_sv_len = sum / num;
+	else mean_sv_len = 0;
+
+	return mean_sv_len;
+}
+
 // determine the dif type for indel candidate
 void Region::determineDifType(){
 	if(getDisagreeNum()>0 or zeroCovPosVector.size()>0 or abCovRegVector.size()>0 or highIndelSubRegNum>0)
@@ -788,7 +834,8 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 
 			//if(disagreeNum>=1 or normal_reg_flag==false) { // deleted on 2023-12-18
 			//if(normal_reg_flag==false) {
-				reg = allocateReg(chrname, startPos_clip, endPos_clip);
+				//reg = allocateReg(chrname, startPos_clip, endPos_clip); // delete on 2024-04-06
+				reg = allocateReg(chrname, startPos_clip, endPos_clip, 0);
 				break;
 			}else{
 				clip_reg_flag = false;

@@ -18,10 +18,11 @@ class alnDataLoader {
 	public:
 		string reg_str, inBamFile;
 		double mean_read_len;
+		int32_t minMapQ;
 
 	public:
 		//alnDataLoader();
-		alnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile);
+		alnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile, int32_t minMapQ);
 		virtual ~alnDataLoader();
 		void loadAlnData(vector<bam1_t*> &alnDataVector);
 		void freeAlnData(vector<bam1_t*> &alnDataVector);

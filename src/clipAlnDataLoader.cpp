@@ -4,12 +4,13 @@
 
 pthread_mutex_t mutex_down_sample = PTHREAD_MUTEX_INITIALIZER;
 
-clipAlnDataLoader::clipAlnDataLoader(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, int32_t minClipEndSize) {
+clipAlnDataLoader::clipAlnDataLoader(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, int32_t minClipEndSize, int32_t minMapQ) {
 	this->chrname = chrname;
 	this->startRefPos = startRefPos;
 	this->endRefPos = endRefPos;
 	this->inBamFile = inBamFile;
 	this->minClipEndSize = minClipEndSize;
+	this->minMapQ = minMapQ;
 }
 
 clipAlnDataLoader::~clipAlnDataLoader() {
@@ -27,7 +28,8 @@ void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVecto
 	bam_hdr_t *header;
 
 	// load the align data
-	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile);
+//	cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << minMapQ << endl;
+	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile, minMapQ);
 	data_loader.loadAlnData(alnDataVector);
 
 	if(max_ultra_high_cov>0){

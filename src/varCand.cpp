@@ -3,6 +3,7 @@
 #include "covLoader.h"
 #include "util.h"
 
+
 //pthread_mutex_t mutex_print_var_cand = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_write_blat_aln = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_write_minimap2_aln = PTHREAD_MUTEX_INITIALIZER;
@@ -14,9 +15,20 @@ varCand::varCand(){
 	this->out_dir_call = "";
 	inBamFile = "";
 	fai = NULL;
-
+	this->minMapQ = 0;
 	init();
+
 }
+//varCand::varCand(int32_t minMapQ){
+//	this->chrname = "";
+//	this->var_cand_filename = "";
+//	this->out_dir_call = "";
+//	inBamFile = "";
+//	fai = NULL;
+//	this->minMapQ = minMapQ;
+//
+//	init();
+//}
 
 varCand::~varCand() {
 	if(clip_reg) delete clip_reg;
@@ -46,6 +58,7 @@ void varCand::init(){
 	limit_reg_delete_flag = false;
 	killed_flag = false;
 	minClipEndSize = MIN_CLIP_END_SIZE;
+	max_ultra_high_cov = MAX_ULTRA_HIGH_COV_THRES;
 
 	killed_blat_work_vec = NULL;
 	killed_blat_work_file = NULL;
@@ -410,6 +423,9 @@ void varCand::callIndelVariants(){
 void varCand::callIndelVariants02(){
 	if(align_success){
 		eraseFalsePositiveVariants();
+
+		// phasing
+		//xxx();
 	}
 }
 
@@ -1317,7 +1333,8 @@ void varCand::eraseFalsePositiveVariants(){
 						case BAM_CINS:
 							if(paf_alnseg->seglen>=min_sv_size){
 								//search
-								supp_num_vec = computeSuppNumFromRegionAlnSegs(qname_vec, paf_alnseg, chrname, startRefPos_cns, endRefPos_cns, QC_SIZE_RATIO_MATCH_THRES_INDEL);
+//								cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << minMapQ << endl;
+								supp_num_vec = computeSuppNumFromRegionAlnSegs(qname_vec, paf_alnseg, chrname, startRefPos_cns, endRefPos_cns, QC_SIZE_RATIO_MATCH_THRES_INDEL, minMapQ);
 								if(supp_num_vec.at(0)>=minReadsNumSupportSV){
 									//write to newVarVec
 									reg = new reg_t();
@@ -1347,7 +1364,7 @@ void varCand::eraseFalsePositiveVariants(){
 									reg->AF = 0;
 									reg->supp_num = reg->DP = 0;
 									reg->discover_level = VAR_DISCOV_L_CNS_ALN;
-									svPosCorrection(reg);
+									//svPosCorrection(reg);  // deleted 2024-04-26
 									newVarVec.push_back(reg);
 
 									allele_node = new struct alleleNode();
@@ -1361,7 +1378,8 @@ void varCand::eraseFalsePositiveVariants(){
 							break;
 						case BAM_CDEL:
 							if(paf_alnseg->seglen>=min_sv_size){
-								supp_num_vec = computeSuppNumFromRegionAlnSegs(qname_vec, paf_alnseg, chrname, startRefPos_cns, endRefPos_cns, QC_SIZE_RATIO_MATCH_THRES_INDEL);
+//								cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << minMapQ << endl;
+								supp_num_vec = computeSuppNumFromRegionAlnSegs(qname_vec, paf_alnseg, chrname, startRefPos_cns, endRefPos_cns, QC_SIZE_RATIO_MATCH_THRES_INDEL, minMapQ);
 								if(supp_num_vec.at(0)>=minReadsNumSupportSV){
 									//write to newVarVec
 									reg = new reg_t();
@@ -1391,8 +1409,7 @@ void varCand::eraseFalsePositiveVariants(){
 									reg->AF = 0;
 									reg->supp_num = reg->DP = 0;
 									reg->discover_level = VAR_DISCOV_L_CNS_ALN;
-									svPosCorrection(reg);
-
+									//svPosCorrection(reg);  // deleted 2024-04-26
 									newVarVec.push_back(reg);
 
 									allele_node = new struct alleleNode();
@@ -1437,7 +1454,7 @@ void varCand::eraseFalsePositiveVariants(){
 							val = 0;
 							if(allele_node->reg->var_type==VAR_INS){ // INS
 								// compute consistency
-								val = computeVarseqConsistency(allele_node->reg->altseq, allele_node2->reg->altseq); // ?
+								val = computeVarseqIndentity(allele_node->reg->altseq, allele_node2->reg->altseq); // ?
 							}else{ // DEL
 								if(allele_node->reg->refseq.size()<=allele_node2->reg->refseq.size()) val = (double)allele_node->reg->refseq.size() / allele_node2->reg->refseq.size();
 								else val = (double)allele_node2->reg->refseq.size() / allele_node->reg->refseq.size();
@@ -1660,7 +1677,7 @@ void varCand::svPosCorrection(reg_t* reg){
 	}
 }
 
-vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres){
+vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, int32_t minMapQ){
 	vector<int32_t> supp_num_vec;
 	int32_t var_num, query_num;
 	size_t i, j;
@@ -1669,7 +1686,7 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 	int32_t t, seq_len, bam_type;
 	char *p_seq;
 	vector<clipAlnData_t*> clipAlnDataVector, query_aln_segs;
-	bool no_otherchrname_flag, flag;
+	bool no_otherchrname_flag, flag, valid_flag;
 	double size_ratio;
 	int64_t noHardClipIdx, ref_distance, end_ref_pos;
 	vector<struct alnSeg*> query_alnSegs;
@@ -1678,8 +1695,10 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 	vector<string>::iterator q;
 
 	// load the clipping data
-	clipAlnDataLoader data_loader(chrname, startRefPos_cns, endRefPos_cns, inBamFile, 200);
-	data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0); //
+
+	clipAlnDataLoader data_loader(chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ);
+	data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
+	//data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0); //deleted on 2024-03-22
 	//data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, 0, MAX_SEG_SIZE_RATIO);
 
 	var_num = 0;
@@ -1772,7 +1791,7 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 											if(size_ratio>=size_ratio_match_thres){
 												ref_distance = abs(paf_alnseg->startRpos - (*seg)->startRpos);
 												//if(ref_distance<200){
-												if(ref_distance<=MAX_REF_DIST_SAME_CHR){
+												if(ref_distance<=MAX_REF_DIST_SAME_CHR){ // match
 													svpos_correction_node = new svpos_correction_t();
 													svpos_correction_node->qname = qname;
 													//svpos_correction_node->startRpos = (*seg)->startRpos;
@@ -1782,39 +1801,51 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 
 													svpos_correction_node->svlen = (*seg)->seglen;
 													if(paf_alnseg->opflag==BAM_CINS){
+														valid_flag = true;
 														if(svpos_correction_node->startRpos - startRefPos_cns<0 or svpos_correction_node->startRpos - startRefPos_cns>=(int64_t)refseq.size()){
-															cout << "sv_node.startRpos=" << svpos_correction_node->startRpos << ", startRefPos_cns=" << startRefPos_cns << ", error!" << endl;
+															//cout << "sv_node.startRpos=" << svpos_correction_node->startRpos << ", startRefPos_cns=" << startRefPos_cns << ", error! alnfilename=" << alnfilename << endl;
+															valid_flag = false;
 														}
 
-														svpos_correction_node->var_type = VAR_INS;
-														//svpos_correction_node->startRpos = (*seg)->startRpos;
-														svpos_correction_node->endQpos = svpos_correction_node->startQpos + (*seg)->seglen - 1;
-														//svpos_correction_node->refseq = refseq.substr((*seg)->startRpos - startRefPos_cns, 1);
-														svpos_correction_node->refseq = refseq.substr(svpos_correction_node->startRpos - startRefPos_cns, 1);
+														if(valid_flag){
+															svpos_correction_node->var_type = VAR_INS;
+															//svpos_correction_node->startRpos = (*seg)->startRpos;
+															svpos_correction_node->endQpos = svpos_correction_node->startQpos + (*seg)->seglen - 1;
+															//svpos_correction_node->refseq = refseq.substr((*seg)->startRpos - startRefPos_cns, 1);
+															svpos_correction_node->refseq = refseq.substr(svpos_correction_node->startRpos - startRefPos_cns, 1);
 
-														svpos_correction_node->endRpos = svpos_correction_node->startRpos;
-														//for(t=svpos_correction_node->startQpos-1; t<svpos_correction_node->endQpos; t++) svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
-														for(t=svpos_correction_node->startQpos-1; t<=svpos_correction_node->endQpos; t++) svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
+															svpos_correction_node->endRpos = svpos_correction_node->startRpos;
+															//for(t=svpos_correction_node->startQpos-1; t<svpos_correction_node->endQpos; t++) svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
+															for(t=svpos_correction_node->startQpos-1; t<=svpos_correction_node->endQpos; t++) svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
 
+															svpos_correction_vec.push_back(svpos_correction_node);
+															var_num ++;
+														}
 													}else{
+														valid_flag = true;
 														if(svpos_correction_node->startRpos - startRefPos_cns<0 or svpos_correction_node->startRpos - startRefPos_cns+(*seg)->seglen + 1>=(int64_t)refseq.size()){
-															cout << "sv_node.startRpos=" << svpos_correction_node->startRpos << ", startRefPos_cns=" << startRefPos_cns << ", error!" << endl;
+															//cout << "sv_node.startRpos=" << svpos_correction_node->startRpos << ", startRefPos_cns=" << startRefPos_cns << ", error! alnfilename=" << alnfilename << endl;
+															valid_flag = false;
 														}
 
-														svpos_correction_node->var_type = VAR_DEL;
-														//svpos_correction_node->startRpos = (*seg)->startRpos + (*seg)->seglen - 1;
-														svpos_correction_node->endQpos = svpos_correction_node->startQpos;
-														//svpos_correction_node->refseq = refseq.substr((*seg)->startRpos - startRefPos_cns, (*seg)->seglen);
-														svpos_correction_node->refseq = refseq.substr(svpos_correction_node->startRpos - startRefPos_cns, (*seg)->seglen + 1);
-														svpos_correction_node->endRpos = svpos_correction_node->startRpos + (*seg)->seglen - 1;
-														//for(t=svpos_correction_node->startQpos - 1; t<svpos_correction_node->endQpos; t++) queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
-														svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, svpos_correction_node->startQpos - 1)];  // seq
-														//for(t=svpos_correction_node->startQpos - 1; t<=svpos_correction_node->endQpos; t++) svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
+														if(valid_flag){
+															svpos_correction_node->var_type = VAR_DEL;
+															//svpos_correction_node->startRpos = (*seg)->startRpos + (*seg)->seglen - 1;
+															svpos_correction_node->endQpos = svpos_correction_node->startQpos;
+															//svpos_correction_node->refseq = refseq.substr((*seg)->startRpos - startRefPos_cns, (*seg)->seglen);
+															svpos_correction_node->refseq = refseq.substr(svpos_correction_node->startRpos - startRefPos_cns, (*seg)->seglen + 1);
+															svpos_correction_node->endRpos = svpos_correction_node->startRpos + (*seg)->seglen - 1;
+															//for(t=svpos_correction_node->startQpos - 1; t<svpos_correction_node->endQpos; t++) queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
+															svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, svpos_correction_node->startQpos - 1)];  // seq
+															//for(t=svpos_correction_node->startQpos - 1; t<=svpos_correction_node->endQpos; t++) svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
 
+															svpos_correction_vec.push_back(svpos_correction_node);
+															var_num ++;
+														}
 													}
-													svpos_correction_vec.push_back(svpos_correction_node);
-													var_num+=1;
-													//len_sum+=(*seg)->seglen;
+													//svpos_correction_vec.push_back(svpos_correction_node);
+													//var_num+=1;
+													////len_sum+=(*seg)->seglen;
 												}
 											}
 										}
@@ -2903,7 +2934,8 @@ void varCand::confirmShortVar(localAln_t *local_aln){
 
 		// extract mismatch regions and remove short items and short polymer items
 		misReg_vec = getMismatchRegVec(local_aln);
-		removeShortPolymerMismatchRegItems(local_aln, misReg_vec, inBamFile, fai);
+
+		removeShortPolymerMismatchRegItems(local_aln, misReg_vec, inBamFile, fai, minMapQ);
 
 		// compute the number of mismatched bases excluding polymers
 		misNum_vec = getMismatchNumAln(local_aln->alignResultVec.at(1), start_check_idx, end_check_idx, misReg_vec, MIN_VALID_POLYMER_SIZE);
@@ -3963,7 +3995,8 @@ vector<int32_t> varCand::computeDisagreeNumAndHighIndelBaseNum(string &chrname, 
 	vector<bam1_t*> alnDataVector;
 	int32_t disagreeNum, highIndelBaseNum;
 
-	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile);
+
+	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile, minMapQ);
 	data_loader.loadAlnData(alnDataVector);
 
 	// load coverage
@@ -4040,7 +4073,8 @@ void varCand::adjustVarLoc(localAln_t *local_aln){
 	misReg_vec = getMismatchRegVec(local_aln);
 
 	// filter out short (e.g. <= 1 bp) mismatched polymer items
-	removeShortPolymerMismatchRegItems(local_aln, misReg_vec, inBamFile, fai);
+
+	removeShortPolymerMismatchRegItems(local_aln, misReg_vec, inBamFile, fai, minMapQ);
 
 	// adjust variant locations according to mismatch regions
 	adjustVarLocByMismatchRegs(local_aln->reg, misReg_vec, local_aln->start_aln_idx_var, local_aln->end_aln_idx_var);
@@ -4567,7 +4601,8 @@ vector<double> varCand::computeDisagreeNumAndHighIndelBaseNumAndClipNum(string &
 	int32_t disagreeNum, highIndelBaseNum;
 	vector<double> numVec, clipNum_vec;
 
-	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile);
+
+	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile, minMapQ);
 	data_loader.loadAlnData(alnDataVector);
 
 	// load coverage
@@ -5250,10 +5285,10 @@ vector<reg_t*> varCand::computeClipRegVarLocOp(string &alnfilename, string &cnsf
 								tmp_queryseq = query_seq.substr(left_qpos-1, right_qpos-left_qpos+1);
 
 								if(sidemost_item_id_vec.at(1)==sidemost_item_id_vec.at(2)) // same segment
-									val = computeVarseqConsistency(tmp_queryseq, tmp_refseq);
+									val = computeVarseqIndentity(tmp_queryseq, tmp_refseq);
 								else{ // different segments
 									reverseComplement(tmp_queryseq);
-									val = computeVarseqConsistency(tmp_queryseq, tmp_refseq);
+									val = computeVarseqIndentity(tmp_queryseq, tmp_refseq);
 									//cout << "consistency=" << val << endl;
 								}
 								if(val>=QC_CONSIST_RATIO_MATCH_THRES){ // consistency confirm
@@ -5360,7 +5395,8 @@ void varCand::computeGenotypeClipReg(vector<reg_t*> &var_vec){
 	for(i=0; i<allele_vec.size(); i++){
 		if(large_indel_flag==false){ // clipping
 			reg_tmp = allele_vec.at(i)->reg;
-			allele_vec.at(i)->depth = computeCovNumReg(reg_tmp->chrname, reg_tmp->startRefPos, reg_tmp->endRefPos, fai, inBamFile);
+
+			allele_vec.at(i)->depth = computeCovNumReg(reg_tmp->chrname, reg_tmp->startRefPos, reg_tmp->endRefPos, fai, inBamFile, minMapQ);
 			if(allele_vec.at(i)->depth<allele_vec.at(i)->supp_num) allele_vec.at(i)->depth = allele_vec.at(i)->supp_num; // tolerate DEL region
 		}else // large indel
 			allele_vec.at(i)->depth = depth_largeIndel;
@@ -5382,7 +5418,7 @@ void varCand::computeGenotypeClipReg(vector<reg_t*> &var_vec){
 			allele_node = allele_vec.at(i);
 			for(j=i+1; j<allele_vec.size(); ){
 				allele_node2 = allele_vec.at(j);
-				val = computeVarseqConsistency(allele_node->reg->altseq, allele_node2->reg->altseq);
+				val = computeVarseqIndentity(allele_node->reg->altseq, allele_node2->reg->altseq);
 				//cout << "allele consistency=" << val << endl;
 				if(val>=gt_min_consistency_merge){ // merge
 					allele_node->supp_num += allele_node2->supp_num;
@@ -5529,8 +5565,10 @@ vector<reg_t*> varCand::rescueDupInvClipReg(){
 
 	if(sv_type==VAR_DUP or sv_type==VAR_INV){
 		// load the clipping data
-		clipAlnDataLoader data_loader(chrname, startRefPos_cns, endRefPos_cns, inBamFile, 200);
-		data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0); //
+
+		clipAlnDataLoader data_loader(chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ);
+		data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
+		//data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0); //deleted on 2024-03-22
 
 		if(clipAlnDataVector.size() > 0){
 			reg_str = chrname + ":" + to_string(startRefPos_cns) + "-" + to_string(endRefPos_cns);
@@ -5997,8 +6035,10 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 
 	if(sv_type==VAR_INS or sv_type==VAR_DEL){
 		// load the clipping data
-		clipAlnDataLoader data_loader(chrname, startRefPos_cns, endRefPos_cns, inBamFile, 200);
-		data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0); //
+
+		clipAlnDataLoader data_loader(chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ);
+		data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
+		//data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0); //deleted on 2024-03-22
 
 		if(clipAlnDataVector.size() > 0){
 			reg_str = chrname + ":" + to_string(startRefPos_cns) + "-" + to_string(endRefPos_cns);
@@ -8059,7 +8099,9 @@ void varCand::indelGenotyping(){
 //			continue;
 
 		if(reg->var_type!=VAR_DUP){ //exclude DUP
-			genotyping gt(reg, fai, inBamFile, gt_min_sig_size, gt_size_ratio_match, gt_hete_ratio_thres, gt_homo_ratio_thres, gt_min_sup_num_recover);
+
+
+			genotyping gt(reg, fai, inBamFile, gt_min_sig_size, gt_size_ratio_match, gt_hete_ratio_thres, gt_homo_ratio_thres, gt_min_sup_num_recover, minMapQ);
 			gt.computeGenotype();
 		}
 	}
@@ -8078,7 +8120,9 @@ void varCand::indelGenotyping02(){
 //			continue;
 
 		if(reg->var_type!=VAR_DUP){ //exclude DUP
-			genotyping gt(reg, fai, inBamFile, gt_min_sig_size, gt_size_ratio_match, gt_hete_ratio_thres, gt_homo_ratio_thres, gt_min_sup_num_recover);
+
+
+			genotyping gt(reg, fai, inBamFile, gt_min_sig_size, gt_size_ratio_match, gt_hete_ratio_thres, gt_homo_ratio_thres, gt_min_sup_num_recover, minMapQ);
 			gt.computeGenotype();
 		}
 	}

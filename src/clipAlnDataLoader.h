@@ -11,9 +11,9 @@ class clipAlnDataLoader {
 		string chrname, inBamFile;
 		int64_t startRefPos, endRefPos;
 		int32_t minClipEndSize;
-
+		int32_t minMapQ;
 	public:
-		clipAlnDataLoader(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, int32_t minClipEndSize);
+		clipAlnDataLoader(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, int32_t minClipEndSize, int32_t minMapQ);
 		virtual ~clipAlnDataLoader();
 		void loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov);

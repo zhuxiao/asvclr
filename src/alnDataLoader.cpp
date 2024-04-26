@@ -4,17 +4,18 @@
 //alnDataLoader::alnDataLoader(){
 //}
 
-alnDataLoader::alnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile) {
+alnDataLoader::alnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile, int32_t minMapQ) {
 	this->reg_str = chrname + ":" + to_string(startRefPos) + "-" + to_string(endRefPos);
 	this->inBamFile = inBamFile;
 	mean_read_len = 0;
+	this->minMapQ = minMapQ;
 }
 
 alnDataLoader::~alnDataLoader() {
 }
 
 void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector){
-	samFile *in = 0;
+	samFile *in = NULL;
 	bam_hdr_t *header;
 
 	if ((in = sam_open(inBamFile.c_str(), "r")) == 0) {
@@ -62,9 +63,12 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 	sum = count = 0;
 	b = bam_init1();
 	while ((result = sam_itr_next(in, iter, b)) >= 0) {
-		sum += b->core.l_qseq;
-		count++;
-		alnDataVector.push_back(b);
+		if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+		//if(b->core.qual>=minMapQ and b->core.qual!=255){
+			sum += b->core.l_qseq;
+			count++;
+			alnDataVector.push_back(b);
+		}else bam_destroy1(b);
 		b = bam_init1();
 	}
 	mean_read_len = (double) sum / count;

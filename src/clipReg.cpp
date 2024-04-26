@@ -85,7 +85,7 @@ void clipReg::computeMateClipReg(){
 }
 
 void clipReg::fillClipAlnDataVectorWithSATag(){
-	clipAlnDataLoader clip_aln_data_loader(chrname, startRefPos, endRefPos, inBamFile, minClipEndSize);
+	clipAlnDataLoader clip_aln_data_loader(chrname, startRefPos, endRefPos, inBamFile, minClipEndSize, paras->minMapQ);
 	clip_aln_data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, paras->max_ultra_high_cov); // removed 2023-12-08
 //	clip_aln_data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, paras->max_ultra_high_cov, paras->max_seg_size_ratio_usr); // modified 2023-12-08
 }
@@ -1810,7 +1810,7 @@ void clipReg::appendClipPosSingleVec(vector<clipPos_t*> &clipPosVec, vector<clip
 			if(end_pos>chr_len) end_pos = chr_len;
 
 			// load the clipping data
-			clipAlnDataLoader clip_aln_data_loader(chrname_max, start_pos, end_pos, inBamFile, minClipEndSize);
+			clipAlnDataLoader clip_aln_data_loader(chrname_max, start_pos, end_pos, inBamFile, minClipEndSize, paras->minMapQ);
 			clip_aln_data_loader.loadClipAlnDataWithSATag(clipAlnDataVec, paras->max_ultra_high_cov);
 			removeNonclipItemsOp(clipAlnDataVec);
 
@@ -2377,7 +2377,9 @@ int32_t clipReg::computeCovNumClipPos(string &chrname, int64_t meanClipPos, int3
 
 	covLoader cov_loader(chrname, start_pos, end_pos, fai, paras->min_ins_size_filt, paras->min_del_size_filt);
 	baseArray = cov_loader.initBaseArray();
-	alnDataLoader data_loader(chrname, start_pos, end_pos, paras->inBamFile);
+
+
+	alnDataLoader data_loader(chrname, start_pos, end_pos, paras->inBamFile, paras->minMapQ);
 	data_loader.loadAlnData(alnDataVector);
 
 	// generate the base coverage array
@@ -3302,7 +3304,8 @@ void clipReg::computeVarTypeClipReg(mateClipReg_t &mate_clip_reg){
 			else { mate_clip_reg.sv_type = largeIndelClipReg->var_type = VAR_DEL; mate_clip_reg.largeIndelClipReg->sv_len = largeIndelClipReg->sv_len = mean_size_del; mate_clip_reg.supp_num_largeIndel = supp_num_largeIndel = del_num; }
 
 			// compute depth for large indel region
-			mate_clip_reg.depth_largeIndel = computeCovNumReg(largeIndelClipReg->chrname, largeIndelClipReg->startRefPos, largeIndelClipReg->endRefPos, fai, inBamFile);
+
+			mate_clip_reg.depth_largeIndel = computeCovNumReg(largeIndelClipReg->chrname, largeIndelClipReg->startRefPos, largeIndelClipReg->endRefPos, fai, inBamFile, paras->minMapQ);
 			if(mate_clip_reg.depth_largeIndel<mate_clip_reg.supp_num_largeIndel) mate_clip_reg.depth_largeIndel = mate_clip_reg.supp_num_largeIndel; // tolerate DEL region
 			mate_clip_reg.supp_num_valid_flag = true;
 

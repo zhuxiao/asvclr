@@ -94,7 +94,7 @@ class Region {
 		void destroyIndelVector();
 		void destroyClipRegVector();
 		int computeAbCovReg();
-		reg_t* allocateReg(string &chrname, int64_t startPosReg, int64_t endPosReg);
+		reg_t* allocateReg(string &chrname, int64_t startPosReg, int64_t endPosReg, int32_t sv_len);
 		double computeMeanCovReg(int64_t startPosReg, int64_t endPosReg);
 		double computeRefinedMeanCovReg(int64_t startPosReg, int64_t endPosReg);
 		int computeHighIndelEventRegNum();
@@ -109,6 +109,7 @@ class Region {
 		int32_t getLargeIndelBaseNum(int64_t startPos, int64_t endPos);
 		int32_t getLargeIndelNum(int64_t startPos, int64_t endPos);
 		int32_t getHighConIndelNum(int64_t startPos, int64_t endPos, float threshold, float polymer_ignore_ratio_thres);
+		int32_t computeEstSVLen(int64_t startPos, int64_t endPos);
 
 		// duplication and inversion
 		reg_t* getClipReg(int64_t startCheckPos);

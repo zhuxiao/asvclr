@@ -16,6 +16,7 @@
 #include "Base.h"
 #include "clipReg.h"
 
+#include "Paras.h"
 
 using namespace std;
 
@@ -85,7 +86,7 @@ void destroyConsWorkOptVec(vector<cnsWork_opt*> &cns_work_vec);
 void deleteItemFromCnsWorkVec(int32_t item_id, vector<cnsWork_opt*> &cns_work_vec);
 int32_t getItemIDFromCnsWorkVec(string &contigfilename, vector<cnsWork_opt*> &cns_work_vec);
 void* processSingleConsWork(void *arg);
-void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 bool isReadableFile(string &filename);
 void* processSingleMinimap2AlnWork(void *arg);
 void* processSingleBlatAlnWork(void *arg);
@@ -111,7 +112,7 @@ void createDir(string &dirname);
 vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_size);
 vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln);
 vector<mismatchReg_t*> getMismatchRegVecWithoutPos(localAln_t *local_aln);
-void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai);
+void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ);
 void adjustVarLocByMismatchRegs(reg_t *reg, vector<mismatchReg_t*> &misReg_vec, int32_t start_aln_idx_var, int32_t end_aln_idx_var);
 void releaseMismatchRegVec(vector<mismatchReg_t*> &misReg_vec);
 mismatchReg_t *getMismatchReg(int32_t aln_idx, vector<mismatchReg_t*> &misReg_vec);
@@ -129,7 +130,7 @@ void checkBNDStrVec(mateClipReg_t &mate_clip_reg);
 bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec);
 void checkSuppNum(mateClipReg_t &mate_clip_reg, int32_t support_num_thres);
 void copyClipPosVec(vector<clipPos_t*> &sourceClipPosVector, vector<clipPos_t*> &destClipPosVector);
-int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile);
+int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile, int32_t minMapQ);
 bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr, int64_t max_sv_size_usr);
 bool isSizeSatisfied2(int64_t sv_len, int64_t min_sv_size_usr, int64_t max_sv_size_usr);
 bool isNotAlreadyExists(vector<reg_t*> &varVec, reg_t *reg);
@@ -193,6 +194,7 @@ class Time{
 		string getTime();
 		void printTime();
 		void setStartTime();
+		double getElapsedSeconds();
 		void printElapsedTime();
 		void printSubCmdElapsedTime();
 		void printOverallElapsedTime();

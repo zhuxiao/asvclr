@@ -759,8 +759,10 @@ bool isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_vec){
 
 	for(size_t i=0; i<mate_clipReg_vec.size(); i++){
 		clip_reg = mate_clipReg_vec.at(i);
-		flag = isIndelInSingleClipReg(reg, clip_reg);
-		if(flag) break;
+		if(clip_reg->valid_flag){
+			flag = isIndelInSingleClipReg(reg, clip_reg);
+			if(flag) break;
+		}
 	}
 
 	return flag;
@@ -1721,7 +1723,7 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 				qname = clipAlnDataVector.at(i)->queryname;
 				query_aln_segs = getQueryClipAlnSegs(qname, clipAlnDataVector);  // get query clip align segments
 
-//				if(qname.compare("SRR8858443.1.96142")==0){
+//				if(qname.compare("SRR8858445.1.146248")==0){
 //					cout << "i=" << i << ", qname=" << qname << endl;
 //				}else continue;
 
@@ -1736,7 +1738,7 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 //						}
 //					}
 					//if(no_otherchrname_flag){
-						//for(j=0; j<query_aln_segs.size(); j++){
+					//for(j=0; j<query_aln_segs.size(); j++){
 					query_seq_qual_vec = getQuerySeqWithSoftClipSeqs(query_aln_segs.at(noHardClipIdx), refseq, startRefPos, endRefPos, bam_type, clip_reg_flag);
 					//markHardClipSegs(noHardClipIdx, query_aln_segs);
 					query_aln_segs.at(noHardClipIdx)->query_checked_flag = true;
@@ -1788,7 +1790,9 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 					}
 						//}
 				//	}
-				}else{ // all hard clipping
+				}
+/*
+				else{ // all hard clipping
 					//cout << "qname=" << qname << ", querylen=" << clipAlnDataVector.at(i)->querylen << endl;
 					// join query align segments without 'SA' tags
 //					query_seq_qual_vec = joinQueryAlnSegs(query_aln_segs);
@@ -1841,8 +1845,9 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 							//destroyAlnSegs(query_alnSegs);
 						}
 					}
-					for(j=0; j<query_aln_segs.size(); j++) query_aln_segs.at(j)->query_checked_flag = true;
 				}
+*/
+				for(j=0; j<query_aln_segs.size(); j++) query_aln_segs.at(j)->query_checked_flag = true;
 			}
 		}
 		for(i=0; i<clipAlnDataVector.size(); i++) clipAlnDataVector.at(i)->query_checked_flag = false;
@@ -1871,13 +1876,13 @@ int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &query_aln_segs){
 // get query with soft clipped sequence
 vector<string> getQuerySeqWithSoftClipSeqs(clipAlnData_t* clip_aln, string &refseq, int64_t startRefPos, int64_t endRefPos, int32_t bam_type, bool clip_reg_flag){
 	vector<string> query_info_vec;
-	uint8_t *seq_int, *qual_int;
+	uint8_t *seq_int; //, *qual_int;
 	string qseq, qual;
 	int32_t i, query_start_loc, query_end_loc; // 0-based
 	vector<int32_t> query_loc_vec;
 
 	seq_int = bam_get_seq(clip_aln->bam);
-	qual_int = bam_get_qual(clip_aln->bam);
+	//qual_int = bam_get_qual(clip_aln->bam);
 
 	qseq = qual = "";
 	if(clip_reg_flag==false){
@@ -1895,11 +1900,11 @@ vector<string> getQuerySeqWithSoftClipSeqs(clipAlnData_t* clip_aln, string &refs
 
 			for(i=query_start_loc - 1; i<query_end_loc; i++) qseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, i)];  // seq
 
-			if(qual_int[0]!=255) for(i=query_start_loc - 1; i<query_end_loc; i++) qual += qual_int[i] + 33;  // qual
-			else for(i=query_start_loc - 1; i<query_end_loc; i++) qual += 34;  // qual
+//			if(qual_int[0]!=255) for(i=query_start_loc - 1; i<query_end_loc; i++) qual += qual_int[i] + 33;  // qual
+//			else for(i=query_start_loc - 1; i<query_end_loc; i++) qual += 34;  // qual
 
 			query_info_vec.push_back(qseq);
-			query_info_vec.push_back(qual);
+//			query_info_vec.push_back(qual);
 		}
 	}else{
 //		for(i=0; i<sizeof(seq_int)/sizeof(uint8_t); i++) qseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, i)];
@@ -1908,11 +1913,11 @@ vector<string> getQuerySeqWithSoftClipSeqs(clipAlnData_t* clip_aln, string &refs
 
 		for(i=0; i<clip_aln->bam->core.l_qseq; i++) qseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, i)];  // seq
 
-		if(qual_int[0]!=255) for(i=0; i<clip_aln->bam->core.l_qseq; i++) qual += qual_int[i] + 33;  // qual
-		else for(i=0; i<clip_aln->bam->core.l_qseq; i++) qual += 34;  // qual
+//		if(qual_int[0]!=255) for(i=0; i<clip_aln->bam->core.l_qseq; i++) qual += qual_int[i] + 33;  // qual
+//		else for(i=0; i<clip_aln->bam->core.l_qseq; i++) qual += 34;  // qual
 
 		query_info_vec.push_back(qseq);
-		query_info_vec.push_back(qual);
+//		query_info_vec.push_back(qual);
 	}
 
 	//}
@@ -1968,7 +1973,8 @@ vector<int32_t> computeQueryStartEndLocByRefPos(bam1_t *b, int64_t startRefPos, 
 					break;
 				case BAM_CSOFT_CLIP:
 				case BAM_CHARD_CLIP:
-					target_startQpos = query_alnSegs.at(0)->startQpos + query_alnSegs.at(0)->seglen;
+					//target_startQpos = query_alnSegs.at(0)->startQpos + query_alnSegs.at(0)->seglen; // deleted on 2024-03-27
+					target_startQpos = query_alnSegs.at(0)->startQpos;
 					delete *query_alnSegs.begin();
 					query_alnSegs.erase(query_alnSegs.begin());
 					break;
@@ -2175,6 +2181,8 @@ void* processSingleConsWork(void *arg){
 	double percentage;
 	Time time;
 
+	time.setStartTime();
+
 //	pthread_mutex_lock(cns_work->p_mtx_cns_reg_workDone_num);
 //	cout << "consensus region [" << cns_work->work_id << "]: " << cns_work_opt->contigfilename << endl;
 //	pthread_mutex_unlock(cns_work->p_mtx_cns_reg_workDone_num);
@@ -2182,7 +2190,14 @@ void* processSingleConsWork(void *arg){
 	for(i=0; i<cns_work_opt->arr_size; i++) varVec.push_back(cns_work_opt->var_array[i]);
 	for(i=0; i<cns_work_opt->limit_reg_array_size; i++) sub_limit_reg_vec.push_back(cns_work_opt->limit_reg_array[i]);
 
-	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->clusterfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->canu_version, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
+//	cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << cns_work->minMapQ << endl;
+	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->clusterfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->canu_version, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->max_ultra_high_cov, cns_work->minMapQ, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
+
+//	double run_seconds = time.getElapsedSeconds();
+//	if(run_seconds>10) {
+//		cout << "run_seconds=" << run_seconds << ", consensus region [" << cns_work->work_id << "]: " << cns_work_opt->contigfilename << endl;
+//	}
+
 
 	// release memory
 	sub_limit_reg_vec.clear();
@@ -2212,9 +2227,9 @@ void* processSingleConsWork(void *arg){
 }
 
 
-void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 
-	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, max_ultra_high_cov, minMapQ, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
 
 	local_cns.setLimitRegs(limit_reg_process_flag, limit_reg_vec);
 	if(local_cns.cns_success_preDone_flag==false){
@@ -3018,7 +3033,7 @@ vector<mismatchReg_t*> getMismatchRegVecWithoutPos(localAln_t *local_aln){
 	return misReg_vec;
 }
 
-void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai){
+void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ){
 	size_t m;
 	int64_t start_ref_pos, end_ref_pos, chrlen_tmp;
 	int32_t i, j, start_check_idx, end_check_idx;
@@ -3042,7 +3057,8 @@ void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchRe
 	if(end_ref_pos>chrlen_tmp) end_ref_pos = chrlen_tmp;
 
 	// load align data
-	alnDataLoader data_loader(chrname_tmp, start_ref_pos, end_ref_pos, inBamFile);
+
+	alnDataLoader data_loader(chrname_tmp, start_ref_pos, end_ref_pos, inBamFile, minMapQ);
 	data_loader.loadAlnData(alnDataVector);
 
 	// load coverage
@@ -3973,7 +3989,7 @@ void copyClipPosVec(vector<clipPos_t*> &sourceClipPosVector, vector<clipPos_t*> 
 }
 
 // compute the coverage of a clipping position
-int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile){
+int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile, int32_t minMapQ){
 	int64_t start_pos, end_pos, chr_len, pos, totalReadBeseNum, totalRefBaseNum;
 	double mean_cov_num;
 	Base *baseArray;
@@ -3989,7 +4005,8 @@ int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faid
 
 	covLoader cov_loader(chrname, start_pos, end_pos, fai, 0, 0);
 	baseArray = cov_loader.initBaseArray();
-	alnDataLoader data_loader(chrname, start_pos, end_pos, inBamFile);
+
+	alnDataLoader data_loader(chrname, start_pos, end_pos, inBamFile, minMapQ);
 	data_loader.loadAlnData(alnDataVector);
 
 	// generate the base coverage array
@@ -4450,6 +4467,7 @@ vector<struct alnSeg*> generateAlnSegs(bam1_t* b){
 	vector<struct alnSeg*> alnSegs;
 	vector<struct MD_seg*> segs_MD;
 	struct MD_seg* seg_MD;
+	uint8_t *seq_int;
 
 	uint32_t *c, op, i = 0, j = 0, startRpos, startQpos;
 	int32_t k, tmp_cigar_len, tmp_MD_len, common_len;  // common_len: used only for match flag
@@ -4458,6 +4476,7 @@ vector<struct alnSeg*> generateAlnSegs(bam1_t* b){
 	startRpos = b->core.pos + 1;  // 1-based
 	startQpos = 1;
 
+	seq_int = bam_get_seq(b);
 	c = bam_get_cigar(b);  // CIGAR
 	op = bam_cigar_op(c[i]);
 	tmp_cigar_len = bam_cigar_oplen(c[i]);
@@ -4478,7 +4497,7 @@ vector<struct alnSeg*> generateAlnSegs(bam1_t* b){
 				//if(common_len==1 and seg_MD->opflag==MD_MISMATCH){
 				if(common_len==1 and seg_MD->opflag==BAM_CDIFF){
 					// change the mismatched reference base to query base
-					seg_MD->seg = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos-1)];
+					seg_MD->seg = "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos-1)];
 					//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, MD_MISMATCH, seg_MD->seg));
 					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CDIFF, seg_MD->seg));
 				}else{
@@ -4505,7 +4524,7 @@ vector<struct alnSeg*> generateAlnSegs(bam1_t* b){
 			case BAM_CINS:
 				// add alnSeg item
 				ins_str = "";
-				for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
 				startQpos += tmp_cigar_len;
 				op = bam_cigar_op(c[++i]);
@@ -4561,6 +4580,7 @@ vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, in
 	vector<struct alnSeg*> alnSegs;
 	vector<struct MD_seg*> segs_MD;
 	struct MD_seg* seg_MD;
+	uint8_t *seq_int;
 
 	uint32_t *c, op, i = 0, j = 0, startRpos, startQpos;
 	int32_t k, tmp_cigar_len, tmp_MD_len, common_len, startmatch_idx, endmatch_idx;  // common_len: used only for match flag
@@ -4568,10 +4588,10 @@ vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, in
 	bool overlap_flag;
 	int64_t end_ref_pos;
 
-
 	startRpos = b->core.pos + 1;  // 1-based
 	startQpos = 1;
 
+	seq_int = bam_get_seq(b);
 	c = bam_get_cigar(b);  // CIGAR
 	op = bam_cigar_op(c[i]);
 	tmp_cigar_len = bam_cigar_oplen(c[i]);
@@ -4599,7 +4619,7 @@ vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, in
 					//if(common_len==1 and seg_MD->opflag==MD_MISMATCH){
 					if(common_len==1 and seg_MD->opflag==BAM_CDIFF){
 						// change the mismatched reference base to query base
-						seg_MD->seg = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos-1)];
+						seg_MD->seg = "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos-1)];
 						//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, MD_MISMATCH, seg_MD->seg));
 						alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CDIFF, seg_MD->seg));
 					}else{
@@ -4633,7 +4653,7 @@ vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, in
 				if(overlap_flag){
 					// add alnSeg item
 					ins_str = "";
-					for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+					for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
 				}
 				startQpos += tmp_cigar_len;
@@ -4693,10 +4713,12 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, Base* BaseArr, int64_t s
 	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx;
 	char queBase, ref;
 	string ins_str, diff, del;
+	uint8_t *seq_int;
 
 	startRpos = b->core.pos + 1;  // 1-based
 	startQpos = 1;
 
+	seq_int = bam_get_seq(b);
 	c = bam_get_cigar(b);  // CIGAR
 	op = bam_cigar_op(c[i]);
 	tmp_cigar_len = bam_cigar_oplen(c[i]);
@@ -4708,7 +4730,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, Base* BaseArr, int64_t s
 				mis_idx = -1;
 				for(k=0; k<tmp_cigar_len; k++){
 					if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras){
-						queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+						queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 						ref = BaseArr[startRpos+k-startRefPos_paras].coverage.refBase;
 						if(isBaseMatch(queBase,ref)==false){
 							if(mis_idx==-1) {
@@ -4750,7 +4772,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, Base* BaseArr, int64_t s
 			case BAM_CINS:
 				// add alnSeg item
 				ins_str = "";
-				for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
 				startQpos += tmp_cigar_len;
 				op = bam_cigar_op(c[++i]);
@@ -4760,7 +4782,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, Base* BaseArr, int64_t s
 			case BAM_CDEL:
 				// add alnSeg item
 				del = "";
-				for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];//something wrong?
+				for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];//something wrong?
 				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
 				startRpos += tmp_cigar_len;
 				op = bam_cigar_op(c[++i]);
@@ -4786,7 +4808,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, Base* BaseArr, int64_t s
 				break;
 			case BAM_CDIFF:
 				diff = "";
-				for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDIFF, diff));
 
 				startQpos += tmp_cigar_len;
@@ -4813,10 +4835,12 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, Base* BaseArr, int64_t 
 	string ins_str, diff, del;
 	bool overlap_flag;
 	int64_t end_ref_pos;
+	uint8_t *seq_int;
 
 	startRpos = b->core.pos + 1;  // 1-based
 	startQpos = 1;
 
+	seq_int = bam_get_seq(b);
 	c = bam_get_cigar(b);  // CIGAR
 	op = bam_cigar_op(c[i]);
 	tmp_cigar_len = bam_cigar_oplen(c[i]);
@@ -4831,7 +4855,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, Base* BaseArr, int64_t 
 					mis_idx = -1;
 					for(k=0; k<tmp_cigar_len; k++){
 						if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras){
-							queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+							queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 							ref = BaseArr[startRpos+k-startRefPos_paras].coverage.refBase;
 							if(isBaseMatch(queBase,ref)==false){
 								if(startRpos+k>startRefPos_paras){
@@ -4883,7 +4907,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, Base* BaseArr, int64_t 
 				if(overlap_flag){
 					// add alnSeg item
 					ins_str = "";
-					for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+					for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
 				}
 				startQpos += tmp_cigar_len;
@@ -4895,7 +4919,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, Base* BaseArr, int64_t 
 				if(overlap_flag){
 					// add alnSeg item
 					del = "";
-					for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];//something wrong?
+					for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];//something wrong?
 					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
 				}
 				startRpos += tmp_cigar_len;
@@ -4927,7 +4951,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, Base* BaseArr, int64_t 
 			case BAM_CDIFF:
 				if(overlap_flag){
 					diff = "";
-					for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+					for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDIFF, diff));
 				}
 				startQpos += tmp_cigar_len;
@@ -4952,10 +4976,12 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, string &refseq, int64_t 
 	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx;
 	char queBase, ref;
 	string ins_str, diff, del;
+	uint8_t *seq_int;
 
 	startRpos = b->core.pos + 1;  // 1-based
 	startQpos = 1;
 
+	seq_int = bam_get_seq(b);
 	c = bam_get_cigar(b);  // CIGAR
 	op = bam_cigar_op(c[i]);
 	tmp_cigar_len = bam_cigar_oplen(c[i]);
@@ -4967,7 +4993,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, string &refseq, int64_t 
 				mis_idx = -1;
 				for(k=0; k<tmp_cigar_len; k++){
 					if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras){
-						queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+						queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 						ref = refseq.at(startRpos+k-startRefPos_paras);
 						if(isBaseMatch(queBase,ref)==false){
 							if(mis_idx==-1) {
@@ -5009,7 +5035,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, string &refseq, int64_t 
 			case BAM_CINS:
 				// add alnSeg item
 				ins_str = "";
-				for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
 				startQpos += tmp_cigar_len;
 				op = bam_cigar_op(c[++i]);
@@ -5019,7 +5045,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, string &refseq, int64_t 
 			case BAM_CDEL:
 				// add alnSeg item
 				del = "";
-				for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];//something wrong?
+				for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];//something wrong?
 				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
 				startRpos += tmp_cigar_len;
 				op = bam_cigar_op(c[++i]);
@@ -5045,7 +5071,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, string &refseq, int64_t 
 				break;
 			case BAM_CDIFF:
 				diff = "";
-				for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+				for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 				alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDIFF, diff));
 
 				startQpos += tmp_cigar_len;
@@ -5072,10 +5098,12 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t
 	string ins_str, diff, del;
 	bool overlap_flag;
 	int64_t end_ref_pos;
+	uint8_t *seq_int;
 
 	startRpos = b->core.pos + 1;  // 1-based
 	startQpos = 1;
 
+	seq_int = bam_get_seq(b);
 	c = bam_get_cigar(b);  // CIGAR
 	op = bam_cigar_op(c[i]);
 	tmp_cigar_len = bam_cigar_oplen(c[i]);
@@ -5090,7 +5118,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t
 					mis_idx = -1;
 					for(k=0; k<tmp_cigar_len; k++){
 						if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras){
-							queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+							queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 							ref = refseq.at(startRpos+k-startRefPos_paras);
 							if(isBaseMatch(queBase,ref)==false){
 								if(startRpos+k>startRefPos_paras){
@@ -5101,8 +5129,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t
 									}else
 										startmatch_idx = mis_idx + 1;
 									endmatch_idx = k - 1;
-									//str_tmp = "";
-									//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx, endmatch_idx-startmatch_idx, BAM_CMATCH, str_tmp));
+									//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx, endmatch_idx-startmatch_idx, BAM_CMATCH, ""));
 									alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
 								}
 								//diff = "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
@@ -5119,8 +5146,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t
 						endmatch_idx = tmp_cigar_len - 1;
 						if(startRpos+tmp_cigar_len-1>endRefPos_paras)
 							endmatch_idx -= (startRpos+tmp_cigar_len-1) - endRefPos_paras;
-						//str_tmp = "";
-						//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CMATCH, str_tmp));
+						//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CMATCH, ""));
 						//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, tmp_cigar_len-startmatch_idx, BAM_CEQUAL, ""));
 						alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
 					}else {
@@ -5128,8 +5154,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t
 						endmatch_idx = tmp_cigar_len - 1;
 						if(startRpos+tmp_cigar_len-1>endRefPos_paras)
 							endmatch_idx -= (startRpos+tmp_cigar_len-1) - endRefPos_paras;
-						//str_tmp = "";
-						//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx+1, tmp_cigar_len-startmatch_idx-1, BAM_CMATCH, str_tmp));
+						//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx+1, startQpos+startmatch_idx+1, tmp_cigar_len-startmatch_idx-1, BAM_CMATCH, ""));
 						//alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, tmp_cigar_len-startmatch_idx, BAM_CEQUAL, ""));
 						alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
 					}
@@ -5144,7 +5169,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t
 				if(overlap_flag){
 					// add alnSeg item
 					ins_str = "";
-					for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
+					for(k=0; k<tmp_cigar_len; k++) ins_str += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
 					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CINS, ins_str));
 				}
 
@@ -5156,7 +5181,7 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t
 				if(overlap_flag){
 					// add alnSeg item
 					del = "";
-					for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];//something wrong?
+					for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];//something wrong?
 					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
 				}
 
@@ -5179,8 +5204,13 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t
 				break;
 			case BAM_CEQUAL:
 				if(overlap_flag){
-					//str_tmp = "";
-					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CEQUAL, ""));
+					startmatch_idx = startRefPos_paras - startRpos;
+					if(startmatch_idx<0) startmatch_idx = 0;
+					endmatch_idx = tmp_cigar_len - 1;
+					if(startRpos+tmp_cigar_len-1>endRefPos_paras)
+						endmatch_idx -= (startRpos+tmp_cigar_len-1) - endRefPos_paras;
+					//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CEQUAL, ""));
+					alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
 				}
 
 				startQpos += tmp_cigar_len;
@@ -5190,9 +5220,21 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t
 				break;
 			case BAM_CDIFF:
 				if(overlap_flag){
+					startmatch_idx = startRefPos_paras - startRpos;
+					if(startmatch_idx<0) startmatch_idx = 0;
+					endmatch_idx = tmp_cigar_len - 1;
+					if(startRpos+tmp_cigar_len-1>endRefPos_paras)
+						endmatch_idx -= (startRpos+tmp_cigar_len-1) - endRefPos_paras;
+
 					diff = "";
-					for(k=0; k<tmp_cigar_len; k++) diff += "=ACMGRSVTWYHKDBN"[bam_seqi(bam_get_seq(b), startQpos+k-1)];
-					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDIFF, diff));
+					//for(k=0; k<tmp_cigar_len; k++)
+//						if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras)
+//							diff += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
+					//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDIFF, diff));
+
+					for(k=startmatch_idx; k<=endmatch_idx; k++)
+						diff += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
+					alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CDIFF, diff));
 				}
 
 				startQpos += tmp_cigar_len;
@@ -5938,7 +5980,7 @@ bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_ma
 						ref_distance = abs(qc_sig->ref_pos - seed_qc_sig->ref_pos);
 						if(qc_sig->cigar_op==BAM_CINS){
 							if(qc_sig->altseq.size()>0 and seed_qc_sig->altseq.size()>0){
-								consist_val = computeVarseqConsistency(qc_sig->altseq, seed_qc_sig->altseq);
+								consist_val = computeVarseqIndentity(qc_sig->altseq, seed_qc_sig->altseq);
 								//cout << "consist_val=" << consist_val << endl;
 								if(ref_distance<max_ref_dist_match and consist_val>=consist_ratio_match_thres){
 									match_flag = true;
@@ -6078,6 +6120,16 @@ void Time::printTime(){
 
 void Time::setStartTime(){
 	time(&start);
+}
+
+double Time::getElapsedSeconds(){
+	if(start!=0){
+		time(&end);
+		return difftime(end, start);
+	}else{
+		cerr << "Please set the start time before calculating the running time" << endl;
+		exit(1);
+	}
 }
 
 void Time::printElapsedTime(){

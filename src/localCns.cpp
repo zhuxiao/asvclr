@@ -6,7 +6,8 @@ pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 extern pthread_mutex_t mutex_down_sample;
 extern pthread_mutex_t mutex_fai;
 
-localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio){
+localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio){
+
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
 	this->readsfilename = preprocessPipeChar(readsfilename);
@@ -18,10 +19,12 @@ localCns::localCns(string &readsfilename, string &contigfilename, string &refseq
 	this->canu_version = canu_version;
 	this->num_threads_per_cns_work = num_threads_per_cns_work;
 	this->minClipEndSize = minClipEndSize;
+	this->minMapQ = minMapQ;
 	this->minConReadLen = minConReadLen;
 	this->min_sv_size = min_sv_size;
 	this->min_supp_num = min_supp_num;
 	this->max_seg_size_ratio = max_seg_size_ratio;
+	this->max_ultra_high_cov = max_ultra_high_cov;
 	this->varVec = varVec;
 	this->fai = fai;
 	this->inBamFile = inBamFile;
@@ -190,7 +193,8 @@ void localCns::extractReadsDataFromBAM(){
 //	data_loader.loadClipAlnData(clipAlnDataVector);
 
 	// load the clipping data ---20220705
-	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize);
+//	cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << minMapQ << endl;
+	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ);
 	//data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0);
 	if(clip_reg_flag) data_loader.loadClipAlnDataWithSATag(clipAlnDataVector);
 	else data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, 0, max_seg_size_ratio);
@@ -210,7 +214,7 @@ void localCns::extractReadsDataFromBAM(){
 		query_seq_info_all = extractQueriesFromClipAlnDataVec(clipAlnDataVector, refseq, chrname, startRefPos_cns, endRefPos_cns, fai, minConReadLen, clip_reg_flag, &mutex_fai);
 
 		// sampling for ultra-high coverage regions
-		expected_cov_cons = 2 * expected_cov;
+		expected_cov_cons = expected_cov;
 		reads_count_original = query_seq_info_all.size();
 		total_bases_original = 0;
 		for(i=0; i<query_seq_info_all.size(); i++) total_bases_original += query_seq_info_all.at(i)->seq.size();
@@ -651,11 +655,12 @@ double localCns::computeScoreRatio(struct querySeqInfoNode* query_seq_info_node,
 		score_ratio = 0.99;
 	}else{
 		score_sum = 0;
-		for(i=0;i<queryCluSig->match_profile_vec.size();i++){
-			score_sum += queryCluSig->match_profile_vec.at(i);
-		}
+		for(i=0; i<queryCluSig->match_profile_vec.size(); i++) score_sum += queryCluSig->match_profile_vec.at(i);
 		score_ratio = (double)score_sum / queryCluSig->match_profile_vec.size();
 	}
+#if POA_ALIGN_DEBUG
+	cout << "score_ratio=" << score_ratio << endl;
+#endif
 
 //	delete queryCluSig;
 //	delete seed_qcQuery;
@@ -878,7 +883,7 @@ struct seedQueryInfo* localCns::chooseSeedClusterQuery02(struct seedQueryInfo* s
 	startSpanPos = 0;
 	endSpanPos = 0;
 	struct seedQueryInfo* seed_info;
-	//if(query_seq_info_node->query_alnSegs.size()>0){
+
 	for(j=0;j<q_cluster.size();j++){
 		query_start = q_cluster.at(j)->query_alnSegs.at(0)->startRpos;
 		query_end = q_cluster.at(j)->query_alnSegs.at(q_cluster.at(j)->query_alnSegs.size() - 1)->startRpos + q_cluster.at(j)->query_alnSegs.at(q_cluster.at(j)->query_alnSegs.size() - 1)->seglen -1;
@@ -922,7 +927,6 @@ struct seedQueryInfo* localCns::chooseSeedClusterQuery02(struct seedQueryInfo* s
 			endSpanPos = endSpanPos_tmp;
 			seed_id = j;
 		}
-		//}
 	}
 
 	seed_info = new struct seedQueryInfo();
@@ -933,98 +937,7 @@ struct seedQueryInfo* localCns::chooseSeedClusterQuery02(struct seedQueryInfo* s
 	return seed_info;
 }
 
-//vector<qcSig_t*> LocalCns::extractQcSigsFromAlnSegsSingleQuery(struct querySeqInfoNode *query_seq_info_node, int64_t startSpanPos, int64_t endSpanPos){
-//	vector<qcSig_t*> sig_vec;
-//	qcSig_t *qc_sig;
-//	vector<struct alnSeg*>::iterator seg;
-//
-//	//int64_t startSpanPos_extend, endSpanPos_extend;
-//
-//	//startSpanPos_extend = startSpanPos - 10;
-//	//endSpanPos_extend = endSpanPos + 10;
-//
-//	//bool corrupt = false;
-//	for(seg=query_seq_info_node->query_alnSegs.begin(); seg!=query_seq_info_node->query_alnSegs.end(); seg++){
-//		switch((*seg)->opflag){
-//			case BAM_CINS:  // insertion in query
-//				if((*seg)->startRpos>=startSpanPos and (*seg)->startRpos<=endSpanPos){
-//					if((*seg)->seglen>=min_sv_size){
-//						qc_sig = allocateQcSigNode(*seg);
-//						qc_sig->chrname = varVec[0]->chrname;
-//						sig_vec.push_back(qc_sig);
-//					}
-//				}
-//				break;
-//			case BAM_CDEL:  // deletion in query
-//				if((*seg)->startRpos>=startSpanPos and ((*seg)->startRpos + (*seg)->seglen -1)<=endSpanPos){
-//					if((*seg)->seglen>=min_sv_size){
-//						qc_sig = allocateQcSigNode(*seg);
-//						qc_sig->chrname = varVec[0]->chrname;
-//						sig_vec.push_back(qc_sig);
-//					}
-//				}
-//				break;
-//			case BAM_CEQUAL:
-//				break;
-//			case BAM_CDIFF:
-//				break;
-//			case BAM_CSOFT_CLIP:// unexpected events
-//			case BAM_CHARD_CLIP:
-//			case BAM_CREF_SKIP:
-//			case BAM_CMATCH:
-//				break;
-//			case BAM_CPAD:
-//			case BAM_CBACK:
-//				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << (*seg)->opflag << endl;
-//				exit(1);
-//				break;
-//			default:
-//				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << (*seg)->opflag << endl;
-////				cerr <<"op_len:" << (*seg)->seglen << endl;
-////				cerr <<"startRpos:" << (*seg)->startRpos << endl;
-////				cerr <<"qname:"<<query_seq_info_node->qname<<endl;
-////				corrupt = true;
-//				exit(1);
-//				break;
-//		}
-////		if(corrupt){
-////			break;
-////		}
-//	}
-//
-//	return sig_vec;
-//}
-//
-//// allocate query cluster signature
-//qcSig_t *LocalCns::allocateQcSigNode(struct alnSeg *aln_seg){
-//	qcSig_t *qc_sig = new qcSig_t();
-//	qc_sig->cigar_op = aln_seg->opflag;
-//	qc_sig->cigar_op_len = aln_seg->seglen;
-//	qc_sig->reg_contain_flag = false;
-//	qc_sig->ref_pos = aln_seg->startRpos;
-//	qc_sig->sig_id = -1;
-//	qc_sig->chrname = "";
-//	qc_sig->mate_qcSig = NULL;
-//	return qc_sig;
-//}
-
-// destroy cluster signatures for queries
-//void LocalCns::destroyQueryCluSigVec(vector<queryCluSig_t*> &queryCluSig_vec){
-//	queryCluSig_t *queryCluSig;
-//	vector<qcSig_t*> sig_vec_singleQuery;
-//	qcSig_t *qc_sig;
-//	for(size_t i=0; i<queryCluSig_vec.size(); i++){
-//		queryCluSig = queryCluSig_vec.at(i);
-//		for(size_t j=0; j<queryCluSig->qcSig_vec.size(); j++){
-//			qc_sig = queryCluSig->qcSig_vec.at(j);
-//			delete qc_sig;
-//		}
-//		vector<qcSig_t*>().swap(queryCluSig->qcSig_vec);
-//		delete queryCluSig;
-//	}
-//	vector<queryCluSig_t*>().swap(queryCluSig_vec);
-//}
-
+// smooth the query sequence data for Indel regions
 struct seqsVec *localCns::smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNode*> &query_seq_info_vec){
 	size_t i, j;
 	uint32_t op;
@@ -1033,45 +946,55 @@ struct seqsVec *localCns::smoothQuerySeqData(string &refseq, vector<struct query
 	uint32_t query_startQpos;
 	char refbase;
 	string seq, delete_seq, qname;
+	struct alnSeg *aln_seg;
 
 	smmothed_seqs_info = new struct seqsVec();
 
 	for(i=0; i<query_seq_info_vec.size(); i++){
 		q_node = query_seq_info_vec.at(i);
+		if(q_node->query_alnSegs.size()==0) continue;
+
 		query_startQpos = 1;
 		seq = q_node->seq;
 		qname = q_node->qname;
+
+//		if(qname.compare("SRR8858470.1.31242")==0){
+//			cout << "i=" << i << ", qname=" << qname << endl;
+//		}
+
 		for(j=0; j<q_node->query_alnSegs.size(); j++){
-			op = q_node->query_alnSegs.at(j)->opflag;
+			aln_seg = q_node->query_alnSegs.at(j);
+			op = aln_seg->opflag;
 			//query_endQpos += q_node->query_alnSegs.at(j)->seglen;
+			//cout << "i=" << i << ", j=" << j << ", startRpos=" << aln_seg->startRpos << endl;
 			switch (op) {
 				case BAM_CMATCH:
-					query_startQpos += q_node->query_alnSegs.at(j)->seglen;
+					query_startQpos += aln_seg->seglen;
 					break;
 				case BAM_CINS:
-					if(q_node->query_alnSegs.at(j)->seglen<min_sv_size){
-						seq.erase(query_startQpos - 1, q_node->query_alnSegs.at(j)->seglen);
+					if(aln_seg->seglen<min_sv_size){
+						seq.erase(query_startQpos - 1, aln_seg->seglen);
 					}else{
-						query_startQpos += q_node->query_alnSegs.at(j)->seglen;
+						query_startQpos += aln_seg->seglen;
 					}
 					break;
 				case BAM_CDEL:
-					if(q_node->query_alnSegs.at(j)->seglen<min_sv_size){
-						delete_seq = refseq.substr(q_node->query_alnSegs.at(j)->startRpos - startRefPos_cns, q_node->query_alnSegs.at(j)->seglen);
+					if(aln_seg->seglen<min_sv_size){
+						delete_seq = refseq.substr(aln_seg->startRpos - startRefPos_cns, aln_seg->seglen);
 						seq.insert(query_startQpos - 1, delete_seq);
-						query_startQpos += q_node->query_alnSegs.at(j)->seglen;
+						query_startQpos += aln_seg->seglen;
 					}
 					break;
 				case BAM_CSOFT_CLIP:
 				case BAM_CHARD_CLIP:
 					break;
 				case BAM_CEQUAL:
-					query_startQpos += q_node->query_alnSegs.at(j)->seglen;
+					query_startQpos += aln_seg->seglen;
 					break;
 				case BAM_CDIFF:
-					refbase = refseq.at(q_node->query_alnSegs.at(j)->startRpos - startRefPos_cns);
-					seq[query_startQpos - 1] = refbase;
-					query_startQpos += q_node->query_alnSegs.at(j)->seglen;
+					refbase = refseq.at(aln_seg->startRpos - startRefPos_cns);
+					seq.at(query_startQpos-1) = refbase;
+					query_startQpos += aln_seg->seglen;
 					break;
 				case BAM_CREF_SKIP:
 					// unexpected events
@@ -1079,7 +1002,7 @@ struct seqsVec *localCns::smoothQuerySeqData(string &refseq, vector<struct query
 				case BAM_CBACK:
 				default:
 					cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
-					cerr << "startRpos" << q_node->query_alnSegs.at(j)->startRpos << endl;
+					cerr << "startRpos" << aln_seg->startRpos << endl;
 					exit(1);
 			}
 		}
@@ -1494,7 +1417,7 @@ bool localCns::cnsByPoa(){
 			reads_file.close();
 
 			tmp_cons_filename = tmpdir + "/consensus_" + to_string(k) + ".fa";
-			cmd2 = "abpoa " + tmp_reads_filename + " -o " + tmp_cons_filename + " > /dev/null 2>&1";
+			cmd2 = "abpoa -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
 			system(cmd2.c_str());
 
 			flag = isFileExist(tmp_cons_filename);

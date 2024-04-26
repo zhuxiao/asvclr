@@ -117,13 +117,13 @@ typedef struct {
 	int32_t work_id, num_work, num_work_percent;  // 'work_id' starts from 1
 	int32_t *p_cns_reg_workDone_num;   // pointer to the global variable which was declared in Paras.h
 	pthread_mutex_t *p_mtx_cns_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
-	int32_t num_threads_per_cns_work, minClipEndSize, cnsSideExtSize, minConReadLen, min_sv_size, min_supp_num;
+	int32_t num_threads_per_cns_work, minClipEndSize, cnsSideExtSize, minConReadLen, min_sv_size, min_supp_num, minMapQ;
 	double max_seg_size_ratio;
 
 	string inBamFile, technology, canu_version;
 	faidx_t *fai;
 	ofstream *var_cand_file;
-	double expected_cov_cns, min_input_cov_canu;
+	double expected_cov_cns, min_input_cov_canu, max_ultra_high_cov;
 	bool delete_reads_flag, keep_failed_reads_flag;
 }cnsWork;
 

@@ -377,8 +377,8 @@ vector<qcSigList_t*> clipRegCluster::extractQcSigsClipReg(vector<struct querySeq
 		queryseq_node = query_seq_info_vec.at(i);
 		if(queryseq_node->selected_flag==false){
 
-//			if(queryseq_node->qname.compare("SRR8858444.1.204625")==0){
-//				cout << queryseq_node->qname << endl;
+//			if(queryseq_node->qname.compare("SRR8858445.1.146248")==0){
+//				cout << "i=" << i << ", " << queryseq_node->qname << endl;
 //			}
 
 			query_seqs = getQuerySeqs(queryseq_node->qname, query_seq_info_vec);
@@ -621,8 +621,8 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						dist = min_dist_same_chr - min_ref_dist_same_chr;
 						if(increase_direction==1) dist = -dist;
 						// prefer the segments on the same chromosome
-						if((mate_arr_idx!=mate_arr_idx_same_chr and (abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag)) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(dist)>MAX_REF_DIST_SAME_CHR)){ // different chromosomes with near reference distance
-						//if(abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR){ // different chromosomes with near reference distance
+						//if((mate_arr_idx!=mate_arr_idx_same_chr and (abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag)) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(dist)>MAX_REF_DIST_SAME_CHR)){ // different chromosomes with near reference distance, deleted on 2024-02-25
+						if((abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(dist)>MAX_REF_DIST_SAME_CHR)){ // different chromosomes with near reference distance
 							mate_arr_idx = mate_arr_idx_same_chr;
 							mate_clip_end_flag = mate_clip_end_flag_same_chr;
 							query_skip_flag = true;
@@ -660,7 +660,7 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						last_clip_sig->refseq = p_seq;
 						free(p_seq);
 
-						last_clip_sig->altseq = queryseq_node->seq.substr(last_clip_sig->query_pos, last_clip_sig->cigar_op_len);
+						last_clip_sig->altseq = queryseq_node->seq.substr(last_clip_sig->query_pos-1, last_clip_sig->cigar_op_len);
 
 					}else if(ref_skip_flag){
 						last_clip_sig->dist_next_clip = last_clip_sig->cigar_op_len = abs(dist) + 1;
@@ -673,7 +673,7 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						last_clip_sig->refseq = p_seq;
 						free(p_seq);
 
-						last_clip_sig->altseq = queryseq_node->seq.substr(last_clip_sig->query_pos, 1);
+						last_clip_sig->altseq = queryseq_node->seq.substr(last_clip_sig->query_pos-1, 1);
 					}
 				}else{
 					query_skip_flag = ref_skip_flag = false;

@@ -19,7 +19,7 @@ using namespace std;
 
 #define BLOCK_SIZE_EST		20000
 #define DIST_CHR_END		20000
-#define MIN_CHR_SIZE_EST	(DIST_CHR_END*2+BLOCK_SIZE_EST)
+#define MIN_CHR_SIZE_EST	((DIST_CHR_END*2+BLOCK_SIZE_EST)*2)
 
 #define REFSEQ_PATTERN		"refseq"
 #define CLIPREG_PATTERN		"clipReg_refseq"

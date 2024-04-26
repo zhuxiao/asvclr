@@ -225,45 +225,53 @@ void Chrome::saveChrBlocksToFile(){
 
 // fill the estimation data
 void Chrome::chrFillDataEst(size_t op_est){
-	int i, pos, begPos, endPos, seq_len;
+	int i, k, pos, begPos, endPos, seq_len;
 	Block *block_tmp;
 	string reg;
 	char *seq;
 	bool flag;
+	double factor;
 
-	if(chrlen>=MIN_CHR_SIZE_EST){ // minimal chromosome size 60kb
-		pos = chrlen / 2;
-		while(pos<chrlen-MIN_CHR_SIZE_EST/2){
-			flag = true;
+	if(chrlen>=MIN_CHR_SIZE_EST){ // minimal chromosome size 120kb
+		for(k=0; k<2; k++){
+			if(k==0) factor = 0.25;
+			else factor = 0.75;
 
-			// construct a block with a 20kb size
-			begPos = pos - BLOCK_SIZE_EST/2;
-			endPos = begPos + BLOCK_SIZE_EST - 1;
-			reg = chrname + ":" + to_string(begPos) + "-" + to_string(endPos);
-			pthread_mutex_lock(&mutex_fai);
-			seq = fai_fetch(fai, reg.c_str(), &seq_len);
-			pthread_mutex_unlock(&mutex_fai);
-			for(i=0; i<seq_len; i++){
-				if(seq[i]=='N' or seq[i]=='n'){
-					flag = false;
-					break;
+			//pos = chrlen / 2;
+			//while(pos<chrlen-MIN_CHR_SIZE_EST/2){
+			pos = chrlen * factor;
+			while(pos<chrlen-MIN_CHR_SIZE_EST/4){
+				flag = true;
+
+				// construct a block with a 20kb size
+				begPos = pos - BLOCK_SIZE_EST/2;
+				endPos = begPos + BLOCK_SIZE_EST - 1;
+				reg = chrname + ":" + to_string(begPos) + "-" + to_string(endPos);
+				pthread_mutex_lock(&mutex_fai);
+				seq = fai_fetch(fai, reg.c_str(), &seq_len);
+				pthread_mutex_unlock(&mutex_fai);
+				for(i=0; i<seq_len; i++){
+					if(seq[i]=='N' or seq[i]=='n'){
+						flag = false;
+						break;
+					}
 				}
+				free(seq);
+
+				if(!flag){ // invalid region, slide to next region
+					pos = endPos + 1;
+				}else break;
 			}
-			free(seq);
 
-			if(!flag){ // invalid region, slide to next region
-				pos = endPos + 1;
-			}else break;
-		}
+			if(flag){ // valid region
+				//cout << "Est region: " << chrname << ":" << begPos << "-" << endPos << endl;
+				block_tmp = allocateBlock(chrname, begPos, endPos, fai, false, false, true);
+				// fill the data
+				block_tmp->blockFillDataEst(op_est);
+				delete block_tmp;
 
-		if(flag){ // valid region
-			//cout << "Est region: " << chrname << ":" << begPos << "-" << endPos << endl;
-			block_tmp = allocateBlock(chrname, begPos, endPos, fai, false, false, true);
-			// fill the data
-			block_tmp->blockFillDataEst(op_est);
-			delete block_tmp;
-
-			paras->reg_sum_size_est += endPos - begPos + 1;
+				paras->reg_sum_size_est += endPos - begPos + 1;
+			}
 		}
 	}
 }
@@ -274,7 +282,7 @@ int Chrome::chrDetect(){
 
 	if(print_flag) cout << "[" << time.getTime() << "]: processing Chr: " << chrname << ", size: " << chrlen << " bp" << endl;
 
-	mkdir(out_dir_detect.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create the directory for detect command
+	//mkdir(out_dir_detect.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);  // create the directory for detect command // delete on 2024-04-06
 
 	chrSetMisAlnRegFile();
 
@@ -1346,7 +1354,7 @@ void Chrome::chrMergeDetectResultToFile(){
 		indel_vec = bloc->indelVector;
 		for(j=0; j<indel_vec.size(); j++){
 			reg = indel_vec.at(j);
-			out_file_indel << reg->chrname << "\t" << reg->startRefPos << "\t" <<  reg->endRefPos << endl;
+			out_file_indel << reg->chrname << "\t" << reg->startRefPos << "\t" <<  reg->endRefPos << "\t" << reg->sv_len << endl;
 		}
 		snv_vec = bloc->snvVector;
 		for(j=0; j<snv_vec.size(); j++){
@@ -1853,7 +1861,7 @@ void Chrome::chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> 
 	string line;
 	vector<string> str_vec;
 	ifstream infile;
-	int64_t begPos, endPos;
+	int64_t begPos, endPos, sv_len;
 	Block* tmp_bloc;
 	reg_t *reg;
 	simpleReg_t *simple_reg;
@@ -1873,8 +1881,9 @@ void Chrome::chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> 
 	while(getline(infile, line)){
 		if(line.size()>0 and line.at(0)!='#'){
 			str_vec = split(line, "\t");
-			begPos = stoi(str_vec[1]);
-			endPos = stoi(str_vec[2]);
+			begPos = stoi(str_vec.at(1));
+			endPos = stoi(str_vec.at(2));
+			sv_len = stoi(str_vec.at(3));
 			tmp_bloc = computeBlocByPos(begPos, blockVector);  // get the block
 
 			// deal with limit regions
@@ -1893,7 +1902,7 @@ void Chrome::chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> 
 				reg->startLocalRefPos = reg->endLocalRefPos = 0;
 				reg->startQueryPos = reg->endQueryPos = 0;
 				reg->var_type = VAR_UNC;
-				reg->sv_len = 0;
+				reg->sv_len = sv_len;
 				reg->query_id = -1;
 				reg->blat_aln_id = -1;
 				reg->minimap2_aln_id = -1;
@@ -2401,7 +2410,7 @@ void Chrome::chrCollectCallWork(){
 		for(size_t i=0; i<var_cand_vec.size(); i++) paras->call_work_vec.push_back(var_cand_vec.at(i));
 		for(size_t i=0; i<var_cand_clipReg_vec.size(); i++) paras->call_work_vec.push_back(var_cand_clipReg_vec.at(i));
 		paras->call_work_vec.shrink_to_fit();
-		cout << "\tChr " << chrname << ": " << var_cand_vec.size() << " indel regions, " << var_cand_clipReg_vec.size() << " clipping regions, total regions: " << total_chr << endl;
+		//cout << "\tChr " << chrname << ": " << var_cand_vec.size() << " indel regions, " << var_cand_clipReg_vec.size() << " clipping regions, total regions: " << total_chr << endl;
 	}
 }
 
@@ -3827,9 +3836,17 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 				else
 					line += "\t-";
 
-				if(reg->refseq.size()) line += "\t" + reg->refseq;
+				//upperSeq
+
+				if(reg->refseq.size()) {
+					upperSeq(reg->refseq);
+					line += "\t" + reg->refseq;
+				}
 				else line += "\t-";
-				if(reg->altseq.size()) line += "\t" + reg->altseq;
+				if(reg->altseq.size()){
+					upperSeq(reg->altseq);
+					line += "\t" + reg->altseq;
+				}
 				else line += "\t-";
 
 				// extra information, split with ";"

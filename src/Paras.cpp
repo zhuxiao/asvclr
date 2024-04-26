@@ -255,6 +255,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 	//minReadsNumSupportSV = -1;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
+	minMapQ = MIN_MAPQ_THRES;
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
 	//max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
@@ -275,7 +276,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:n:M:e:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:n:M:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
@@ -285,6 +286,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 					min_Nsupp_est_flag = 0;
 					break;
 			case 'e': minClipEndSize = stoi(optarg); break;
+			case 'q': minMapQ = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
@@ -364,6 +366,7 @@ int Paras::parseCnsParas(int argc, char **argv){
 	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
 	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	minClipEndSize = MIN_CLIP_END_SIZE;
+	minMapQ = MIN_MAPQ_THRES;
 	expected_cov_cns = EXPECTED_COV_CNS;
 	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
 	outDir = OUT_DIR;
@@ -389,7 +392,7 @@ int Paras::parseCnsParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:n:r:e:x:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:n:r:e:q:x:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -399,6 +402,7 @@ int Paras::parseCnsParas(int argc, char **argv){
 					break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
+			case 'q': minMapQ = stoi(optarg); break;
 			case 'x': expected_cov_cns = stod(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
@@ -468,6 +472,7 @@ int Paras::parseCallParas(int argc, char **argv){
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
+	minMapQ = MIN_MAPQ_THRES;
 	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
 	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	outDir = OUT_DIR;
@@ -495,7 +500,7 @@ int Paras::parseCallParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:n:e:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:n:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -504,6 +509,7 @@ int Paras::parseCallParas(int argc, char **argv){
 					min_Nsupp_est_flag = 0;
 					break;
 			case 'e': minClipEndSize = stoi(optarg); break;
+			case 'q': minMapQ = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
@@ -564,6 +570,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	min_sv_size_usr = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
+	minMapQ = MIN_MAPQ_THRES;
 	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
@@ -578,6 +585,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	gt_min_consistency_merge = GT_MIN_CONSIST_MERGE_THRES;
 	gt_homo_ratio = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio = GT_HETE_RATIO_THRES;
+
 
 	simpleReg_t *simple_reg;
 	string simple_reg_str;
@@ -609,7 +617,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:r:e:x:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:r:e:q:x:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
@@ -620,6 +628,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 					break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
+			case 'q': minMapQ = stoi(optarg); break;
 			case 'x': expected_cov_cns = stod(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
@@ -724,10 +733,10 @@ void Paras::showUsage(){
 
 	cout << "Example:" << endl;
 	cout << "   # run the pipeline on the whole genome" << endl;
-	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam" << endl << endl;
 
 	cout << "   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000" << endl;
-	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for detect command
@@ -755,6 +764,8 @@ void Paras::showDetectUsage(){
 	cout << "                 the data set (rounded)" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
+	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
+	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
 	//cout << "   -r FILE       limit reference regions to process [null]: CHR|CHR:START-END" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
 	cout << "   -p STR        prefix of output result files [null]" << endl;
@@ -799,6 +810,8 @@ void Paras::showCnsUsage(){
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
+	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
+	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
 	cout << "   -x FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
 	cout << "                 0 for no coverage sampling" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
@@ -869,6 +882,8 @@ void Paras::showCallUsage(){
 	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
+	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
+	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
 	cout << "   -p STR        prefix of output result files [null]" << endl;
 	cout << "   -t INT        number of threads [0]. 0 for the maximal number" << endl;
@@ -907,7 +922,7 @@ void Paras::showCallUsage(){
 
 	cout << "Example:" << endl;
 	cout << "   # run 'call' command on the whole genome or the user-specified regions according to previous 'det' command." << endl;
-	cout << "   $ asvclr call -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl;
+	cout << "   $ asvclr call -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam" << endl;
 }
 
 // show the usage for all command
@@ -937,6 +952,8 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
+	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
+	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
 	cout << "   -x FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
 	cout << "                 0 for no coverage sampling" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
@@ -1028,14 +1045,14 @@ if(cmd_str.compare(CMD_ALL_STR)==0){
 }else{
 	cout << "   # run the '" << cmd_str << "' command on the whole genome" << endl;
 }
-	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam" << endl << endl;
 
 if(cmd_str.compare(CMD_ALL_STR)==0){
 	cout << "   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
 }else{
 	cout << "   # run the '" << cmd_str << "' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
 }
-	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for det-cns command
@@ -1079,6 +1096,7 @@ void Paras::outputParas(){
 	if(command.compare(CMD_DET_STR)!=0)
 		cout << "Minimal ratio of max-segment for indel calling: " << max_seg_size_ratio_usr << endl; // not det
 	cout << "Minimal clipping end size: " << minClipEndSize << " bp" << endl;
+	cout << "Minimal read mapping quality threshold: " << minMapQ << endl;
 	if(command.compare(CMD_CNS_STR)==0 or command.compare(CMD_ALL_STR)==0 or command.compare(CMD_DET_CNS_STR)==0){ // cns, all, det-cns
 		cout << "Expected sampling coverage: " << expected_cov_cns << endl;
 		cout << "Local consensus chunk size : " << cnsChunkSize << " bp" << endl;

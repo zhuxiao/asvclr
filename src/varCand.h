@@ -18,9 +18,8 @@
 #include "meminfo.h"
 #include "genotyping.h"
 #include "clipAlnDataLoader.h"
+#include "indentity.h"
 #include "util.h"
-#include "consistency.h"
-
 
 using namespace std;
 
@@ -74,7 +73,8 @@ class varCand {
 
 		string refseqfilename, ctgfilename, readsfilename, alnfilename, clusterfilename;
 //		string rescue_refseqfilename, rescue_cnsfilename, rescue_readsfilename, rescue_alnfilename;
-		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize;
+		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, minMapQ;
+		double max_ultra_high_cov;
 		vector<reg_t*> varVec, newVarVec;
 		bool cns_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
 		vector<blat_aln_t*> blat_aln_vec;               	// blat aligned segments
@@ -128,6 +128,7 @@ class varCand {
 
 	public:
 		varCand();
+		varCand(int32_t minMapQ);
 		virtual ~varCand();
 		void callVariants();
 		void callVariants02();
@@ -174,7 +175,7 @@ class varCand {
 		void determineIndelType();
 		void eraseFalsePositiveVariants();
 		void svPosCorrection(reg_t* reg);
-		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres);
+		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, int32_t minMapQ);
 		void destoryClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void destoryPosCorrectionVec();
 		void callShortVariants();

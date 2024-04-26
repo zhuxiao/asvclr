@@ -273,7 +273,7 @@ void Block::blockDetect(){
 
 //	printRegVec(indelVector, "indelVector");
 
-	removeFalseIndel();
+	//removeFalseIndel();  // deleted 2024-04-03
 
 //	printRegVec(indelVector, "indelVector");
 
@@ -293,7 +293,7 @@ void Block::blockDetect(){
 	removeRedundantItems(clipRegVector);
 
 	// save SV to file
-	saveSV2File();
+	//saveSV2File(); // delete on 2024-04-06
 
 	// output base coverage
 	//outputCovFile();
@@ -305,7 +305,7 @@ void Block::blockDetect(){
 
 // load alignment data with specified region in the format like `chr2:100-200'
 int Block::loadAlnData(){
-	alnDataLoader data_loader(chrname, startPos, endPos, paras->inBamFile);
+	alnDataLoader data_loader(chrname, startPos, endPos, paras->inBamFile, paras->minMapQ);
 	data_loader.loadAlnData(alnDataVector);
 	return 0;
 }
@@ -838,7 +838,7 @@ void Block::saveSV2File(){
 	reg_t* reg;
 	for(i=0; i<indelVector.size(); i++){
 		reg = indelVector.at(i);
-		out_file << reg->chrname << "\t" << reg->startRefPos << "\t" <<  reg->endRefPos << endl;
+		out_file << reg->chrname << "\t" << reg->startRefPos << "\t" <<  reg->endRefPos << "\t" << reg->sv_len << endl;
 	}
 	out_file.close();
 
