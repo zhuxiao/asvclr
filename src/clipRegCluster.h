@@ -19,11 +19,11 @@ class clipRegCluster {
 private:
 	string chrname;
 	int64_t var_startRefPos, var_endRefPos, chrlen;
-	int32_t minClipEndSize, min_sv_size;
+	int32_t minClipEndSize, min_sv_size, min_supp_num;
 	faidx_t *fai;
 
 public:
-	clipRegCluster(string &chrname, int64_t var_startRefPos, int64_t var_endRefPos, int32_t minClipEndSize, int32_t min_sv_size, faidx_t *fai);
+	clipRegCluster(string &chrname, int64_t var_startRefPos, int64_t var_endRefPos, int32_t minClipEndSize, int32_t min_sv_size, int32_t min_supp_num, faidx_t *fai);
 	virtual ~clipRegCluster();
 	void destoryQcSigList(vector<qcSigList_t*> &qcSigList_vec);
 	vector<qcSigList_t*> extractQcSigsClipReg(vector<struct querySeqInfoNode*> &query_seq_info_vec);

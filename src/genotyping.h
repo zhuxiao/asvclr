@@ -44,7 +44,7 @@ class genotyping{
 		reg_t *reg;
 		string inBamFile;
 		int32_t sig_size_thres, clip_size_thres, clip_extend_match_thres, min_sup_num_recover, noProfileQueryNum, minMapQ;
-		double size_ratio_match_thres, valid_summed_size_ratio_read, min_alle_ratio_thres, max_alle_ratio_thres;
+		double size_ratio_match_thres, valid_summed_size_ratio_read, min_alle_ratio_thres, max_alle_ratio_thres, max_ultra_high_cov;
 		queryGtSig_t *seed_gtQuery;
 		vector<bool> validGtSigFlagVec;
 		vector<string> gt_str_vec;
@@ -54,7 +54,7 @@ class genotyping{
 		vector<profile_pat_t*> match_profile_pat_vec;
 
 	public:
-		genotyping(reg_t *reg, faidx_t *fai, string &inBamFile, int32_t sig_size_thres, double size_ratio_match_thres, double min_alle_ratio_thres, double max_alle_ratio_thres, int32_t min_sup_num_recover, int32_t minMapQ);
+		genotyping(reg_t *reg, faidx_t *fai, string &inBamFile, int32_t sig_size_thres, double size_ratio_match_thres, double min_alle_ratio_thres, double max_alle_ratio_thres, int32_t min_sup_num_recover, int32_t minMapQ, double max_ultra_high_cov);
 		virtual ~genotyping();
 		void destroyMatchProfilePatVec(vector<profile_pat_t*> &match_profile_pat_vec);
 		void computeGenotype();

@@ -2348,10 +2348,17 @@ void* processSingleCallWork(void *arg){
 	double percentage;
 	Time time;
 
+	time.setStartTime();
+
 	//cout << var_cand->alnfilename << endl;
 
 	//var_cand->callVariants();
 	var_cand->callVariants02();
+
+//	double run_seconds = time.getElapsedSeconds();
+//	if(run_seconds>10) {
+//		cout << "run_seconds=" << run_seconds << ", call region [" << call_work_opt->work_id << "]: " << call_work_opt->var_cand->alnfilename << endl;
+//	}
 
 	// output progress information
 	pthread_mutex_lock(call_work_opt->p_mtx_call_workDone_num);
@@ -3033,7 +3040,7 @@ vector<mismatchReg_t*> getMismatchRegVecWithoutPos(localAln_t *local_aln){
 	return misReg_vec;
 }
 
-void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ){
+void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ, double max_ultra_high_cov){
 	size_t m;
 	int64_t start_ref_pos, end_ref_pos, chrlen_tmp;
 	int32_t i, j, start_check_idx, end_check_idx;
@@ -3059,7 +3066,7 @@ void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchRe
 	// load align data
 
 	alnDataLoader data_loader(chrname_tmp, start_ref_pos, end_ref_pos, inBamFile, minMapQ);
-	data_loader.loadAlnData(alnDataVector);
+	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
 
 	// load coverage
 	covLoader cov_loader(chrname_tmp, start_ref_pos, end_ref_pos, fai);
@@ -3989,7 +3996,7 @@ void copyClipPosVec(vector<clipPos_t*> &sourceClipPosVector, vector<clipPos_t*> 
 }
 
 // compute the coverage of a clipping position
-int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile, int32_t minMapQ){
+int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile, int32_t minMapQ, double max_ultra_high_cov){
 	int64_t start_pos, end_pos, chr_len, pos, totalReadBeseNum, totalRefBaseNum;
 	double mean_cov_num;
 	Base *baseArray;
@@ -4007,7 +4014,7 @@ int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faid
 	baseArray = cov_loader.initBaseArray();
 
 	alnDataLoader data_loader(chrname, start_pos, end_pos, inBamFile, minMapQ);
-	data_loader.loadAlnData(alnDataVector);
+	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
 
 	// generate the base coverage array
 	cov_loader.generateBaseCoverage(baseArray, alnDataVector);
@@ -5964,10 +5971,11 @@ int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len){
 	return end_query_pos;
 }
 
-bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double consist_ratio_match_thres){
+bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double consist_ratio_match_thres, faidx_t *fai){
 	bool match_flag = false;
-	double size_ratio, consist_val;
-	int64_t ref_distance;
+	double size_ratio, identity_val;
+	int64_t ref_distance, min_val;
+	vector<string> comp_seqs;
 
 	if(qc_sig and seed_qc_sig){
 		if(qc_sig->chrname.compare(seed_qc_sig->chrname)==0){
@@ -5979,10 +5987,17 @@ bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_ma
 					if(size_ratio>=size_ratio_match_thres){
 						ref_distance = abs(qc_sig->ref_pos - seed_qc_sig->ref_pos);
 						if(qc_sig->cigar_op==BAM_CINS){
-							if(qc_sig->altseq.size()>0 and seed_qc_sig->altseq.size()>0){
-								consist_val = computeVarseqIndentity(qc_sig->altseq, seed_qc_sig->altseq);
-								//cout << "consist_val=" << consist_val << endl;
-								if(ref_distance<max_ref_dist_match and consist_val>=consist_ratio_match_thres){
+							if(qc_sig->altseq.size()>0 and seed_qc_sig->altseq.size()>0 and ref_distance < MAX_REF_DIST_IDENTITY){
+								min_val = min(qc_sig->cigar_op_len, seed_qc_sig->cigar_op_len);
+								if(ref_distance>0 and min_val/ref_distance > 1-consist_ratio_match_thres){
+									// get sequences
+									comp_seqs = extractQcSigCompSeqs(qc_sig, seed_qc_sig, fai);
+									identity_val = computeVarseqIdentity(comp_seqs.at(0), comp_seqs.at(1));
+								}else
+									identity_val = computeVarseqIdentity(qc_sig->altseq, seed_qc_sig->altseq);
+
+//								cout << "identity_val=" << identity_val << ", cigar_op_len1=" << qc_sig->cigar_op_len << ", cigar_op_len2=" << seed_qc_sig->cigar_op_len << ", qc_sig.altseq=" << qc_sig->altseq << ", seed_qc_sig.altseq=" << seed_qc_sig->altseq << endl;
+								if(ref_distance<max_ref_dist_match and identity_val>=consist_ratio_match_thres){
 									match_flag = true;
 								}
 							}else{
@@ -6094,7 +6109,67 @@ void destoryQuerySeqInfoAll(vector<struct querySeqInfoNode*> &query_seq_info_all
 	vector<struct querySeqInfoNode*>().swap(query_seq_info_all);
 }
 
+vector<string> extractQcSigCompSeqs(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, faidx_t *fai){
+	vector<string> comp_seqs;
+	string seq_new1, seq_new2;
+	string seq_left, seq_right, reg_str;
+	int startpos1, startpos2, endpos1, endpos2;
+	int32_t refseq_len_tmp;
+	char *seq;
 
+	startpos1 = qc_sig->ref_pos;
+	startpos2 = seed_qc_sig->ref_pos;
+	endpos1 = getEndRefPosAlnSeg(qc_sig->ref_pos, qc_sig->cigar_op, qc_sig->cigar_op_len);
+	endpos2 = getEndRefPosAlnSeg(seed_qc_sig->ref_pos, seed_qc_sig->cigar_op, seed_qc_sig->cigar_op_len);
+
+	seq_new1 = qc_sig->altseq;
+	seq_new2 = seed_qc_sig->altseq;
+
+	if (startpos1 < startpos2) {
+		reg_str = qc_sig->chrname + ":" + to_string(startpos1) + "-" + to_string(startpos2 - 1);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+		pthread_mutex_unlock(&mutex_fai);
+		seq_left = seq;
+		free(seq);
+
+		seq_new2 = seq_left + seq_new2;
+	} else if(startpos1 > startpos2) {
+		reg_str = seed_qc_sig->chrname + ":" + to_string(startpos2) + "-" + to_string(startpos1 - 1);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+		pthread_mutex_unlock(&mutex_fai);
+		seq_left = seq;
+		free(seq);
+
+		seq_new1 = seq_left + seq_new1;
+	}
+
+	if (endpos1 < endpos2) {
+		reg_str = qc_sig->chrname + ":" + to_string(endpos1 + 1) + "-" + to_string(endpos2);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+		pthread_mutex_unlock(&mutex_fai);
+		seq_right = seq;
+		free(seq);
+
+		seq_new1 = seq_new1 + seq_right;
+	} else if(endpos1 > endpos2){
+		reg_str = seed_qc_sig->chrname + ":" + to_string(endpos2 + 1) + "-" + to_string(endpos1);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+		pthread_mutex_unlock(&mutex_fai);
+		seq_right = seq;
+		free(seq);
+
+		seq_new2 = seq_new2 + seq_right;
+	}
+
+	comp_seqs.push_back(seq_new1);
+	comp_seqs.push_back(seq_new2);
+
+	return comp_seqs;
+}
 
 Time::Time() {
 	timestamp = start = end = start_all = end_all = 0;

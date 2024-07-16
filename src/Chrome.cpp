@@ -311,13 +311,13 @@ int Chrome::chrDetect(){
 
 // single thread
 int Chrome::chrDetect_st(){
-	//Time time;
+	Time time;
 	Block* bloc;
 	for(size_t i=0; i<blockVector.size(); i++){
 		bloc = blockVector.at(i);
 		if(bloc->process_flag)
 		{
-			//cout << "[" << time.getTime() << "]: [" << i << "]: detect files:" << bloc->out_dir_detect << "/" << bloc->snvFilenameDetect << ", " << bloc->indelFilenameDetect << endl;
+			//cout << "[" << time.getTime() << "]: [" << i << "]: detect files:" << bloc->indelFilenameDetect << endl;
 			bloc->blockDetect();
 		}
 	}
@@ -1819,7 +1819,7 @@ void Chrome::chrResetMisAlnRegFile(){
 		(*bloc)->resetMisAlnRegFile();
 }
 
-// load detected variation data for local consensus
+// load detected variant data for local consensus
 void Chrome::chrLoadDataCons(){
 	size_t i;
 	mateClipReg_t* mate_clip_reg;
@@ -1919,7 +1919,7 @@ void Chrome::chrLoadIndelData(bool limit_reg_process_flag, vector<simpleReg_t*> 
 				reg->discover_level = VAR_DISCOV_L_UNUSED;
 				//cout << "blocID=" << computeBlocID(begPos, blockVector) << ", reg:" << begPos << "-" << endPos << endl;
 
-				tmp_bloc->indelVector.push_back(reg);  // add the variation
+				tmp_bloc->indelVector.push_back(reg);  // add the variant
 			}
 		}
 	}
@@ -2425,7 +2425,7 @@ int Chrome::chrCall(){
 	// set blat var_cand files
 	setBlatVarcandFiles();
 
-	// call variations
+	// call variants
 	if(paras->num_threads<=1) chrCall_st();  // single thread
 	else chrCall_mt();  // multiple threads
 
@@ -2436,24 +2436,24 @@ int Chrome::chrCall(){
 	if(!blat_aligned_chr_varCand_vec.empty()) destroyVarCandVector(blat_aligned_chr_varCand_vec);
 	if(!blat_aligned_chr_clipReg_varCand_vec.empty()) destroyVarCandVector(blat_aligned_chr_clipReg_varCand_vec);
 
-//	// remove redundant new called variations
+//	// remove redundant new called variants
 //	cout << "--[" << time.getTime() << "]: aaaaaaaaaaaaa: removeRedundantVar..." << endl;
 //	removeRedundantVar();
 //
-//	// remove FPs of new called variations
+//	// remove FPs of new called variants
 //	cout << "--[" << time.getTime() << "]: bbbbbbbbbbbbb: removeFPNewVarVec..." << endl;
 //	removeFPNewVarVec();
 
 	return 0;
 }
 
-// call variations for chrome using single thread
+// call variants for chrome using single thread
 void Chrome::chrCall_st(){
 	chrCallVariants(var_cand_vec);
 	chrCallVariants(var_cand_clipReg_vec);
 }
 
-// call variations according to variation candidates
+// call variants according to variant candidates
 void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	varCand *var_cand;
 	for(size_t i=0; i<var_cand_vec.size(); i++){
@@ -2467,7 +2467,7 @@ void Chrome::chrCallVariants(vector<varCand*> &var_cand_vec){
 	}
 }
 
-// call variations for chrome using multiple threads
+// call variants for chrome using multiple threads
 void Chrome::chrCall_mt(){
 	int32_t i;
 	MultiThread mt[paras->num_threads];
@@ -2632,7 +2632,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				// get the number of contigs
 				var_cand_tmp->ctg_num = getCtgCount(var_cand_tmp->ctgfilename);
 
-				// load variations
+				// load variants
 				if(line_vec.at(7).compare("-")!=0){
 					var_str = split(line_vec.at(7), ";");
 					for(i=0; i<var_str.size(); i++){
@@ -2661,7 +2661,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 						reg->AF = 0;
 						reg->supp_num = reg->DP = 0;
 						reg->discover_level = VAR_DISCOV_L_UNUSED;
-						var_cand_tmp->varVec.push_back(reg);  // variation vector
+						var_cand_tmp->varVec.push_back(reg);  // variant vector
 					}
 					var_cand_tmp->varVec.shrink_to_fit();
 				}
@@ -2750,7 +2750,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 							var_cand_tmp->sv_type = mate_clip_reg->sv_type;
 							var_cand_tmp->dup_num = 0;
 						}else{
-							cerr << __func__ << ", line=" << __LINE__ << ", invalid variation type=" << mate_clip_reg->sv_type << ", error!" << endl;
+							cerr << __func__ << ", line=" << __LINE__ << ", invalid variant type=" << mate_clip_reg->sv_type << ", error!" << endl;
 							exit(1);
 						}
 					}else{ // large indel
@@ -3431,7 +3431,7 @@ void Chrome::chrFillVarseqSingleVec(vector<varCand*> &var_cand_vec){
 	}
 }
 
-// remove redundant called variations
+// remove redundant called variants
 void Chrome::removeRedundantVar(){
 	removeRedundantIndel(var_cand_vec);
 	//removeRedundantClipReg(var_cand_clipReg_vec);

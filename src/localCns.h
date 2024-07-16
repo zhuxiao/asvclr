@@ -81,6 +81,7 @@ class localCns {
 		void destroyQueryQcSig(queryCluSig_t *qc_Sig);
 		void saveClusterInfo(string &clusterfilename, vector<struct seqsVec*> &seqs_vec);
 		vector<struct querySeqInfoVec*> queryCluster(vector<struct querySeqInfoNode*> &query_seq_info_all);
+		void prepareQueryInfoForCluster(vector<struct querySeqInfoNode*> &query_seq_info_all);
 		void resucueCluster(vector<struct querySeqInfoNode*> &query_seq_info_all, vector<struct querySeqInfoNode*> &q_cluster_a, vector<struct querySeqInfoNode*> &q_cluster_b);
 		double computeScoreRatio(struct querySeqInfoNode *query_seq_info_node, struct querySeqInfoNode *q_cluster_node, int64_t startSpanPos, int64_t endSpanPos, int32_t min_sv_size);
 		vector<int8_t> computeQcMatchProfileSingleQuery(queryCluSig_t *queryCluSig, queryCluSig_t *seed_qcQuery);

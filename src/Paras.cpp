@@ -733,10 +733,10 @@ void Paras::showUsage(){
 
 	cout << "Example:" << endl;
 	cout << "   # run the pipeline on the whole genome" << endl;
-	cout << "   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
 
 	cout << "   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000" << endl;
-	cout << "   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for detect command
@@ -909,20 +909,20 @@ void Paras::showCallUsage(){
 //	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
 	cout << "   --gt-min-consist-merge FLOAT" << endl;
 	cout << "                 minimal sequence consistency threshold for allele merge [" << GT_MIN_CONSIST_MERGE_THRES << "]." << endl;
-	cout << "                 Allelic variations will be merged if their sequence consistency are larger than FLOAT. " << endl;
+	cout << "                 Allelic variants will be merged if their sequence consistency are larger than FLOAT. " << endl;
 	cout << "   --gt-homo-ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio threshold for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
-	cout << "                 Variation is homozygous if the ratio of allele count is larger than FLOAT." << endl;
+	cout << "                 Variant is homozygous if the ratio of allele count is larger than FLOAT." << endl;
 	cout << "   --gt_hete_ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio threshold for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
-	cout << "                 Variation is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
+	cout << "                 Variant is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
 
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl << endl;
 
 	cout << "Example:" << endl;
 	cout << "   # run 'call' command on the whole genome or the user-specified regions according to previous 'det' command." << endl;
-	cout << "   $ asvclr call -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam" << endl;
+	cout << "   $ asvclr call -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl;
 }
 
 // show the usage for all command
@@ -1027,13 +1027,13 @@ if(cmd_str.compare(CMD_CALL_STR)==0 or cmd_str.compare(CMD_ALL_STR)==0){
 //	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
 	cout << "   --gt-min-consist-merge FLOAT" << endl;
 	cout << "                 minimal sequence consistency threshold for allele merge [" << GT_MIN_CONSIST_MERGE_THRES << "]." << endl;
-	cout << "                 Allelic variations will be merged if their sequence consistency are larger than FLOAT. " << endl;
+	cout << "                 Allelic Variants will be merged if their sequence consistency are larger than FLOAT. " << endl;
 	cout << "   --gt-homo-ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio threshold for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
-	cout << "                 Variation is homozygous if the ratio of allele count is larger than FLOAT." << endl;
+	cout << "                 Variant is homozygous if the ratio of allele count is larger than FLOAT." << endl;
 	cout << "   --gt_hete_ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio threshold for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
-	cout << "                 Variation is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
+	cout << "                 Variant is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
 }
 
 	cout << "   -v,--version  show version information" << endl;
@@ -1045,14 +1045,14 @@ if(cmd_str.compare(CMD_ALL_STR)==0){
 }else{
 	cout << "   # run the '" << cmd_str << "' command on the whole genome" << endl;
 }
-	cout << "   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
 
 if(cmd_str.compare(CMD_ALL_STR)==0){
 	cout << "   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
 }else{
 	cout << "   # run the '" << cmd_str << "' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
 }
-	cout << "   $ asvclr all -t 32 -m 20 -p genome_asvclr -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for det-cns command
@@ -1256,7 +1256,7 @@ int64_t Paras::estimateMinReadsNumSupportSV(vector<int64_t> &mean_depth_vec){
 	int64_t max_id, max_num, same_id, min_supp_reads_num, total_depth;
 	bool exist_flag = false;
 	if(mean_depth_vec.size()==0){
-		cout<<"paras minReadsNumSupportSV wrong"<<endl;
+		cout << "Too low depth to estimate the minimal reads number for support SV" << endl;
 	}
 	for(i=0; i<mean_depth_vec.size(); i++){
 		for(j=0; j<support_match_vec.size(); j++){
@@ -1288,10 +1288,8 @@ int64_t Paras::estimateMinReadsNumSupportSV(vector<int64_t> &mean_depth_vec){
 		}
 	}
 	total_depth = 0;
-	for(i=0; i<support_match_vec.at(max_id)->support_num.size(); i++){
-		total_depth += support_match_vec.at(max_id)->support_num.at(i);
-	}
-	min_supp_reads_num = 2 + round(((double)total_depth / support_match_vec.at(max_id)->support_num.size())*MIN_SUPPORT_READS_NUM_FACTOR);
+	for(i=0; i<support_match_vec.at(max_id)->support_num.size(); i++) total_depth += support_match_vec.at(max_id)->support_num.at(i);
+	min_supp_reads_num = 2 + round(((double)total_depth / support_match_vec.at(max_id)->support_num.size()) * MIN_SUPPORT_READS_NUM_FACTOR);
 
 	//destroy and support_match_vec
 	for(i=0; i<support_match_vec.size(); i++){
@@ -1313,7 +1311,7 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 	if(opt_name_str.compare("sample")==0){ // "sample"
 		if(optarg) sample = optarg;
 		else{
-			cout << "Error: Please specify the correct sample name using --sample option." << endl << endl;
+			cout << "Error: please specify the correct sample name using --sample option." << endl << endl;
 			ret = 1;
 		}
 	}

@@ -149,6 +149,7 @@ struct querySeqInfoNode{
 	clipAlnData_t *clip_aln;
 	string qname, seq;
 	bool cluster_finished_flag, selected_flag;
+	int16_t overlap_sig_num;
 	vector<struct alnSeg*> query_alnSegs;
 };
 

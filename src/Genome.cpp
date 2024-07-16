@@ -307,12 +307,13 @@ void Genome::estimateSVSizeNum(){
 	paras->estimate(NUM_EST_OP);
 }
 
-// detect variations for genome
+// detect variants for genome
 int Genome::genomeDetect(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 //		if(chr->chrname =="1"){
+		//if((chr->decoy_flag==false or paras->include_decoy) and (chr->chrname.find("_random")==string::npos and chr->chrname.find("_alt")==string::npos and chr->chrname.find("chrUn_")==string::npos)) // no alt
 		if(chr->decoy_flag==false or paras->include_decoy)
 			chr->chrDetect();
 //		}
@@ -704,6 +705,7 @@ void Genome::genomeLoadDataCons(){
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		//if(chr->chrname.compare("GL000225.1")==0)
+		//if(chr->decoy_flag==false and (chr->chrname.find("_random")==string::npos and chr->chrname.find("_alt")==string::npos and chr->chrname.find("chrUn_")==string::npos)) // non-decoy and no alt
 		if(chr->decoy_flag==false) // non-decoy
 		{
 			if(chr->chrname.compare(CHR_X_STR1)!=0 and chr->chrname.compare(CHR_X_STR2)!=0 and chr->chrname.compare(CHR_Y_STR1)!=0 and chr->chrname.compare(CHR_Y_STR2)!=0){
@@ -757,8 +759,9 @@ int Genome::processConsWork(){
 			cerr << __func__ << ", line=" << __LINE__ << ": cannot get car_cand file for CHR: " << cns_work_opt->chrname << ", error!" << endl;
 			exit(1);
 		}
-		//clipReg_reads_1_26966226-26974816.fq, clipReg_reads_1_21506254-21506762.fq, clipReg_cns_16_209822-210880.fa, clipReg_cns_1_197756788-197757987.fa (INV)
-//		if(cns_work_opt->contigfilename.compare("output_debug_hg002_hg38_pbmm2/2_cns/chrX/cns_chrX_62494219-62494220.fa")==0){
+		// clipReg_reads_1_26966226-26974816.fq, clipReg_reads_1_21506254-21506762.fq, clipReg_cns_16_209822-210880.fa, clipReg_cns_1_197756788-197757987.fa (INV)
+		// cns_chr1_1461692-1461767.fa, cns_chr1_1595082-1595934.fa, cns_chr1_1663381-1663402.fa
+//		if(cns_work_opt->contigfilename.compare("output_test/2_cns/chr1/cns_chr1_1663381-1663402.fa")==0){
 //			cout << "cnsfilename=" << cns_work_opt->contigfilename << endl;
 //		}else continue;
 
@@ -873,7 +876,7 @@ int Genome::genomeCall(){
 	// call TRA according to mate clip regions
 	//genomeCallTra(); // 2023-12-25
 
-	// fill variation sequence
+	// fill variant sequence
 	//cout << "4444444444444" << endl;
 	cout << "[" << time.getTime() << "]: fill variant sequences... " << endl;
 	genomeFillVarseq();
@@ -1061,6 +1064,7 @@ void Genome::genomeCollectCallWork(){
 		chr = chromeVector.at(i);
 		//if(chr->chrname.compare("1")==0)
 		{
+			//if(chr->decoy_flag==false and (chr->chrname.find("_random")==string::npos and chr->chrname.find("_alt")==string::npos and chr->chrname.find("chrUn_")==string::npos)){ // non-decoy and no alt
 			if(chr->decoy_flag==false){ // non-decoy
 				if(chr->chrname.compare(CHR_X_STR1)!=0 and chr->chrname.compare(CHR_X_STR2)!=0 and chr->chrname.compare(CHR_Y_STR1)!=0 and chr->chrname.compare(CHR_Y_STR2)!=0){
 					chr->chrLoadDataCall();
@@ -1189,7 +1193,7 @@ int Genome::processCallWork(){
 
 	paras->call_workDone_num = 0;
 	num_work = paras->call_work_vec.size();
-	num_work_percent = num_work / (paras->num_parts_progress / 10);
+	num_work_percent = num_work / (paras->num_parts_progress >> 1);
 	if(num_work_percent==0) num_work_percent = 1;
 	for(size_t i=0; i<num_work; i++){
 		var_cand = paras->call_work_vec.at(i);
@@ -1201,7 +1205,7 @@ int Genome::processCallWork(){
 		// blat_contig_chr1_253768-256236.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_2068132-2073121.sim4
 		// minimap2_1_2213173-2214000.paf, minimap2_contig_1_26966226-26974816.paf, minimap2_contig_1_21506254-21506762.paf, minimap2_contig_1_29382165-29382465.paf
 		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf
-//		if(var_cand->alnfilename.compare("output_hg002_hg38_pbmm2/3_call/chr22/minimap2_chr22_16350249-16351216.paf")!=0){
+//		if(var_cand->alnfilename.compare("output_test/3_call/chr1/minimap2_chr1_143246329-143247038.paf")!=0){
 //			continue;
 //		}
 
@@ -3613,13 +3617,13 @@ void Genome::saveVCFHeader(ofstream &fp, string &sample_str){
 //	fp << "##ALT=<ID=TRA,Description=\"Translocation\">" << endl;
 //	fp << "##ALT=<ID=BND,Description=\"Breakend\">" << endl;
 //	fp << "##INFO=<ID=CHR2,Number=1,Type=String,Description=\"Chromosome for END coordinate in case of a translocation\">" << endl;
-	fp << "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variation described in this record\">" << endl;
+	fp << "##INFO=<ID=END,Number=1,Type=Integer,Description=\"End position of the structural variant described in this record\">" << endl;
 	fp << "##INFO=<ID=SVTYPE,Number=1,Type=String,Description=\"Type of structural variant\">" << endl;
 	fp << "##INFO=<ID=SVLEN,Number=1,Type=Integer,Description=\"Difference in length between REF and ALT alleles\">" << endl;
 	fp << "##INFO=<ID=DUPNUM,Number=1,Type=Integer,Description=\"Copy number of DUP\">" << endl;
 	fp << "##INFO=<ID=MATEID,Number=.,Type=String,Description=\"ID of mate breakends\">" << endl;
 	fp << "##INFO=<ID=MATEDIST,Number=1,Type=Integer,Description=\"Distance to the mate breakend for mates on the same contig\">" << endl;
-	fp << "##INFO=<ID=LDISCOV,Number=1,Type=String,Description=\"Variation discover level: ALN for variations are discovered from consensus alignments, RES-ALN for variations are discovered from rescued consensus alignments around variation regions, READS for variations are discovered from reads alignments directly\">" << endl;
+	fp << "##INFO=<ID=LDISCOV,Number=1,Type=String,Description=\"Variant discover level: ALN for variants are discovered from consensus alignments, RES-ALN for variants are discovered from rescued consensus alignments around variant regions, READS for variants are discovered from reads alignments directly\">" << endl;
 	fp << "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Total Depth\">" << endl;
 	fp << "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele Frequency\">" << endl;
 	//fp << "##INFO=<ID=BLATINNER,Number=1,Type=Flag,Description=\"variants called from inner parts of BLAT align segment\">" << endl;

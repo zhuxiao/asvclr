@@ -2380,7 +2380,7 @@ int32_t clipReg::computeCovNumClipPos(string &chrname, int64_t meanClipPos, int3
 
 
 	alnDataLoader data_loader(chrname, start_pos, end_pos, paras->inBamFile, paras->minMapQ);
-	data_loader.loadAlnData(alnDataVector);
+	data_loader.loadAlnData(alnDataVector, paras->max_ultra_high_cov);
 
 	// generate the base coverage array
 	cov_loader.generateBaseCoverage(baseArray, alnDataVector);
@@ -3305,7 +3305,7 @@ void clipReg::computeVarTypeClipReg(mateClipReg_t &mate_clip_reg){
 
 			// compute depth for large indel region
 
-			mate_clip_reg.depth_largeIndel = computeCovNumReg(largeIndelClipReg->chrname, largeIndelClipReg->startRefPos, largeIndelClipReg->endRefPos, fai, inBamFile, paras->minMapQ);
+			mate_clip_reg.depth_largeIndel = computeCovNumReg(largeIndelClipReg->chrname, largeIndelClipReg->startRefPos, largeIndelClipReg->endRefPos, fai, inBamFile, paras->minMapQ, paras->max_ultra_high_cov);
 			if(mate_clip_reg.depth_largeIndel<mate_clip_reg.supp_num_largeIndel) mate_clip_reg.depth_largeIndel = mate_clip_reg.supp_num_largeIndel; // tolerate DEL region
 			mate_clip_reg.supp_num_valid_flag = true;
 

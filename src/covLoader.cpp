@@ -295,9 +295,10 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 					for(pos=(*seg)->startRpos; pos<=tmp_endPos; pos++){
 						if(pos>=startPos and pos<=endPos){
 							cover = &(baseArr[pos-startPos].coverage);
-							if(cover->idx_RefBase>=0 and cover->idx_RefBase<=4)
-								cover->num_bases[cover->idx_RefBase] ++;
-							else{
+							if(cover->idx_RefBase>=0 and cover->idx_RefBase<=4) cover->num_bases[cover->idx_RefBase] ++;
+							else if(cover->idx_RefBase==5) { // treat as 'N'
+								cover->num_bases[4] ++;
+							}else{
 								cerr << __func__ << ", line=" << __LINE__ << ": invalid idx_RefBase " << cover->idx_RefBase << endl;
 								outputAlnSegs(alnSegs);
 								exit(1);

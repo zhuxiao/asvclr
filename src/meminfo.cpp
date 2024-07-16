@@ -8,9 +8,9 @@ int64_t swap_total = 0;	// in kB
 int64_t extend_total = 0;	// in kB, the minimum of mem_total and swap_total
 
 int64_t mem_seqAln = 0;		// in kB
-double mem_use_block_factor = 0.9;
+double mem_use_block_factor = 0.8; // 0.9
 double extend_use_block_factor = 0.1;
-int32_t mem_wait_seconds = 2;	// wait time
+int32_t mem_wait_seconds = 1;	// wait time  // 2
 
 int32_t work_num = 0;
 

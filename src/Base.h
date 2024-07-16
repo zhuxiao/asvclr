@@ -18,7 +18,7 @@ class Base
 		baseCoverage_t coverage;
 		vector<insEvent_t*> insVector;  // insertion event vector
 		vector<delEvent_t*> delVector;  // deletion event vector
-		vector<delEvent_t*> extendDelVector;  // extend deletion event vector, 20220530
+		vector<delEvent_t*> extendDelVector;  // extend deletion event vector, 20220530     (10k)
 		vector<clipEvent_t*> clipVector;  // clip event vector
 
 		int32_t num_shortIns, num_shortdel, num_shortClip, del_num_from_del_vec;

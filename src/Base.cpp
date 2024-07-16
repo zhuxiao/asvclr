@@ -79,7 +79,7 @@ void Base::updateCovInfo(){
 	// get max and count
 	maxIdx = 0; maxNum = cov_nums[0];
 	for(i=1; i<5; i++) if(maxNum<cov_nums[i]){ maxIdx = i; maxNum = cov_nums[i]; }
-	coverage.idx_max = maxIdx;
+	if(maxNum>0) coverage.idx_max = maxIdx;
 	coverage.num_max = maxNum;
 }
 
@@ -89,8 +89,8 @@ bool Base::isDisagreeBase(){
 	int32_t baseNum_A, baseNum_C, baseNum_G, baseNum_T, total_cov;
 	double total_tmp;
 
-	if((double)coverage.num_max/coverage.num_bases[5]<=DISAGREE_THRES)
-		flag = true;
+	if(coverage.num_bases[5]==0) flag = true;
+	else if((double)coverage.num_max/coverage.num_bases[5]<=DISAGREE_THRES) flag = true;
 	else if(coverage.idx_max!=coverage.idx_RefBase){
 		if(coverage.idx_RefBase==5){
 			baseNum_A = coverage.num_bases[0];
@@ -154,6 +154,7 @@ bool Base::isDisagreeBase(){
 		}else
 			flag = true;
 	}
+
 	return flag;
 }
 

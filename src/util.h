@@ -112,7 +112,7 @@ void createDir(string &dirname);
 vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_size);
 vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln);
 vector<mismatchReg_t*> getMismatchRegVecWithoutPos(localAln_t *local_aln);
-void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ);
+void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ, double max_ultra_high_cov);
 void adjustVarLocByMismatchRegs(reg_t *reg, vector<mismatchReg_t*> &misReg_vec, int32_t start_aln_idx_var, int32_t end_aln_idx_var);
 void releaseMismatchRegVec(vector<mismatchReg_t*> &misReg_vec);
 mismatchReg_t *getMismatchReg(int32_t aln_idx, vector<mismatchReg_t*> &misReg_vec);
@@ -130,7 +130,7 @@ void checkBNDStrVec(mateClipReg_t &mate_clip_reg);
 bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec);
 void checkSuppNum(mateClipReg_t &mate_clip_reg, int32_t support_num_thres);
 void copyClipPosVec(vector<clipPos_t*> &sourceClipPosVector, vector<clipPos_t*> &destClipPosVector);
-int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile, int32_t minMapQ);
+int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile, int32_t minMapQ, double max_ultra_high_cov);
 bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr, int64_t max_sv_size_usr);
 bool isSizeSatisfied2(int64_t sv_len, int64_t min_sv_size_usr, int64_t max_sv_size_usr);
 bool isNotAlreadyExists(vector<reg_t*> &varVec, reg_t *reg);
@@ -176,10 +176,11 @@ int64_t getEndRefPosAlnSeg(int64_t startRpos, int32_t opflag, int32_t op_len);
 int64_t getEndSubjectPosAlnSeg(int64_t startSubpos, int32_t opflag, int32_t op_len);
 int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len);
 
-bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double consist_ratio_match_thres);
+bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double consist_ratio_match_thres, faidx_t *fai);
 vector<qcSig_t*> extractQcSigsFromAlnSegsSingleQuery(struct querySeqInfoNode *query_seq_info_node, string &chrname, int64_t startSpanPos, int64_t endSpanPos, int32_t min_sv_size);
 qcSig_t *allocateQcSigNode(struct alnSeg *aln_seg);
 void destoryQuerySeqInfoAll(vector<struct querySeqInfoNode*> &query_seq_info_all);
+vector<string> extractQcSigCompSeqs(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, faidx_t *fai);
 
 
 class Time{

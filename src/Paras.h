@@ -16,8 +16,8 @@ using namespace std;
 
 // program variables
 #define PROG_NAME					"ASVCLR"
-#define PROG_DESC					"Accurate Structural Variation Caller for Long Reads"
-#define PROG_VERSION				"1.4.1"
+#define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
+#define PROG_VERSION				"1.4.2"
 #define VCF_VERSION					"4.2"
 
 #define CMD_DET_STR					"det"
@@ -76,7 +76,7 @@ using namespace std;
 
 //#define MIN_CLIP_READS_NUM_THRES	7
 #define MIN_SUPPORT_READS_NUM_EST		-1
-#define MIN_SUPPORT_READS_NUM_FACTOR	0.07f
+#define MIN_SUPPORT_READS_NUM_FACTOR	0.05f	// 0.07f (updated 2024-06-25)
 #define READS_NUM_SUPPORT_FACTOR		0.5f
 
 #define MAX_VAR_REG_SIZE			50000
@@ -86,6 +86,8 @@ using namespace std;
 #define CNS_EXT_INDEL_FACTOR_1K		5	// side extend size factor for large chunk (> 1kb)
 #define CNS_CHUNK_SIZE_EXT_CLIP		20000	//1000, 10000
 #define MIN_CONS_READ_LEN			100
+
+#define MAX_REF_DIST_IDENTITY		2000
 
 #define SIZE_PERCENTILE_EST			0.95	//0.95 (d-2024-03-23)
 #define NUM_PERCENTILE_EST			0.99995
@@ -117,7 +119,7 @@ using namespace std;
 #define SAMPLE_DEFAULT				"sample"
 #define RESULT_PREFIX_DEFAULT		"genome"
 
-#define MAX_ULTRA_HIGH_COV_THRES	100		// maximal coverage threshold for ultra-high coverage, 300
+#define MAX_ULTRA_HIGH_COV_THRES	300		// maximal coverage threshold for ultra-high coverage, 100
 #define MIN_MAPQ_THRES				0		// 10
 
 #define MIN_ADJACENT_REG_DIST		20		// 50

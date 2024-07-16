@@ -18,7 +18,7 @@
 #include "meminfo.h"
 #include "genotyping.h"
 #include "clipAlnDataLoader.h"
-#include "indentity.h"
+#include "identity.h"
 #include "util.h"
 
 using namespace std;
@@ -175,7 +175,7 @@ class varCand {
 		void determineIndelType();
 		void eraseFalsePositiveVariants();
 		void svPosCorrection(reg_t* reg);
-		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, int32_t minMapQ);
+		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, vector<clipAlnData_t*> &clipAlnDataVector, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, int32_t minMapQ);
 		void destoryClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void destoryPosCorrectionVec();
 		void callShortVariants();

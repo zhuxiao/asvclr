@@ -334,10 +334,11 @@ int32_t Region::computeValidSigNumReg(int64_t startPosReg, int64_t endPosReg, in
 				clip = base->clipVector.at(j);
 				if(clip->seq.size()>=(size_t)min_sig_size) totalValidSigNum ++;
 			}
-		}else{ // do not tolerate the gap region
-			totalValidSigNum = 0;
-			break;
 		}
+//		else{ // do not tolerate the gap region // deleted on 2024-06-28
+//			totalValidSigNum = 0;
+//			break;
+//		}
 	}
 	return totalValidSigNum;
 }
@@ -476,13 +477,13 @@ void Region::detectIndelReg(){
 	if(i<minRPos) i = minRPos;
 	while(i<endMidPartPos){
 
-//		if(i>1413900)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>
-//			cout << i << endl;
+//		if(i>32915500)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>, 9786000, 12876474
+//			cout << i << endl;  // breakpoints
 
 		reg = getIndelReg(i);
 
 		if(reg){
-			//cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", localRef: " << reg->startLocalRefPos << "-" << reg->endLocalRefPos << ", Query :" << reg->startQueryPos << "-" << reg->endQueryPos << endl;
+//			cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", localRef: " << reg->startLocalRefPos << "-" << reg->endLocalRefPos << ", Query :" << reg->startQueryPos << "-" << reg->endQueryPos << endl;
 			indelVector.push_back(reg);
 			i = reg->endRefPos + subRegSize;
 		} else break;
@@ -532,7 +533,6 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 		}
 		if(indel_beg_flag){
 			endPos1 = startPos1 + reg_size1 - 1;
-
 			// get normal region2
 			startPos2 = -1;
 			reg_size2 = 0;
@@ -540,33 +540,33 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 			for(i=endPos1+1; i<=endRPos+extendSize; i++){
 				if(i>chrlen) break;
 
-				if(regBaseArr[i-startRPos].coverage.idx_RefBase==4){ // skip the Ns region
-					startPos2 = -1;
-					reg_size2 = 0;
-					continue;
-				}
-
-				if(haveNoAbSigs(regBaseArr+i-startRPos, i)){
-					if(startPos2==-1)
-						startPos2 = i;
-					++reg_size2;
-					if(reg_size2>=2*(int64_t)subRegSize){
-						num3 = getLargeIndelNum(startPos2, i);
-						if(num3<3){
-							indel_end_flag = true;
-							break;
-						}else{
-							startPos2 = -1;
-							reg_size2 = 0;
+				if(regBaseArr[i-startRPos].coverage.idx_RefBase!=4){
+					if(haveNoAbSigs(regBaseArr+i-startRPos, i)){
+						if(startPos2==-1)
+							startPos2 = i;
+						++reg_size2;
+						if(reg_size2>=2*(int64_t)subRegSize){
+							num3 = getLargeIndelNum(startPos2, i);
+							if(num3<3){
+								indel_end_flag = true;
+								break;
+							}else{
+								startPos2 = -1;
+								reg_size2 = 0;
+							}
 						}
+					}else{
+						startPos2 = -1;
+						reg_size2 = 0;
 					}
-				}else{
+				}else{ // skip the Ns region
 					startPos2 = -1;
 					reg_size2 = 0;
+					//continue;
 				}
 
-				if(i==endRPos and indel_end_flag==false){
-					extendSize = paras->slideSize * 2;
+				if(i==endRPos+extendSize and extendSize<=paras->max_sv_size_usr and indel_end_flag==false){
+					extendSize += paras->slideSize * 2;
 					if(extendSize+endRPos>maxRPos)
 						extendSize = maxRPos - endRPos;
 				}
@@ -710,9 +710,9 @@ int32_t Region::getHighConIndelNum(int64_t startPos, int64_t endPos, float thres
 	return high_con_indel_base_num;
 }
 
-// compute estimate sv size
+// compute estimate maximal sv size
 int32_t Region::computeEstSVLen(int64_t startPos, int64_t endPos){
-	int64_t i, j, start_pos, end_pos, sum, num, mean_sv_len;
+	int64_t i, j, start_pos, end_pos, sum_ins, sum_del, num_ins, num_del, mean_sv_len_ins, mean_sv_len_del;
 	vector<insEvent_t*> insVector;
 	vector<delEvent_t*> delVector;
 	Base *base;
@@ -724,7 +724,7 @@ int32_t Region::computeEstSVLen(int64_t startPos, int64_t endPos){
 	end_pos = endPos + subRegSize;
 	if(end_pos>maxRPos) end_pos = maxRPos;
 
-	sum = num = 0;
+	sum_ins = sum_del = num_ins = num_del = 0;
 	for(i=start_pos; i<=end_pos; i++){
 		base = regBaseArr + i - startRPos;
 		// insVector
@@ -732,8 +732,8 @@ int32_t Region::computeEstSVLen(int64_t startPos, int64_t endPos){
 		for(j=0; j<(int64_t)insVector.size(); j++){
 			ins_event = insVector.at(j);
 			if(ins_event->seq.size()>=(size_t)paras->min_sv_size_usr){
-				sum += ins_event->seq.size();
-				num ++;
+				sum_ins += ins_event->seq.size();
+				num_ins ++;
 			}
 		}
 		// delVector
@@ -741,16 +741,19 @@ int32_t Region::computeEstSVLen(int64_t startPos, int64_t endPos){
 		for(j=0; j<(int64_t)delVector.size(); j++){
 			del_event = delVector.at(j);
 			if(del_event->seq.size()>=(size_t)paras->min_sv_size_usr){
-				sum += del_event->seq.size();
-				num ++;
+				sum_del += del_event->seq.size();
+				num_del ++;
 			}
 		}
 	}
 
-	if(num>0) mean_sv_len = sum / num;
-	else mean_sv_len = 0;
+	if(num_ins>0) mean_sv_len_ins = sum_ins / num_ins;
+	else mean_sv_len_ins = 0;
+	if(num_del>0) mean_sv_len_del = sum_del / num_del;
+	else mean_sv_len_del = 0;
 
-	return mean_sv_len;
+	if(mean_sv_len_ins>mean_sv_len_del) return mean_sv_len_ins;
+	else return mean_sv_len_del;
 }
 
 // determine the dif type for indel candidate

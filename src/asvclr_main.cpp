@@ -23,11 +23,11 @@ int main(int argc, char **argv) {
 	// detect
 	if(paras.command.compare(CMD_DET_STR)==0 or paras.command.compare(CMD_ALL_STR)==0 or paras.command.compare(CMD_DET_CNS_STR)==0){
 		time.setStartTime();
-		cout << "[" << time.getTime() << "]: detect structural variations ..." << endl;
+		cout << "[" << time.getTime() << "]: detect structural variants ..." << endl;
 		genome.genomeDetect();
 
 		//cout << "Total misAln region size: " << paras.misAlnRegLenSum << " bp" << endl;
-		cout << "[" << time.getTime() << "]: detect structural variations finished." << endl;
+		cout << "[" << time.getTime() << "]: detect structural variants finished." << endl;
 		time.printSubCmdElapsedTime();
 	}
 
@@ -46,12 +46,12 @@ int main(int argc, char **argv) {
 	// call
 	if(paras.command.compare(CMD_CALL_STR)==0 or paras.command.compare(CMD_ALL_STR)==0){
 		time.setStartTime();
-		cout << "[" << time.getTime() << "]: call variations ..." << endl;
+		cout << "[" << time.getTime() << "]: call variants ..." << endl;
 
-		// call variations
+		// call variants
 		genome.genomeCall();
 
-		cout << "[" << time.getTime() << "]: call variations finished." << endl;
+		cout << "[" << time.getTime() << "]: call variants finished." << endl;
 		time.printSubCmdElapsedTime();
 	}
 

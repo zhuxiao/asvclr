@@ -306,7 +306,7 @@ void Block::blockDetect(){
 // load alignment data with specified region in the format like `chr2:100-200'
 int Block::loadAlnData(){
 	alnDataLoader data_loader(chrname, startPos, endPos, paras->inBamFile, paras->minMapQ);
-	data_loader.loadAlnData(alnDataVector);
+	data_loader.loadAlnData(alnDataVector, paras->max_ultra_high_cov);
 	return 0;
 }
 
@@ -1161,7 +1161,7 @@ void Block::generateCnsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag,
 	else file_prefix_str = "clipReg_";
 
 	if(minRefPos!=-1 and maxRefPos!=-1){
-		// construct the variation region
+		// construct the variant region
 		chrname_tmp = varVec.at(0)->chrname;
 		readsfilename = out_dir_cns  + "/" + file_prefix_str + "reads_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
 		contigfilename = out_dir_cns  + "/" + file_prefix_str + "cns_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
