@@ -246,6 +246,8 @@ void Paras::show_version(){
 // parse the parameters for detect command
 int Paras::parseDetectParas(int argc, char **argv){
 	int opt, threadNum_tmp = 0, option_index;
+	string lower_str;
+
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
@@ -276,7 +278,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:n:M:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:x:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
@@ -285,6 +287,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 			case 'n': minReadsNumSupportSV = stoi(optarg);
 					min_Nsupp_est_flag = 0;
 					break;
+			case 'x': technology = optarg; break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
@@ -324,6 +327,17 @@ int Paras::parseDetectParas(int argc, char **argv){
 	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 	maxVarRegSize = max_sv_size_usr;
 
+	// check technology
+	lower_str.resize(technology.size());
+	transform(technology.begin(), technology.end(), lower_str.begin(), ::tolower);
+	if(lower_str.compare(PACBIO_CCS_TECH_STR)==0 or lower_str.compare(PACBIO_RS_TECH_STR)==0 or lower_str.compare(PACBIO_SQ_TECH_STR)==0 or lower_str.compare(NANOPORE_TECH_STR)==0){
+		technology = lower_str;
+	}else{
+		cout << "Error: Please specify the correct sequencing technology using '-x' option." << endl << endl;
+		showDetectUsage();
+		return 1;
+	}
+
 	outDir = deleteTailPathChar(outDir);
 
 	opt = argc - optind; // the reference and BAM file on the command line
@@ -354,6 +368,8 @@ int Paras::parseDetectParas(int argc, char **argv){
 // parse the parameters for 'cns' command
 int Paras::parseCnsParas(int argc, char **argv){
 	int opt, threadNum_tmp = 0, option_index;
+	string lower_str;
+
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
@@ -385,14 +401,14 @@ int Paras::parseCnsParas(int argc, char **argv){
 		//{ "min-cov-cns", required_argument, NULL, 0 },
 		//{ "monitor-proc-names-cns", required_argument, NULL, 0 },
 		//{ "max_proc_running_minutes_cns", required_argument, NULL, 0 },
-		{ "technology", required_argument, NULL, 0 },
+		//{ "technology", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:n:r:e:q:x:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:n:x:r:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -400,10 +416,11 @@ int Paras::parseCnsParas(int argc, char **argv){
 			case 'n': minReadsNumSupportSV = stoi(optarg);
 					min_Nsupp_est_flag = 0;
 					break;
+			case 'x': technology = optarg; break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
-			case 'x': expected_cov_cns = stod(optarg); break;
+			case 'c': expected_cov_cns = stod(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
@@ -445,6 +462,17 @@ int Paras::parseCnsParas(int argc, char **argv){
 //		cout << "Warning: the user-specified total number of concurrent consensus work is " << num_threads << ", and the user-specified number of threads for each consensus work is " << num_threads_per_cns_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
 //	}
 
+	// check technology
+	lower_str.resize(technology.size());
+	transform(technology.begin(), technology.end(), lower_str.begin(), ::tolower);
+	if(lower_str.compare(PACBIO_CCS_TECH_STR)==0 or lower_str.compare(PACBIO_RS_TECH_STR)==0 or lower_str.compare(PACBIO_SQ_TECH_STR)==0 or lower_str.compare(NANOPORE_TECH_STR)==0){
+		technology = lower_str;
+	}else{
+		cout << "Error: Please specify the correct sequencing technology using '-x' option." << endl << endl;
+		showCnsUsage();
+		return 1;
+	}
+
 	outDir = deleteTailPathChar(outDir);
 
 	opt = argc - optind; // the reference file and BAM file on the command line
@@ -463,6 +491,8 @@ int Paras::parseCnsParas(int argc, char **argv){
 // parse the parameters for call command
 int Paras::parseCallParas(int argc, char **argv){
 	int opt, threadNum_tmp = 0, option_index;
+	string lower_str;
+
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
@@ -477,7 +507,7 @@ int Paras::parseCallParas(int argc, char **argv){
 	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
-	gt_min_consistency_merge = GT_MIN_CONSIST_MERGE_THRES;
+	gt_min_identity_merge = GT_MIN_IDENTITY_MERGE_THRES;
 	gt_homo_ratio = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio = GT_HETE_RATIO_THRES;
 
@@ -500,7 +530,7 @@ int Paras::parseCallParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:n:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:n:x:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -508,6 +538,7 @@ int Paras::parseCallParas(int argc, char **argv){
 			case 'n': minReadsNumSupportSV = stoi(optarg);
 					min_Nsupp_est_flag = 0;
 					break;
+			case 'x': technology = optarg; break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
@@ -547,6 +578,17 @@ int Paras::parseCallParas(int argc, char **argv){
 	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
 	maxVarRegSize = max_sv_size_usr;
 
+	// check technology
+	lower_str.resize(technology.size());
+	transform(technology.begin(), technology.end(), lower_str.begin(), ::tolower);
+	if(lower_str.compare(PACBIO_CCS_TECH_STR)==0 or lower_str.compare(PACBIO_RS_TECH_STR)==0 or lower_str.compare(PACBIO_SQ_TECH_STR)==0 or lower_str.compare(NANOPORE_TECH_STR)==0){
+		technology = lower_str;
+	}else{
+		cout << "Error: Please specify the correct sequencing technology using '-x' option." << endl << endl;
+		showCallUsage();
+		return 1;
+	}
+
 	outDir = deleteTailPathChar(outDir);
 
 	opt = argc - optind; // the reference file and BAM file on the command line
@@ -565,6 +607,9 @@ int Paras::parseCallParas(int argc, char **argv){
 // parse the parameters for 'all' command
 int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	int opt, threadNum_tmp = 0, option_index;
+	simpleReg_t *simple_reg;
+	string simple_reg_str, lower_str;
+
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
 	min_sv_size_usr = MIN_SV_SIZE_USR;
@@ -582,13 +627,9 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
-	gt_min_consistency_merge = GT_MIN_CONSIST_MERGE_THRES;
+	gt_min_identity_merge = GT_MIN_IDENTITY_MERGE_THRES;
 	gt_homo_ratio = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio = GT_HETE_RATIO_THRES;
-
-
-	simpleReg_t *simple_reg;
-	string simple_reg_str;
 
 	static struct option lopts[] = {
 		{ "sample", required_argument, NULL, 0 },
@@ -605,7 +646,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		//{ "monitor_proc_names_call", required_argument, NULL, 0 },
 		//{ "max_proc_running_minutes_cns", required_argument, NULL, 0 },
 		//{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
-		{ "technology", required_argument, NULL, 0 },
+		//{ "technology", required_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "gt-min-sig-size", required_argument, NULL, 0 },
 		{ "gt-size-ratio-match", required_argument, NULL, 0 },
@@ -617,7 +658,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:r:e:q:x:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:x:r:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
@@ -626,10 +667,11 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 			case 'n': minReadsNumSupportSV = stoi(optarg);
 					min_Nsupp_est_flag = 0;
 					break;
+			case 'x': technology = optarg; break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
-			case 'x': expected_cov_cns = stod(optarg); break;
+			case 'c': expected_cov_cns = stod(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
 			case 't': threadNum_tmp = stoi(optarg); break;
@@ -671,6 +713,17 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 //	if(num_threads*num_threads_per_cns_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
 //		cout << "Warning: the user-specified total number of concurrent consensus work is " << num_threads << ", and the user-specified number of threads for each consensus work is " << num_threads_per_cns_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
 //	}
+
+	// check technology
+	lower_str.resize(technology.size());
+	transform(technology.begin(), technology.end(), lower_str.begin(), ::tolower);
+	if(lower_str.compare(PACBIO_CCS_TECH_STR)==0 or lower_str.compare(PACBIO_RS_TECH_STR)==0 or lower_str.compare(PACBIO_SQ_TECH_STR)==0 or lower_str.compare(NANOPORE_TECH_STR)==0){
+		technology = lower_str;
+	}else{
+		cout << "Error: Please specify the correct sequencing technology using '-x' option." << endl << endl;
+		showAllUsage(cmd_str);
+		return 1;
+	}
 
 	outDir = deleteTailPathChar(outDir);
 
@@ -732,11 +785,11 @@ void Paras::showUsage(){
 	cout << "   det-cns           run 'det' and 'cns' commands in turn" << endl << endl;
 
 	cout << "Example:" << endl;
-	cout << "   # run the pipeline on the whole genome" << endl;
-	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   # run the pipeline on the whole genome for PacBio CCS sequencing" << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl << endl;
 
 	cout << "   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000" << endl;
-	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -x ccs -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for detect command
@@ -806,13 +859,14 @@ void Paras::showCnsUsage(){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be "<< MIN_SUPPORT_READS_NUM_FACTOR << " times of the sequencing depth of" << endl;
 	cout << "                 the data set (rounded)" << endl;
+	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
 	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
 	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
 	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
-	cout << "   -x FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
+	cout << "   -c FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
 	cout << "                 0 for no coverage sampling" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
 	cout << "   -p STR        prefix of output result files [null]" << endl;
@@ -850,11 +904,11 @@ void Paras::showCnsUsage(){
 //	cout << "   --max_proc_running_minutes_cns INT" << endl;
 //	cout << "                 Monitored processes for consensus will be terminated if their CPU running" << endl;
 //	cout << "                 time exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CNS << "]" << endl;
-	cout << "   --technology STR" << endl;
-	cout << "                 Sequencing technology [pacbio]:" << endl;
-	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
-	cout << "                   nanopore   : the Nanopore sequencing technology;" << endl;
-	cout << "                   pacbio-hifi: the PacBio CCS sequencing technology." << endl;
+//	cout << "   --technology STR" << endl;
+//	cout << "                 Sequencing technology [pacbio]:" << endl;
+//	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
+//	cout << "                   nanopore   : the Nanopore sequencing technology;" << endl;
+//	cout << "                   pacbio-hifi: the PacBio CCS sequencing technology." << endl;
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
@@ -863,7 +917,7 @@ void Paras::showCnsUsage(){
 
 	cout << "Example:" << endl;
 	cout << "   # run 'cns' command on the whole genome or the user-specified regions according to previous 'det' command." << endl;
-	cout << "   $ asvclr cns -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl;
+	cout << "   $ asvclr cns -t 32 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl;
 }
 
 // show the usage for call command
@@ -880,6 +934,7 @@ void Paras::showCallUsage(){
 	cout << "   -m INT        minimal SV size to report [" << MIN_SV_SIZE_USR << "]" << endl;
 	cout << "   -M INT        maximal SV size to report [" << MAX_SV_SIZE_USR << "]" << endl;
 	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
+	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
 	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
@@ -908,8 +963,8 @@ void Paras::showCallUsage(){
 //	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
 //	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
 	cout << "   --gt-min-consist-merge FLOAT" << endl;
-	cout << "                 minimal sequence consistency threshold for allele merge [" << GT_MIN_CONSIST_MERGE_THRES << "]." << endl;
-	cout << "                 Allelic variants will be merged if their sequence consistency are larger than FLOAT. " << endl;
+	cout << "                 minimal sequence identity threshold for allele merge [" << GT_MIN_IDENTITY_MERGE_THRES << "]." << endl;
+	cout << "                 Allelic variants will be merged if their sequence identity are larger than FLOAT. " << endl;
 	cout << "   --gt-homo-ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio threshold for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is homozygous if the ratio of allele count is larger than FLOAT." << endl;
@@ -948,13 +1003,14 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be "<< MIN_SUPPORT_READS_NUM_FACTOR << " times of the sequencing depth of" << endl;
 	cout << "                 the data set (rounded)" << endl;
+	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
 	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
 	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
 	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
-	cout << "   -x FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
+	cout << "   -c FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
 	cout << "                 0 for no coverage sampling" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
 	cout << "   -p STR        prefix of output result files [null]" << endl;
@@ -1009,11 +1065,11 @@ void Paras::showAllUsage(const string &cmd_str){
 //		cout << "                 exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CALL << "]" << endl;
 //	}
 
-	cout << "   --technology STR" << endl;
-	cout << "                 Sequencing technology [pacbio]:" << endl;
-	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
-	cout << "                   nanopore   : the Nanopore sequencing technology;" << endl;
-	cout << "                   pacbio-hifi: the PacBio CCS sequencing technology." << endl;
+//	cout << "   --technology STR" << endl;
+//	cout << "                 Sequencing technology [pacbio]:" << endl;
+//	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
+//	cout << "                   nanopore   : the Nanopore sequencing technology;" << endl;
+//	cout << "                   pacbio-hifi: the PacBio CCS sequencing technology." << endl;
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy items in result" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
@@ -1026,8 +1082,8 @@ if(cmd_str.compare(CMD_CALL_STR)==0 or cmd_str.compare(CMD_ALL_STR)==0){
 //	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
 //	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
 	cout << "   --gt-min-consist-merge FLOAT" << endl;
-	cout << "                 minimal sequence consistency threshold for allele merge [" << GT_MIN_CONSIST_MERGE_THRES << "]." << endl;
-	cout << "                 Allelic Variants will be merged if their sequence consistency are larger than FLOAT. " << endl;
+	cout << "                 minimal sequence identity threshold for allele merge [" << GT_MIN_IDENTITY_MERGE_THRES << "]." << endl;
+	cout << "                 Allelic Variants will be merged if their sequence identity are larger than FLOAT. " << endl;
 	cout << "   --gt-homo-ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio threshold for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is homozygous if the ratio of allele count is larger than FLOAT." << endl;
@@ -1041,18 +1097,18 @@ if(cmd_str.compare(CMD_CALL_STR)==0 or cmd_str.compare(CMD_ALL_STR)==0){
 
 	cout << "Example:" << endl;
 if(cmd_str.compare(CMD_ALL_STR)==0){
-	cout << "   # run the pipeline on the whole genome" << endl;
+	cout << "   # run the pipeline on the whole genome for PacBio CCS sequencing" << endl;
 }else{
-	cout << "   # run the '" << cmd_str << "' command on the whole genome" << endl;
+	cout << "   # run the '" << cmd_str << "' command on the whole genome for PacBio CCS sequencing" << endl;
 }
-	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl << endl;
 
 if(cmd_str.compare(CMD_ALL_STR)==0){
 	cout << "   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
 }else{
 	cout << "   # run the '" << cmd_str << "' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
 }
-	cout << "   $ asvclr all -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr all -t 32 -m 20 -x ccs -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for det-cns command
@@ -1114,7 +1170,7 @@ void Paras::outputParas(){
 	if(delete_reads_flag==false) cout << "Retain local temporary reads: yes" << endl;
 	if(keep_failed_reads_flag) cout << "Retain failed local temporary reads: yes" << endl;
 	if(recns_failed_work_flag) cout << "Reperform previously failed local consensus work: yes" << endl;
-	cout << "Minimum input coverage for local consensus: " << min_input_cov_canu << endl;
+	//cout << "Minimum input coverage for local consensus: " << min_input_cov_canu << endl;
 //	if(command.compare("cns")==0 or command.compare("all")==0 or command.compare("det-cns")==0)
 //		cout << "Monitored process names for consensus: " << monitoring_proc_names_cns << endl;
 //	if(command.compare("call")==0 or command.compare("all")==0)
@@ -1125,7 +1181,7 @@ void Paras::outputParas(){
 //		cout << "Maximum monitored process running minutes for call: " << max_proc_running_minutes_call << endl;
 
 	if(command.compare(CMD_CALL_STR)==0 or command.compare(CMD_ALL_STR)==0){
-		cout << "Minimal sequence consistency threshold for allele merge: " << gt_min_consistency_merge << endl;
+		cout << "Minimal sequence identity threshold for allele merge: " << gt_min_identity_merge << endl;
 		cout << "Minimal allele ratio threshold for homozygous alleles: " << gt_homo_ratio << endl;
 		cout << "Minimal allele ratio threshold for heterozygous alleles: " << gt_hete_ratio << endl;
 	}
@@ -1305,7 +1361,7 @@ int64_t Paras::estimateMinReadsNumSupportSV(vector<int64_t> &mean_depth_vec){
 int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct option *lopts){
 	int ret = 0;
 	//size_t find_pos;
-	string lower_str;
+	//string lower_str;
 
 	string opt_name_str = lopts[option_index].name;
 	if(opt_name_str.compare("sample")==0){ // "sample"
@@ -1376,17 +1432,18 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 //			ret = 1;
 //		}
 //	}
-	else if(opt_name_str.compare("technology")==0){ // technology
-		technology = optarg;
-		lower_str.resize(technology.size());
-		transform(technology.begin(), technology.end(), lower_str.begin(), ::tolower);
-		if(lower_str.compare(PACBIO_CLR_TECH_STR)==0 or lower_str.compare(PACBIO_CCS_TECH_STR)==0 or lower_str.compare(NANOPORE_TECH_STR)==0){
-			technology = lower_str;
-		}else{
-			cout << "Error: Please specify the correct sequencing technology using '--technology' option." << endl << endl;
-			ret = 1;
-		}
-	}else if(opt_name_str.compare("include-decoy")==0){ // include-decoy
+//	else if(opt_name_str.compare("technology")==0){ // technology
+//		technology = optarg;
+//		lower_str.resize(technology.size());
+//		transform(technology.begin(), technology.end(), lower_str.begin(), ::tolower);
+//		if(lower_str.compare(PACBIO_CLR_TECH_STR)==0 or lower_str.compare(PACBIO_CCS_TECH_STR)==0 or lower_str.compare(NANOPORE_TECH_STR)==0){
+//			technology = lower_str;
+//		}else{
+//			cout << "Error: Please specify the correct sequencing technology using '--technology' option." << endl << endl;
+//			ret = 1;
+//		}
+//	}
+	else if(opt_name_str.compare("include-decoy")==0){ // include-decoy
 		include_decoy = true;
 	}
 //	else if(opt_name_str.compare("gt-min-sig-size")==0){ // "gt-min-sig-size"
@@ -1395,7 +1452,7 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 //		gt_size_ratio_match = stof(optarg);
 //	}
 	else if(opt_name_str.compare("gt-min-consist-merge")==0){ // "gt-min-consist-merge"
-		gt_min_consistency_merge = stof(optarg);
+		gt_min_identity_merge = stof(optarg);
 	}else if(opt_name_str.compare("gt-homo-ratio")==0){ // "gt-homo-ratio"
 		gt_homo_ratio = stof(optarg);
 	}else if(opt_name_str.compare("gt-hete-ratio")==0){ // "gt-hete-ratio"

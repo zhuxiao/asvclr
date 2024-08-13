@@ -66,14 +66,14 @@ using namespace std;
 
 class varCand {
 	public:
-		string var_cand_filename, out_dir_call, chrname, inBamFile, misAln_filename;
+		string var_cand_filename, out_dir_call, chrname, inBamFile, misAln_filename, technology;
 		faidx_t *fai;
 		vector<simpleReg_t*> sub_limit_reg_vec;
 		bool limit_reg_process_flag, limit_reg_delete_flag;
 
 		string refseqfilename, ctgfilename, readsfilename, alnfilename, clusterfilename;
 //		string rescue_refseqfilename, rescue_cnsfilename, rescue_readsfilename, rescue_alnfilename;
-		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, minMapQ;
+		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, minConReadLen, minMapQ;
 		double max_ultra_high_cov;
 		vector<reg_t*> varVec, newVarVec;
 		bool cns_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
@@ -120,7 +120,7 @@ class varCand {
 
 		//genotyping parameter
 		int32_t gt_min_sig_size, gt_min_sup_num_recover; // not used
-		double gt_min_consistency_merge, gt_homo_ratio_thres, gt_hete_ratio_thres;
+		double gt_min_identity_merge, gt_homo_ratio_thres, gt_hete_ratio_thres;
 		double gt_size_ratio_match; // not used
 
 		//SV position correction
@@ -134,7 +134,7 @@ class varCand {
 		void callVariants02();
 		void setBlatVarcandFile(ofstream *blat_var_cand_file, vector<varCand*> *blat_aligned_info_vec);
 		void resetBlatVarcandFile();
-		void setGtParas(int32_t gt_min_sig_size, double gt_size_ratio_match, double gt_min_consistency_merge, double gt_homo_ratio_thres, double gt_hete_ratio_thres, int32_t min_sup_num_recover);
+		void setGtParas(int32_t gt_min_sig_size, double gt_size_ratio_match, double gt_min_identity_merge, double gt_homo_ratio_thres, double gt_hete_ratio_thres, int32_t min_sup_num_recover);
 		vector<int32_t> computeDisagreeNumAndHighIndelBaseNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 		void adjustVarLocSlightly();
 		void fillVarseq();
@@ -173,9 +173,11 @@ class varCand {
 		float computeRepeatCovRatio(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void determineIndelType();
-		void eraseFalsePositiveVariants();
+		vector<reg_t*> computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec);
+		vector<reg_t*> rescueIndelVarLoc();
 		void svPosCorrection(reg_t* reg);
 		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, vector<clipAlnData_t*> &clipAlnDataVector, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, int32_t minMapQ);
+		void computeGenotypeIndelReg(vector<reg_t*> &var_vec);
 		void destoryClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void destoryPosCorrectionVec();
 		void callShortVariants();
@@ -219,6 +221,7 @@ class varCand {
 		// clippings
 		void computeClipRegVarLoc();
 		vector<reg_t*> computeClipRegVarLocOp(string &alnfilename, string &refseqfilename, string &cnsfilename, string &clusterfilename, vector<minimap2_aln_t*> &minimap2_aln_vec, bool rescue_flag);
+		int32_t computeSuppNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, int32_t minMapQ, double max_ultra_high_cov, vector<string> &target_qname_vec);
 		void computeGenotypeClipReg(vector<reg_t*> &var_vec);
 		vector<reg_t*> rescueDupInvClipReg();
 		vector<reg_t*> rescueLargeIndelClipReg();

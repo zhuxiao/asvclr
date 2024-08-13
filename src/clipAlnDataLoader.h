@@ -17,10 +17,12 @@ class clipAlnDataLoader {
 		virtual ~clipAlnDataLoader();
 		void loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov);
+		void loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, vector<string> &qname_vec);
 		void loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, vector<string> &qname_vec);
 		void loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector);
 		void loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov);
 		void loadClipAlnDataWithSATagWithSegSize(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, double primary_seg_size_ratio);
+		void loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, vector<string> &qname_vec);
 		void loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, vector<string> &qname_vec);
 
 		void freeClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);

@@ -13,7 +13,7 @@ using namespace std;
 #define MAX_DIST_MATCH_CLIP_POS				500
 #define MIN_SIZE_RATIO_MATCH_CLIP_POS		(0.8f)
 #define QC_SIZE_RATIO_MATCH_THRES_INDEL		(0.7f)
-#define QC_CONSIST_RATIO_MATCH_THRES		(0.8f)
+#define QC_IDENTITY_RATIO_MATCH_THRES		(0.9f)
 
 class clipRegCluster {
 private:
@@ -30,6 +30,8 @@ public:
 	vector<qcSigListVec_t*> queryCluster(vector<struct querySeqInfoNode*> &query_seq_info_vec);
 
 private:
+	void prepareQcSigListInfoClipRegForCluster(vector<qcSigList_t*> &qcSigList_vec);
+	void sortQueryInfoByNumCategoryClipReg(vector<qcSigList_t*> &qcSigList_vec);
 	vector<struct querySeqInfoNode*> getQuerySeqs(string &qname, vector<struct querySeqInfoNode*> &query_seq_info_vec);
 	void printQcSigListVec(vector<qcSigList_t*> &qcSigList_vec);
 	int32_t removeUnclusteredQueries(vector<qcSigList_t*> &qcSigList_vec, vector<qcSigListVec_t*> &query_clu_vec);
@@ -40,7 +42,7 @@ private:
 	struct seedQueryInfo* chooseSeedClusterQueryClipReg(qcSigList_t* qcSigList_node, vector<qcSigList_t*> &q_cluster);
 	double computeMatchRatioClipReg(qcSigList_t* query_seq_info_node, qcSigList_t* q_cluster_node, int64_t startSpanPos, int64_t endSpanPos);
 	vector<int8_t> computeQcMatchProfileSingleQueryClipReg(qcSigList_t *queryCluSig, qcSigList_t *seed_qcQuery);
-	bool isQcSigMatchClipReg(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_dist_match_clip_pos, double min_size_ratio_match_thres_clip, double size_ratio_match_thres, double consist_ratio_match_thres);
+	bool isQcSigMatchClipReg(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_dist_match_clip_pos, double min_size_ratio_match_thres_clip, double size_ratio_match_thres, double identity_ratio_match_thres);
 	vector<int8_t> qComputeSigMatchProfileClipReg(struct alnScoreNode *scoreArr, int32_t rowsNum, int32_t colsNum, qcSigList_t *queryCluSig, qcSigList_t *seed_qcQuery);
 };
 

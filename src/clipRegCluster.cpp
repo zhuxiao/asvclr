@@ -34,8 +34,6 @@ vector<qcSigListVec_t*> clipRegCluster::queryCluster(vector<struct querySeqInfoN
 	vector<qcSigList_t*> qcSigList_vec;
 	qcSigListVec_t *q_cluster_node_a, *q_cluster_node_b, *tmp;
 	size_t i, j, k, smin_id;
-	qcSigList_t *qcSigList_node, *qcSigList_node2, *tmp_qcSigList_node;
-	vector<struct querySeqInfoNode*> query_seqs;
 	vector<qcSigList_t*> q_cluster_a, q_cluster_b, q_cluster_rescue, q_cluster_a_final, q_cluster_b_final;
 	double match_ratio_a, match_ratio_b, match_min;
 	vector<size_t> min_id_vec;// span_vec2_id;
@@ -50,18 +48,8 @@ vector<qcSigListVec_t*> clipRegCluster::queryCluster(vector<struct querySeqInfoN
 
 	for(i=0; i<qcSigList_vec.size(); i++) qcSigList_vec.at(i)->cluster_finished_flag = false;
 
-	// sort in descending order according to the number of features
-	for(i=0; i<qcSigList_vec.size(); i++){
-		for(j=0; j<qcSigList_vec.size()-i-1; j++){
-			qcSigList_node = qcSigList_vec.at(j);
-			qcSigList_node2 = qcSigList_vec.at(j+1);
-			if(qcSigList_node->qcSig_vec.size()<qcSigList_node2->qcSig_vec.size()){
-				tmp_qcSigList_node = qcSigList_vec.at(j);
-				qcSigList_vec.at(j) = qcSigList_vec.at(j+1);
-				qcSigList_vec.at(j+1) = tmp_qcSigList_node;
-			}
-		}
-	}
+	// prepare qcSigList information of clipping region for clustering
+	prepareQcSigListInfoClipRegForCluster(qcSigList_vec);
 
 #if CLIP_REG_CLUSTER_DEBUG
 	cout << "*********** Before cluster, size=" << qcSigList_vec.size() << ":" << endl;
@@ -83,7 +71,7 @@ vector<qcSigListVec_t*> clipRegCluster::queryCluster(vector<struct querySeqInfoN
 
 		match_ratio_vec.push_back(1);
 		for(i=1; i<qcSigList_vec.size(); i++){
-			if(qcSigList_vec.at(i)->qcSig_vec.size()>0){
+			if(qcSigList_vec.at(i)->qcSig_vec.size()>0 and qcSigList_vec.at(i)->entire_flanking_flag){ // prefer the items flanking the entire region
 				seed_info_a = chooseSeedClusterQueryClipReg(qcSigList_vec.at(i), q_cluster_a);
 				if(seed_info_a->span_intersection>0){
 					match_ratio_a = computeMatchRatioClipReg(qcSigList_vec.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos);
@@ -139,16 +127,6 @@ vector<qcSigListVec_t*> clipRegCluster::queryCluster(vector<struct querySeqInfoN
 					}
 				}
 			}
-
-			// only two initial clusters, deleted on 2024-07-04
-//			mrsame_maxnum = mrmin_match_vec.at(0)->num;
-//			smin_id = 0;
-//			for(i=0; i<mrmin_match_vec.size(); i++){
-//				if(mrsame_maxnum<mrmin_match_vec.at(i)->num){
-//					smin_id = i;
-//					mrsame_maxnum = mrmin_match_vec.at(i)->num;
-//				}
-//			}
 
 			qcSigList_vec.at(mrmin_match_vec.at(0)->pos_id.at(0))->cluster_finished_flag = true;
 			q_cluster_a.push_back(qcSigList_vec.at(mrmin_match_vec.at(0)->pos_id.at(0)));
@@ -297,6 +275,110 @@ vector<qcSigListVec_t*> clipRegCluster::queryCluster(vector<struct querySeqInfoN
 	return query_clu_vec;
 }
 
+// prepare qcSigList information of clipping region for clustering
+void clipRegCluster::prepareQcSigListInfoClipRegForCluster(vector<qcSigList_t*> &qcSigList_vec){
+	size_t i, j;
+	qcSigList_t *qcSigList_node, *qcSigList_node2, *tmp_qcSigList_node;
+	bool exist_flag;
+
+	// sort in descending order according to the number of features
+	for(i=0; i<qcSigList_vec.size(); i++){
+		qcSigList_node = qcSigList_vec.at(i);
+		for(j=i+1; j<qcSigList_vec.size(); j++){
+			qcSigList_node2 = qcSigList_vec.at(j);
+			if(qcSigList_node->qcSig_vec.size()<qcSigList_node2->qcSig_vec.size()){
+				tmp_qcSigList_node = qcSigList_vec.at(i);
+				qcSigList_vec.at(i) = qcSigList_vec.at(j);
+				qcSigList_vec.at(j) = tmp_qcSigList_node;
+			}
+		}
+	}
+
+	// sort according to the category of the number of signatures
+	sortQueryInfoByNumCategoryClipReg(qcSigList_vec);
+
+	// prefer the alignments flanking the entire variant region
+	for(i=0; i<qcSigList_vec.size(); i++){
+		qcSigList_node = qcSigList_vec.at(i);
+		if(qcSigList_node->entire_flanking_flag==false){
+			exist_flag = false;
+			for(j=i+1; j<qcSigList_vec.size(); j++){
+				qcSigList_node2 = qcSigList_vec.at(j);
+				if(qcSigList_node2->entire_flanking_flag){
+					exist_flag = true;
+					tmp_qcSigList_node = qcSigList_vec.at(i);
+					qcSigList_vec.at(i) = qcSigList_vec.at(j);
+					qcSigList_vec.at(j) = tmp_qcSigList_node;
+					break;
+				}
+			}
+			if(exist_flag==false) break;
+		}
+	}
+}
+
+void clipRegCluster::sortQueryInfoByNumCategoryClipReg(vector<qcSigList_t*> &qcSigList_vec){
+	size_t i, j, sum;
+	vector<qcSigList_t*> qcSigList_vec_tmp;
+	int32_t idx;
+	vector<srmin_match_t*> num_id_vec;
+	srmin_match_t *num_id_node;
+	bool flag;
+
+	for(i=0; i<qcSigList_vec.size(); i++){
+		flag = false;
+		for(j=0; j<num_id_vec.size(); j++){
+			if(num_id_vec.at(j)->num==(int32_t)qcSigList_vec.at(i)->qcSig_vec.size()){
+				idx = j;
+				flag = true;
+				break;
+			}
+		}
+		if(flag){ // exist, update item
+			num_id_node  = num_id_vec.at(idx);
+			num_id_node->pos_id.push_back(i);
+		}else{ // add item
+			num_id_node = new srmin_match_t();
+			num_id_node->num = qcSigList_vec.at(i)->qcSig_vec.size();
+			num_id_node->pos_id.push_back(i);
+			num_id_vec.push_back(num_id_node);
+		}
+	}
+
+	// sort descendingly according to the number category of overlapped signatures
+	for(i=0; i<num_id_vec.size(); i++){
+		if(num_id_vec.at(i)->num>0){
+			for(j=i+1; j<num_id_vec.size(); j++){
+				if(num_id_vec.at(j)->num>0){
+					if(num_id_vec.at(i)->pos_id.size()<num_id_vec.at(j)->pos_id.size()){
+						num_id_node = num_id_vec.at(i);
+						num_id_vec.at(i) = num_id_vec.at(j);
+						num_id_vec.at(j) = num_id_node;
+					}
+				}
+			}
+		}
+	}
+
+	// update the query vector
+	sum = 0;
+	for(i=0; i<num_id_vec.size(); i++) sum += num_id_vec.at(i)->pos_id.size();
+	if(sum==qcSigList_vec.size()){
+		for(i=0; i<num_id_vec.size(); i++){
+			num_id_node = num_id_vec.at(i);
+			for(j=0; j<(size_t)num_id_node->pos_id.size(); j++) qcSigList_vec_tmp.push_back(qcSigList_vec.at(num_id_node->pos_id.at(j)));
+		}
+		for(i=0; i<qcSigList_vec_tmp.size(); i++) qcSigList_vec.at(i) = qcSigList_vec_tmp.at(i);
+	}else{
+		cerr << "sum=" << sum << ", qcSigList_vec.size=" << qcSigList_vec.size() << ", error!" << endl;
+		exit(1);
+	}
+
+	// release memory
+	for(i=0; i<num_id_vec.size(); i++) delete num_id_vec.at(i);
+	vector<srmin_match_t*>().swap(num_id_vec);
+}
+
 
 vector<struct querySeqInfoNode*> clipRegCluster::getQuerySeqs(string &qname, vector<struct querySeqInfoNode*> &query_seq_info_vec){
 	vector<struct querySeqInfoNode*> queryseq_vec;
@@ -368,7 +450,7 @@ void clipRegCluster::printQcSigListVec(vector<qcSigList_t*> &qcSigList_vec){
 	// print the feature
 	for(i=0; i<qcSigList_vec.size(); i++){
 		qcSigList_node = qcSigList_vec.at(i);
-		cout << "[" << i << "]: " << qcSigList_node->query_seqs_vec.at(0)->qname << ", cluster_finished=" << qcSigList_node->cluster_finished_flag << ", qcSig_vec.size=" << qcSigList_node->qcSig_vec.size() << ":";
+		cout << "[" << i << "]: " << qcSigList_node->query_seqs_vec.at(0)->qname << ", cluster_finished=" << qcSigList_node->cluster_finished_flag << ", entire_flanking=" << qcSigList_node->entire_flanking_flag << ", qcSig_vec.size=" << qcSigList_node->qcSig_vec.size() << ":";
 		for(j=0; j<qcSigList_node->qcSig_vec.size(); j++){
 			qc_sig = qcSigList_node->qcSig_vec.at(j);
 			if(qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP) // clippings
@@ -395,9 +477,9 @@ vector<qcSigList_t*> clipRegCluster::extractQcSigsClipReg(vector<struct querySeq
 		queryseq_node = query_seq_info_vec.at(i);
 		if(queryseq_node->selected_flag==false){
 
-//			if(queryseq_node->qname.compare("SRR8858445.1.146248")==0){
-//				cout << "i=" << i << ", " << queryseq_node->qname << endl;
-//			}
+			if(queryseq_node->qname.compare("SRR8858445.1.155235")==0){
+				cout << "i=" << i << ", " << queryseq_node->qname << endl;
+			}
 
 			query_seqs = getQuerySeqs(queryseq_node->qname, query_seq_info_vec);
 			qcSigList_node = extractQcSigsSingleQueryClipReg(query_seqs);
@@ -423,8 +505,9 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 	bool overlap_flag, valid_query_left_end_flag, valid_query_right_end_flag, self_overlap_flag, ref_skip_flag, query_skip_flag;
 	size_t i, j;
 	int32_t mate_arr_idx, mate_clip_end_flag, mate_arr_idx_same_chr, mate_clip_end_flag_same_chr, min_dist, min_ref_dist, min_dist_same_chr, min_ref_dist_same_chr, seq_len, ignore_end_flag;
-	int64_t var_startRefPos_tmp, var_endRefPos_tmp, end_ref_pos, dist;
-	string reg_str, refseq;
+	int64_t var_startRefPos_tmp, var_endRefPos_tmp, end_ref_pos, dist, start_qpos_tmp;
+	int8_t query_orient;
+	string reg_str, refseq, queryseq_whole, reverse_seq;
 	char *p_seq;
 	int32_t seq_id_arr[query_seqs.size()];
 
@@ -432,6 +515,19 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 	var_endRefPos_tmp = var_endRefPos + GROUP_DIST_THRES;
 	if(var_startRefPos_tmp<1) var_startRefPos_tmp = 1;
 	if(var_endRefPos_tmp>chrlen) var_endRefPos_tmp = chrlen;
+
+	queryseq_whole = "";
+	query_orient = -1;
+	for(i=0; i<query_seqs.size(); i++){
+		queryseq_node = query_seqs.at(i);
+		if(queryseq_node->clip_aln and queryseq_node->clip_aln->leftHardClippedFlag==false and queryseq_node->clip_aln->rightHardClippedFlag==false){
+			queryseq_whole = queryseq_node->seq;
+			query_orient = queryseq_node->clip_aln->aln_orient;
+			break;
+		}
+	}
+	//cout << "queryseq_whole=" << queryseq_whole << endl;
+	if(queryseq_whole.size()==0) return NULL; // ignore all hard clip segments
 
 	for(i=0; i<query_seqs.size(); i++) seq_id_arr[i] = 0;
 
@@ -488,7 +584,8 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 					qc_sig->refseq = p_seq;
 					free(p_seq);
 				}else if(qc_sig->cigar_op==BAM_CDEL){
-					qc_sig->altseq = queryseq_node->seq.substr(qc_sig->query_pos, 1);
+					if(queryseq_node->clip_aln->leftHardClippedFlag==false) qc_sig->altseq = queryseq_node->seq.substr(qc_sig->query_pos, 1);
+					else qc_sig->altseq = queryseq_node->seq.substr(qc_sig->query_pos-queryseq_node->clip_aln->leftClipSize, 1);
 				}
 				qcSig_vec.push_back(qc_sig);
 			}
@@ -561,7 +658,8 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						qc_sig->refseq = p_seq;
 						free(p_seq);
 					}else if(qc_sig->cigar_op==BAM_CDEL){
-						qc_sig->altseq = queryseq_node->seq.substr(qc_sig->query_pos, 1);
+						if(queryseq_node->clip_aln->leftHardClippedFlag==false) qc_sig->altseq = queryseq_node->seq.substr(qc_sig->query_pos, 1);
+						else qc_sig->altseq = queryseq_node->seq.substr(qc_sig->query_pos-queryseq_node->clip_aln->leftClipSize, 1);
 					}
 					qcSig_vec.push_back(qc_sig);
 				}
@@ -596,6 +694,7 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 			}
 		}
 
+		// unify the TRA and indels
 		if(queryseq_node->clip_aln->rightmost_flag) break;
 		else{
 			ignore_end_flag = -1;
@@ -678,7 +777,17 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						last_clip_sig->refseq = p_seq;
 						free(p_seq);
 
-						last_clip_sig->altseq = queryseq_node->seq.substr(last_clip_sig->query_pos-1, last_clip_sig->cigar_op_len);
+						//last_clip_sig->altseq = queryseq_node->seq.substr(last_clip_sig->query_pos-1, last_clip_sig->cigar_op_len);
+						if(last_clip_sig->aln_orient==query_orient)
+							last_clip_sig->altseq = queryseq_whole.substr(last_clip_sig->query_pos-1, last_clip_sig->cigar_op_len);
+						else{
+							//cout << "line=" << __LINE__ << ", " << chrname << ":" << var_startRefPos << "-" << var_endRefPos << ": " << queryseq_node->qname << ", aln_orient is not the same!" << endl;
+
+							start_qpos_tmp = queryseq_whole.size() - last_clip_sig->query_pos;
+							reverse_seq = queryseq_whole.substr(start_qpos_tmp-1, last_clip_sig->cigar_op_len);
+							reverseComplement(reverse_seq);
+							last_clip_sig->altseq = reverse_seq;
+						}
 
 					}else if(ref_skip_flag){
 						last_clip_sig->dist_next_clip = last_clip_sig->cigar_op_len = abs(dist) + 1;
@@ -691,7 +800,17 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						last_clip_sig->refseq = p_seq;
 						free(p_seq);
 
-						last_clip_sig->altseq = queryseq_node->seq.substr(last_clip_sig->query_pos-1, 1);
+						//last_clip_sig->altseq = queryseq_node->seq.substr(last_clip_sig->query_pos-1, 1);
+						if(last_clip_sig->aln_orient==query_orient)
+							last_clip_sig->altseq = queryseq_whole.substr(last_clip_sig->query_pos-1, 1);
+						else{
+							//cout << "line=" << __LINE__ << ", " << chrname << ":" << var_startRefPos << "-" << var_endRefPos << ": " << queryseq_node->qname << ", aln_orient is not the same!" << endl;
+
+							start_qpos_tmp = queryseq_whole.size() - last_clip_sig->query_pos;
+							reverse_seq = queryseq_whole.substr(start_qpos_tmp-1, 1);
+							reverseComplement(reverse_seq);
+							last_clip_sig->altseq = reverse_seq;
+						}
 					}
 				}else{
 					query_skip_flag = ref_skip_flag = false;
@@ -731,6 +850,13 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 	qcSigList_node->endSpanRefPos = sidemost_idx_vec.at(3);
 	qcSigList_node->query_seqs_vec = query_seqs;
 	qcSigList_node->qcSig_vec = qcSig_vec;
+
+	var_startRefPos_tmp = var_startRefPos - EXT_SIZE_CHK_VAR_LOC;
+	if(var_startRefPos_tmp<1) var_startRefPos_tmp = 1;
+	var_endRefPos_tmp = var_endRefPos + EXT_SIZE_CHK_VAR_LOC;
+	if(var_endRefPos_tmp>chrlen) var_endRefPos_tmp = chrlen;
+	if(qcSigList_node->startSpanRefPos<=var_startRefPos_tmp and qcSigList_node->endSpanRefPos>=var_endRefPos_tmp) qcSigList_node->entire_flanking_flag = true;
+	else qcSigList_node->entire_flanking_flag = false;
 
 	return qcSigList_node;
 }
@@ -925,7 +1051,7 @@ vector<int8_t> clipRegCluster::computeQcMatchProfileSingleQueryClipReg(qcSigList
 			for(j=1; j<colsNum; j++){
 				qc_sig1 = queryCluSig->qcSig_vec.at(i-1);
 				qc_sig2 = seed_qcQuery->qcSig_vec.at(j-1);
-				matchFlag = isQcSigMatchClipReg(qc_sig1, qc_sig2, MAX_DIST_MATCH_CLIP_POS, MIN_SIZE_RATIO_MATCH_CLIP_POS, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_CONSIST_RATIO_MATCH_THRES);
+				matchFlag = isQcSigMatchClipReg(qc_sig1, qc_sig2, MAX_DIST_MATCH_CLIP_POS, MIN_SIZE_RATIO_MATCH_CLIP_POS, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_IDENTITY_RATIO_MATCH_THRES);
 				if(matchFlag) scoreIJ = matchScore;
 				else scoreIJ = mismatchScore;//
 
@@ -978,14 +1104,14 @@ vector<int8_t> clipRegCluster::computeQcMatchProfileSingleQueryClipReg(qcSigList
 	return match_profile_vec;
 }
 
-bool clipRegCluster::isQcSigMatchClipReg(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_dist_match_clip_pos, double min_size_ratio_match_thres_clip, double size_ratio_match_thres, double consist_ratio_match_thres){
+bool clipRegCluster::isQcSigMatchClipReg(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_dist_match_clip_pos, double min_size_ratio_match_thres_clip, double size_ratio_match_thres, double identity_ratio_match_thres){
 	bool match_flag = false;
 	double size_ratio;
 	int64_t ref_dist;
 
 	if(qc_sig and seed_qc_sig){
 		if((qc_sig->cigar_op==BAM_CINS and seed_qc_sig->cigar_op==BAM_CINS) or (qc_sig->cigar_op==BAM_CDEL and seed_qc_sig->cigar_op==BAM_CDEL)){ // indel
-			match_flag = isQcSigMatch(qc_sig, seed_qc_sig, max_dist_match_clip_pos, size_ratio_match_thres, consist_ratio_match_thres, fai);
+			match_flag = isQcSigMatch(qc_sig, seed_qc_sig, max_dist_match_clip_pos, size_ratio_match_thres, identity_ratio_match_thres, fai);
 		}else if((qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP) and (seed_qc_sig->cigar_op==BAM_CSOFT_CLIP or seed_qc_sig->cigar_op==BAM_CHARD_CLIP)){ // clipping
 			if(qc_sig->chrname.compare(seed_qc_sig->chrname)==0){
 				ref_dist = abs(qc_sig->ref_pos - seed_qc_sig->ref_pos);

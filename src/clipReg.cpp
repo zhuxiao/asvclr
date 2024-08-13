@@ -86,8 +86,8 @@ void clipReg::computeMateClipReg(){
 
 void clipReg::fillClipAlnDataVectorWithSATag(){
 	clipAlnDataLoader clip_aln_data_loader(chrname, startRefPos, endRefPos, inBamFile, minClipEndSize, paras->minMapQ);
-	clip_aln_data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, paras->max_ultra_high_cov); // removed 2023-12-08
-//	clip_aln_data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, paras->max_ultra_high_cov, paras->max_seg_size_ratio_usr); // modified 2023-12-08
+//	clip_aln_data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, paras->max_ultra_high_cov); // removed 2023-12-08
+	clip_aln_data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, paras->max_ultra_high_cov, paras->max_seg_size_ratio_usr); // modified 2023-12-08
 }
 
 void clipReg::removeNonclipItems(){
@@ -142,25 +142,35 @@ void clipReg::computeMateAlnClipReg(){
 
 	extractClipPosVec();  // get the clip pos vector
 
-	//printClipVecs("After extract");  // print clips
+#if CLIP_REG_DEBUG
+	printClipVecs("After extract");  // print clips
+#endif
 
 	splitClipPosVec(); // split vector
 
-	//printClipVecs("After split");  // print clips
+#if CLIP_REG_DEBUG
+	printClipVecs("After split");  // print clips
+#endif
 
 	appendClipPos();  // append clipping positions
 
 	sortClipPos(); // sort clips
 
-	//printClipVecs("After sort");  // print clips
+#if CLIP_REG_DEBUG
+	printClipVecs("After sort");  // print clips
+#endif
 
 	removeFakeClips();  // remove fake clips
 
-	//printClipVecs("After remove fake clips");  // print clips
+#if CLIP_REG_DEBUG
+	printClipVecs("After remove fake clips");  // print clips
+#endif
 
 	computeClipRegs();  // get the mediate and the around region
 
-	//printResultClipRegs(); // print clip regions
+#if CLIP_REG_DEBUG
+	printResultClipRegs(); // print clip regions
+#endif
 
 	//cout << " ---- " << endl;
 }
@@ -2029,22 +2039,23 @@ void clipReg::sortClipPosSingleVec(vector<clipPos_t*> &clipPosVec){
 
 // remove fake clips
 void clipReg::removeFakeClips(){
-	string vec_name;
-
 	removeFakeClipsDifferentChrSingleVec(leftClipPosVector);
 	removeFakeClipsDifferentChrSingleVec(leftClipPosVector2);
 	removeFakeClipsDifferentChrSingleVec(rightClipPosVector);
 	removeFakeClipsDifferentChrSingleVec(rightClipPosVector2);
 
-	removeFakeClipsLongDistSameOrientSingleVec(leftClipPosVector, vec_name="Left");
-	removeFakeClipsLongDistSameOrientSingleVec(leftClipPosVector2, vec_name="Left2");
-	removeFakeClipsLongDistSameOrientSingleVec(rightClipPosVector, vec_name="Right");
-	removeFakeClipsLongDistSameOrientSingleVec(rightClipPosVector2, vec_name="Right2");
+	removeFakeClipsLongDistSameOrientSingleVec(leftClipPosVector);
+	removeFakeClipsLongDistSameOrientSingleVec(leftClipPosVector2);
+	removeFakeClipsLongDistSameOrientSingleVec(rightClipPosVector);
+	removeFakeClipsLongDistSameOrientSingleVec(rightClipPosVector2);
 
 	removeFakeClipsLowCov(leftClipPosVector, int32_t(paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR));
 	removeFakeClipsLowCov(leftClipPosVector2, int32_t(paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR));
 	removeFakeClipsLowCov(rightClipPosVector, int32_t(paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR));
 	removeFakeClipsLowCov(rightClipPosVector2, int32_t(paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR));
+
+	// remove unreliable unbalanced alignments
+	removeFakeClipsUnbalancedVec(MIN_CLIP_REG_UNBALANCED_RATIO, paras->minReadsNumSupportSV);
 }
 
 // remove fake clips with alignment onto different chromes based on single vector
@@ -2091,7 +2102,7 @@ void clipReg::removeFakeClipsDifferentChrSingleVec(vector<clipPos_t*> &clipPosVe
 }
 
 // remove fake clips with long dist based on single vector
-void clipReg::removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &clipPosVector, string &vec_name){
+void clipReg::removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &clipPosVector){
 	size_t i, group_id, group_id_max;
 	int32_t dist;
 	vector<size_t> clip_pos_group_id_vec, group_central_vec, group_num_vec;
@@ -2164,6 +2175,33 @@ void clipReg::removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &cli
 // remove fake clips with long dist based on single vector
 void clipReg::removeFakeClipsLowCov(vector<clipPos_t*> &clipPosVector, int32_t min_clip_reads_num){
 	if(clipPosVector.size()<(size_t)min_clip_reads_num) destroyClipPosVec(clipPosVector); // remove fake clips Only this function modifies the minimum number of supports
+}
+
+// remove redundant secondary alignments
+void clipReg::removeFakeClipsUnbalancedVec(double unbalance_ratio, int32_t min_clip_reads_num){
+	int32_t left_max, right_max, min_num;
+	double ratio;
+
+	if(large_indel_flag==false and (leftClipPosVector.size()>0 or leftClipPosVector2.size()>0) and (rightClipPosVector.size()>0 or rightClipPosVector2.size()>0)){
+		left_max = max(leftClipPosVector.size(), leftClipPosVector2.size());
+		right_max = max(rightClipPosVector.size(), rightClipPosVector2.size());
+
+		if(left_max>right_max) {
+			ratio = (double)right_max / left_max;
+			min_num = right_max;
+		}else {
+			ratio = (double)left_max / right_max;
+			min_num = left_max;
+		}
+
+		if(ratio<unbalance_ratio and min_num<min_clip_reads_num) { // remove fake clips Only this function modifies the minimum number of supports
+//			cout << __func__ << ": " << "ratio=" << ratio << ", min_num=" << min_num << endl;
+			destroyClipPosVec(leftClipPosVector);
+			destroyClipPosVec(leftClipPosVector2);
+			destroyClipPosVec(rightClipPosVector);
+			destroyClipPosVec(rightClipPosVector2);
+		}
+	}
 }
 
 // get the index
@@ -2565,9 +2603,9 @@ void clipReg::determineLargeIndelReg(){
 	vector<int32_t> adjClipAlnSegInfo;
 	clipPos_t *clip_pos;
 	int32_t mate_arr_idx, mate_clip_end_flag, idx_vec, reg_num;
-	int32_t mate_arr_idx_same_chr, mate_clip_end_flag_same_chr, min_dist_same_chr, valid_del_num;
+	int32_t mate_arr_idx_same_chr, mate_clip_end_flag_same_chr, min_dist_same_chr, min_ref_dist_same_chr, valid_num;
 	int32_t start_pos_tmp, end_pos_tmp;
-	bool valid_mate_flag, same_orient_flag, self_overlap_flag, ref_skip_flag;
+	bool valid_mate_flag, same_orient_flag, self_overlap_flag, seg_skip_flag, ref_skip_flag;
 
 	// save the INS region if there are only one clipPos set
 	reg_num = mate_clip_reg.leftClipRegNum + mate_clip_reg.rightClipRegNum;
@@ -2621,12 +2659,12 @@ void clipReg::determineLargeIndelReg(){
 		mate_clip_reg.supp_num_largeIndel = supp_num_largeIndel;
 	}
 	else if(mate_clip_reg.leftClipRegNum==1 and mate_clip_reg.rightClipRegNum==1){
-		if(leftClipPosVector.size()>0)clip_pos_vec1 = &leftClipPosVector;
+		if(leftClipPosVector.size()>0) clip_pos_vec1 = &leftClipPosVector;
 		else clip_pos_vec1 = &leftClipPosVector2;
 
 		resetClipCheckFlag(clipAlnDataVector);
 
-		valid_del_num = 0;
+		valid_num = 0;
 		for(i=0; i<clip_pos_vec1->size(); i++){
 			clip_pos = clip_pos_vec1->at(i);
 
@@ -2634,7 +2672,7 @@ void clipReg::determineLargeIndelReg(){
 			query_aln_segs = getQueryClipAlnSegsAll(queryname, clipAlnDataVector);  // get query clip align segments
 
 			// deal with the mate clip end
-			ref_skip_flag = false;
+			seg_skip_flag = ref_skip_flag = false;
 			idx_vec = getVecIdxClipAlnData(clip_pos->clip_aln, query_aln_segs);
 			adjClipAlnSegInfo = getAdjacentClipAlnSeg(idx_vec, clip_pos->clip_end, query_aln_segs, minClipEndSize, MAX_VAR_REG_SIZE);
 			mate_arr_idx = adjClipAlnSegInfo.at(0);
@@ -2642,14 +2680,16 @@ void clipReg::determineLargeIndelReg(){
 			mate_arr_idx_same_chr = adjClipAlnSegInfo.at(4);
 			mate_clip_end_flag_same_chr = adjClipAlnSegInfo.at(5);
 			min_dist_same_chr = adjClipAlnSegInfo.at(6);
-			//min_ref_dist_same_chr = adjClipAlnSegInfo.at(7);
+			min_ref_dist_same_chr = adjClipAlnSegInfo.at(7);
 			if(mate_arr_idx!=-1){ // mated
 				// prefer the segments on the same chromosome
-				if(mate_arr_idx_same_chr!=-1 and mate_arr_idx==mate_arr_idx_same_chr and mate_clip_end_flag==mate_clip_end_flag_same_chr and abs(min_dist_same_chr)<=MAX_REF_DIST_SAME_CHR){
-					ref_skip_flag = true;
+				//if(mate_arr_idx_same_chr!=-1 and mate_arr_idx==mate_arr_idx_same_chr and mate_clip_end_flag==mate_clip_end_flag_same_chr and abs(min_dist_same_chr)<=MAX_REF_DIST_SAME_CHR){
+				if(mate_arr_idx_same_chr!=-1 and mate_arr_idx==mate_arr_idx_same_chr and mate_clip_end_flag==mate_clip_end_flag_same_chr){
+					if(abs(min_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or min_ref_dist_same_chr-min_dist_same_chr>=MAX_REF_DIST_SAME_CHR) ref_skip_flag = true;
+					else if(abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or min_dist_same_chr-min_ref_dist_same_chr>=MAX_REF_DIST_SAME_CHR) seg_skip_flag = true;
 				}
 
-				if(ref_skip_flag){
+				if(seg_skip_flag or ref_skip_flag){
 					mate_clip_aln_seg = query_aln_segs.at(mate_arr_idx);
 
 					if(clip_pos->clip_aln->aln_orient==mate_clip_aln_seg->aln_orient) same_orient_flag = true;
@@ -2678,7 +2718,7 @@ void clipReg::determineLargeIndelReg(){
 					}
 
 					if(same_orient_flag and self_overlap_flag==false and valid_mate_flag){
-						valid_del_num ++;
+						valid_num ++;
 					}
 				}
 			}
@@ -2686,7 +2726,7 @@ void clipReg::determineLargeIndelReg(){
 		resetClipCheckFlag(clipAlnDataVector);
 
 		// construct DEL region
-		if(valid_del_num>paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR){
+		if(valid_num>paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR){
 			if(leftClipPosVector.size()>0){
 				clip_pos_vec1 = &leftClipPosVector;
 				reg1 = mate_clip_reg.leftClipReg;

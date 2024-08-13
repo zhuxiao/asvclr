@@ -38,7 +38,7 @@ struct Minimizer {
 int max(int a, int b, int c);
 double computeVarseqIdentity(const string& seq, const string& seq1);
 void needleman_wunschOp(const string& seq1, const string& seq2, int32_t match_score, int32_t mismatch_score, int32_t gap_penalty, string& seq1_new, string& seq2_new);
-double calculate_consistency(const string& seq1, const string& seq2);
+double calculate_identity(const string& seq1, const string& seq2);
 vector<Minimizer> findMinimizers(const string& sequence, size_t windowSize, size_t kmerSize);
 size_t customHashFunction(const string& kmer, size_t kmerSize);
 void retainCommonHashValuesMinimizers(vector<Minimizer>& containerA, vector<Minimizer>& containerB);

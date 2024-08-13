@@ -55,7 +55,7 @@ void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVecto
 	bam_hdr_destroy(header);
 }
 
-void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, vector<string> &qname_vec){
+void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, vector<string> &qname_vec){
 	size_t i;
 	vector<bam1_t*> alnDataVector;
 	clipAlnData_t *clip_aln;
@@ -66,11 +66,38 @@ void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVecto
 
 	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile, minMapQ);
 //	data_loader.loadAlnData(alnDataVector);
-	data_loader.loadAlnData(alnDataVector, qname_vec);
+	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov, qname_vec);
 
 //	if(max_ultra_high_cov>0){
 //		samplingAlnData(alnDataVector, data_loader.mean_read_len, max_ultra_high_cov);
 //	}
+
+	// load the sam/bam header
+	header = loadSamHeader(inBamFile);
+
+	// compute the aligned region
+	for(i=0; i<alnDataVector.size(); i++){
+		clip_aln = generateClipAlnData(alnDataVector.at(i), header);
+		if(clip_aln){
+			clipAlnDataVector.push_back(clip_aln);
+		}else{
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot generate clip align item, error!" << endl;
+			exit(1);
+		}
+	}
+
+	bam_hdr_destroy(header);
+}
+
+void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, vector<string> &qname_vec){
+	size_t i;
+	vector<bam1_t*> alnDataVector;
+	clipAlnData_t *clip_aln;
+	bam_hdr_t *header;
+
+	// load the align data
+	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile, minMapQ);
+	data_loader.loadAlnData(alnDataVector, qname_vec);
 
 	// load the sam/bam header
 	header = loadSamHeader(inBamFile);
@@ -104,6 +131,12 @@ void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAln
 void clipAlnDataLoader::loadClipAlnDataWithSATagWithSegSize(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, double primary_seg_size_ratio){
 	loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
 	removeClipAlnDataWithLowPrimarySegSizeRatio(clipAlnDataVector, primary_seg_size_ratio);
+}
+
+void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, vector<string> &qname_vec){
+	loadClipAlnData(clipAlnDataVector, max_ultra_high_cov, qname_vec);
+	fillClipAlnDataBySATag(clipAlnDataVector);
+	addAdjacentInfo(clipAlnDataVector);
 }
 
 void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, vector<string> &qname_vec){

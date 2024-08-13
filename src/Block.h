@@ -72,7 +72,7 @@ class Block{
 
 	private:
 		void destroyBaseArray();
-		void destoryAlnData();
+//		void destoryAlnData();
 		void destroySnvVector();
 		void destroyIndelVector();
 		void destroyClipRegVector();

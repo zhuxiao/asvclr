@@ -23,6 +23,8 @@ using namespace std;
 #define MIN_CANU_VERSION_HIFI			"1.9"
 #define MIN_CANU_VERSION_NO_GNPPLOT		"1.8"
 
+#define EXT_SIZE_ENTIRE_FLANKING		50
+
 #define POA_ALIGN_DEBUG					0
 
 
@@ -33,14 +35,11 @@ class localCns {
 		vector<string> readsfilename_vec;
 		int64_t chrlen, cns_extend_size, startRefPos_cns, endRefPos_cns;
 		int32_t num_threads_per_cns_work, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, minMapQ;
-//		Paras *paras;
 		double max_ultra_high_cov, max_seg_size_ratio;
 		bool cns_success_preDone_flag, cns_success_flag, use_poa_flag, clip_reg_flag;
 		double min_input_cov_canu;
 
 		vector<struct seqsVec*> seqs_vec;
-		//vector<string> seqs;
-		//vector<struct alnSeg*> query_alnSegs;
 
 		// start time and end time
 		time_t start_time, end_time;
@@ -73,7 +72,6 @@ class localCns {
 		void setLimitRegs(bool limit_reg_process_flag, vector<simpleReg_t*> limit_reg_vec);
 
 	private:
-		void destoryAlnData();
 		void destoryClipAlnData();
 		void destorySeqsVec(vector<struct seqsVec*> &seqs_vec);//
 		void destoryQueryCluVec(vector<struct querySeqInfoVec*> &query_clu_vec);
@@ -81,14 +79,14 @@ class localCns {
 		void destroyQueryQcSig(queryCluSig_t *qc_Sig);
 		void saveClusterInfo(string &clusterfilename, vector<struct seqsVec*> &seqs_vec);
 		vector<struct querySeqInfoVec*> queryCluster(vector<struct querySeqInfoNode*> &query_seq_info_all);
-		void prepareQueryInfoForCluster(vector<struct querySeqInfoNode*> &query_seq_info_all);
+		void prepareQueryInfoForCluster(vector<struct querySeqInfoNode*> &query_seq_info_vec);
+		void sortQueryInfoByNumCategory(vector<struct querySeqInfoNode*> &query_seq_info_vec);
 		void resucueCluster(vector<struct querySeqInfoNode*> &query_seq_info_all, vector<struct querySeqInfoNode*> &q_cluster_a, vector<struct querySeqInfoNode*> &q_cluster_b);
 		double computeScoreRatio(struct querySeqInfoNode *query_seq_info_node, struct querySeqInfoNode *q_cluster_node, int64_t startSpanPos, int64_t endSpanPos, int32_t min_sv_size);
 		vector<int8_t> computeQcMatchProfileSingleQuery(queryCluSig_t *queryCluSig, queryCluSig_t *seed_qcQuery);
 		vector<int8_t> qComputeSigMatchProfile(struct alnScoreNode *scoreArr, int32_t rowsNum, int32_t colsNum, queryCluSig_t *queryCluSig, queryCluSig_t *seed_qcQuery);
 		struct seedQueryInfo* chooseSeedClusterQuery(struct querySeqInfoNode* query_seq_info_node, vector<struct querySeqInfoNode*> &q_cluster);
 		struct seedQueryInfo* chooseSeedClusterQuery02(struct seedQueryInfo* seedinfo, vector<struct querySeqInfoNode*> &q_cluster);
-		struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNode*> &query_seq_info_vec);
 		struct seqsVec* collectQuerySeqDataClipReg(vector<qcSigList_t*> &qcSigList);
 		double computeCompensationCoefficient(size_t startRefPos_cns, size_t endRefPos_cns, double mean_read_len);
 		double computeLocalCovClipReg(vector<struct fqSeqNode*> &fq_seq_vec, double compensation_coefficient);

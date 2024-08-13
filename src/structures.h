@@ -148,7 +148,7 @@ typedef struct qcSigNode{
 struct querySeqInfoNode{
 	clipAlnData_t *clip_aln;
 	string qname, seq;
-	bool cluster_finished_flag, selected_flag;
+	bool cluster_finished_flag, selected_flag, entire_flanking_flag;
 	int16_t overlap_sig_num;
 	vector<struct alnSeg*> query_alnSegs;
 };
@@ -158,7 +158,7 @@ typedef struct qcSigListNode{
 	vector<struct querySeqInfoNode*> query_seqs_vec;
 	vector<qcSig_t*> qcSig_vec;
 	vector<int8_t> match_profile_vec;
-	bool cluster_finished_flag;
+	bool cluster_finished_flag, entire_flanking_flag;
 }qcSigList_t;
 
 typedef struct qcSigListVecNode{

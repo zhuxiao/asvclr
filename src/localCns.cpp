@@ -69,12 +69,6 @@ localCns::~localCns() {
 	}
 }
 
-void localCns::destoryAlnData(){
-	for(size_t i=0; i<alnDataVector.size(); i++)
-		bam_destroy1(alnDataVector.at(i));
-	vector<bam1_t*>().swap(alnDataVector);
-}
-
 // destroy the alignment data of the block
 void localCns::destoryClipAlnData(){
 	for(size_t i=0; i<clipAlnDataVector.size(); i++){
@@ -188,24 +182,10 @@ void localCns::extractReadsDataFromBAM(){
 	endRefPos_cns = varVec[varVec.size()-1]->endRefPos + cns_extend_size;
 	if(endRefPos_cns>chrlen) endRefPos_cns = chrlen;
 
-	// load the aligned reads data
-//	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize);
-//	data_loader.loadClipAlnData(clipAlnDataVector);
-
 	// load the clipping data ---20220705
-//	cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << minMapQ << endl;
 	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ);
-	//data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0);
-
-//	cout << "clip_reg_flag=" << clip_reg_flag << endl;
-
-	//if(clip_reg_flag) data_loader.loadClipAlnDataWithSATag(clipAlnDataVector);
 	if(clip_reg_flag) data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
 	else data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, max_ultra_high_cov, max_seg_size_ratio);
-
-//	if(clipAlnDataVector.size()>1000){
-//		cout << "clipAlnDataVector.size()=" << clipAlnDataVector.size() << endl;
-//	}
 
 	if(clipAlnDataVector.size()>0){
 
@@ -288,10 +268,7 @@ void localCns::extractReadsDataFromBAM(){
 				}
 				//smooth read segments
 				for(i=0; i<query_clu_vec.size(); i++){
-					smoothed_seqs = smoothQuerySeqData(refseq, query_clu_vec.at(i)->query_seq_info_all);
-					//seqs_vec smoothed_seqs;
-					//seqs_vec_node = new struct seqsVec();
-					//seqs_vec_node = smoothed_seqs;
+					smoothed_seqs = smoothQuerySeqData(refseq, query_clu_vec.at(i)->query_seq_info_all, startRefPos_cns, min_sv_size);
 					seqs_vec.push_back(smoothed_seqs);
 				}
 			}
@@ -379,11 +356,12 @@ vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInf
 //		score_ratio_vec.push_back(1);
 
 		for(i=0; i<query_seq_info_all.size(); i++){
+			if(query_seq_info_all.at(i)->overlap_sig_num==0 or query_seq_info_all.at(i)->entire_flanking_flag==false) continue; // skip items of no signatures
+
 //			if(query_seq_info_all.at(i)->cluster_finished_flag == false){
 				seed_info_a = chooseSeedClusterQuery(query_seq_info_all.at(i), q_cluster_a);
 				//span_vec1.push_back(seed_info_a->span_intersection);
 				if(seed_info_a->span_intersection>0){
-
 					if(i!=k) {
 						score_ratio_a = computeScoreRatio(query_seq_info_all.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size);
 						score_ratio_vec.push_back(score_ratio_a);
@@ -449,16 +427,6 @@ vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInf
 				}
 			}
 
-			// only two initial clusters, deleted on 2024-06-29
-//			srsame_maxnum = srmin_match_vec.at(0)->num;
-//			smin_id = 0;
-//			for(i=0; i<srmin_match_vec.size(); i++){
-//				if(srsame_maxnum<srmin_match_vec.at(i)->num){
-//					smin_id = i;
-//					srsame_maxnum = srmin_match_vec.at(i)->num;
-//				}
-//			}
-
 			query_seq_info_all.at(srmin_match_vec.at(0)->pos_id.at(0))->cluster_finished_flag = true;
 			q_cluster_a.push_back(query_seq_info_all.at(srmin_match_vec.at(0)->pos_id.at(0)));
 			if(srmin_match_vec.size()>1 and srmin_match_vec.at(1)->num>=0.6*min_supp_num) {
@@ -490,16 +458,6 @@ vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInf
 				query_seq_info_all.at(i)->cluster_finished_flag = true;
 				q_cluster_a.push_back(query_seq_info_all.at(i));
 			}
-//			if(query_seq_info_all.at(i)->cluster_finished_flag == false){
-//				queryCluSig = new queryCluSig_t();
-//				queryCluSig->qcSig_vec = extractQcSigsFromAlnSegsSingleQuery(query_seq_info_all.at(i), query_seq_info_all.at(i)->clip_aln->chrname, query_seq_info_all.at(i)->query_alnSegs.at(0)->startRpos, query_seq_info_all.at(i)->query_alnSegs.at(query_seq_info_all.at(i)->query_alnSegs.size() - 1)->startRpos + query_seq_info_all.at(i)->query_alnSegs.at(query_seq_info_all.at(i)->query_alnSegs.size() - 1)->seglen, min_sv_size);
-//				if(queryCluSig->qcSig_vec.size()>0){
-//					query_seq_info_all.at(i)->cluster_finished_flag = true;
-//					q_cluster_a.push_back(query_seq_info_all.at(i));
-//				}
-//				//delete queryCluSig;
-//				destroyQueryQcSig(queryCluSig);
-//			}
 		}
 	}else{
 		for(i=0; i<query_seq_info_all.size(); i++){
@@ -576,27 +534,8 @@ vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInf
 		}
 	}
 
-	for(i=0; i<q_cluster_a.size(); i++){
-		if(q_cluster_a.at(i)->overlap_sig_num>0) q_cluster_a_final.push_back(q_cluster_a.at(i));
-//		queryCluSig = new queryCluSig_t();
-//		queryCluSig->qcSig_vec = extractQcSigsFromAlnSegsSingleQuery(q_cluster_a.at(i), q_cluster_a.at(i)->clip_aln->chrname, q_cluster_a.at(i)->query_alnSegs.at(0)->startRpos, q_cluster_a.at(i)->query_alnSegs.at(q_cluster_a.at(i)->query_alnSegs.size() - 1)->startRpos + q_cluster_a.at(i)->query_alnSegs.at(q_cluster_a.at(i)->query_alnSegs.size() - 1)->seglen, min_sv_size);
-//		if(queryCluSig->qcSig_vec.size()>0){
-//			q_cluster_a_final.push_back(q_cluster_a.at(i));
-//		}
-//		//delete queryCluSig;
-//		destroyQueryQcSig(queryCluSig);
-	}
-
-	for(i=0; i<q_cluster_b.size(); i++){
-		if(q_cluster_b.at(i)->overlap_sig_num>0) q_cluster_b_final.push_back(q_cluster_b.at(i));
-//		queryCluSig = new queryCluSig_t();
-//		queryCluSig->qcSig_vec = extractQcSigsFromAlnSegsSingleQuery(q_cluster_b.at(i), q_cluster_b.at(i)->clip_aln->chrname, q_cluster_b.at(i)->query_alnSegs.at(0)->startRpos, q_cluster_b.at(i)->query_alnSegs.at(q_cluster_b.at(i)->query_alnSegs.size() - 1)->startRpos + q_cluster_b.at(i)->query_alnSegs.at(q_cluster_b.at(i)->query_alnSegs.size() - 1)->seglen, min_sv_size);
-//		if(queryCluSig->qcSig_vec.size()>0){
-//			q_cluster_b_final.push_back(q_cluster_b.at(i));
-//		}
-//		//delete queryCluSig;
-//		destroyQueryQcSig(queryCluSig);
-	}
+	for(i=0; i<q_cluster_a.size(); i++) if(q_cluster_a.at(i)->overlap_sig_num>0) q_cluster_a_final.push_back(q_cluster_a.at(i));
+	for(i=0; i<q_cluster_b.size(); i++) if(q_cluster_b.at(i)->overlap_sig_num>0) q_cluster_b_final.push_back(q_cluster_b.at(i));
 
 	if(q_cluster_a_final.size()>0){
 		q_cluster_node_a = new struct querySeqInfoVec();
@@ -614,32 +553,33 @@ vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInf
 }
 
 // prepare query information for cluster
-void localCns::prepareQueryInfoForCluster(vector<struct querySeqInfoNode*> &query_seq_info_all){
+void localCns::prepareQueryInfoForCluster(vector<struct querySeqInfoNode*> &query_seq_info_vec){
 	int32_t span, span_next;
 	struct querySeqInfoNode *q_seq_node;
+	vector<struct alnSeg*> query_alnSegs;
 	struct alnSeg *seg;
 	size_t i, j, k;
-	int64_t end_ref_pos;
+	int64_t end_ref_pos, start_var_pos, end_var_pos;
 	reg_t *reg;
 	bool flag;
 
 	//sort in descending order by |query_endRpos - query_startRpos|
 	//query_seq_info_item = new struct querySeqInfoNode();
-	for(i=0; i<query_seq_info_all.size(); i++){
-		for(j=0; j<query_seq_info_all.size()-i-1; j++){
-			span = query_seq_info_all.at(j)->query_alnSegs.at(query_seq_info_all.at(j)->query_alnSegs.size() - 1)->startRpos +  query_seq_info_all.at(j)->query_alnSegs.at(query_seq_info_all.at(j)->query_alnSegs.size() - 1)->seglen - query_seq_info_all.at(j)->query_alnSegs.at(0)->startRpos;
-			span_next = query_seq_info_all.at(j+1)->query_alnSegs.at(query_seq_info_all.at(j+1)->query_alnSegs.size() - 1)->startRpos +  query_seq_info_all.at(j+1)->query_alnSegs.at(query_seq_info_all.at(j+1)->query_alnSegs.size() - 1)->seglen - query_seq_info_all.at(j+1)->query_alnSegs.at(0)->startRpos;
+	for(i=0; i<query_seq_info_vec.size(); i++){
+		for(j=0; j<query_seq_info_vec.size()-i-1; j++){
+			span = query_seq_info_vec.at(j)->query_alnSegs.at(query_seq_info_vec.at(j)->query_alnSegs.size() - 1)->startRpos +  query_seq_info_vec.at(j)->query_alnSegs.at(query_seq_info_vec.at(j)->query_alnSegs.size() - 1)->seglen - query_seq_info_vec.at(j)->query_alnSegs.at(0)->startRpos;
+			span_next = query_seq_info_vec.at(j+1)->query_alnSegs.at(query_seq_info_vec.at(j+1)->query_alnSegs.size() - 1)->startRpos +  query_seq_info_vec.at(j+1)->query_alnSegs.at(query_seq_info_vec.at(j+1)->query_alnSegs.size() - 1)->seglen - query_seq_info_vec.at(j+1)->query_alnSegs.at(0)->startRpos;
 			if(span<span_next){ // swap
-				q_seq_node = query_seq_info_all.at(j);
-				query_seq_info_all.at(j) = query_seq_info_all.at(j+1);
-				query_seq_info_all.at(j+1) = q_seq_node;
+				q_seq_node = query_seq_info_vec.at(j);
+				query_seq_info_vec.at(j) = query_seq_info_vec.at(j+1);
+				query_seq_info_vec.at(j+1) = q_seq_node;
 			}
 		}
 	}
 
 	// count the number of overlapped signatures
-	for(i=0; i<query_seq_info_all.size(); i++){
-		q_seq_node = query_seq_info_all.at(i);
+	for(i=0; i<query_seq_info_vec.size(); i++){
+		q_seq_node = query_seq_info_vec.at(i);
 		q_seq_node->overlap_sig_num = 0;
 		for(j=0; j<q_seq_node->query_alnSegs.size(); j++){
 			seg = q_seq_node->query_alnSegs.at(j);
@@ -662,15 +602,110 @@ void localCns::prepareQueryInfoForCluster(vector<struct querySeqInfoNode*> &quer
 	}
 
 	// sort descendingly according to the number of overlapped signatures
-	for(i=0; i<query_seq_info_all.size(); i++){
-		for(j=i+1; j<query_seq_info_all.size(); j++){
-			if(query_seq_info_all.at(i)->overlap_sig_num<query_seq_info_all.at(j)->overlap_sig_num){
-				q_seq_node = query_seq_info_all.at(i);
-				query_seq_info_all.at(i) = query_seq_info_all.at(j);
-				query_seq_info_all.at(j) = q_seq_node;
+	for(i=0; i<query_seq_info_vec.size(); i++){
+		for(j=i+1; j<query_seq_info_vec.size(); j++){
+			if(query_seq_info_vec.at(i)->overlap_sig_num<query_seq_info_vec.at(j)->overlap_sig_num){
+				q_seq_node = query_seq_info_vec.at(i);
+				query_seq_info_vec.at(i) = query_seq_info_vec.at(j);
+				query_seq_info_vec.at(j) = q_seq_node;
 			}
 		}
 	}
+
+	// sort according to the category of the number of signatures
+	sortQueryInfoByNumCategory(query_seq_info_vec);
+
+	// calculate the entire flanking flag
+	start_var_pos = varVec.at(0)->startRefPos - EXT_SIZE_ENTIRE_FLANKING;
+	end_var_pos = varVec.at(varVec.size()-1)->endRefPos + EXT_SIZE_ENTIRE_FLANKING;
+	if(start_var_pos<1) start_var_pos = 1;
+	if(end_var_pos>chrlen) end_var_pos = chrlen;
+	for(i=0; i<query_seq_info_vec.size(); i++){
+		query_alnSegs = query_seq_info_vec.at(i)->query_alnSegs;
+		seg = query_alnSegs.at(query_alnSegs.size()-1);
+		end_ref_pos = getEndRefPosAlnSeg(seg->startRpos, seg->opflag, seg->seglen);
+		if(query_alnSegs.at(0)->startRpos<=start_var_pos and end_ref_pos>=end_var_pos) query_seq_info_vec.at(i)->entire_flanking_flag = true;
+		else query_seq_info_vec.at(i)->entire_flanking_flag = false;
+	}
+
+	// prefer the alignments flanking the entire variant region
+	for(i=0; i<query_seq_info_vec.size(); i++){
+		if(query_seq_info_vec.at(i)->entire_flanking_flag==false){
+			flag = false;
+			for(j=i+1; j<query_seq_info_vec.size(); j++){
+				if(query_seq_info_vec.at(j)->entire_flanking_flag){
+					flag = true;
+					q_seq_node = query_seq_info_vec.at(i);
+					query_seq_info_vec.at(i) = query_seq_info_vec.at(j);
+					query_seq_info_vec.at(j) = q_seq_node;
+					break;
+				}
+			}
+			if(flag==false) break;
+		}
+	}
+}
+
+void localCns::sortQueryInfoByNumCategory(vector<struct querySeqInfoNode*> &query_seq_info_vec){
+	size_t i, j, sum;
+	vector<struct querySeqInfoNode*> query_seq_info_vec_tmp;
+	int32_t idx;
+	vector<srmin_match_t*> num_id_vec;
+	srmin_match_t *num_id_node;
+	bool flag;
+
+	for(i=0; i<query_seq_info_vec.size(); i++){
+		flag = false;
+		for(j=0; j<num_id_vec.size(); j++){
+			if(num_id_vec.at(j)->num==(int32_t)query_seq_info_vec.at(i)->overlap_sig_num){
+				idx = j;
+				flag = true;
+				break;
+			}
+		}
+		if(flag){ // exist, update item
+			num_id_node  = num_id_vec.at(idx);
+			num_id_node->pos_id.push_back(i);
+		}else{ // add item
+			num_id_node = new srmin_match_t();
+			num_id_node->num = query_seq_info_vec.at(i)->overlap_sig_num;
+			num_id_node->pos_id.push_back(i);
+			num_id_vec.push_back(num_id_node);
+		}
+	}
+
+	// sort descendingly according to the number category of overlapped signatures
+	for(i=0; i<num_id_vec.size(); i++){
+		if(num_id_vec.at(i)->num>0){
+			for(j=i+1; j<num_id_vec.size(); j++){
+				if(num_id_vec.at(j)->num>0){
+					if(num_id_vec.at(i)->pos_id.size()<num_id_vec.at(j)->pos_id.size()){
+						num_id_node = num_id_vec.at(i);
+						num_id_vec.at(i) = num_id_vec.at(j);
+						num_id_vec.at(j) = num_id_node;
+					}
+				}
+			}
+		}
+	}
+
+	// update the query vector
+	sum = 0;
+	for(i=0; i<num_id_vec.size(); i++) sum += num_id_vec.at(i)->pos_id.size();
+	if(sum==query_seq_info_vec.size()){
+		for(i=0; i<num_id_vec.size(); i++){
+			num_id_node = num_id_vec.at(i);
+			for(j=0; j<(size_t)num_id_node->pos_id.size(); j++) query_seq_info_vec_tmp.push_back(query_seq_info_vec.at(num_id_node->pos_id.at(j)));
+		}
+		for(i=0; i<query_seq_info_vec_tmp.size(); i++) query_seq_info_vec.at(i) = query_seq_info_vec_tmp.at(i);
+	}else{
+		cerr << "sum=" << sum << ", query_seq_info_vec.size=" << query_seq_info_vec.size() << ", error!" << endl;
+		exit(1);
+	}
+
+	// release memory
+	for(i=0; i<num_id_vec.size(); i++) delete num_id_vec.at(i);
+	vector<srmin_match_t*>().swap(num_id_vec);
 }
 
 void localCns::resucueCluster(vector<struct querySeqInfoNode*> &query_seq_info_all, vector<struct querySeqInfoNode*> &q_cluster_a, vector<struct querySeqInfoNode*> &q_cluster_b){
@@ -788,7 +823,7 @@ vector<int8_t> localCns::computeQcMatchProfileSingleQuery(queryCluSig_t *queryCl
 		// compute the scores of each element
 		for(i=1; i<rowsNum; i++){
 			for(j=1; j<colsNum; j++){
-				matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_CONSIST_RATIO_MATCH_THRES, fai);
+				matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_IDENTITY_RATIO_MATCH_THRES, fai);
 				if(matchFlag) scoreIJ = matchScore;
 				else scoreIJ = mismatchScore;//
 
@@ -1021,81 +1056,6 @@ struct seedQueryInfo* localCns::chooseSeedClusterQuery02(struct seedQueryInfo* s
 	seed_info->span_intersection = span_max;
 	seed_info->id = seed_id;
 	return seed_info;
-}
-
-// smooth the query sequence data for Indel regions
-struct seqsVec *localCns::smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNode*> &query_seq_info_vec){
-	size_t i, j;
-	uint32_t op;
-	struct seqsVec *smmothed_seqs_info;
-	struct querySeqInfoNode *q_node;
-	uint32_t query_startQpos;
-	char refbase;
-	string seq, delete_seq, qname;
-	struct alnSeg *aln_seg;
-
-	smmothed_seqs_info = new struct seqsVec();
-
-	for(i=0; i<query_seq_info_vec.size(); i++){
-		q_node = query_seq_info_vec.at(i);
-		if(q_node->query_alnSegs.size()==0) continue;
-
-		query_startQpos = 1;
-		seq = q_node->seq;
-		qname = q_node->qname;
-
-//		if(qname.compare("SRR8858470.1.31242")==0){
-//			cout << "i=" << i << ", qname=" << qname << endl;
-//		}
-
-		for(j=0; j<q_node->query_alnSegs.size(); j++){
-			aln_seg = q_node->query_alnSegs.at(j);
-			op = aln_seg->opflag;
-			//query_endQpos += q_node->query_alnSegs.at(j)->seglen;
-			//cout << "i=" << i << ", j=" << j << ", startRpos=" << aln_seg->startRpos << endl;
-			switch (op) {
-				case BAM_CMATCH:
-					query_startQpos += aln_seg->seglen;
-					break;
-				case BAM_CINS:
-					if(aln_seg->seglen<min_sv_size){
-						seq.erase(query_startQpos - 1, aln_seg->seglen);
-					}else{
-						query_startQpos += aln_seg->seglen;
-					}
-					break;
-				case BAM_CDEL:
-					if(aln_seg->seglen<min_sv_size){
-						delete_seq = refseq.substr(aln_seg->startRpos - startRefPos_cns, aln_seg->seglen);
-						seq.insert(query_startQpos - 1, delete_seq);
-						query_startQpos += aln_seg->seglen;
-					}
-					break;
-				case BAM_CSOFT_CLIP:
-				case BAM_CHARD_CLIP:
-					break;
-				case BAM_CEQUAL:
-					query_startQpos += aln_seg->seglen;
-					break;
-				case BAM_CDIFF:
-					refbase = refseq.at(aln_seg->startRpos - startRefPos_cns);
-					seq.at(query_startQpos-1) = refbase;
-					query_startQpos += aln_seg->seglen;
-					break;
-				case BAM_CREF_SKIP:
-					// unexpected events
-				case BAM_CPAD:
-				case BAM_CBACK:
-				default:
-					cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << op << endl;
-					cerr << "startRpos" << aln_seg->startRpos << endl;
-					exit(1);
-			}
-		}
-		smmothed_seqs_info->seqs.push_back(seq);
-		smmothed_seqs_info->qname.push_back(qname);
-	}
-	return smmothed_seqs_info;
 }
 
 // collect query sequence data
@@ -1493,13 +1453,6 @@ bool localCns::cnsByPoa(){
 		}
 
 		n_seqs = seqs_vec.at(k)->seqs.size();
-
-//		if(n_seqs>300){
-//			cout << "tmp_reads_filename=" << tmp_reads_filename << ", n_seqs=" << n_seqs << endl;
-//		}
-
-//		mem_cost = 4194304; // 4096 MiB = 4 GiB
-
 		if(n_seqs>=(size_t)min_supp_num*READS_NUM_SUPPORT_FACTOR){ // only use sufficient reads data to generate consensus sequence
 			for (i = 0; i < n_seqs; ++i) reads_file << ">" << seqs_vec.at(k)->qname[i] << endl << seqs_vec.at(k)->seqs[i] << endl;
 			reads_file.close();
@@ -1635,7 +1588,7 @@ bool localCns::localCnsWtdbg2(){
 					sleep(mem_wait_seconds);
 				}else{
 					output_prefix = "tmp_wtdbg2_" + tmp_reg_str;
-					cmd2 = "wtdbg2.pl -x ccs -o " + output_prefix + " " + tmp_reads_filename + " > /dev/null 2>&1";
+					cmd2 = "wtdbg2.pl -x " + technology + " -o " + output_prefix + " -a -q " + tmp_reads_filename + " > /dev/null 2>&1";
 					system(cmd2.c_str());
 
 					pthread_mutex_lock(&mutex_mem);
@@ -1659,7 +1612,7 @@ bool localCns::localCnsWtdbg2(){
 						cons_header = ">wtdbg2_cns_";
 						cons_header += to_string(serial_number) + "_"; //serial number
 						cons_header += to_string(fa_loader.getFastaSeqLen(i)) + "_"; //consensus sequence length
-						cons_header += to_string(seqs_vec.at(k)->seqs.size()) + "-";  //cluster_number
+						cons_header += to_string(seqs_vec.at(k)->seqs.size()) + "-";  //read count
 
 						for(j=0; j<seqs_vec.at(k)->qname.size()-1; j++) cons_header += seqs_vec.at(k)->qname.at(j) + "-";
 						cons_header += seqs_vec.at(k)->qname.at(seqs_vec.at(k)->qname.size()-1);
@@ -1741,7 +1694,7 @@ bool localCns::localCnsCanu_IncreaseGenomeSize(){
 
 	// technology
 	technology_str = "";
-	if(technology.compare(PACBIO_CLR_TECH_STR)==0){
+	if(technology.compare(PACBIO_RS_TECH_STR)==0 or technology.compare(PACBIO_SQ_TECH_STR)==0){
 		if(canu_version.compare(MIN_CANU_VERSION_NO_RAW)>=0)
 			technology_str = " -pacbio ";
 		else
@@ -1847,7 +1800,7 @@ bool localCns::localCnsCanu_DecreaseGenomeSize(){
 
 	// technology
 	technology_str = "";
-	if(technology.compare(PACBIO_CLR_TECH_STR)==0){
+	if(technology.compare(PACBIO_RS_TECH_STR)==0 or technology.compare(PACBIO_SQ_TECH_STR)==0){
 		if(canu_version.compare(MIN_CANU_VERSION_NO_RAW)>=0)
 			technology_str = " -pacbio ";
 		else

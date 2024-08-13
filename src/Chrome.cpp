@@ -492,7 +492,7 @@ void Chrome::processMateClipRegDetectWork(){
 
 			//cout << "[" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
-//			if(i>=43 and i<=44)
+//			if(i>=2 and i<=2)
 //				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 //			else continue;
 
@@ -2609,6 +2609,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				var_cand_tmp->misAln_filename = misAln_reg_filename;
 				var_cand_tmp->inBamFile = paras->inBamFile;
 				var_cand_tmp->fai = fai;
+				var_cand_tmp->technology = paras->technology;
 
 				var_cand_tmp->refseqfilename = refseqfilename;	// refseq file name
 				var_cand_tmp->ctgfilename = contigfilename;	// contig file name
@@ -2619,6 +2620,8 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 
 				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
+				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
+				var_cand_tmp->minConReadLen = paras->minConReadLen;
 
 				var_cand_tmp->blat_aligned_info_vec = NULL;
 				var_cand_tmp->blat_var_cand_file = NULL;
@@ -2771,7 +2774,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				}
 
 				//set genotyping parameters
-				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_consistency_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_identity_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 				// process monitor killed blat work
 				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
@@ -3079,6 +3082,7 @@ void Chrome::loadPrevMinimapAlnItems(bool clipReg_flag, bool limit_reg_process_f
 				var_cand_tmp->misAln_filename = "";
 				var_cand_tmp->inBamFile = "";
 				var_cand_tmp->fai = NULL;
+				var_cand_tmp->technology = paras->technology;
 
 				var_cand_tmp->alnfilename = alnfilename;  // align file name
 				var_cand_tmp->ctgfilename = contigfilename;  // contig file name
@@ -3094,6 +3098,8 @@ void Chrome::loadPrevMinimapAlnItems(bool clipReg_flag, bool limit_reg_process_f
 
 				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
+				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
+				var_cand_tmp->minConReadLen = paras->minConReadLen;
 
 				if(line_vec[3].compare(ALIGN_SUCCESS)==0) var_cand_tmp->align_success = true;
 				else var_cand_tmp->align_success = false;
@@ -3101,7 +3107,7 @@ void Chrome::loadPrevMinimapAlnItems(bool clipReg_flag, bool limit_reg_process_f
 				var_cand_tmp->ctg_num = 0;
 
 				//set genotyping parameters
-				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_consistency_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_identity_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 				// process monitor killed blat work
 				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
@@ -3786,11 +3792,11 @@ void Chrome::saveCallIndelClipReg2File(string &outfilename_indel, string &outfil
 void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outfilename_clipReg){
 	size_t i, j;
 	ofstream outfile;
-	varCand *var_cand, *var_cand_pre, *var_cand_pre_pre;
+	varCand *var_cand; //, *var_cand_pre, *var_cand_pre_pre;
 	reg_t *reg;
 	string line, sv_type, header_line_bed, discov_level_str;
 	int32_t ref_dist, query_dist;
-	bool size_satisfied, no_existed;
+	bool size_satisfied; //, no_existed;
 
 	outfile.open(outfilename_indel);
 	if(!outfile.is_open()){
@@ -3804,19 +3810,20 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 
 	for(i=0; i<var_cand_vec.size(); i++){ // indel region
 		var_cand = var_cand_vec.at(i);
-		if(i>0) var_cand_pre = var_cand_vec.at(i-1);
-		if(i>1) var_cand_pre_pre = var_cand_vec.at(i-2);
+//		if(i>0) var_cand_pre = var_cand_vec.at(i-1);
+//		if(i>1) var_cand_pre_pre = var_cand_vec.at(i-2);
 		for(j=0; j<var_cand->newVarVec.size(); j++){
-			no_existed = true;
+			//no_existed = true;
 			reg = var_cand->newVarVec.at(j);
 			// choose the size-selected variants
 			size_satisfied = isSizeSatisfied2(reg->sv_len, paras->min_sv_size_usr, paras->max_sv_size_usr);
 
-			if(i>0) no_existed = isNotAlreadyExists(var_cand_pre->newVarVec, reg);
-			if(i>1 and no_existed) no_existed = isNotAlreadyExists(var_cand_pre_pre->newVarVec, reg);
-			if(no_existed) no_existed = isNotAlreadyExists(var_cand->newVarVec, reg, j);
+//			if(i>0) no_existed = isNotAlreadyExists(var_cand_pre->newVarVec, reg);
+//			if(i>1 and no_existed) no_existed = isNotAlreadyExists(var_cand_pre_pre->newVarVec, reg);
+//			if(no_existed) no_existed = isNotAlreadyExists(var_cand->newVarVec, reg, j);
 
-			if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied and no_existed){
+			//if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied and no_existed){ // deleted on 2024-08-02
+			if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied){
 				switch(reg->var_type){
 					case VAR_UNC: sv_type = VAR_UNC_STR; break;
 					case VAR_INS: sv_type = VAR_INS_STR; break;

@@ -27,13 +27,16 @@ class alnDataLoader {
 		virtual ~alnDataLoader();
 //		void loadAlnData(vector<bam1_t*> &alnDataVector);
 		void loadAlnData(vector<bam1_t*> &alnDataVector, double max_ultra_high_cov);
+		void loadAlnData(vector<bam1_t*> &alnDataVector, double max_ultra_high_cov, vector<string> &qname_vec);
 		void loadAlnData(vector<bam1_t*> &alnDataVector, vector<string> &qname_vec);
 		void freeAlnData(vector<bam1_t*> &alnDataVector);
 
 	private:
 		void computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, vector<int32_t> &qlen_vec, size_t &total_len, size_t &total_num);
+		void computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, vector<string> &qname_vec, vector<int32_t> &qlen_vec, size_t &total_len, size_t &total_num);
 //		void loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg);
 		void loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, double max_ultra_high_cov, vector<int32_t> &qlen_vec, size_t total_len, size_t total_num);
+		void loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, double max_ultra_high_cov, vector<string> &target_qname_vec, vector<string> &qname_vec, vector<int32_t> &qlen_vec, size_t total_len, size_t total_num);
 		void loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, vector<string> &qname_vec);
 		double computeLocalCov(size_t total_len, double compensation_coefficient);
 		double computeCompensationCoefficient(size_t startRefPos, size_t endRefPos);

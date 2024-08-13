@@ -16,6 +16,7 @@
 
 using namespace std;
 
+#define CLIP_REG_DEBUG						0
 
 #define CLIP_END_EXTEND_SIZE				50 // 100  300
 #define MIN_CLIP_END_SIZE					200	// 50
@@ -47,6 +48,7 @@ using namespace std;
 #define MAX_INNER_MISSING_IGNORE_SIZE		100
 
 #define MIN_CLIP_REG_MATED_RATIO			(0.1f) // 0.3
+#define MIN_CLIP_REG_UNBALANCED_RATIO		(0.2f)
 
 #define MAX_REF_DIST_SAME_CHR				500
 
@@ -111,8 +113,9 @@ class clipReg {
 		void sortClipPosSingleVec(vector<clipPos_t*> &clipPosVector);
 		void removeFakeClips();
 		void removeFakeClipsDifferentChrSingleVec(vector<clipPos_t*> &clipPosVector);
-		void removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &clipPosVector, string &vec_name);
+		void removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &clipPosVector);
 		void removeFakeClipsLowCov(vector<clipPos_t*> &clipPosVector, int32_t min_clip_reads_num);
+		void removeFakeClipsUnbalancedVec(double unbalance_ratio, int32_t min_clip_reads_num);
 		string computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, int32_t vec_id, string &chrname_clip, int64_t meanClipPos);
 		int32_t computeCovNumClipPos(string &chrname, int64_t meanClipPos, int32_t clip_end, faidx_t *fai, Paras *paras);
 		void computeClipRegs();

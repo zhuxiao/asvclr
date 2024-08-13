@@ -146,6 +146,7 @@ bool isRegSorted(vector<reg_t*> &regVector);
 void startWorkProcessMonitor(string &work_finish_filename, string &monitoring_proc_names, int32_t max_proc_running_minutes);
 void *workProcessMonitor(void *arg);
 
+void destoryAlnData(vector<bam1_t*> &alnDataVector);
 vector<struct alnSeg*> generateAlnSegs(bam1_t* b);
 vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, int64_t endRefPos_paras);
 vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, Base* BaseArr, int64_t startRefPos_paras, int64_t endRefPos_paras);
@@ -176,11 +177,12 @@ int64_t getEndRefPosAlnSeg(int64_t startRpos, int32_t opflag, int32_t op_len);
 int64_t getEndSubjectPosAlnSeg(int64_t startSubpos, int32_t opflag, int32_t op_len);
 int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len);
 
-bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double consist_ratio_match_thres, faidx_t *fai);
+bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double identity_ratio_match_thres, faidx_t *fai);
 vector<qcSig_t*> extractQcSigsFromAlnSegsSingleQuery(struct querySeqInfoNode *query_seq_info_node, string &chrname, int64_t startSpanPos, int64_t endSpanPos, int32_t min_sv_size);
 qcSig_t *allocateQcSigNode(struct alnSeg *aln_seg);
 void destoryQuerySeqInfoAll(vector<struct querySeqInfoNode*> &query_seq_info_all);
 vector<string> extractQcSigCompSeqs(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, faidx_t *fai);
+struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNode*> &query_seq_info_vec, int64_t startRefPos_cns, int32_t min_sv_size);
 
 
 class Time{

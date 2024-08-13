@@ -72,7 +72,7 @@ void needleman_wunschOp(const string& seq1, const string& seq2, int32_t match_sc
     free(score_matrix);
 }
 
-double calculate_consistency(const string& seq1, const string& seq2) {
+double calculate_identity(const string& seq1, const string& seq2) {
 
     int matching_chars = 0;
     int seq_length = max(seq1.length(), seq2.length());
@@ -98,8 +98,8 @@ double calculate_consistency(const string& seq1, const string& seq2) {
         }
     }
 
-    double consistency = static_cast<double>(matching_chars + relief) / seq_length;
-    return consistency;
+    double identity = static_cast<double>(matching_chars + relief) / seq_length;
+    return identity;
 }
 
 size_t customHashFunction(const string& kmer, size_t kmerSize) {
@@ -331,7 +331,7 @@ double computeVarseqIdentity(const string& seq, const string& seq1) {
     	upperSeq(seq_tmp);
     	upperSeq(seq1_tmp);
         needleman_wunschOp(seq, seq1, MATCHSCORE, MISMATCHSCORE, GAPPENALTY, seq1_new, seq2_new);
-        result = calculate_consistency(seq1_new, seq2_new);
+        result = calculate_identity(seq1_new, seq2_new);
     }
     else {
         vector<Minimizer> minimizers = findMinimizers(seq, WINDOWSIZE, KMERSIZE);
@@ -342,39 +342,11 @@ double computeVarseqIdentity(const string& seq, const string& seq1) {
         LongSequenceSplitAlignment(minimizers, minimizers1, KMERSIZE, AlignSeq, AlignSeq1, seq, seq1);
         if (minimizers.empty() or minimizers1.empty()) {
             needleman_wunschOp(seq, seq1, MATCHSCORE, MISMATCHSCORE, GAPPENALTY, seq1_new, seq2_new);
-            result = calculate_consistency(seq1_new, seq2_new);
+            result = calculate_identity(seq1_new, seq2_new);
         }
         else
-            result = calculate_consistency(AlignSeq, AlignSeq1);
+            result = calculate_identity(AlignSeq, AlignSeq1);
     }
     return result;
 }
 
-//void Readfile(const string file_path, string& sequence) {
-//    ifstream file(file_path);
-//
-//    if (file.is_open()) {
-//        string line;
-//        while (getline(file, line)) {
-//            sequence += line;
-//        }
-//        cout << "File Content:\n" << sequence << endl;
-//        file.close();
-//    }
-//    else {
-//        cerr << "Unable to open file: " << file_path << endl;
-//    }
-//}
-
-//int main() {
-//
-//	string seq1, seq2;
-//    //const string file_path = "C:\\Users\\Administrator\\Desktop\\seq\\seq21690.txt"; //seq32199.txt //seq40739.txt \\seq.txt
-//    //const string file_path1 = "C:\\Users\\Administrator\\Desktop\\seq\\seq121690.txt";   //seq132199.txt //seq140739.txt \\seq1.txt
-//    //Readfile(file_path, seq1);
-//    //Readfile(file_path1, seq2);
-//	double consistency;
-//	consistency = computeVarseqConsistency(seq1,seq2);
-//    cout << "result:" << consistency << endl;
-//	return 0;
-//}

@@ -8,6 +8,7 @@ pthread_mutex_t mutex_print_var_cand = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_write_blat_aln = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_write_minimap2_aln = PTHREAD_MUTEX_INITIALIZER;
 extern pthread_mutex_t mutex_fai;
+extern pthread_mutex_t mutex_write;
 
 varCand::varCand(){
 	this->chrname = "";
@@ -46,6 +47,7 @@ void varCand::init(){
 	readsfilename = "";
 	alnfilename = "";
 	clusterfilename = "";
+	technology = SEQUENCING_TECH_DEFAULT;
 	ref_left_shift_size = ref_right_shift_size = ctg_num = 0;
 	cns_success = align_success = call_success = clip_reg_flag = false;
 	clip_reg = clip_reg_allele = NULL;
@@ -72,7 +74,7 @@ void varCand::init(){
 
 	gt_min_sig_size = GT_SIG_SIZE_THRES;
 	gt_size_ratio_match = GT_SIZE_RATIO_MATCH_THRES;
-	gt_min_consistency_merge = GT_MIN_CONSIST_MERGE_THRES;
+	gt_min_identity_merge = GT_MIN_IDENTITY_MERGE_THRES;
 	gt_homo_ratio_thres = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio_thres = GT_HETE_RATIO_THRES;
 }
@@ -110,10 +112,10 @@ void varCand::resetBlatVarcandFile(){
 	blat_aligned_info_vec = NULL;
 }
 
-void varCand::setGtParas(int32_t gt_min_sig_size, double gt_size_ratio_match, double gt_min_consistency_merge, double gt_homo_ratio_thres, double gt_hete_ratio_thres, int32_t gt_min_sup_num_recover){
+void varCand::setGtParas(int32_t gt_min_sig_size, double gt_size_ratio_match, double gt_min_identity_merge, double gt_homo_ratio_thres, double gt_hete_ratio_thres, int32_t gt_min_sup_num_recover){
 	this->gt_min_sig_size = gt_min_sig_size;
 	this->gt_size_ratio_match = gt_size_ratio_match;
-	this->gt_min_consistency_merge = gt_min_consistency_merge;
+	this->gt_min_identity_merge = gt_min_identity_merge;
 	this->gt_homo_ratio_thres = gt_homo_ratio_thres;
 	this->gt_hete_ratio_thres = gt_hete_ratio_thres;
 	this->gt_min_sup_num_recover = gt_min_sup_num_recover;
@@ -326,9 +328,9 @@ void varCand::callVariants02(){
 
 
 		// genotyping
-		if(clip_reg_flag==false){
-			//indelGenotyping02();
-		}
+//		if(clip_reg_flag==false){
+//			//indelGenotyping02();
+//		}
 
 		// destroy local alignment items
 		destroyLocalAlnVec(local_aln_vec);
@@ -421,8 +423,26 @@ void varCand::callIndelVariants(){
 
 //call indel variants from paf
 void varCand::callIndelVariants02(){
+	vector<reg_t*> var_vec;
+
+
 	if(align_success){
-		eraseFalsePositiveVariants();
+		var_vec = computeIndelVarLoc(minimap2_aln_vec);
+
+		// rescue the variant by wtdbg2
+		if(var_vec.size()==0){
+			var_vec = rescueIndelVarLoc();
+
+//			if(var_vec.size()>0) {
+//				static int32_t rescue_num = 0;
+//				rescue_num += var_vec.size();
+//				cout << "rescue_num=" << rescue_num << endl;
+//			}
+		}
+
+		// genotyping
+		if(var_vec.size()>0)
+			computeGenotypeIndelReg(var_vec);
 
 		// phasing
 		//xxx();
@@ -1289,29 +1309,25 @@ void varCand::determineIndelType(){
 	vector<reg_t*>().swap(candRegVec);
 }
 
-void varCand::eraseFalsePositiveVariants(){
+vector<reg_t*> varCand::computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec){
+	vector<reg_t*> var_vec;
 	size_t  i, j;
 	uint32_t op;
 	vector<clipAlnData_t*> clipAlnDataVector;
-	string chrname, gt_header, gt_str, dp_str, ad_str1, ad_str2;
+	string chrname_tmp, gt_header, gt_str, dp_str, ad_str1, ad_str2;
 	minimap2_aln_t *minimap2_aln;
+	vector<int32_t> supp_num_vec;
 	struct pafalnSeg* paf_alnseg;
-	bool flag, overlap_flag;
-	int64_t startRefPos_cns, endRefPos_cns, end_ref_pos;
+	bool flag;
+	int64_t startRefPos_cns, endRefPos_cns, end_ref_pos, start_var_pos, end_var_pos, chrlen_tmp;
 	reg_t *reg;
 	vector<string> qname_vec;
 
-	struct alleleNode{
-		reg_t *reg;
-		int32_t supp_num, depth : 27, gt_type: 5;
-		double AF_val;
-		struct alleleNode *mate_allele;
-	};
-
-	vector<struct alleleNode*> allele_vec;
-	vector<int32_t> supp_num_vec;
-	struct alleleNode *allele_node, *allele_node2;
-	double val;
+	chrlen_tmp = faidx_seq_len(fai, chrname.c_str());
+	start_var_pos = varVec.at(0)->startRefPos - EXT_SIZE_CHK_VAR_LOC;
+	end_var_pos = varVec.at(varVec.size()-1)->endRefPos + EXT_SIZE_CHK_VAR_LOC;
+	if(start_var_pos<1) start_var_pos = 1;
+	if(end_var_pos>chrlen_tmp) end_var_pos = chrlen_tmp;
 
 	for(i=0; i<minimap2_aln_vec.size(); i++){
 		minimap2_aln = minimap2_aln_vec.at(i);
@@ -1319,7 +1335,7 @@ void varCand::eraseFalsePositiveVariants(){
 		endRefPos_cns = minimap2_aln->region_endRefPos;
 		if(!clipAlnDataVector.empty()) destoryClipAlnData(clipAlnDataVector);
 
-		chrname = minimap2_aln->chrname;
+		chrname_tmp = minimap2_aln->chrname;
 		qname_vec = minimap2_aln->qname;
 		if(minimap2_aln->pafalnsegs.size()>0){
 			for(j=0; j<minimap2_aln->pafalnsegs.size(); j++){
@@ -1330,13 +1346,14 @@ void varCand::eraseFalsePositiveVariants(){
 
 				flag = false;
 				end_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
-				if(paf_alnseg->startRpos>=startRefPos_cns and end_ref_pos<=endRefPos_cns) flag = true;
+				//if(paf_alnseg->startRpos>=startRefPos_cns and end_ref_pos<=endRefPos_cns) flag = true;
+				if(isOverlappedPos(paf_alnseg->startRpos, end_ref_pos, start_var_pos, end_var_pos)) flag = true;
 				if(flag){
 					if(clipAlnDataVector.size()==0){
 						// load the clipping data
-						clipAlnDataLoader data_loader(chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ);
+						clipAlnDataLoader data_loader(chrname_tmp, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ);
 //						data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
-						data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, qname_vec);
+						data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov, qname_vec);
 						//data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, 0); //deleted on 2024-03-22
 						//data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, 0, MAX_SEG_SIZE_RATIO);
 					}
@@ -1348,12 +1365,12 @@ void varCand::eraseFalsePositiveVariants(){
 							if(paf_alnseg->seglen>=min_sv_size){
 								//search
 //								cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << minMapQ << endl;
-								supp_num_vec = computeSuppNumFromRegionAlnSegs(qname_vec, paf_alnseg, clipAlnDataVector, chrname, startRefPos_cns, endRefPos_cns, QC_SIZE_RATIO_MATCH_THRES_INDEL, minMapQ);
+								supp_num_vec = computeSuppNumFromRegionAlnSegs(qname_vec, paf_alnseg, clipAlnDataVector, chrname_tmp, startRefPos_cns, endRefPos_cns, QC_SIZE_RATIO_MATCH_THRES_INDEL, minMapQ);
 								if(supp_num_vec.at(0)>=minReadsNumSupportSV){
 									//write to newVarVec
 									reg = new reg_t();
 									reg->var_type = VAR_INS;
-									reg->chrname = chrname;
+									reg->chrname = chrname_tmp;
 									reg->startRefPos = paf_alnseg->startRpos + 1;
 									reg->endRefPos = paf_alnseg->startRpos + 1;
 									reg->startLocalRefPos = paf_alnseg->startSubjectPos + 1;
@@ -1376,17 +1393,18 @@ void varCand::eraseFalsePositiveVariants(){
 									reg->refseq =  paf_alnseg->ref_seq;
 									reg->altseq = paf_alnseg->alt_seq;
 									reg->AF = 0;
-									reg->supp_num = reg->DP = 0;
+									reg->supp_num = supp_num_vec.at(0);
+									reg->DP = supp_num_vec.at(1);
 									reg->discover_level = VAR_DISCOV_L_CNS_ALN;
-									svPosCorrection(reg);
-									newVarVec.push_back(reg);
+									//svPosCorrection(reg);
+									var_vec.push_back(reg);
 
-									allele_node = new struct alleleNode();
-									allele_node->reg = reg;
-									allele_node->mate_allele = NULL;
-									allele_node->supp_num = supp_num_vec.at(0);
-									allele_node->depth = supp_num_vec.at(1);
-									allele_vec.push_back(allele_node);
+//									allele_node = new struct alleleNode();
+//									allele_node->reg = reg;
+//									allele_node->mate_allele = NULL;
+//									allele_node->supp_num = supp_num_vec.at(0);
+//									allele_node->depth = supp_num_vec.at(1);
+//									allele_vec.push_back(allele_node);
 								}
 //								else{
 //									cout << "Nsupp=" << supp_num_vec.at(0) << ", " << chrname << ";" << startRefPos_cns << "-" << endRefPos_cns << ", op=INS, oplen=" << paf_alnseg->seglen << endl;
@@ -1396,12 +1414,12 @@ void varCand::eraseFalsePositiveVariants(){
 						case BAM_CDEL:
 							if(paf_alnseg->seglen>=min_sv_size){
 //								cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << minMapQ << endl;
-								supp_num_vec = computeSuppNumFromRegionAlnSegs(qname_vec, paf_alnseg, clipAlnDataVector, chrname, startRefPos_cns, endRefPos_cns, QC_SIZE_RATIO_MATCH_THRES_INDEL, minMapQ);
+								supp_num_vec = computeSuppNumFromRegionAlnSegs(qname_vec, paf_alnseg, clipAlnDataVector, chrname_tmp, startRefPos_cns, endRefPos_cns, QC_SIZE_RATIO_MATCH_THRES_INDEL, minMapQ);
 								if(supp_num_vec.at(0)>=minReadsNumSupportSV){
 									//write to newVarVec
 									reg = new reg_t();
 									reg->var_type = VAR_DEL;
-									reg->chrname = chrname;
+									reg->chrname = chrname_tmp;
 									reg->startRefPos = paf_alnseg->startRpos + 1;
 									reg->endRefPos = paf_alnseg->startRpos + paf_alnseg->seglen;
 									reg->startLocalRefPos = paf_alnseg->startSubjectPos + 1;
@@ -1424,18 +1442,19 @@ void varCand::eraseFalsePositiveVariants(){
 									reg->refseq =  paf_alnseg->ref_seq;
 									reg->altseq = paf_alnseg->alt_seq;
 									reg->AF = 0;
-									reg->supp_num = reg->DP = 0;
+									reg->supp_num = supp_num_vec.at(0);
+									reg->DP = supp_num_vec.at(1);
 									reg->discover_level = VAR_DISCOV_L_CNS_ALN;
-									svPosCorrection(reg);
+									//svPosCorrection(reg);
 
-									newVarVec.push_back(reg);
+									var_vec.push_back(reg);
 
-									allele_node = new struct alleleNode();
-									allele_node->reg = reg;
-									allele_node->mate_allele = NULL;
-									allele_node->supp_num = supp_num_vec.at(0);
-									allele_node->depth = supp_num_vec.at(1);
-									allele_vec.push_back(allele_node);
+//									allele_node = new struct alleleNode();
+//									allele_node->reg = reg;
+//									allele_node->mate_allele = NULL;
+//									allele_node->supp_num = supp_num_vec.at(0);
+//									allele_node->depth = supp_num_vec.at(1);
+//									allele_vec.push_back(allele_node);
 								}
 //								else{
 //									cout << "Nsupp=" << supp_num_vec.at(0) << ", " << chrname << ";" << startRefPos_cns << "-" << endRefPos_cns << ", op=DEL, oplen=" << paf_alnseg->seglen << endl;
@@ -1461,118 +1480,216 @@ void varCand::eraseFalsePositiveVariants(){
 	}
 	if(!clipAlnDataVector.empty()) destoryClipAlnData(clipAlnDataVector);
 
-	// genotyping
-	// get the mate allele
-	for(i=0; i<allele_vec.size(); i++){
-		allele_node = allele_vec.at(i);
-		flag = false;
-		if(allele_node->mate_allele==NULL){
-			for(j=i+1; j<allele_vec.size(); j++){
-				allele_node2 = allele_vec.at(j);
-				if(allele_node->reg->query_id!=allele_node2->reg->query_id){ // on different queries
-					overlap_flag = isOverlappedRegExtSize(allele_node->reg, allele_node2->reg, 5, 5);
-					if(overlap_flag){
-						if(allele_node->reg->var_type==allele_node2->reg->var_type){ // same variant type
-							val = 0;
-							if(allele_node->reg->var_type==VAR_INS){ // INS
-								// compute consistency
-								val = computeVarseqIdentity(allele_node->reg->altseq, allele_node2->reg->altseq); // ?
-							}else{ // DEL
-								if(allele_node->reg->refseq.size()<=allele_node2->reg->refseq.size()) val = (double)allele_node->reg->refseq.size() / allele_node2->reg->refseq.size();
-								else val = (double)allele_node2->reg->refseq.size() / allele_node->reg->refseq.size();
-							}
+	// delete minimap2_aln_vec
+	destroyMinimap2AlnVec(minimap2_aln_vec);
 
-							if(val<gt_min_consistency_merge){ // heterozygous
-								allele_node->mate_allele = allele_node2;
-								allele_node2->mate_allele = allele_node;
-								allele_node->reg->gt_type = GT_HETEROZYGOUS;
-								allele_node2->reg->gt_type = GT_HETEROZYGOUS;
-								allele_node->gt_type = GT_HETEROZYGOUS;
-								allele_node2->gt_type = GT_HETEROZYGOUS;
-								allele_node->AF_val = (double)allele_node->supp_num / allele_node->depth;
-								allele_node2->AF_val = (double)allele_node2->supp_num / allele_node2->depth;
-								allele_node->reg->DP = allele_node->depth;
-								allele_node2->reg->DP = allele_node2->depth;
-								allele_node->reg->AF = allele_node->AF_val;
-								allele_node2->reg->AF = allele_node2->AF_val;
-							}else{ // homozygous, merge the same variant
-								allele_node->reg->gt_type = GT_HOMOZYGOUS;
-								allele_node->gt_type = GT_HOMOZYGOUS;
-								allele_node->supp_num += allele_node2->supp_num;
-								allele_node->AF_val = (double)allele_node->supp_num / allele_node->depth;
-								allele_node->reg->DP = allele_node->depth;
-								allele_node->reg->AF = allele_node->AF_val;
-								allele_node2->reg->call_success_status = false;
-								delete allele_node2;
-								allele_vec.erase(allele_vec.begin()+j);
-							}
-						}else{ // different variant type, heterozygous
-							allele_node->mate_allele = allele_node2;
-							allele_node2->mate_allele = allele_node;
-							allele_node->reg->gt_type = GT_HETEROZYGOUS;
-							allele_node2->reg->gt_type = GT_HETEROZYGOUS;
-							allele_node->gt_type = GT_HETEROZYGOUS;
-							allele_node2->gt_type = GT_HETEROZYGOUS;
-							allele_node->AF_val = (double)allele_node->supp_num / allele_node->depth;
-							allele_node2->AF_val = (double)allele_node2->supp_num / allele_node2->depth;
-							allele_node->reg->DP = allele_node->depth;
-							allele_node2->reg->DP = allele_node2->depth;
-							allele_node->reg->AF = allele_node->AF_val;
-							allele_node2->reg->AF = allele_node2->AF_val;
-						}
-						flag = true;
-						//break;
-					}
-				}
-			}
+	return var_vec;
+}
 
-			// no mate-allele, needs to genotyping according to Nsupp and Depth
-			if(flag==false){ //
-				val = (double)allele_node->supp_num / allele_node->depth;
-				if(val>=gt_homo_ratio_thres){
-					allele_node->reg->gt_type = GT_HOMOZYGOUS;
-					allele_node->gt_type = GT_HOMOZYGOUS;
-				}else if(val>=gt_hete_ratio_thres){
-					allele_node->reg->gt_type = GT_HETEROZYGOUS;
-					allele_node->gt_type = GT_HETEROZYGOUS;
-				}else{
-					allele_node->reg->gt_type = GT_NOZYGOUS;
-					allele_node->gt_type = GT_NOZYGOUS;
-				}
-				allele_node->reg->DP = allele_node->depth;
-				allele_node->AF_val = allele_node->reg->AF = val;
-			}
-		}
+vector<reg_t*> varCand::rescueIndelVarLoc(){
+	vector<reg_t*> var_vec;
+	vector<vector<string>> qnames_vec;
+	size_t i, j, k, id, id2, n_seqs;
+	vector<string> qname_vec;
+	vector<clipAlnData_t*> clipAlnDataVector;
+	bool flag;
+	int64_t start_var_pos, end_var_pos, startRefPos_cns, endRefPos_cns, chrlen_tmp, mem_avail;
+	ofstream outfile_rescue_reads, outfile_rescue_refseq, outfile_rescue_cns;
+	string rescue_readsfilename, rescue_refseqfilename, rescue_cnsfilename, rescue_alnfilename, tmp_cns_filename, refseq, reg_str, cmd, cmd2;
+	string cons_header, minimap2_cmd, output_prefix, tmp_reg_str;
+	int32_t seq_len, ret_status, status, serial_number, left_shift_size, right_shift_size, len;
+	char *p_seq;
+	vector<struct querySeqInfoNode*> query_seq_info_all;
+	struct seqsVec *smoothed_seqs;
 
-		// compute the genotype
-		gt_header = "GT:AD:DP";
-		gt_str = "./.";
-		ad_str1 = ".";
-		ad_str2 = ".";
-		dp_str = ".";
+	// load cluster reads
+	//cout << clusterfilename << endl;
+	qnames_vec = getClusterInfo(clusterfilename);
 
-		if(allele_node->gt_type==GT_HOMOZYGOUS){
-			gt_str = GT_HOMOZYGOUS_STR;
-		}else if(allele_node->gt_type==GT_HETEROZYGOUS){
-			gt_str = GT_HETEROZYGOUS_STR;
-		}else if(allele_node->gt_type==GT_NOZYGOUS){
-			gt_str = GT_NOZYGOUS_STR;
-		}else {
-			cout << "line=" << __LINE__ << ", unknown genotype=" << allele_node->gt_type << ", error!" << endl;
-			exit(1);
-		}
-		ad_str1 = to_string(allele_node->depth-allele_node->supp_num);
-		ad_str2 = to_string(allele_node->supp_num);
-		dp_str = to_string(allele_node->depth);
+//	for(k=0; k<qnames_vec.size(); k++){
+//		qname_vec = qnames_vec.at(k);
+//		cout << "cluster " << k << ", size=" << qname_vec.size() << ": ";
+//		for(i=0; i<qname_vec.size(); i++){
+//			cout << qname_vec.at(i) << ", ";
+//		}
+//		cout << endl;
+//	}
 
-		allele_node->reg->gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
+	if(qnames_vec.size()==0) return var_vec;
+
+	start_var_pos = varVec.at(0)->startRefPos;
+	end_var_pos = varVec.at(varVec.size()-1)->endRefPos;
+
+	chrlen_tmp = faidx_seq_len(fai, chrname.c_str());  // get reference size
+	startRefPos_cns = start_var_pos - ref_left_shift_size;
+	endRefPos_cns = end_var_pos + ref_right_shift_size;
+	if(startRefPos_cns<1) startRefPos_cns = 1;
+	if(endRefPos_cns>chrlen_tmp) endRefPos_cns = chrlen_tmp;
+	left_shift_size = start_var_pos - startRefPos_cns;  // left shift size
+	right_shift_size = endRefPos_cns - end_var_pos;  // right shift size
+
+	rescue_refseqfilename = out_dir_call + "/rescue_refseq_" + chrname + "_" + to_string(start_var_pos) + "-" + to_string(end_var_pos) + ".fa";
+	reg_str = chrname + ":" + to_string(startRefPos_cns) + "-" + to_string(endRefPos_cns);
+	pthread_mutex_lock(&mutex_fai);
+	p_seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+	pthread_mutex_unlock(&mutex_fai);
+	refseq = p_seq;
+	free(p_seq);
+
+	outfile_rescue_refseq.open(rescue_refseqfilename);
+	if(outfile_rescue_refseq.is_open()==false){
+		cerr << "In " << __func__ << "(), cannot open file '" << rescue_refseqfilename << "', error!" << endl;
+		exit(1);
 	}
 
-	for(i=0; i<allele_vec.size(); i++) delete allele_vec.at(i);
-	vector<struct alleleNode*>().swap(allele_vec);
+	// refseq file
+	cons_header = ">" + reg_str + "___" + to_string(left_shift_size) + "___" + to_string(right_shift_size) + "___" + rescue_refseqfilename;
+	outfile_rescue_refseq << cons_header << endl;
+	outfile_rescue_refseq << refseq << endl;
+	outfile_rescue_refseq.close();
 
-	//delete minimap2_aln_vec
-	destroyMinimap2AlnVec(minimap2_aln_vec);
+	// cnsfile
+	rescue_cnsfilename = out_dir_call + "/rescue_cns_" + chrname + "_" + to_string(start_var_pos) + "-" + to_string(end_var_pos) + ".fa";
+	//cout << rescue_cnsfilename << endl;
+
+	outfile_rescue_cns.open(rescue_cnsfilename);
+	if(outfile_rescue_cns.is_open()==false){
+		cerr << "In " << __func__ << "(), cannot open file '" << rescue_cnsfilename << "', error!" << endl;
+		exit(1);
+	}
+
+	rescue_alnfilename = out_dir_call + "/rescue_minimap2_" + chrname + "_" + to_string(start_var_pos) + "-" + to_string(end_var_pos) + ".paf";
+
+	// load data according to clusters
+	serial_number = 1;
+	for(k=0; k<qnames_vec.size(); k++){
+		qname_vec = qnames_vec.at(k);
+		clipAlnDataLoader data_loader(chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ);
+		data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, qname_vec);
+
+//		cout << "Aln cluster " << k << ", size=" << clipAlnDataVector.size() << ": ";
+//		for(i=0; i<clipAlnDataVector.size(); i++) cout << clipAlnDataVector.at(i)->queryname << ", ";
+//		cout << endl;
+
+		// extract queries from clip align data vector
+		query_seq_info_all = extractQueriesFromClipAlnDataVec(clipAlnDataVector, refseq, chrname, startRefPos_cns, endRefPos_cns, fai, minConReadLen, clip_reg_flag, &mutex_fai);
+
+		if(query_seq_info_all.size()>0){
+			// construct the reads file
+			rescue_readsfilename = out_dir_call + "/rescue_reads_" + chrname + "_" + to_string(start_var_pos) + "-" + to_string(end_var_pos) + "_" + to_string(k) + ".fa";
+//			cout << rescue_readsfilename << endl;
+
+			outfile_rescue_reads.open(rescue_readsfilename);
+			if(outfile_rescue_reads.is_open()==false){
+				cerr << "In " << __func__ << "(), cannot open file '" << rescue_readsfilename << "', error!" << endl;
+				exit(1);
+			}
+
+			//smooth read segments
+			smoothed_seqs = smoothQuerySeqData(refseq, query_seq_info_all, startRefPos_cns, min_sv_size);
+
+			n_seqs = smoothed_seqs->seqs.size();
+			if(n_seqs>=(size_t)minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR){ // only use sufficient reads data to generate consensus sequence
+				// reads file
+				for(i=0; i<n_seqs; i++) outfile_rescue_reads << ">" << smoothed_seqs->qname.at(i) << endl << smoothed_seqs->seqs.at(i) << endl;
+				outfile_rescue_reads.close();
+
+				flag = false;
+				while(1){
+					pthread_mutex_lock(&mutex_mem);
+					mem_avail = getMemInfo("MemAvailable", 2);
+					// prepare for alignment computation
+					if(mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
+						work_num ++;
+						flag = true;
+					}
+					pthread_mutex_unlock(&mutex_mem);
+
+					if(flag==false){ // block the alignment computation
+						//cout << "\t" << __func__ << ": wait " << mem_wait_seconds << " seconds, mem_avail=" << (mem_avail >> 10) << " MB, work_num=" << work_num << ", " << contigfilename << endl;
+						sleep(mem_wait_seconds);
+					}else{
+						id = rescue_readsfilename.find_last_of("/");
+						id2 = rescue_readsfilename.find_last_of(".");
+						len = id2 - id;
+						if(id!=string::npos and id2!=string::npos) tmp_reg_str = rescue_readsfilename.substr(id+1, len-1);
+						else{
+							cerr << "line=" << __LINE__ << ", cannot find the / in " << rescue_readsfilename << ", error." << endl;
+							exit(1);
+						}
+
+						output_prefix = "tmp_rescue_wtdbg2_" + tmp_reg_str;
+						cmd = "wtdbg2.pl -x " + technology + " -o " + output_prefix + " -a -q " + rescue_readsfilename + " > /dev/null 2>&1";
+						system(cmd.c_str());
+
+						pthread_mutex_lock(&mutex_mem);
+						work_num --;
+						if(work_num<0){
+							cerr << "line=" << __LINE__ << ", work_num=" << work_num << ", error." << endl;
+							exit(1);
+						}
+						pthread_mutex_unlock(&mutex_mem);
+
+						break;
+					}
+				}
+
+				tmp_cns_filename = output_prefix + ".cns.fa";
+				flag = isFileExist(tmp_cns_filename);
+				if(flag){
+					FastaSeqLoader fa_loader(tmp_cns_filename);
+					for(i=0; i<fa_loader.getFastaSeqCount(); i++){
+						if(fa_loader.getFastaSeqLen(i)>0){
+							cons_header = ">wtdbg2_rescueCns_";
+							cons_header += to_string(serial_number) + "_"; //serial number
+							cons_header += to_string(fa_loader.getFastaSeqLen(i)) + "_"; //consensus sequence length
+							cons_header += to_string(smoothed_seqs->seqs.size()) + "-";  //read count
+
+							for(j=0; j<smoothed_seqs->qname.size()-1; j++) cons_header += smoothed_seqs->qname.at(j) + "-";
+							cons_header += smoothed_seqs->qname.at(smoothed_seqs->qname.size()-1);
+
+							pthread_mutex_lock(&mutex_write);
+							outfile_rescue_cns << cons_header << endl; // header
+							outfile_rescue_cns << fa_loader.getFastaSeq(i) << endl;  // seq
+
+//							cout << cons_header << endl; // header
+//							cout << fa_loader.getFastaSeq(i) << endl;  // seq
+							//cons_file.flush();
+							pthread_mutex_unlock(&mutex_write);
+
+							serial_number ++;
+						}
+					}
+				}
+
+				cmd2 = "rm -rf " + output_prefix + "*";
+				system(cmd2.c_str());  // remove temporary files
+			}else{
+				outfile_rescue_reads.close();
+			}
+		}
+
+		delete smoothed_seqs;
+		if(!clipAlnDataVector.empty()) destoryClipAlnData(clipAlnDataVector);
+		if(!query_seq_info_all.empty()) destoryQuerySeqInfoAll(query_seq_info_all);
+	}
+	outfile_rescue_cns.close();
+
+	flag = isFileExist(rescue_cnsfilename);
+	if(flag){
+		minimap2_cmd = "minimap2 -c -x asm5 -o " + rescue_alnfilename + " " + rescue_refseqfilename + " " + rescue_cnsfilename + " > /dev/null 2>&1";
+		status = system(minimap2_cmd.c_str());
+		ret_status = getSuccessStatusSystemCmd(status);
+		if(ret_status==0){ // command executed successfully
+			// parse alignment information
+			minimap2_aln_vec = minimap2Parse(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename);
+
+			// get reference sequence and query sequence
+			var_vec = computeIndelVarLoc(minimap2_aln_vec);
+		}
+	}
+
+	return var_vec;
 }
 
 void varCand::destroyMinimap2AlnVec(vector<minimap2_aln_t*> &minimap2_aln_vec){
@@ -1608,7 +1725,7 @@ void varCand::svPosCorrection(reg_t* reg){
 	same_id = -1;
 	for(i=0; i<svpos_correction_vec.size(); i++){
 		for(j=0; j<svpos_match_vec.size(); j++){
-			if(svpos_correction_vec.at(i)->var_type==svpos_match_vec.at(j)->var_type and svpos_correction_vec.at(i)->startRpos==svpos_match_vec.at(j)->startRpos and ((double)svpos_correction_vec.at(i)->svlen/svpos_match_vec.at(j)->sv_len>=gt_min_consistency_merge or (double)svpos_match_vec.at(j)->sv_len/svpos_correction_vec.at(i)->svlen<=gt_min_consistency_merge)){
+			if(svpos_correction_vec.at(i)->var_type==svpos_match_vec.at(j)->var_type and svpos_correction_vec.at(i)->startRpos==svpos_match_vec.at(j)->startRpos and ((double)svpos_correction_vec.at(i)->svlen/svpos_match_vec.at(j)->sv_len>=gt_min_identity_merge or (double)svpos_match_vec.at(j)->sv_len/svpos_correction_vec.at(i)->svlen<=gt_min_identity_merge)){
 				same_id = j;
 				exist_flag = true;
 				break;
@@ -1710,9 +1827,9 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 	vector<clipAlnData_t*> query_aln_segs; //clipAlnDataVector;
 	bool no_otherchrname_flag, flag;
 	double size_ratio;
-	int64_t noHardClipIdx, ref_distance, end_ref_pos;
+	int64_t noHardClipIdx, ref_dist, min_ref_dist, end_ref_pos, end_paf_pos, end_seg_pos;
 	vector<struct alnSeg*> query_alnSegs;
-	vector<struct alnSeg*>::iterator seg;
+	struct alnSeg *seg;
 	svpos_correction_t *svpos_correction_node;
 	vector<string>::iterator q;
 
@@ -1782,8 +1899,17 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 										exit(1);
 								}
 							}
+
+//							if(qname.compare("SRR8858450.1.35388")==0){
+//								cout << "-- qname=" << qname << endl;
+//							}
+
 							//compute query_num
-							if(paf_alnseg->startRpos>query_alnSegs.at(0)->startRpos and (paf_alnseg->startRpos+paf_alnseg->seglen)<(query_alnSegs.at(query_alnSegs.size()-1)->startRpos + query_alnSegs.at(query_alnSegs.size()-1)->seglen)){
+							end_paf_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
+							end_seg_pos = getEndRefPosAlnSeg(query_alnSegs.at(query_alnSegs.size()-1)->startRpos, query_alnSegs.at(query_alnSegs.size()-1)->opflag, query_alnSegs.at(query_alnSegs.size()-1)->seglen);
+							if(paf_alnseg->startRpos>query_alnSegs.at(0)->startRpos and end_paf_pos<end_seg_pos){
+							//if(paf_alnseg->startRpos>query_alnSegs.at(0)->startRpos and (paf_alnseg->startRpos+paf_alnseg->seglen)<(query_alnSegs.at(query_alnSegs.size()-1)->startRpos + query_alnSegs.at(query_alnSegs.size()-1)->seglen)){
+								//cout << "query_num=" << query_num << ", qname=" << qname << ", i=" << i << endl;
 								query_num ++;
 							}
 
@@ -1799,28 +1925,30 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 		//							cout<<paf_alnseg->seglen<<endl;
 		//						}
 								//search
-								for(seg=query_alnSegs.begin(); seg!=query_alnSegs.end(); seg++){
+								min_ref_dist = INT_MAX;
+								for(j=0; j<query_alnSegs.size(); j++){
+									seg = query_alnSegs.at(j);
 									// recompute the overlap
-									end_ref_pos = getEndRefPosAlnSeg((*seg)->startRpos, (*seg)->opflag, (*seg)->seglen);
+									end_ref_pos = getEndRefPosAlnSeg(seg->startRpos, seg->opflag, seg->seglen);
 									flag = false;
-									if((*seg)->startRpos-1>=startRefPos_cns and end_ref_pos-1<=endRefPos_cns) flag = true;
+									if(seg->startRpos-1>=startRefPos_cns and end_ref_pos-1<=endRefPos_cns) flag = true;
 
-									if(flag and paf_alnseg->opflag==(*seg)->opflag){
-										if(paf_alnseg->seglen>=min_sv_size and (*seg)->seglen>=min_sv_size){
-											if(paf_alnseg->seglen <= (*seg)->seglen) size_ratio = (double)paf_alnseg->seglen / (*seg)->seglen;
-											else size_ratio = (double)(*seg)->seglen / paf_alnseg->seglen;
+									if(flag and paf_alnseg->opflag==seg->opflag){
+										if(paf_alnseg->seglen>=min_sv_size and seg->seglen>=min_sv_size){
+											if(paf_alnseg->seglen <= seg->seglen) size_ratio = (double)paf_alnseg->seglen / seg->seglen;
+											else size_ratio = (double)seg->seglen / paf_alnseg->seglen;
 											if(size_ratio>=size_ratio_match_thres){
-												ref_distance = abs(paf_alnseg->startRpos - (*seg)->startRpos);
+												ref_dist = abs(paf_alnseg->startRpos - seg->startRpos);
 												//if(ref_distance<200){
-												if(ref_distance<=MAX_REF_DIST_SAME_CHR){
+												if(ref_dist<=MAX_REF_DIST_SAME_CHR){
 													svpos_correction_node = new svpos_correction_t();
 													svpos_correction_node->qname = qname;
 													//svpos_correction_node->startRpos = (*seg)->startRpos;
 													//svpos_correction_node->startQpos = (*seg)->startQpos;
-													svpos_correction_node->startRpos = (*seg)->startRpos - 1;
-													svpos_correction_node->startQpos = (*seg)->startQpos - 1;
+													svpos_correction_node->startRpos = seg->startRpos - 1;
+													svpos_correction_node->startQpos = seg->startQpos - 1;
 
-													svpos_correction_node->svlen = (*seg)->seglen;
+													svpos_correction_node->svlen = seg->seglen;
 													if(paf_alnseg->opflag==BAM_CINS){
 														if(svpos_correction_node->startRpos - startRefPos_cns<0 or svpos_correction_node->startRpos - startRefPos_cns>=(int64_t)refseq.size()){
 															cout << "sv_node.startRpos=" << svpos_correction_node->startRpos << ", startRefPos_cns=" << startRefPos_cns << ", error!" << endl;
@@ -1828,7 +1956,7 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 
 														svpos_correction_node->var_type = VAR_INS;
 														//svpos_correction_node->startRpos = (*seg)->startRpos;
-														svpos_correction_node->endQpos = svpos_correction_node->startQpos + (*seg)->seglen - 1;
+														svpos_correction_node->endQpos = svpos_correction_node->startQpos + seg->seglen - 1;
 														//svpos_correction_node->refseq = refseq.substr((*seg)->startRpos - startRefPos_cns, 1);
 														svpos_correction_node->refseq = refseq.substr(svpos_correction_node->startRpos - startRefPos_cns, 1);
 
@@ -1837,7 +1965,7 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 														for(t=svpos_correction_node->startQpos-1; t<=svpos_correction_node->endQpos; t++) svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
 
 													}else{
-														if(svpos_correction_node->startRpos - startRefPos_cns<0 or svpos_correction_node->startRpos - startRefPos_cns+(*seg)->seglen + 1>=(int64_t)refseq.size()){
+														if(svpos_correction_node->startRpos - startRefPos_cns<0 or svpos_correction_node->startRpos - startRefPos_cns+seg->seglen + 1>=(int64_t)refseq.size()){
 															cout << "sv_node.startRpos=" << svpos_correction_node->startRpos << ", startRefPos_cns=" << startRefPos_cns << ", error!" << endl;
 														}
 
@@ -1845,21 +1973,27 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 														//svpos_correction_node->startRpos = (*seg)->startRpos + (*seg)->seglen - 1;
 														svpos_correction_node->endQpos = svpos_correction_node->startQpos;
 														//svpos_correction_node->refseq = refseq.substr((*seg)->startRpos - startRefPos_cns, (*seg)->seglen);
-														svpos_correction_node->refseq = refseq.substr(svpos_correction_node->startRpos - startRefPos_cns, (*seg)->seglen + 1);
-														svpos_correction_node->endRpos = svpos_correction_node->startRpos + (*seg)->seglen - 1;
+														svpos_correction_node->refseq = refseq.substr(svpos_correction_node->startRpos - startRefPos_cns, seg->seglen + 1);
+														svpos_correction_node->endRpos = svpos_correction_node->startRpos + seg->seglen - 1;
 														//for(t=svpos_correction_node->startQpos - 1; t<svpos_correction_node->endQpos; t++) queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
 														svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, svpos_correction_node->startQpos - 1)];  // seq
 														//for(t=svpos_correction_node->startQpos - 1; t<=svpos_correction_node->endQpos; t++) svpos_correction_node->altseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, t)];  // seq
 
 													}
 													svpos_correction_vec.push_back(svpos_correction_node);
-													var_num+=1;
+													//cout << "\tvar_num=" << var_num << ", ref_dist=" << ref_dist << ", seg.pos=" << seg->startRpos << ", seg.len=" << seg->seglen << ", qname=" << qname << ", startRpos=" << paf_alnseg->startRpos << ", seglen=" << paf_alnseg->seglen << ", i=" << i << ", j=" << j << endl;
+													//var_num ++;
+													if(ref_dist<min_ref_dist) min_ref_dist = ref_dist;
 													//len_sum+=(*seg)->seglen;
 												}
 											}
 										}
 									}
 								}
+								if(min_ref_dist!=INT_MAX){
+									var_num ++;
+								}
+
 								//query_num+=1;
 								//destroyAlnSegs(query_alnSegs);
 							}
@@ -1886,6 +2020,163 @@ vector<int32_t> varCand::computeSuppNumFromRegionAlnSegs(vector<string> &clu_qna
 	return supp_num_vec;
 }
 
+// compute the genotypes of indel regions
+void varCand::computeGenotypeIndelReg(vector<reg_t*> &var_vec){
+
+	struct alleleNode{
+		reg_t *reg;
+		int32_t supp_num, depth : 27, gt_type: 5;
+		double AF_val;
+		struct alleleNode *mate_allele;
+	};
+
+	size_t  i, j;
+	string gt_header, gt_str, dp_str, ad_str1, ad_str2;
+	bool flag, overlap_flag;
+
+	vector<struct alleleNode*> allele_vec;
+	struct alleleNode *allele_node, *allele_node2;
+	double val;
+
+	if(var_vec.size()>=0){
+		for(i=0; i<var_vec.size(); i++){
+			allele_node = new struct alleleNode();
+			allele_node->reg = var_vec.at(i);
+			allele_node->mate_allele = NULL;
+			allele_node->supp_num = var_vec.at(i)->supp_num;
+			allele_node->depth = var_vec.at(i)->DP;
+			allele_vec.push_back(allele_node);
+		}
+	}
+
+//	reg_t *reg;
+//	cout << "\talleles: ";
+//	for(i=0; i<allele_vec.size(); i++){
+//		reg = allele_vec.at(i)->reg;
+//		cout << "[" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", " << to_string(reg->var_type) << ", " << reg->sv_len << "], ";
+//	}
+//	cout << endl;
+//
+//	cout << "\tvarVec: ";
+//	for(i=0; i<varVec.size(); i++){
+//		reg = varVec.at(i);
+//		cout << "[" << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << ", " << to_string(reg->var_type) << ", " << reg->sv_len << "], ";
+//	}
+//	cout << endl;
+
+	// genotyping
+	// get the mate allele
+	for(i=0; i<allele_vec.size(); i++){
+		allele_node = allele_vec.at(i);
+		flag = false;
+		if(allele_node->mate_allele==NULL){
+			for(j=i+1; j<allele_vec.size(); j++){
+				allele_node2 = allele_vec.at(j);
+				if(allele_node->reg->query_id!=allele_node2->reg->query_id){ // on different queries
+					overlap_flag = isOverlappedRegExtSize(allele_node->reg, allele_node2->reg, 5, 5);
+					if(overlap_flag){
+						if(allele_node->reg->var_type==allele_node2->reg->var_type){ // same variant type
+							val = 0;
+							if(allele_node->reg->var_type==VAR_INS){ // INS
+								// compute identity
+								val = computeVarseqIdentity(allele_node->reg->altseq, allele_node2->reg->altseq); // ?
+							}else{ // DEL
+								if(allele_node->reg->refseq.size()<=allele_node2->reg->refseq.size()) val = (double)allele_node->reg->refseq.size() / allele_node2->reg->refseq.size();
+								else val = (double)allele_node2->reg->refseq.size() / allele_node->reg->refseq.size();
+							}
+
+							if(val<gt_min_identity_merge){ // heterozygous
+								allele_node->mate_allele = allele_node2;
+								allele_node2->mate_allele = allele_node;
+								allele_node->reg->gt_type = GT_HETEROZYGOUS;
+								allele_node2->reg->gt_type = GT_HETEROZYGOUS;
+								allele_node->gt_type = GT_HETEROZYGOUS;
+								allele_node2->gt_type = GT_HETEROZYGOUS;
+								allele_node->AF_val = (double)allele_node->supp_num / allele_node->depth;
+								allele_node2->AF_val = (double)allele_node2->supp_num / allele_node2->depth;
+								allele_node->reg->DP = allele_node->depth;
+								allele_node2->reg->DP = allele_node2->depth;
+								allele_node->reg->AF = allele_node->AF_val;
+								allele_node2->reg->AF = allele_node2->AF_val;
+							}else{ // homozygous, merge the same variant
+								allele_node->reg->gt_type = GT_HOMOZYGOUS;
+								allele_node->gt_type = GT_HOMOZYGOUS;
+								allele_node->supp_num += allele_node2->supp_num;
+								allele_node->depth = max(allele_node->supp_num, allele_node->depth);
+								allele_node->AF_val = (double)allele_node->supp_num / allele_node->depth;
+								allele_node->reg->DP = allele_node->depth;
+								allele_node->reg->AF = allele_node->AF_val;
+								allele_node2->reg->call_success_status = false;
+								delete allele_node2;
+								allele_vec.erase(allele_vec.begin()+j);
+							}
+						}else{ // different variant type, heterozygous
+							allele_node->mate_allele = allele_node2;
+							allele_node2->mate_allele = allele_node;
+							allele_node->reg->gt_type = GT_HETEROZYGOUS;
+							allele_node2->reg->gt_type = GT_HETEROZYGOUS;
+							allele_node->gt_type = GT_HETEROZYGOUS;
+							allele_node2->gt_type = GT_HETEROZYGOUS;
+							allele_node->AF_val = (double)allele_node->supp_num / allele_node->depth;
+							allele_node2->AF_val = (double)allele_node2->supp_num / allele_node2->depth;
+							allele_node->reg->DP = allele_node->depth;
+							allele_node2->reg->DP = allele_node2->depth;
+							allele_node->reg->AF = allele_node->AF_val;
+							allele_node2->reg->AF = allele_node2->AF_val;
+						}
+						flag = true;
+						//break;
+					}
+				}
+			}
+
+			// no mate-allele, needs to genotyping according to Nsupp and Depth
+			if(flag==false){ //
+				val = (double)allele_node->supp_num / allele_node->depth;
+				if(val>=gt_homo_ratio_thres){
+					allele_node->reg->gt_type = GT_HOMOZYGOUS;
+					allele_node->gt_type = GT_HOMOZYGOUS;
+				}else if(val>=gt_hete_ratio_thres){
+					allele_node->reg->gt_type = GT_HETEROZYGOUS;
+					allele_node->gt_type = GT_HETEROZYGOUS;
+				}else{
+					allele_node->reg->gt_type = GT_NOZYGOUS;
+					allele_node->gt_type = GT_NOZYGOUS;
+				}
+				allele_node->reg->DP = allele_node->depth;
+				allele_node->AF_val = allele_node->reg->AF = val;
+			}
+		}
+
+		// compute the genotype
+		gt_header = "GT:AD:DP";
+		gt_str = "./.";
+		ad_str1 = ".";
+		ad_str2 = ".";
+		dp_str = ".";
+
+		if(allele_node->gt_type==GT_HOMOZYGOUS){
+			gt_str = GT_HOMOZYGOUS_STR;
+		}else if(allele_node->gt_type==GT_HETEROZYGOUS){
+			gt_str = GT_HETEROZYGOUS_STR;
+		}else if(allele_node->gt_type==GT_NOZYGOUS){
+			gt_str = GT_NOZYGOUS_STR;
+		}else {
+			cout << "line=" << __LINE__ << ", unknown genotype=" << allele_node->gt_type << ", error!" << endl;
+			exit(1);
+		}
+		ad_str1 = to_string(allele_node->depth-allele_node->supp_num);
+		ad_str2 = to_string(allele_node->supp_num);
+		dp_str = to_string(allele_node->depth);
+
+		allele_node->reg->gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
+
+		newVarVec.push_back(allele_node->reg);
+	}
+
+	for(i=0; i<allele_vec.size(); i++) delete allele_vec.at(i);
+	vector<struct alleleNode*>().swap(allele_vec);
+}
 
 // destroy the alignment data of the block
 void varCand::destoryClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector){
@@ -4877,13 +5168,13 @@ vector<reg_t*> varCand::computeClipRegVarLocOp(string &alnfilename, string &cnsf
 	size_t  i, cluster_id;
 	string ref_seq, query_seq, tmp_refseq, tmp_queryseq;
 	minimap2_aln_t *minimap2_aln, *minimap2_aln_left, *minimap2_aln_right;
-	struct pafalnSeg* paf_alnseg;
-	int64_t j, start_aln_seg_pos, end_aln_seg_pos, end_ref_pos, begin_var_idx, end_var_idx, sv_len, dist_begin, dist_end;
+	struct pafalnSeg *paf_alnseg, *paf_alnseg2;
+	int64_t j, start_aln_seg_pos, end_aln_seg_pos, end_ref_pos, begin_var_idx, end_var_idx, begin_var_idx_new, end_var_idx_new, sv_len, dist_begin, dist_end;
 	int64_t start_var_ref_pos, end_var_ref_pos, start_var_subject_pos, end_var_subject_pos, start_var_query_pos, end_var_query_pos;
 	reg_t *clip_reg_tmp;
 	vector<int32_t> minimap2_item_id_vec, sidemost_item_id_vec;
 	bool tmp_call_success_flag;
-	int32_t idx_alnSegs_left, idx_alnSegs_right, margin_dist1, margin_dist2;
+	int32_t idx_alnSegs_left, idx_alnSegs_right, margin_dist1, margin_dist2, new_sv_type;
 	int64_t left_rpos, left_subjectpos, left_qpos, right_rpos, right_subjectpos, right_qpos;
 	double val;
 
@@ -4967,104 +5258,155 @@ vector<reg_t*> varCand::computeClipRegVarLocOp(string &alnfilename, string &cnsf
 
 						// compute the locations
 						if(begin_var_idx!=-1 and end_var_idx!=-1){
-							// begin_pos
-							paf_alnseg = minimap2_aln->pafalnsegs.at(begin_var_idx);
-							end_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
-							start_var_ref_pos = start_var_subject_pos = start_var_query_pos = -1;
-							switch(paf_alnseg->opflag){
-								case BAM_CMATCH:
-									if(end_ref_pos+1>=leftClipRefPos){
-										dist_begin = leftClipRefPos - paf_alnseg->startRpos - 1;
-										if(dist_begin>=0){ // beg_paf_alnseg is in the clipping region
-											start_var_ref_pos = leftClipRefPos;
-											start_var_subject_pos = paf_alnseg->startSubjectPos + 1 + dist_begin;
-											start_var_query_pos = paf_alnseg->startQpos + 1 + dist_begin;
-										}else{ // beg_paf_alnseg is not in the clipping region, update the locations according to alignment
+							// shrink to fit for indels
+							if(sv_type==VAR_INS or sv_type==VAR_DEL){
+								// start location adjust
+								begin_var_idx_new = begin_var_idx;
+								for(j=begin_var_idx+1; j<end_var_idx; j++){
+									paf_alnseg = minimap2_aln->pafalnsegs.at(j-1);
+									paf_alnseg2 = minimap2_aln->pafalnsegs.at(j);
+									if(paf_alnseg->opflag==BAM_CMATCH and (paf_alnseg2->opflag==BAM_CINS or paf_alnseg2->opflag==BAM_CDEL) and paf_alnseg2->seglen>5){
+										begin_var_idx_new = j - 1;
+										break;
+									}
+								}
+								begin_var_idx = begin_var_idx_new;
+
+								end_var_idx_new = end_var_idx;
+								for(j=end_var_idx-1; j>begin_var_idx; j--){
+									paf_alnseg = minimap2_aln->pafalnsegs.at(j);
+									paf_alnseg2 = minimap2_aln->pafalnsegs.at(j+1);
+									if(paf_alnseg2->opflag==BAM_CMATCH and (paf_alnseg->opflag==BAM_CINS or paf_alnseg->opflag==BAM_CDEL) and paf_alnseg->seglen>5){
+										end_var_idx_new = j + 1;
+										break;
+									}
+								}
+								end_var_idx = end_var_idx_new;
+							}
+
+							new_sv_type = -1;
+							if(end_var_idx-begin_var_idx==2){ // only one signature among them, added on 2024-08-05
+//								paf_alnseg = minimap2_aln->pafalnsegs.at(begin_var_idx);
+//								start_var_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
+//								start_var_subject_pos = getEndSubjectPosAlnSeg(paf_alnseg->startSubjectPos, paf_alnseg->opflag, paf_alnseg->seglen);
+//								start_var_query_pos = getEndQueryPosAlnSeg(paf_alnseg->startQpos, paf_alnseg->opflag, paf_alnseg->seglen);
+
+								paf_alnseg = minimap2_aln->pafalnsegs.at(begin_var_idx+1);
+								start_var_ref_pos = paf_alnseg->startRpos + 1;
+								start_var_subject_pos = paf_alnseg->startSubjectPos + 1;
+								start_var_query_pos = paf_alnseg->startQpos + 1;
+
+								//paf_alnseg = minimap2_aln->pafalnsegs.at(begin_var_idx+1);
+								end_var_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen) + 1;
+								end_var_subject_pos = getEndSubjectPosAlnSeg(paf_alnseg->startSubjectPos, paf_alnseg->opflag, paf_alnseg->seglen) + 1;
+								end_var_query_pos = getEndQueryPosAlnSeg(paf_alnseg->startQpos, paf_alnseg->opflag, paf_alnseg->seglen) + 1;
+
+								if(paf_alnseg->opflag==BAM_CINS) new_sv_type = VAR_INS;
+								else if(paf_alnseg->opflag==BAM_CDEL) new_sv_type = VAR_DEL;
+							}else{
+								// begin_pos
+								paf_alnseg = minimap2_aln->pafalnsegs.at(begin_var_idx);
+								end_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
+								start_var_ref_pos = start_var_subject_pos = start_var_query_pos = -1;
+								switch(paf_alnseg->opflag){
+									case BAM_CMATCH:
+										if(end_ref_pos+1>=leftClipRefPos){
+											dist_begin = leftClipRefPos - paf_alnseg->startRpos - 1;
+											if(dist_begin>=0){ // beg_paf_alnseg is in the clipping region
+												start_var_ref_pos = leftClipRefPos;
+												start_var_subject_pos = paf_alnseg->startSubjectPos + 1 + dist_begin;
+												start_var_query_pos = paf_alnseg->startQpos + 1 + dist_begin;
+											}else{ // beg_paf_alnseg is not in the clipping region, update the locations according to alignment
+												start_var_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
+												start_var_subject_pos = getEndSubjectPosAlnSeg(paf_alnseg->startSubjectPos, paf_alnseg->opflag, paf_alnseg->seglen);
+												start_var_query_pos = getEndQueryPosAlnSeg(paf_alnseg->startQpos, paf_alnseg->opflag, paf_alnseg->seglen);
+											}
+										}else{
 											start_var_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
 											start_var_subject_pos = getEndSubjectPosAlnSeg(paf_alnseg->startSubjectPos, paf_alnseg->opflag, paf_alnseg->seglen);
 											start_var_query_pos = getEndQueryPosAlnSeg(paf_alnseg->startQpos, paf_alnseg->opflag, paf_alnseg->seglen);
 										}
-									}else{
-										start_var_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
-										start_var_subject_pos = getEndSubjectPosAlnSeg(paf_alnseg->startSubjectPos, paf_alnseg->opflag, paf_alnseg->seglen);
-										start_var_query_pos = getEndQueryPosAlnSeg(paf_alnseg->startQpos, paf_alnseg->opflag, paf_alnseg->seglen);
-									}
-									break;
-								case BAM_CINS:
-								case BAM_CDEL:
-								case BAM_CSOFT_CLIP:
-								case BAM_CHARD_CLIP:
-									break;
-								case BAM_CEQUAL:
-								case BAM_CDIFF:
-									cout << "line=" << __LINE__ << ", opflag=diff" << ", startRpos=" << start_var_ref_pos << endl;
-									break;
-								case BAM_CREF_SKIP:
-									// unexpected events
-								case BAM_CPAD:
-								case BAM_CBACK:
-								default:
-									cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << paf_alnseg->opflag << endl;
+										break;
+									case BAM_CINS:
+									case BAM_CDEL:
+									case BAM_CSOFT_CLIP:
+									case BAM_CHARD_CLIP:
+										break;
+									case BAM_CEQUAL:
+									case BAM_CDIFF:
+										cout << "line=" << __LINE__ << ", opflag=diff" << ", startRpos=" << start_var_ref_pos << endl;
+										break;
+									case BAM_CREF_SKIP:
+										// unexpected events
+									case BAM_CPAD:
+									case BAM_CBACK:
+									default:
+										cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << paf_alnseg->opflag << endl;
+										exit(1);
+								}
+								if(start_var_ref_pos<0 or start_var_subject_pos<0 or start_var_query_pos<0){
+									cerr << __func__ << ", line=" << __LINE__ << ": invalid start locations: start_var_ref_pos=" << start_var_ref_pos << ", start_var_subject_pos=" << start_var_subject_pos << ", start_var_query_pos=" << start_var_query_pos << endl;
 									exit(1);
-							}
-							if(start_var_ref_pos<0 or start_var_subject_pos<0 or start_var_query_pos<0){
-								cerr << __func__ << ", line=" << __LINE__ << ": invalid start locations: start_var_ref_pos=" << start_var_ref_pos << ", start_var_subject_pos=" << start_var_subject_pos << ", start_var_query_pos=" << start_var_query_pos << endl;
-								exit(1);
-							}
+								}
 
-							// end_pos
-							paf_alnseg = minimap2_aln->pafalnsegs.at(end_var_idx);
-							end_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
-							end_var_ref_pos = end_var_subject_pos = end_var_query_pos = -1;
-							switch(paf_alnseg->opflag){
-								case BAM_CMATCH:
-									if(end_ref_pos+1>=rightClipRefPos){
-										dist_end = rightClipRefPos - paf_alnseg->startRpos - 1;
-										if(dist_end>=0){ // end_paf_alnseg is in the clipping region
-											end_var_ref_pos = rightClipRefPos;
-											end_var_subject_pos = paf_alnseg->startSubjectPos + 1 + dist_end;
-											end_var_query_pos = paf_alnseg->startQpos + 1 + dist_end;
-										}else{ // end_paf_alnseg is not in the clipping region, update the locations according to alignment
-											end_var_ref_pos = paf_alnseg->startRpos + 1;
-											end_var_subject_pos = paf_alnseg->startSubjectPos + 1;
-											end_var_query_pos = paf_alnseg->startQpos + 1;
+								// end_pos
+								paf_alnseg = minimap2_aln->pafalnsegs.at(end_var_idx);
+								end_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
+								end_var_ref_pos = end_var_subject_pos = end_var_query_pos = -1;
+								switch(paf_alnseg->opflag){
+									case BAM_CMATCH:
+										if(end_ref_pos+1>=rightClipRefPos){
+											dist_end = rightClipRefPos - paf_alnseg->startRpos - 1;
+											if(dist_end>=0){ // end_paf_alnseg is in the clipping region
+												end_var_ref_pos = rightClipRefPos;
+												end_var_subject_pos = paf_alnseg->startSubjectPos + 1 + dist_end;
+												end_var_query_pos = paf_alnseg->startQpos + 1 + dist_end;
+											}else{ // end_paf_alnseg is not in the clipping region, update the locations according to alignment
+												end_var_ref_pos = paf_alnseg->startRpos + 1;
+												end_var_subject_pos = paf_alnseg->startSubjectPos + 1;
+												end_var_query_pos = paf_alnseg->startQpos + 1;
+											}
+										}else{
+											end_var_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
+											end_var_subject_pos = getEndSubjectPosAlnSeg(paf_alnseg->startSubjectPos, paf_alnseg->opflag, paf_alnseg->seglen);
+											end_var_query_pos = getEndQueryPosAlnSeg(paf_alnseg->startQpos, paf_alnseg->opflag, paf_alnseg->seglen);
 										}
-									}else{
-										end_var_ref_pos = getEndRefPosAlnSeg(paf_alnseg->startRpos, paf_alnseg->opflag, paf_alnseg->seglen);
-										end_var_subject_pos = getEndSubjectPosAlnSeg(paf_alnseg->startSubjectPos, paf_alnseg->opflag, paf_alnseg->seglen);
-										end_var_query_pos = getEndQueryPosAlnSeg(paf_alnseg->startQpos, paf_alnseg->opflag, paf_alnseg->seglen);
-									}
-									break;
-								case BAM_CINS:
-								case BAM_CDEL:
-								case BAM_CSOFT_CLIP:
-								case BAM_CHARD_CLIP:
-									break;
-								case BAM_CEQUAL:
-								case BAM_CDIFF:
-									cout << "line=" << __LINE__ << ", opflag=diff" << ", startRpos=" << start_var_ref_pos << endl;
-									break;
-								case BAM_CREF_SKIP:
-									// unexpected events
-								case BAM_CPAD:
-								case BAM_CBACK:
-								default:
-									cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << paf_alnseg->opflag << endl;
-									exit(1);
-							}
+										break;
+									case BAM_CINS:
+									case BAM_CDEL:
+									case BAM_CSOFT_CLIP:
+									case BAM_CHARD_CLIP:
+										break;
+									case BAM_CEQUAL:
+									case BAM_CDIFF:
+										cout << "line=" << __LINE__ << ", opflag=diff" << ", startRpos=" << start_var_ref_pos << endl;
+										break;
+									case BAM_CREF_SKIP:
+										// unexpected events
+									case BAM_CPAD:
+									case BAM_CBACK:
+									default:
+										cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << paf_alnseg->opflag << endl;
+										exit(1);
+								}
 
-							if(end_var_ref_pos<0 or end_var_subject_pos<0 or end_var_query_pos<0){
-								cerr << __func__ << ", line=" << __LINE__ << ": invalid start locations: end_var_ref_pos=" << end_var_ref_pos << ", end_var_subject_pos=" << end_var_subject_pos << ", end_var_query_pos=" << end_var_query_pos << endl;
-								exit(1);
+								if(end_var_ref_pos<0 or end_var_subject_pos<0 or end_var_query_pos<0){
+									cerr << __func__ << ", line=" << __LINE__ << ": invalid start locations: end_var_ref_pos=" << end_var_ref_pos << ", end_var_subject_pos=" << end_var_subject_pos << ", end_var_query_pos=" << end_var_query_pos << endl;
+									exit(1);
+								}
 							}
 
 							// save
-							sv_len = (end_var_query_pos - start_var_query_pos) - (end_var_ref_pos - start_var_ref_pos) + 1;
+							if((end_var_query_pos - start_var_query_pos) > (end_var_ref_pos - start_var_ref_pos))
+								sv_len = (end_var_query_pos - start_var_query_pos) - (end_var_ref_pos - start_var_ref_pos) + 1; // INS
+							else
+								sv_len = (end_var_query_pos - start_var_query_pos) - (end_var_ref_pos - start_var_ref_pos) - 1; // DEL
 							query_seq = fa_loader.getFastaSeq(minimap2_aln->query_id, minimap2_aln->relative_strand);
 
 							// allocate new node
 							clip_reg_tmp = new reg_t();
-							clip_reg_tmp->var_type = sv_type;
+							if(new_sv_type!=-1) clip_reg_tmp->var_type = new_sv_type;
+							else clip_reg_tmp->var_type = sv_type;
 							clip_reg_tmp->chrname = minimap2_aln->chrname;
 							clip_reg_tmp->startRefPos = start_var_ref_pos;
 							clip_reg_tmp->endRefPos = end_var_ref_pos;
@@ -5087,27 +5429,30 @@ vector<reg_t*> varCand::computeClipRegVarLocOp(string &alnfilename, string &cnsf
 							clip_reg_tmp->gt_type = -1;
 							clip_reg_tmp->gt_seq = "";
 							clip_reg_tmp->AF = 0;
-							clip_reg_tmp->supp_num = minimap2_aln->qname.size();
+							//clip_reg_tmp->supp_num = minimap2_aln->qname.size();
+							clip_reg_tmp->supp_num = computeSuppNum(clip_reg_tmp->chrname, clip_reg_tmp->startRefPos, clip_reg_tmp->endRefPos, inBamFile, minMapQ, max_ultra_high_cov, minimap2_aln->qname);
 							clip_reg_tmp->DP = 0;
 							if(rescue_flag==false) clip_reg_tmp->discover_level = VAR_DISCOV_L_CNS_ALN;
 							else clip_reg_tmp->discover_level = VAR_DISCOV_L_RESCUE_CNS_ALN;
 							clip_reg_tmp->refseq =  ref_seq.substr(clip_reg_tmp->startLocalRefPos-1, clip_reg_tmp->endLocalRefPos-clip_reg_tmp->startLocalRefPos+1);
 							clip_reg_tmp->altseq = query_seq.substr(clip_reg_tmp->startQueryPos-1, clip_reg_tmp->endQueryPos-clip_reg_tmp->startQueryPos+1);
 
-							switch(sv_type){
-								case VAR_DUP: // DUP
-									clip_reg_tmp->dup_num = dup_num;
-									clip_reg_tmp->large_indel_flag = false;
-									break;
-								case VAR_INV: // INV
-									clip_reg_tmp->dup_num = 0;
-									clip_reg_tmp->large_indel_flag = false;
-									break;
-								case VAR_INS: // large INS or DEL
-								case VAR_DEL:
-									clip_reg_tmp->dup_num = 0;
-									clip_reg_tmp->large_indel_flag = true;
-									break;
+							if(new_sv_type==-1){
+								switch(sv_type){
+									case VAR_DUP: // DUP
+										clip_reg_tmp->dup_num = dup_num;
+										clip_reg_tmp->large_indel_flag = false;
+										break;
+									case VAR_INV: // INV
+										clip_reg_tmp->dup_num = 0;
+										clip_reg_tmp->large_indel_flag = false;
+										break;
+									case VAR_INS: // large INS or DEL
+									case VAR_DEL:
+										clip_reg_tmp->dup_num = 0;
+										clip_reg_tmp->large_indel_flag = true;
+										break;
+								}
 							}
 
 							var_vec.push_back(clip_reg_tmp);
@@ -5213,7 +5558,8 @@ vector<reg_t*> varCand::computeClipRegVarLocOp(string &alnfilename, string &cnsf
 									clip_reg_tmp->gt_type = -1;
 									clip_reg_tmp->gt_seq = "";
 									clip_reg_tmp->AF = 0;
-									clip_reg_tmp->supp_num = queryname_vec.size();
+									//clip_reg_tmp->supp_num = queryname_vec.size();
+									clip_reg_tmp->supp_num = computeSuppNum(clip_reg_tmp->chrname, clip_reg_tmp->startRefPos, clip_reg_tmp->endRefPos, inBamFile, minMapQ, max_ultra_high_cov, queryname_vec);
 									clip_reg_tmp->DP = 0;
 									if(rescue_flag==false) clip_reg_tmp->discover_level = VAR_DISCOV_L_CNS_ALN;
 									else clip_reg_tmp->discover_level = VAR_DISCOV_L_RESCUE_CNS_ALN;
@@ -5298,9 +5644,9 @@ vector<reg_t*> varCand::computeClipRegVarLocOp(string &alnfilename, string &cnsf
 								else{ // different segments
 									reverseComplement(tmp_queryseq);
 									val = computeVarseqIdentity(tmp_queryseq, tmp_refseq);
-									//cout << "consistency=" << val << endl;
+									//cout << "identity=" << val << endl;
 								}
-								if(val>=QC_CONSIST_RATIO_MATCH_THRES){ // consistency confirm
+								if(val>=QC_IDENTITY_RATIO_MATCH_THRES){ // identity confirm
 									// allocate new node
 									clip_reg_tmp = new reg_t();
 									clip_reg_tmp->var_type = sv_type;
@@ -5327,7 +5673,8 @@ vector<reg_t*> varCand::computeClipRegVarLocOp(string &alnfilename, string &cnsf
 									clip_reg_tmp->gt_type = -1;
 									clip_reg_tmp->gt_seq = "";
 									clip_reg_tmp->AF = 0;
-									clip_reg_tmp->supp_num = queryname_vec.size();
+									//clip_reg_tmp->supp_num = queryname_vec.size();
+									clip_reg_tmp->supp_num = computeSuppNum(clip_reg_tmp->chrname, clip_reg_tmp->startRefPos, clip_reg_tmp->endRefPos, inBamFile, minMapQ, max_ultra_high_cov, queryname_vec);;
 									clip_reg_tmp->DP = 0;
 									if(rescue_flag==false) clip_reg_tmp->discover_level = VAR_DISCOV_L_CNS_ALN;
 									else clip_reg_tmp->discover_level = VAR_DISCOV_L_RESCUE_CNS_ALN;
@@ -5367,6 +5714,42 @@ vector<reg_t*> varCand::computeClipRegVarLocOp(string &alnfilename, string &cnsf
 	return var_vec;
 }
 
+// compute the support number
+int32_t varCand::computeSuppNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, int32_t minMapQ, double max_ultra_high_cov, vector<string> &target_qname_vec){
+	int32_t supp_num, start_pos, end_pos, chr_len;
+	size_t i;
+	vector<bam1_t*> alnDataVector;
+	bam1_t *b;
+	string qname;
+	int64_t start_pos_tmp, end_pos_tmp;
+
+	start_pos = startRefPos - CLIP_END_EXTEND_SIZE / 2;
+	end_pos = endRefPos + CLIP_END_EXTEND_SIZE / 2;
+
+	chr_len = faidx_seq_len(fai, chrname.c_str()); // get the reference length
+	if(start_pos<1) start_pos = 1;
+	if(end_pos>chr_len) end_pos = chr_len;
+
+	alnDataLoader data_loader(chrname, start_pos, end_pos, inBamFile, minMapQ);
+	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov, target_qname_vec);
+
+	supp_num = 0;
+	for(i=0; i<alnDataVector.size(); i++){
+		b = alnDataVector.at(i);
+		qname = bam_get_qname(b);
+		if(find(target_qname_vec.begin(), target_qname_vec.end(), qname) != target_qname_vec.end()){  // found
+			start_pos_tmp = b->core.pos;
+			end_pos_tmp = bam_endpos(b);
+			if(isOverlappedPos(start_pos_tmp, end_pos_tmp, start_pos, end_pos)){ // overlap
+				supp_num ++;
+			}
+		}
+	}
+	if(!alnDataVector.empty()) destoryAlnData(alnDataVector);
+
+	return supp_num;
+}
+
 // compute genotype
 void varCand::computeGenotypeClipReg(vector<reg_t*> &var_vec){
 
@@ -5389,7 +5772,6 @@ void varCand::computeGenotypeClipReg(vector<reg_t*> &var_vec){
 
 	if(var_vec.size()==0) return;
 
-	// rescue the calling
 	if(var_vec.size()>=0){
 		for(i=0; i<var_vec.size(); i++){
 			allele_node = new struct alleleNode();
@@ -5404,11 +5786,13 @@ void varCand::computeGenotypeClipReg(vector<reg_t*> &var_vec){
 	for(i=0; i<allele_vec.size(); i++){
 		if(large_indel_flag==false){ // clipping
 			reg_tmp = allele_vec.at(i)->reg;
-
 			allele_vec.at(i)->depth = computeCovNumReg(reg_tmp->chrname, reg_tmp->startRefPos, reg_tmp->endRefPos, fai, inBamFile, minMapQ, max_ultra_high_cov);
 			if(allele_vec.at(i)->depth<allele_vec.at(i)->supp_num) allele_vec.at(i)->depth = allele_vec.at(i)->supp_num; // tolerate DEL region
 		}else // large indel
 			allele_vec.at(i)->depth = depth_largeIndel;
+
+		if(allele_vec.at(i)->depth<allele_vec.at(i)->supp_num) // refine the supp_num
+			allele_vec.at(i)->supp_num = allele_vec.at(i)->reg->supp_num = allele_vec.at(i)->depth;
 	}
 
 	// sort
@@ -5428,8 +5812,8 @@ void varCand::computeGenotypeClipReg(vector<reg_t*> &var_vec){
 			for(j=i+1; j<allele_vec.size(); ){
 				allele_node2 = allele_vec.at(j);
 				val = computeVarseqIdentity(allele_node->reg->altseq, allele_node2->reg->altseq);
-				//cout << "allele consistency=" << val << endl;
-				if(val>=gt_min_consistency_merge){ // merge
+				//cout << "allele identity=" << val << endl;
+				if(val>=gt_min_identity_merge){ // merge
 					allele_node->supp_num += allele_node2->supp_num;
 					allele_node->depth = allele_node->supp_num;
 					delete allele_node2->reg;
@@ -6082,7 +6466,7 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 								continue;
 							}
 
-//							if(qname.compare("SRR8858466.1.161458")==0){
+//							if(qname.compare("SRR8858443.1.61322")==0){
 //								cout << "qname=" << qname << endl;
 //							}
 
@@ -6187,7 +6571,7 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 													right_aln_seg = clip_aln_seg;
 												}
 
-												if(left_aln_seg and right_aln_seg and left_aln_seg->bam and right_aln_seg->bam){
+												if(left_aln_seg and right_aln_seg and left_aln_seg->bam and right_aln_seg->bam and ((left_aln_seg->leftHardClippedFlag==false and left_aln_seg->rightHardClippedFlag==false) or (right_aln_seg->leftHardClippedFlag==false and right_aln_seg->rightHardClippedFlag==false))){
 													// alnSegs_left
 													switch(bam_type){
 														case BAM_CIGAR_NO_DIFF_MD:
@@ -6206,13 +6590,12 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 															cerr << __func__ << ": unknown bam type, error!" << endl;
 															exit(1);
 													}// generate align segments
-													//if(clip_reg_flag==false)
-														removeHeadTailAlnSegs(alnSegs_left);
-														//removeHeadTailAlnSegs(alnSegs_left_clip);
-														if(alnSegs_left.size()==0){
-															cout << "alnSegs_left.size=" << alnSegs_left.size() << ", error!" << endl;
-															exit(1);
-														}
+													removeHeadTailAlnSegs(alnSegs_left);
+													if(alnSegs_left.size()==0){
+														cout << "alnSegs_left.size=" << alnSegs_left.size() << ", error!" << endl;
+														exit(1);
+													}
+
 													// only consider the query wholly contain the variants
 													idx_alnSegs_left = -1;
 													for(k=0; k<(int64_t)alnSegs_left.size(); k++){
@@ -6231,28 +6614,23 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 													// alnSegs_right
 													switch(bam_type){
 														case BAM_CIGAR_NO_DIFF_MD:
-															//alnSegs = generateAlnSegs(b);
 															alnSegs_right = generateAlnSegs2(right_aln_seg->bam, startRefPos_cns, endRefPos_cns);
-															//alnSegs_right_clip = generateAlnSegs2(right_aln_seg->bam, leftClipRefPos-1, rightClipRefPos);
 															break;
 														case BAM_CIGAR_NO_DIFF_NO_MD:
 														case BAM_CIGAR_DIFF_MD:
 														case BAM_CIGAR_DIFF_NO_MD:
-															//alnSegs = generateAlnSegs_no_MD(b, refseq, startPos, endPos);
 															alnSegs_right = generateAlnSegs_no_MD2(right_aln_seg->bam, refseq, startRefPos_cns, endRefPos_cns);
-															//alnSegs_right_clip = generateAlnSegs_no_MD2(right_aln_seg->bam, refseq, leftClipRefPos-1, rightClipRefPos);
 															break;
 														default:
 															cerr << __func__ << ": unknown bam type, error!" << endl;
 															exit(1);
 													}// generate align segments
-													//if(clip_reg_flag==false)
-														removeHeadTailAlnSegs(alnSegs_right);
-														//removeHeadTailAlnSegs(alnSegs_right_clip);
-														if(alnSegs_right.size()==0){
-															cout << "alnSegs_right.size=" << alnSegs_right.size() << ", error!" << endl;
-															exit(1);
-														}
+													removeHeadTailAlnSegs(alnSegs_right);
+													if(alnSegs_right.size()==0){
+														cout << "alnSegs_right.size=" << alnSegs_right.size() << ", error!" << endl;
+														exit(1);
+													}
+
 													idx_alnSegs_right = -1;
 													for(k=0; k<(int64_t)alnSegs_right.size(); k++){
 														aln_seg = alnSegs_right.at(k);
@@ -6273,9 +6651,9 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 													right_qpos = getEndQueryPosAlnSeg(alnSegs_right.at(alnSegs_right.size()-1)->startQpos, alnSegs_right.at(alnSegs_right.size()-1)->opflag, alnSegs_right.at(alnSegs_right.size()-1)->seglen);
 
 													queryseq = "";
-													if(left_aln_seg->bam)
+													if(left_aln_seg->bam and left_aln_seg->leftHardClippedFlag==false and left_aln_seg->rightHardClippedFlag==false)
 														seq_int = bam_get_seq(left_aln_seg->bam);
-													else if(right_aln_seg->bam)
+													else if(right_aln_seg->bam and right_aln_seg->leftHardClippedFlag==false and right_aln_seg->rightHardClippedFlag==false)
 														seq_int = bam_get_seq(right_aln_seg->bam);
 													for(k=left_qpos-1; k<right_qpos; k++) queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, k)];  // seq
 
@@ -6305,9 +6683,9 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 
 														if(left_rpos<=right_rpos){
 															queryseq = "";
-															if(left_aln_seg->bam)
+															if(left_aln_seg->bam and left_aln_seg->leftHardClippedFlag==false and left_aln_seg->rightHardClippedFlag==false)
 																seq_int = bam_get_seq(left_aln_seg->bam);
-															else if(right_aln_seg->bam)
+															else if(right_aln_seg->bam and right_aln_seg->leftHardClippedFlag==false and right_aln_seg->rightHardClippedFlag==false)
 																seq_int = bam_get_seq(right_aln_seg->bam);
 															for(k=left_qpos-1; k<right_qpos; k++) queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, k)];  // seq
 
@@ -6428,61 +6806,6 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 				// get reference sequence and query sequence
 				rescue_var_vec = computeClipRegVarLocOp(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename, clusterfilename, minimap2_aln_vec, true);
 			}
-//			else{ // align failed, then pick the first query sequence
-//
-//				// get reference sequence and query sequence
-//				FastaSeqLoader fa_loader(rescue_cnsfilename);
-//				queryseq = fa_loader.getFastaSeq(0);
-//
-//				sv_len = queryseq.size() - (rightClipRefPos - leftClipRefPos + 1);
-//
-//				// allocate new node
-//				reg = new reg_t();
-//				reg->var_type = sv_type;
-//				reg->chrname = chrname;
-//				reg->startRefPos = leftClipRefPos-1;
-//				reg->endRefPos = rightClipRefPos;
-//				reg->startLocalRefPos = -1;
-//				reg->endLocalRefPos = -1;
-//				reg->startQueryPos = 1;
-//				reg->endQueryPos = queryseq.size();
-//				reg->query_id = -1;
-//				reg->sv_len = sv_len;
-//				if(sv_len<0) reg->sv_len = -reg->sv_len;
-//				reg->dup_num = dup_num; //--------------
-//				//reg->blat_aln_id = i;
-//				reg->minimap2_aln_id = -1;
-//				reg->call_success_status = true;
-//				reg->short_sv_flag = false;
-//				reg->zero_cov_flag = false;
-//				reg->aln_seg_end_flag = false;
-//				reg->query_pos_invalid_flag = false;
-//				reg->large_indel_flag = false;  //-----------
-//				reg->aln_orient = ALN_PLUS_ORIENT;
-//				reg->gt_type = -1;
-//				reg->gt_seq = "";
-//				reg->supp_num = re_seq_vec.size();
-//				reg->DP = reg->AF = 0;
-//				reg->discover_level = VAR_DISCOV_L_UNUSED;
-//				reg->refseq =  refseq.substr(leftClipRefPos-startRefPos_cns-1, rightClipRefPos-leftClipRefPos+1+1);
-//				reg->altseq = refseq.at(leftClipRefPos-startRefPos_cns-1) + queryseq;
-//
-//				switch(sv_type){
-//					case VAR_DUP: // DUP
-//						reg->dup_num = dup_num;
-//						reg->large_indel_flag = false;
-//						break;
-//					case VAR_INV: // INV
-//						reg->dup_num = 0;
-//						reg->large_indel_flag = false;
-//						break;
-//					case VAR_INS: // large INS or DEL
-//					case VAR_DEL:
-//						reg->dup_num = 0;
-//						reg->large_indel_flag = true;
-//						break;
-//				}
-//			}
 		}
 
 		if(rescue_var_vec.size()==0){ // failed, then pick the first query sequence
@@ -6553,8 +6876,6 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 				rescue_seq_node = re_seq_vec.at(i);
 				destroyAlnSegs(rescue_seq_node->alnSegs_left);
 				destroyAlnSegs(rescue_seq_node->alnSegs_right);
-				//destroyAlnSegs(rescue_seq_node->alnSegs_left_clip);
-				//destroyAlnSegs(rescue_seq_node->alnSegs_right_clip);
 				delete rescue_seq_node;
 			}
 			vector<struct rescueSeqNode*>().swap(re_seq_vec);

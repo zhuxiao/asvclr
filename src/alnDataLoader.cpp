@@ -110,10 +110,66 @@ void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector, double max_ultra
 	if(in) sam_close(in);
 }
 
-void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector, vector<string> &qname_vec){
+void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector, double max_ultra_high_cov, vector<string> &target_qname_vec){
 	samFile *in = NULL;
 	bam_hdr_t *header;
+	vector<string> qname_vec;
 	vector<int32_t> qlen_vec;
+	size_t total_len=0, total_num=0;
+
+	if ((in = sam_open(inBamFile.c_str(), "r")) == 0) {
+		cerr << __func__ << ": failed to open " << inBamFile << " for reading" << endl;
+		exit(1);
+	}
+
+	if ((header = sam_hdr_read(in)) == 0) {
+		cerr << __func__ << ": fail to read the header from " << inBamFile << endl;
+		exit(1);
+	}
+
+	hts_idx_t *idx = sam_index_load(in, inBamFile.c_str()); // load index
+	if (idx == 0) { // index is unavailable
+		cerr << __func__ << ": random alignment retrieval only works for indexed BAM files.\n" << endl;
+		exit(1);
+	}
+
+	hts_itr_t *iter = sam_itr_querys(idx, header, reg_str.c_str()); // parse a region in the format like `chr2:100-200'
+	if (iter == NULL) { // region invalid or reference name not found
+		int beg1, end1;
+		if (hts_parse_reg(reg_str.c_str(), &beg1, &end1))
+			cerr <<  __func__ << ": region " << reg_str << " specifies an unknown reference name." << endl;
+		else
+			cerr <<  __func__ << ": region " << reg_str << " could not be parsed." << endl;
+		exit(1);
+	}
+	computeAlnDataNumFromIter(in, header, iter, reg_str, qname_vec, qlen_vec, total_len, total_num); // total_num, total_len, q_len
+	//cout << "total_len="<< total_len << " total_num=" << total_num << " q_len.size()=" << qlen_vec.size() << endl;
+
+	hts_itr_destroy(iter);
+
+	iter = sam_itr_querys(idx, header, reg_str.c_str());
+	if (iter == NULL) { // region invalid or reference name not found
+		int beg2, end2;
+		if (hts_parse_reg(reg_str.c_str(), &beg2, &end2))
+			cerr <<  __func__ << ": region " << reg_str << " specifies an unknown reference name." << endl;
+		else
+			cerr <<  __func__ << ": region " << reg_str << " could not be parsed." << endl;
+		exit(1);
+	}
+
+	// load align data from iteration
+	loadAlnDataFromIter(alnDataVector, in, header, iter, reg_str, max_ultra_high_cov, target_qname_vec, qname_vec, qlen_vec, total_len, total_num);
+
+	hts_itr_destroy(iter);
+	hts_idx_destroy(idx); // destroy the BAM index
+	bam_hdr_destroy(header);
+	if(in) sam_close(in);
+
+}
+
+void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector, vector<string> &target_qname_vec){
+	samFile *in = NULL;
+	bam_hdr_t *header;
 
 	if ((in = sam_open(inBamFile.c_str(), "r")) == 0) {
 		cerr << __func__ << ": failed to open " << inBamFile << " for reading" << endl;
@@ -142,7 +198,7 @@ void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector, vector<string> &
 	}
 
 	// load align data from iteration
-	loadAlnDataFromIter(alnDataVector, in, header, iter, reg_str, qname_vec);
+	loadAlnDataFromIter(alnDataVector, in, header, iter, reg_str, target_qname_vec);
 
 	hts_itr_destroy(iter);
 	hts_idx_destroy(idx); // destroy the BAM index
@@ -160,6 +216,35 @@ void alnDataLoader::computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, ht
 		if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
 			total_len += b->core.l_qseq;
 			total_num++;
+			qlen_vec.push_back(b->core.l_qseq);
+		}
+		bam_destroy1(b);
+		b = bam_init1();
+	}
+	mean_read_len = (double) total_len / total_num;
+
+//	cout << "total_len=" << total_len << " ;total_num=" << total_num << " ;mean_read_len=" << mean_read_len << endl;
+	bam_destroy1(b);
+
+	if (result < -1) {
+		cerr <<  __func__ << ": retrieval of region " << reg << " failed due to truncated file or corrupt BAM index file." << endl;
+		exit(1);
+	}
+}
+
+// compute align data number from iteration
+void alnDataLoader::computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, vector<string> &qname_vec, vector<int32_t> &qlen_vec, size_t &total_len, size_t &total_num){
+	int result;
+	bam1_t *b;
+	string qname;
+
+	b = bam_init1();
+	while ((result = sam_itr_next(in, iter, b)) >= 0) {
+		if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+			total_len += b->core.l_qseq;
+			total_num++;
+			qname = bam_get_qname(b);
+			qname_vec.push_back(qname);
 			qlen_vec.push_back(b->core.l_qseq);
 		}
 		bam_destroy1(b);
@@ -273,6 +358,91 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 	alnDataVector.shrink_to_fit();
 }
 
+void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, double max_ultra_high_cov, vector<string> &target_qname_vec, vector<string> &qname_vec, vector<int32_t> &qlen_vec, size_t total_len, size_t total_num){
+	int result;
+	bam1_t *b;
+	double expected_total_bases;//, sampled_cov;
+	double compensation_coefficient, local_cov_original;
+	size_t i, index, reg_size, reads_count, max_reads_num, total_bases;
+	int8_t *selected_flag_array;
+	string qname;
+
+	if(qname_vec.size()!=qlen_vec.size()){
+		cerr << __func__ << ", line=" << __LINE__ << ": qname_vec.size=" << qname_vec.size() << ", qlen_vec.size=" << qlen_vec.size() << ", error!" << endl;
+		exit(1);
+	}
+
+	selected_flag_array = (int8_t*) calloc(qlen_vec.size(), sizeof(int8_t));
+//	selected_flag_array = (int8_t*) calloc(alnDataVector.size(), sizeof(int8_t));
+	if(selected_flag_array==NULL){
+		cerr << __func__ << ", line=" << __LINE__ << ": cannot allocate memory, error!" << endl;
+		exit(1);
+	}
+
+	compensation_coefficient = computeCompensationCoefficient(startRefPos, endRefPos);
+	local_cov_original = computeLocalCov(total_len, compensation_coefficient);
+	if(max_ultra_high_cov>0 and local_cov_original>max_ultra_high_cov){  // down sample
+		reg_size = endRefPos - startRefPos + 1 + mean_read_len;
+		expected_total_bases = reg_size * max_ultra_high_cov;
+		max_reads_num = qlen_vec.size();
+
+		// mark the target reads
+		reads_count = 0;
+		total_bases = 0;
+		for(i=0; i<max_reads_num; i++){
+			qname = qname_vec.at(i);
+			if(find(target_qname_vec.begin(), target_qname_vec.end(), qname) != target_qname_vec.end()){  // found
+				selected_flag_array[i] = 1;
+				total_bases += qlen_vec.at(i);
+				reads_count ++;
+			}
+		}
+
+		// make sure each down-sampling is equivalent
+		pthread_mutex_lock(&mutex_down_sample);
+		srand(1);
+		while(total_bases <= expected_total_bases and reads_count <= max_reads_num){
+			index = rand() % max_reads_num;
+			if(selected_flag_array[index]==0){
+				selected_flag_array[index] = 1;
+				total_bases += qlen_vec.at(index);
+				reads_count ++;
+//				cout << "index=" << index << " selected_flag_array[index]=" << selected_flag_array[index] << " total_bases=" << total_bases << " reads_count=" << reads_count << endl;
+			}
+		}
+		pthread_mutex_unlock(&mutex_down_sample);
+		//sampled_cov = total_bases / reg_size;
+		//cout << "sampled_cov=" << sampled_cov << endl;
+
+		b = bam_init1();
+		i = 0;
+		while((result = sam_itr_next(in, iter, b)) >= 0) {
+			if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+				if(selected_flag_array[i] == 1) alnDataVector.push_back(b);
+				else bam_destroy1(b);
+				i++;
+			}else bam_destroy1(b);
+			b = bam_init1();
+		}
+		free(selected_flag_array);
+	}else{ // load all data
+		b = bam_init1();
+		while ((result = sam_itr_next(in, iter, b)) >= 0) {
+			if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)) alnDataVector.push_back(b);
+			else bam_destroy1(b);
+			b = bam_init1();
+		}
+	}
+
+	bam_destroy1(b);
+	if (result < -1) {
+		cerr <<  __func__ << ": retrieval of region " << reg << " failed due to truncated file or corrupt BAM index file." << endl;
+		exit(1);
+	}
+	alnDataVector.shrink_to_fit();
+}
+
+
 void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, vector<string> &qname_vec){
 	int result;
 	size_t sum, count;
@@ -306,6 +476,7 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 		exit(1);
 	}
 }
+
 
 double alnDataLoader::computeLocalCov(size_t total_len, double compensation_coefficient){
 	double cov = 0;

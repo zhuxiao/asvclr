@@ -16,8 +16,8 @@ using namespace std;
 
 // program variables
 #define PROG_NAME					"ASVCLR"
-#define PROG_DESC					"Accurate Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.4.2"
+#define PROG_DESC					"Allele-aware Structural Variant Caller for Long Reads"
+#define PROG_VERSION				"1.4.3"
 #define VCF_VERSION					"4.2"
 
 #define CMD_DET_STR					"det"
@@ -28,10 +28,14 @@ using namespace std;
 
 #define CANU_RECOMMEND_VERSION		"2.1"
 
-#define PACBIO_CLR_TECH_STR			"pacbio"
-#define PACBIO_CCS_TECH_STR			"pacbio-hifi"
-#define NANOPORE_TECH_STR			"nanopore"
-#define SEQUENCING_TECH_DEFAULT		PACBIO_CLR_TECH_STR
+//#define PACBIO_CLR_TECH_STR			"pacbio"
+//#define PACBIO_CCS_TECH_STR			"pacbio-hifi"
+//#define NANOPORE_TECH_STR			"nanopore"
+#define PACBIO_CCS_TECH_STR			"ccs"
+#define PACBIO_RS_TECH_STR			"rs"
+#define PACBIO_SQ_TECH_STR			"sq"
+#define NANOPORE_TECH_STR			"ont"
+#define SEQUENCING_TECH_DEFAULT		PACBIO_CCS_TECH_STR
 
 #define DECOY_PREFIX				"hs37d"
 #define DECOY_PREFIX2				"hs38d"
@@ -84,7 +88,11 @@ using namespace std;
 #define CNS_CHUNK_SIZE_EXT_INDEL	1000	//1000
 #define CNS_EXT_INDEL_FACTOR_500BP	2	// side extend size factor for mid chunk (> 500bp)
 #define CNS_EXT_INDEL_FACTOR_1K		5	// side extend size factor for large chunk (> 1kb)
-#define CNS_CHUNK_SIZE_EXT_CLIP		20000	//1000, 10000
+#define CNS_CHUNK_SIZE_EXT_CLIP		5000	//1000, 10000, 20000
+#define CNS_EXT_CLIPREG_FACTOR_1K	(1.5f)	// side extend size factor for mid chunk (> 1kb)
+#define CNS_EXT_CLIPREG_FACTOR_2K	2	// side extend size factor for mid chunk (> 2kb)
+#define CNS_EXT_CLIPREG_FACTOR_4K	3	// side extend size factor for large chunk (> 4kb)
+#define CNS_EXT_CLIPREG_FACTOR_6K	4	// side extend size factor for large chunk (> 6kb)
 #define MIN_CONS_READ_LEN			100
 
 #define MAX_REF_DIST_IDENTITY		2000
@@ -117,7 +125,7 @@ using namespace std;
 
 #define OUT_DIR						"output"
 #define SAMPLE_DEFAULT				"sample"
-#define RESULT_PREFIX_DEFAULT		"genome"
+#define RESULT_PREFIX_DEFAULT		"asvclr"
 
 #define MAX_ULTRA_HIGH_COV_THRES	300		// maximal coverage threshold for ultra-high coverage, 100
 #define MIN_MAPQ_THRES				0		// 10
@@ -224,7 +232,7 @@ class Paras
 
 		//genotyping parameters
 		int32_t gt_min_sig_size; // not used
-		double gt_min_consistency_merge, gt_homo_ratio, gt_hete_ratio;
+		double gt_min_identity_merge, gt_homo_ratio, gt_hete_ratio;
 		double gt_size_ratio_match; // not used
 
 	public:

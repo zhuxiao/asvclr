@@ -52,7 +52,7 @@ Block::Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai,  Para
 // Destructor
 Block::~Block(){
 	if(baseArr) destroyBaseArray();
-	if(!alnDataVector.empty()) destoryAlnData();
+	if(!alnDataVector.empty()) destoryAlnData(alnDataVector);
 	if(!snvVector.empty()) destroySnvVector();
 	if(!indelVector.empty()) destroyIndelVector();
 	if(!clipRegVector.empty()) destroyClipRegVector();
@@ -91,14 +91,6 @@ Base *Block::initBaseArray(){
 void Block::destroyBaseArray(){
 	delete[] baseArr;
 	baseArr = NULL;
-}
-
-// destroy the alignment data of the block
-void Block::destoryAlnData(){
-	vector<bam1_t*>::iterator aln;
-	for(aln=alnDataVector.begin(); aln!=alnDataVector.end(); aln++)
-		bam_destroy1(*aln);
-	vector<bam1_t*>().swap(alnDataVector);
 }
 
 // destroy the SNV vector
@@ -300,7 +292,7 @@ void Block::blockDetect(){
 
 	// release memory
 	if(baseArr) destroyBaseArray();
-	if(!alnDataVector.empty()) destoryAlnData();
+	if(!alnDataVector.empty()) destoryAlnData(alnDataVector);
 }
 
 // load alignment data with specified region in the format like `chr2:100-200'

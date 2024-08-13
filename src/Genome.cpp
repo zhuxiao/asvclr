@@ -501,11 +501,9 @@ void Genome::genomeRemoveFPIndelSnvInClipReg(Chrome *chr, vector<Chrome*> &chr_v
 				}else{
 					for(k=0; k<chr_vec.size(); k++){
 						chr_tmp = chr_vec.at(k);
-						if(chr!=chr_tmp and chrname_arr[j].size()>0){
-							if(chr_tmp->chrname.compare(chrname_arr[j])==0){
-								chr_arr[j] = chr_tmp;
-								break;
-							}
+						if(chr!=chr_tmp and chrname_arr[j].size()>0 and chr_tmp->chrname.compare(chrname_arr[j])==0){
+							chr_arr[j] = chr_tmp;
+							break;
 						}
 					}
 				}
@@ -733,8 +731,8 @@ int Genome::processConsWork(){
 
 	if(paras->cns_work_vec.empty()) return 0;  // no consensus work, then return directly
 
-	num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
-	//num_threads_work = (paras->num_threads>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
+	//num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
+	num_threads_work = (paras->num_threads>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
 
 	if(num_threads_work<1) num_threads_work = 1;
 
@@ -761,7 +759,7 @@ int Genome::processConsWork(){
 		}
 		// clipReg_reads_1_26966226-26974816.fq, clipReg_reads_1_21506254-21506762.fq, clipReg_cns_16_209822-210880.fa, clipReg_cns_1_197756788-197757987.fa (INV)
 		// cns_chr1_1461692-1461767.fa, cns_chr1_1595082-1595934.fa, cns_chr1_1663381-1663402.fa
-//		if(cns_work_opt->contigfilename.compare("output_test/2_cns/chr1/cns_chr1_1663381-1663402.fa")==0){
+//		if(cns_work_opt->contigfilename.compare("output_test_tmp/2_cns/X/clipReg_cns_X_49012184-49019157.fa")==0){
 //			cout << "cnsfilename=" << cns_work_opt->contigfilename << endl;
 //		}else continue;
 
@@ -774,16 +772,33 @@ int Genome::processConsWork(){
 		cns_work->p_mtx_cns_reg_workDone_num = &(paras->mtx_cns_reg_workDone_num);
 		cns_work->num_threads_per_cns_work = paras->num_threads_per_cns_work;
 		cns_work->minClipEndSize = paras->minClipEndSize;
-		if(cns_work_opt->clip_reg_flag==false){
-			sv_len_sum = 0;
-			for(j=0; j<cns_work_opt->arr_size; j++) sv_len_sum += cns_work_opt->var_array[j]->sv_len;
+
+		sv_len_sum = 0;
+		for(j=0; j<cns_work_opt->arr_size; j++) sv_len_sum += cns_work_opt->var_array[j]->sv_len;
+		if(cns_work_opt->clip_reg_flag==false){ // indel
 			if(sv_len_sum>paras->cnsChunkSize)
-				cns_work->cnsSideExtSize = paras->cnsSideExtSize * CNS_EXT_INDEL_FACTOR_1K;
+				cns_work->cnsSideExtSize = paras->cnsSideExtSize * CNS_EXT_INDEL_FACTOR_1K + sv_len_sum;
 			else if(sv_len_sum>0.5*paras->cnsChunkSize)
-				cns_work->cnsSideExtSize = paras->cnsSideExtSize * CNS_EXT_INDEL_FACTOR_500BP;
+				cns_work->cnsSideExtSize = paras->cnsSideExtSize * CNS_EXT_INDEL_FACTOR_500BP + sv_len_sum;
 			else
-				cns_work->cnsSideExtSize = paras->cnsSideExtSize;
-		}else cns_work->cnsSideExtSize = paras->cnsSideExtSizeClip;
+				cns_work->cnsSideExtSize = paras->cnsSideExtSize + sv_len_sum;
+
+//			if(sv_len_sum>2000){
+//				cout << "Large indel: arr_size=" << cns_work_opt->arr_size << ", " << cns_work_opt->contigfilename << ", sv_len=" << sv_len_sum << endl;
+//			}
+
+		}else{ // clipping
+			if(sv_len_sum>1.2*paras->cnsSideExtSizeClip or sv_len_sum==0) // large size or size undetermined
+				cns_work->cnsSideExtSize = paras->cnsSideExtSizeClip * CNS_EXT_CLIPREG_FACTOR_6K;
+			else if(sv_len_sum>0.8*paras->cnsSideExtSizeClip)
+				cns_work->cnsSideExtSize = paras->cnsSideExtSizeClip * CNS_EXT_CLIPREG_FACTOR_4K;
+			else if(sv_len_sum>0.4*paras->cnsSideExtSizeClip)
+				cns_work->cnsSideExtSize = paras->cnsSideExtSizeClip * CNS_EXT_CLIPREG_FACTOR_2K;
+			else if(sv_len_sum>0.2*paras->cnsSideExtSizeClip)
+				cns_work->cnsSideExtSize = paras->cnsSideExtSizeClip * CNS_EXT_CLIPREG_FACTOR_1K;
+			else
+				cns_work->cnsSideExtSize = paras->cnsSideExtSizeClip;
+		}
 		cns_work->minConReadLen = paras->minConReadLen;
 		cns_work->min_sv_size = paras->min_sv_size_usr;
 		cns_work->min_supp_num = paras->minReadsNumSupportSV;
@@ -1204,8 +1219,9 @@ int Genome::processCallWork(){
 		// blat_1_19156546-19164246.sim4, blat_1_2415202-2415425.sim4, tra_blat_1_2686251-2691837.sim4
 		// blat_contig_chr1_253768-256236.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_2068132-2073121.sim4
 		// minimap2_1_2213173-2214000.paf, minimap2_contig_1_26966226-26974816.paf, minimap2_contig_1_21506254-21506762.paf, minimap2_contig_1_29382165-29382465.paf
-		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf
-//		if(var_cand->alnfilename.compare("output_test/3_call/chr1/minimap2_chr1_143246329-143247038.paf")!=0){
+		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf, minimap2_chr1_143246329-143247038.paf, minimap2_1_649705-650290.paf
+		// minimap2_1_2765904-2766241.paf, minimap2_1_5447230-5447236.paf,
+//		if(var_cand->alnfilename.compare("output_test_tmp2/3_call/1/minimap2_1_48710409-48710409.paf")!=0){
 //			continue;
 //		}
 
@@ -1756,6 +1772,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->misAln_filename = "";
 		var_cand_new->inBamFile = paras->inBamFile;
 		var_cand_new->fai = fai;
+		var_cand_new->technology = paras->technology;
 
 		var_cand_new->refseqfilename = var_cand_tmp->refseqfilename;  // refseq file name
 		var_cand_new->ctgfilename = var_cand->ctgfilename;  // contig file name
@@ -1771,6 +1788,8 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 
 		var_cand_new->min_sv_size = paras->min_sv_size_usr;
 		var_cand_new->minReadsNumSupportSV = paras->minReadsNumSupportSV;
+		var_cand_tmp->minClipEndSize = paras->minClipEndSize;
+		var_cand_tmp->minConReadLen = paras->minConReadLen;
 
 		var_cand_new->cns_success = var_cand->cns_success;
 		var_cand_new->ctg_num = var_cand->ctg_num;
@@ -1789,7 +1808,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->dup_num = var_cand_tmp->dup_num;
 
 		//set genotyping parameters
-		var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_consistency_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
+		var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_identity_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 		// process monitor killed blat work
 		var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
@@ -2793,6 +2812,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->misAln_filename = "";
 				var_cand_tmp->inBamFile = paras->inBamFile;
 				var_cand_tmp->fai = fai;
+				var_cand_tmp->technology = paras->technology;
 				var_cand_tmp->call_success = false;
 
 				var_cand_tmp->blat_aligned_info_vec = NULL;
@@ -2803,6 +2823,8 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 
 				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
+				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
+				var_cand_tmp->minConReadLen = paras->minConReadLen;
 
 				var_cand_tmp->leftClipRefPos = clip_reg->leftClipPosTra1;
 				//var_cand_tmp->rightClipRefPos = clip_reg->rightClipPosTra1;
@@ -2836,7 +2858,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				tmpdir = out_dir_tra + "/" + "tmp_tra_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
 
 				//set genotyping parameters
-				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_consistency_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_identity_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 				// process monitor killed blat work
 				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
@@ -2910,6 +2932,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->misAln_filename = "";
 				var_cand_tmp->inBamFile = paras->inBamFile;
 				var_cand_tmp->fai = fai;
+				var_cand_tmp->technology = paras->technology;
 				var_cand_tmp->align_success = false;
 
 				var_cand_tmp->blat_aligned_info_vec = NULL;
@@ -2924,6 +2947,8 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 
 				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
+				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
+				var_cand_tmp->minConReadLen = paras->minConReadLen;
 
 				reg = new reg_t();
 				//reg->chrname = clip_reg->chrname_leftTra2;
@@ -2966,7 +2991,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->mtx_killed_minimap2_work = &paras->mtx_killed_minimap2_work;
 
 				//set genotyping parameters
-				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_consistency_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_identity_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 				for(i=0; i<3; i++){
 					cns_extend_size = paras->cnsSideExtSizeClip * i;
@@ -3821,6 +3846,7 @@ void Genome::sortVarResults(string &infilename, int32_t filetype){
 
 	subsets = constructSubsetByChr(sv_vec);
 	sortSVitem(subsets);
+	rmDupSVitem(subsets, paras->gt_min_identity_merge); // remove identical items
 	outputResult(outfilename, subsets, filetype);
 
 	remove(infilename.c_str());
@@ -3856,9 +3882,7 @@ void Genome::outputResult(string &outfilename, vector<vector<SV_item*>> &subsets
 
 	for(size_t i=0; i<subsets.size(); i++){
 		sv_vec = subsets.at(i);
-		for(size_t j=0; j<sv_vec.size(); j++){
-			outfile << sv_vec.at(j)->info << endl;
-		}
+		for(size_t j=0; j<sv_vec.size(); j++) if(sv_vec.at(j)->valid_flag) outfile << sv_vec.at(j)->info << endl;
 	}
 	outfile.close();
 }

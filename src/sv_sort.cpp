@@ -20,6 +20,7 @@ SV_item *constructSVItem(string &line){
 		item->sv_type = VAR_UNC;
 		item->chrname2 = "";
 		item->startPos2 = item->endPos2 = 0;
+		item->valid_flag = true;
 
 		str_tmp = str_vec.at(3);
 		if(str_tmp.compare("INS")==0 or str_tmp.compare("insertion")==0){
@@ -45,6 +46,11 @@ SV_item *constructSVItem(string &line){
 				else item->sv_type = VAR_BND;
 			}else
 				item->sv_type = VAR_MIX;
+		}
+
+		if(item->sv_type!=VAR_TRA and item->sv_type!=VAR_BND and item->sv_type!=VAR_MIX){
+			item->sv_len = stoi(str_vec.at(4));
+			item->altseq = str_vec.at(7);
 		}
 	}
 	return item;
@@ -265,7 +271,7 @@ vector<string> getSVType(vector<string> &str_vec){
 }
 
 // allocate SV item
-SV_item *allocateSVItem(string &chrname, size_t startPos, size_t endPos, string &chrname2, size_t startPos2, size_t endPos2, string &sv_type_str, string &line){
+SV_item *allocateSVItem(string &chrname, size_t startPos, size_t endPos, string &chrname2, size_t startPos2, size_t endPos2, string &sv_type_str, size_t sv_len, string &altseq, string &line){
 	size_t sv_type;
 
 	if(sv_type_str.compare("UNC")==0){
@@ -304,15 +310,18 @@ SV_item *allocateSVItem(string &chrname, size_t startPos, size_t endPos, string 
 	item->startPos2 = startPos2;
 	item->endPos2 = endPos2;
 	item->sv_type = sv_type;
+	item->sv_len = sv_len;
+	item->altseq = altseq;
 	item->info = line;
+	item->valid_flag = true;
 	return item;
 }
 
 vector<SV_item*> loadDataVcf(string &filename){
 	vector<SV_item*> sv_vec;
 	ifstream infile;
-	string line, chrname, start_pos_str, endpos_str, chrname2, start_pos_str2, endpos_str2, sv_type_str, sv_type_str1, sv_type_str2, bnd_str, bnd_pos_str;
-	size_t i, start_pos, endpos, start_pos2, endpos2;
+	string line, chrname, start_pos_str, endpos_str, chrname2, start_pos_str2, endpos_str2, sv_type_str, sv_type_str1, sv_type_str2, sv_len_str, altseq, bnd_str, bnd_pos_str;
+	size_t i, start_pos, endpos, start_pos2, endpos2, sv_len;
 	vector<string> str_vec, sv_type_vec, info_vec, sub_info_vec, bnd_pos_vec;
 	SV_item *sv_item;
 
@@ -332,7 +341,7 @@ vector<SV_item*> loadDataVcf(string &filename){
 				// get locations
 				chrname = str_vec.at(0);
 				start_pos_str = str_vec.at(1);
-
+				altseq = str_vec.at(4);
 
 				chrname2 = endpos_str = sv_type_str = "";
 				info_vec = split(str_vec.at(7), ";");
@@ -345,6 +354,8 @@ vector<SV_item*> loadDataVcf(string &filename){
 						endpos_str = sub_info_vec.at(1);
 					if(sub_info_vec.at(0).compare("SVTYPE")==0)
 						sv_type_str = sub_info_vec.at(1);
+					if(sub_info_vec.at(0).compare("SVLEN")==0)
+						sv_len_str = sub_info_vec.at(1);
 				}
 
 				// get sv type
@@ -383,7 +394,9 @@ vector<SV_item*> loadDataVcf(string &filename){
 					endpos = stoi(endpos_str);
 					start_pos2 = stoi(start_pos_str2);
 					endpos2 = stoi(endpos_str2);
-					sv_item = allocateSVItem(chrname, start_pos, endpos, chrname2, start_pos2, endpos2, sv_type_str, line);
+					if(sv_len_str.size()>0) sv_len = stoi(sv_len_str);
+					else sv_len = 0;
+					sv_item = allocateSVItem(chrname, start_pos, endpos, chrname2, start_pos2, endpos2, sv_type_str, sv_len, altseq, line);
 					sv_vec.push_back(sv_item);
 
 				}else{
@@ -582,6 +595,27 @@ void sortSubset(vector<SV_item*> &sv_vec){
 void sortSVitem(vector<vector<SV_item*>> &subsets){
 	for(size_t i=0;i<subsets.size();i++){
 		sortSubset(subsets.at(i));
+	}
+}
+
+// remove duplicated items
+void rmDupSVitem(vector<vector<SV_item*>> &subsets, double identity_thres){
+	cout << "remove duplicated items ..." << endl;
+	for(size_t i=0;i<subsets.size();i++)
+		rmDupSVitemSubset(subsets.at(i), identity_thres);
+}
+
+void rmDupSVitemSubset(vector<SV_item*> &sv_vec, double identity_thres){
+	SV_item *item1, *item2;
+	double val;
+
+	for(size_t i=1;i<sv_vec.size(); i++){
+		item1 = sv_vec.at(i-1);
+		item2 = sv_vec.at(i);
+		if(item1->sv_type==item2->sv_type and item1->chrname.compare(item2->chrname)==0 and item1->startPos==item2->startPos and item1->endPos==item2->endPos and item1->sv_len==item2->sv_len){
+			val = computeVarseqIdentity(item1->altseq, item2->altseq);
+			if(val>=identity_thres) item2->valid_flag = false;
+		}
 	}
 }
 
