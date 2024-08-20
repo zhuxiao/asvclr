@@ -2,7 +2,7 @@
 #include "clipAlnDataLoader.h"
 #include "util.h"
 
-pthread_mutex_t mutex_down_sample = PTHREAD_MUTEX_INITIALIZER;
+//pthread_mutex_t mutex_down_sample = PTHREAD_MUTEX_INITIALIZER;
 
 clipAlnDataLoader::clipAlnDataLoader(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, int32_t minClipEndSize, int32_t minMapQ) {
 	this->chrname = chrname;
@@ -28,10 +28,7 @@ void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVecto
 	bam_hdr_t *header;
 
 	// load the align data
-//	cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << minMapQ << endl;
-
 	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile, minMapQ);
-//	data_loader.loadAlnData(alnDataVector);
 	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
 
 //	if(max_ultra_high_cov>0){
@@ -240,7 +237,7 @@ double clipAlnDataLoader::samplingAlnDataOp(vector<bam1_t*> &alnDataVector, doub
 	max_reads_num = alnDataVector.size();
 
 	// make sure each down-sampling is equivalent
-	pthread_mutex_lock(&mutex_down_sample);
+	//pthread_mutex_lock(&mutex_down_sample);
 	srand(1);
 	reads_count = 0;
 	total_bases = 0;
@@ -254,7 +251,7 @@ double clipAlnDataLoader::samplingAlnDataOp(vector<bam1_t*> &alnDataVector, doub
 			reads_count ++;
 		}
 	}
-	pthread_mutex_unlock(&mutex_down_sample);
+	//pthread_mutex_unlock(&mutex_down_sample);
 	sampled_cov = total_bases / reg_size;
 
 	// remove unselected items

@@ -3,10 +3,10 @@
 #include "clipAlnDataLoader.h"
 
 pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
-extern pthread_mutex_t mutex_down_sample;
+//extern pthread_mutex_t mutex_down_sample;
 extern pthread_mutex_t mutex_fai;
 
-localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio){
+localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio){
 
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
@@ -16,7 +16,7 @@ localCns::localCns(string &readsfilename, string &contigfilename, string &refseq
 	this->clusterfilename = preprocessPipeChar(clusterfilename);
 	this->tmpdir = preprocessPipeChar(tmpdir);
 	this->technology = technology;
-	this->canu_version = canu_version;
+	this->sv_len_est = sv_len_est;
 	this->num_threads_per_cns_work = num_threads_per_cns_work;
 	this->minClipEndSize = minClipEndSize;
 	this->minMapQ = minMapQ;
@@ -25,6 +25,7 @@ localCns::localCns(string &readsfilename, string &contigfilename, string &refseq
 	this->min_supp_num = min_supp_num;
 	this->max_seg_size_ratio = max_seg_size_ratio;
 	this->max_ultra_high_cov = max_ultra_high_cov;
+	this->min_identity_match = min_identity_match;
 	this->varVec = varVec;
 	this->fai = fai;
 	this->inBamFile = inBamFile;
@@ -32,7 +33,10 @@ localCns::localCns(string &readsfilename, string &contigfilename, string &refseq
 	this->cns_extend_size = cns_extend_size;
 	startRefPos_cns = endRefPos_cns = 0;
 	mean_read_len = 0;
-	use_poa_flag = true;
+
+	if(sv_len_est<=MAX_SV_LEN_USING_POA and clip_reg_flag==false) use_poa_flag = true;
+	else use_poa_flag = false;
+	//cout << "sv_len_est=" << sv_len_est << ", use_poa_flag=" << use_poa_flag << endl;
 
 	readsfilename_prefix = this->readsfilename.substr(0, this->readsfilename.size()-3);
 	readsfilename_suffix = this->readsfilename.substr(this->readsfilename.size()-3, 3);
@@ -217,7 +221,7 @@ void localCns::extractReadsDataFromBAM(){
 		if(clip_reg_flag){ // clipping region
 			if(query_seq_info_all.size()>0){
 				insufficient_flag = false;
-				clipRegCluster clip_reg_cluster(varVec[0]->chrname, varVec[0]->startRefPos, varVec[varVec.size()-1]->endRefPos, minClipEndSize, min_sv_size, min_supp_num, fai);
+				clipRegCluster clip_reg_cluster(varVec[0]->chrname, varVec[0]->startRefPos, varVec[varVec.size()-1]->endRefPos, minClipEndSize, min_sv_size, min_supp_num, min_identity_match, technology, fai);
 				//if(query_seq_info_all.size()>1){
 				if(query_seq_info_all.size()>=(size_t)min_supp_num){ // 2024-01-28
 					query_clu_vec_clipReg = clip_reg_cluster.queryCluster(query_seq_info_all);
@@ -766,6 +770,10 @@ double localCns::computeScoreRatio(struct querySeqInfoNode* query_seq_info_node,
 	size_t i;
 	queryCluSig_t *queryCluSig, *seed_qcQuery;
 
+#if POA_ALIGN_DEBUG
+	cout << "qname1=" << query_seq_info_node->qname << ", qname2=" << q_cluster_node->qname << endl;
+#endif
+
 	score_ratio = 0;
 	//matching prepare
 	queryCluSig = new queryCluSig_t();
@@ -823,7 +831,8 @@ vector<int8_t> localCns::computeQcMatchProfileSingleQuery(queryCluSig_t *queryCl
 		// compute the scores of each element
 		for(i=1; i<rowsNum; i++){
 			for(j=1; j<colsNum; j++){
-				matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_IDENTITY_RATIO_MATCH_THRES, fai);
+				//matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_IDENTITY_RATIO_MATCH_THRES, fai);
+				matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_identity_match, fai);
 				if(matchFlag) scoreIJ = matchScore;
 				else scoreIJ = mismatchScore;//
 
@@ -1167,7 +1176,7 @@ void localCns::samplingReadsClipRegOp(vector<struct fqSeqNode*> &fq_seq_vec, dou
 	expected_total_bases = reg_size * expect_cov_val;
 	max_reads_num = fq_seq_vec.size();
 
-	pthread_mutex_lock(&mutex_down_sample);
+	//pthread_mutex_lock(&mutex_down_sample);
 	srand(1);
 	reads_count = 0;
 	total_bases = 0;
@@ -1181,7 +1190,7 @@ void localCns::samplingReadsClipRegOp(vector<struct fqSeqNode*> &fq_seq_vec, dou
 			reads_count ++;
 		}
 	}
-	pthread_mutex_unlock(&mutex_down_sample);
+	//pthread_mutex_unlock(&mutex_down_sample);
 	sampled_cov = total_bases / reg_size;
 	sampling_flag = true;
 
@@ -1199,41 +1208,52 @@ void localCns::samplingReads(vector<struct querySeqInfoNode*> &query_seq_info_al
 
 void localCns::samplingReadsOp(vector<struct querySeqInfoNode*> &query_seq_info_all, double expect_cov_val){
 	double expected_total_bases, total_bases;
-	size_t index, max_reads_num, reg_size;
+	size_t i, index, num, count, max_reads_num, reg_size;
 	struct querySeqInfoNode* qseq_node;
+	set<string> selected_qname_vec;
 
-	// reverse the select flag
-	for(size_t i=0; i<query_seq_info_all.size(); i++){
-		qseq_node = query_seq_info_all.at(i);
-		qseq_node->selected_flag = false;
-	}
+	// reset the select flag
+	for(i=0; i<query_seq_info_all.size(); i++) query_seq_info_all.at(i)->selected_flag = false;
 
 	reg_size = endRefPos_cns - startRefPos_cns + 1 + mean_read_len;
 	expected_total_bases = reg_size * expect_cov_val;
 	max_reads_num = query_seq_info_all.size();
 
-	pthread_mutex_lock(&mutex_down_sample);
+	//pthread_mutex_lock(&mutex_down_sample);
 	srand(1);
-	reads_count = 0;
-	total_bases = 0;
-	while(total_bases<=expected_total_bases and reads_count<=max_reads_num){
+	num = count = total_bases = 0;
+	while(total_bases<=expected_total_bases and count<max_reads_num){
 		index = rand() % max_reads_num;
 		qseq_node = query_seq_info_all.at(index);
 		if(qseq_node->selected_flag==false){
 			qseq_node->selected_flag = true;
-
-			total_bases += qseq_node->seq.size();
-			reads_count ++;
+			if(selected_qname_vec.find(qseq_node->qname)==selected_qname_vec.end()){ // new item
+				selected_qname_vec.insert(qseq_node->qname);
+				total_bases += qseq_node->seq.size();
+				num ++;
+			}
+			count ++;
 		}
 	}
-	pthread_mutex_unlock(&mutex_down_sample);
+	//pthread_mutex_unlock(&mutex_down_sample);
+
+	// append remaining align items of the selected reads
+	for(i=0; i<query_seq_info_all.size(); i++){
+		qseq_node = query_seq_info_all.at(i);
+		if(qseq_node->selected_flag==false){
+			if(selected_qname_vec.find(qseq_node->qname)!=selected_qname_vec.end()) // found, then add item
+				qseq_node->selected_flag = true;
+		}
+	}
+
+	reads_count = num;
 	sampled_cov = total_bases / reg_size;
 	sampling_flag = true;
 
 //	/cout << "After sampling, reads count: " << reads_count << ", total bases: " << total_bases << endl;
 
 	// remove unselected items
-	for(size_t i=0; i<query_seq_info_all.size(); ){
+	for(i=0; i<query_seq_info_all.size(); ){
 		qseq_node = query_seq_info_all.at(i);
 		if(qseq_node->selected_flag==false){
 			destroyAlnSegs(qseq_node->query_alnSegs);
@@ -1419,6 +1439,29 @@ int32_t localCns::getLeftMostAlnSeg(vector<clipAlnData_t*> &query_aln_segs){
 	return left_most_idx;
 }
 
+bool localCns::localConsensus(){
+	bool flag;
+
+	//if(local_cns.clip_reg_flag==false){
+	if(use_poa_flag){
+		flag = cnsByPoa(); // local consensus using abPOA
+		if(flag==false){
+			flag = localCnsWtdbg2();
+			//cout << "+++++++++ " << flag << ": rescued by wtdbg2, " << contigfilename << ", sv_len_est=" << sv_len_est << endl;
+		}
+	}else{
+		flag = localCnsWtdbg2(); // local consensus using wtdbg2
+		if(flag==false){
+			flag = cnsByPoa();
+			//cout << "--------- " << flag << ": rescued by abpoa, " << contigfilename  << ", sv_len_est=" << sv_len_est << endl;
+		}
+	}
+
+	destorySeqsVec(seqs_vec);
+
+	return flag;
+}
+
 // get heter local consensus using abPOA
 bool localCns::cnsByPoa(){
 	bool flag, abpoa_flag;
@@ -1475,6 +1518,7 @@ bool localCns::cnsByPoa(){
 				}else{
 					tmp_cons_filename = tmpdir + "/consensus_" + to_string(k) + ".fa";
 					cmd2 = "abpoa -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
+					//cout << cmd2 << endl;
 					system(cmd2.c_str());
 
 					pthread_mutex_lock(&mutex_mem);
@@ -1518,7 +1562,7 @@ bool localCns::cnsByPoa(){
 	}
 
 	cons_file.close();
-	destorySeqsVec(seqs_vec);
+	//destorySeqsVec(seqs_vec);
 
 	flag = isFileExist(contigfilename);
 	if(flag){ // cons generated successfully
@@ -1588,7 +1632,8 @@ bool localCns::localCnsWtdbg2(){
 					sleep(mem_wait_seconds);
 				}else{
 					output_prefix = "tmp_wtdbg2_" + tmp_reg_str;
-					cmd2 = "wtdbg2.pl -x " + technology + " -o " + output_prefix + " -a -q " + tmp_reads_filename + " > /dev/null 2>&1";
+					cmd2 = "wtdbg2.pl -t 8 -x " + technology + " -o " + output_prefix + " -a -q " + tmp_reads_filename + " > /dev/null 2>&1";
+					//cout << cmd2 << endl;
 					system(cmd2.c_str());
 
 					pthread_mutex_lock(&mutex_mem);
@@ -1636,7 +1681,7 @@ bool localCns::localCnsWtdbg2(){
 	}
 
 	cons_file.close();
-	destorySeqsVec(seqs_vec);
+	//destorySeqsVec(seqs_vec);
 
 	flag = isFileExist(contigfilename);
 	if(flag){ // consensus generated successfully

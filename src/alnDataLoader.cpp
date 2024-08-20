@@ -1,8 +1,7 @@
 #include "alnDataLoader.h"
 
-extern pthread_mutex_t mutex_down_sample;
-//alnDataLoader::alnDataLoader(){
-//}
+//extern pthread_mutex_t mutex_down_sample;
+
 
 alnDataLoader::alnDataLoader(string &chrname, int32_t startRefPos, int32_t endRefPos, string &inBamFile, int32_t minMapQ) {
 	this->reg_str = chrname + ":" + to_string(startRefPos) + "-" + to_string(endRefPos);
@@ -57,8 +56,9 @@ alnDataLoader::~alnDataLoader() {
 void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector, double max_ultra_high_cov){
 	samFile *in = NULL;
 	bam_hdr_t *header;
+	vector<string> qname_vec;
 	vector<int32_t> qlen_vec;
-	size_t total_len=0, total_num=0;
+	size_t total_len = 0, total_num = 0;
 
 	if ((in = sam_open(inBamFile.c_str(), "r")) == 0) {
 		cerr << __func__ << ": failed to open " << inBamFile << " for reading" << endl;
@@ -85,7 +85,8 @@ void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector, double max_ultra
 			cerr <<  __func__ << ": region " << reg_str << " could not be parsed." << endl;
 		exit(1);
 	}
-	computeAlnDataNumFromIter(in, header, iter, reg_str, qlen_vec, total_len, total_num); // total_num, total_len, q_len
+	computeAlnDataNumFromIter(in, header, iter, reg_str, qname_vec, qlen_vec, total_len, total_num); // total_num, total_len, q_len
+	//computeAlnDataNumFromIter(in, header, iter, reg_str, qlen_vec, total_len, total_num); // total_num, total_len, q_len
 	//cout << "total_len="<< total_len << " total_num=" << total_num << " q_len.size()=" << qlen_vec.size() << endl;
 
 	hts_itr_destroy(iter);
@@ -101,8 +102,7 @@ void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector, double max_ultra
 	}
 
 	// load align data from iteration
-//	loadAlnDataFromIter(alnDataVector, in, header, iter, reg_str);
-	loadAlnDataFromIter(alnDataVector, in, header, iter, reg_str, max_ultra_high_cov, qlen_vec, total_len, total_num);
+	loadAlnDataFromIter(alnDataVector, in, header, iter, reg_str, max_ultra_high_cov, qname_vec, qlen_vec, total_len, total_num);
 
 	hts_itr_destroy(iter);
 	hts_idx_destroy(idx); // destroy the BAM index
@@ -208,29 +208,29 @@ void alnDataLoader::loadAlnData(vector<bam1_t*> &alnDataVector, vector<string> &
 }
 
 // compute align data number from iteration
-void alnDataLoader::computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, vector<int32_t> &qlen_vec, size_t &total_len, size_t &total_num){
-	int result;
-	bam1_t *b;
-	b = bam_init1();
-	while ((result = sam_itr_next(in, iter, b)) >= 0) {
-		if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
-			total_len += b->core.l_qseq;
-			total_num++;
-			qlen_vec.push_back(b->core.l_qseq);
-		}
-		bam_destroy1(b);
-		b = bam_init1();
-	}
-	mean_read_len = (double) total_len / total_num;
-
-//	cout << "total_len=" << total_len << " ;total_num=" << total_num << " ;mean_read_len=" << mean_read_len << endl;
-	bam_destroy1(b);
-
-	if (result < -1) {
-		cerr <<  __func__ << ": retrieval of region " << reg << " failed due to truncated file or corrupt BAM index file." << endl;
-		exit(1);
-	}
-}
+//void alnDataLoader::computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, vector<int32_t> &qlen_vec, size_t &total_len, size_t &total_num){
+//	int result;
+//	bam1_t *b;
+//	b = bam_init1();
+//	while ((result = sam_itr_next(in, iter, b)) >= 0) {
+//		if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+//			total_len += b->core.l_qseq;
+//			total_num++;
+//			qlen_vec.push_back(b->core.l_qseq);
+//		}
+//		bam_destroy1(b);
+//		b = bam_init1();
+//	}
+//	mean_read_len = (double) total_len / total_num;
+//
+////	cout << "total_len=" << total_len << " ;total_num=" << total_num << " ;mean_read_len=" << mean_read_len << endl;
+//	bam_destroy1(b);
+//
+//	if (result < -1) {
+//		cerr <<  __func__ << ": retrieval of region " << reg << " failed due to truncated file or corrupt BAM index file." << endl;
+//		exit(1);
+//	}
+//}
 
 // compute align data number from iteration
 void alnDataLoader::computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, vector<string> &qname_vec, vector<int32_t> &qlen_vec, size_t &total_len, size_t &total_num){
@@ -290,16 +290,21 @@ void alnDataLoader::computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, ht
 //	}
 //}
 
-void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, double max_ultra_high_cov, vector<int32_t> &qlen_vec, size_t total_len, size_t total_num){
-	int result, i;
+void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile *in, bam_hdr_t *header, hts_itr_t *iter, string& reg, double max_ultra_high_cov, vector<string> qname_vec, vector<int32_t> &qlen_vec, size_t total_len, size_t total_num){
+	int result;
 	bam1_t *b;
 	double expected_total_bases;//, sampled_cov;
 	double compensation_coefficient, local_cov_original;
-	size_t index, reg_size, reads_count, max_reads_num, total_bases;
+	size_t i, index, reg_size, num, max_reads_num, total_bases;
 	int8_t *selected_flag_array;
+	set<string> selected_qname_vec;
+
+	if(qname_vec.size()!=qlen_vec.size()){
+		cerr << __func__ << ", line=" << __LINE__ << ": qname_vec.size=" << qname_vec.size() << ", qlen_vec.size=" << qlen_vec.size() << ", error!" << endl;
+		exit(1);
+	}
 
 	selected_flag_array = (int8_t*) calloc(qlen_vec.size(), sizeof(int8_t));
-//	selected_flag_array = (int8_t*) calloc(alnDataVector.size(), sizeof(int8_t));
 	if(selected_flag_array==NULL){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot allocate memory, error!" << endl;
 		exit(1);
@@ -311,22 +316,34 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 		reg_size = endRefPos - startRefPos + 1 + mean_read_len;
 		expected_total_bases = reg_size * max_ultra_high_cov;
 		max_reads_num = qlen_vec.size();
+
 		// make sure each down-sampling is equivalent
-		pthread_mutex_lock(&mutex_down_sample);
+		//pthread_mutex_lock(&mutex_down_sample);
 		srand(1);
-		reads_count = 0;
+		num = 0;
 		total_bases = 0;
 
-		while(total_bases <= expected_total_bases and reads_count <= max_reads_num){
+		while(total_bases <= expected_total_bases and num < max_reads_num){
 			index = rand() % max_reads_num;
 			if(selected_flag_array[index]==0){
 				selected_flag_array[index] = 1;
-				total_bases += qlen_vec.at(index);
-				reads_count ++;
-//				cout << "index=" << index << " selected_flag_array[index]=" << selected_flag_array[index] << " total_bases=" << total_bases << " reads_count=" << reads_count << endl;
+				if(selected_qname_vec.find(qname_vec.at(index))==selected_qname_vec.end()){ // new item
+					selected_qname_vec.insert(qname_vec.at(index));
+					total_bases += qlen_vec.at(index);
+				}
+				num ++;
+//				cout << "index=" << index << " selected_flag_array[index]=" << selected_flag_array[index] << " total_bases=" << total_bases << ", num=" << num << endl;
 			}
 		}
-		pthread_mutex_unlock(&mutex_down_sample);
+		//pthread_mutex_unlock(&mutex_down_sample);
+
+		// append remaining align items of the selected reads
+		for(i=0; i<qname_vec.size(); i++){
+			if(selected_flag_array[i]==0){
+				if(selected_qname_vec.find(qname_vec.at(i))!=selected_qname_vec.end()) // found, then add item
+					selected_flag_array[i] = 1;
+			}
+		}
 		//sampled_cov = total_bases / reg_size;
 		//cout << "sampled_cov=" << sampled_cov << endl;
 
@@ -334,7 +351,7 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 		i = 0;
 		while((result = sam_itr_next(in, iter, b)) >= 0) {
 			if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
-				if(selected_flag_array[i] == 1) alnDataVector.push_back(b);
+				if(selected_flag_array[i]==1) alnDataVector.push_back(b);
 				else bam_destroy1(b);
 				i++;
 			}else bam_destroy1(b);
@@ -363,9 +380,10 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 	bam1_t *b;
 	double expected_total_bases;//, sampled_cov;
 	double compensation_coefficient, local_cov_original;
-	size_t i, index, reg_size, reads_count, max_reads_num, total_bases;
+	size_t i, index, reg_size, num, max_reads_num, total_bases;
 	int8_t *selected_flag_array;
 	string qname;
+	set<string> selected_qname_vec;
 
 	if(qname_vec.size()!=qlen_vec.size()){
 		cerr << __func__ << ", line=" << __LINE__ << ": qname_vec.size=" << qname_vec.size() << ", qlen_vec.size=" << qlen_vec.size() << ", error!" << endl;
@@ -373,7 +391,6 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 	}
 
 	selected_flag_array = (int8_t*) calloc(qlen_vec.size(), sizeof(int8_t));
-//	selected_flag_array = (int8_t*) calloc(alnDataVector.size(), sizeof(int8_t));
 	if(selected_flag_array==NULL){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot allocate memory, error!" << endl;
 		exit(1);
@@ -387,30 +404,44 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 		max_reads_num = qlen_vec.size();
 
 		// mark the target reads
-		reads_count = 0;
+		num = 0;
 		total_bases = 0;
 		for(i=0; i<max_reads_num; i++){
 			qname = qname_vec.at(i);
 			if(find(target_qname_vec.begin(), target_qname_vec.end(), qname) != target_qname_vec.end()){  // found
 				selected_flag_array[i] = 1;
-				total_bases += qlen_vec.at(i);
-				reads_count ++;
+				if(selected_qname_vec.find(qname_vec.at(i))==selected_qname_vec.end()){ // new item
+					selected_qname_vec.insert(qname_vec.at(i));
+					total_bases += qlen_vec.at(i);
+				}
+				num ++;
 			}
 		}
 
 		// make sure each down-sampling is equivalent
-		pthread_mutex_lock(&mutex_down_sample);
+		//pthread_mutex_lock(&mutex_down_sample);
 		srand(1);
-		while(total_bases <= expected_total_bases and reads_count <= max_reads_num){
+		while(total_bases <= expected_total_bases and num < max_reads_num){
 			index = rand() % max_reads_num;
 			if(selected_flag_array[index]==0){
 				selected_flag_array[index] = 1;
-				total_bases += qlen_vec.at(index);
-				reads_count ++;
-//				cout << "index=" << index << " selected_flag_array[index]=" << selected_flag_array[index] << " total_bases=" << total_bases << " reads_count=" << reads_count << endl;
+				if(selected_qname_vec.find(qname_vec.at(index))==selected_qname_vec.end()){ // new item
+					selected_qname_vec.insert(qname_vec.at(index));
+					total_bases += qlen_vec.at(index);
+				}
+				num ++;
+//				cout << "index=" << index << " selected_flag_array[index]=" << selected_flag_array[index] << " total_bases=" << total_bases << ", num=" << num << endl;
 			}
 		}
-		pthread_mutex_unlock(&mutex_down_sample);
+		//pthread_mutex_unlock(&mutex_down_sample);
+
+		// append remaining align items of the selected reads
+		for(i=0; i<qname_vec.size(); i++){
+			if(selected_flag_array[i]==0){
+				if(selected_qname_vec.find(qname_vec.at(i))!=selected_qname_vec.end()) // found, then add item
+					selected_flag_array[i] = 1;
+			}
+		}
 		//sampled_cov = total_bases / reg_size;
 		//cout << "sampled_cov=" << sampled_cov << endl;
 
@@ -418,7 +449,7 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 		i = 0;
 		while((result = sam_itr_next(in, iter, b)) >= 0) {
 			if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
-				if(selected_flag_array[i] == 1) alnDataVector.push_back(b);
+				if(selected_flag_array[i]==1) alnDataVector.push_back(b);
 				else bam_destroy1(b);
 				i++;
 			}else bam_destroy1(b);

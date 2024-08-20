@@ -14,16 +14,18 @@ using namespace std;
 #define MIN_SIZE_RATIO_MATCH_CLIP_POS		(0.8f)
 #define QC_SIZE_RATIO_MATCH_THRES_INDEL		(0.7f)
 #define QC_IDENTITY_RATIO_MATCH_THRES		(0.9f)
+#define QC_IDENTITY_RATIO_MATCH_THRES2		(0.75f)
 
 class clipRegCluster {
 private:
-	string chrname;
+	string chrname, technology;
 	int64_t var_startRefPos, var_endRefPos, chrlen;
 	int32_t minClipEndSize, min_sv_size, min_supp_num;
+	double min_identity_match;
 	faidx_t *fai;
 
 public:
-	clipRegCluster(string &chrname, int64_t var_startRefPos, int64_t var_endRefPos, int32_t minClipEndSize, int32_t min_sv_size, int32_t min_supp_num, faidx_t *fai);
+	clipRegCluster(string &chrname, int64_t var_startRefPos, int64_t var_endRefPos, int32_t minClipEndSize, int32_t min_sv_size, int32_t min_supp_num, double min_identity_match, string &technology, faidx_t *fai);
 	virtual ~clipRegCluster();
 	void destoryQcSigList(vector<qcSigList_t*> &qcSigList_vec);
 	vector<qcSigList_t*> extractQcSigsClipReg(vector<struct querySeqInfoNode*> &query_seq_info_vec);

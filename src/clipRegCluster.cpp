@@ -2,7 +2,7 @@
 
 extern pthread_mutex_t mutex_fai;
 
-clipRegCluster::clipRegCluster(string &chrname, int64_t var_startRefPos, int64_t var_endRefPos, int32_t minClipEndSize, int32_t min_sv_size, int32_t min_supp_num, faidx_t *fai) {
+clipRegCluster::clipRegCluster(string &chrname, int64_t var_startRefPos, int64_t var_endRefPos, int32_t minClipEndSize, int32_t min_sv_size, int32_t min_supp_num, double min_identity_match, string &technology, faidx_t *fai) {
 	this->chrname = chrname;
 	this->var_startRefPos = var_startRefPos;
 	this->var_endRefPos = var_endRefPos;
@@ -11,6 +11,8 @@ clipRegCluster::clipRegCluster(string &chrname, int64_t var_startRefPos, int64_t
 	this->min_supp_num = min_supp_num;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
 	this->fai = fai;
+	this->min_identity_match = min_identity_match;
+	this->technology = technology;
 }
 
 clipRegCluster::~clipRegCluster() {
@@ -477,9 +479,9 @@ vector<qcSigList_t*> clipRegCluster::extractQcSigsClipReg(vector<struct querySeq
 		queryseq_node = query_seq_info_vec.at(i);
 		if(queryseq_node->selected_flag==false){
 
-			if(queryseq_node->qname.compare("SRR8858445.1.155235")==0){
-				cout << "i=" << i << ", " << queryseq_node->qname << endl;
-			}
+//			if(queryseq_node->qname.compare("SRR11008518.1.6316273")==0){
+//				cout << "i=" << i << ", " << queryseq_node->qname << endl;
+//			}
 
 			query_seqs = getQuerySeqs(queryseq_node->qname, query_seq_info_vec);
 			qcSigList_node = extractQcSigsSingleQueryClipReg(query_seqs);
@@ -502,10 +504,10 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 	qcSig_t *qc_sig, *qc_sig_next, *last_clip_sig;
 	int32_t id, leftmost_id, increase_direction;
 	int32_t left_clip_end_flag, right_clip_end_flag, end_flag;
-	bool overlap_flag, valid_query_left_end_flag, valid_query_right_end_flag, self_overlap_flag, ref_skip_flag, query_skip_flag;
+	bool overlap_flag, valid_query_left_end_flag, valid_query_right_end_flag, self_overlap_flag, ref_skip_flag, query_skip_flag, merge_flag;
 	size_t i, j;
 	int32_t mate_arr_idx, mate_clip_end_flag, mate_arr_idx_same_chr, mate_clip_end_flag_same_chr, min_dist, min_ref_dist, min_dist_same_chr, min_ref_dist_same_chr, seq_len, ignore_end_flag;
-	int64_t var_startRefPos_tmp, var_endRefPos_tmp, end_ref_pos, dist, start_qpos_tmp;
+	int64_t var_startRefPos_tmp, var_endRefPos_tmp, end_ref_pos, end_ref_pos2, end_query_pos2, dist, start_qpos_tmp;
 	int8_t query_orient;
 	string reg_str, refseq, queryseq_whole, reverse_seq;
 	char *p_seq;
@@ -827,6 +829,52 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 		}
 	}
 
+	// merge nearest signatures for non-ccs data
+	if(technology.compare(PACBIO_CCS_TECH_STR)!=0){
+		for(i=1; i<qcSig_vec.size(); ){
+			qc_sig = qcSig_vec.at(i-1);
+			qc_sig_next = qcSig_vec.at(i);
+			merge_flag = false;
+			if(qc_sig->cigar_op==qc_sig_next->cigar_op and qc_sig->aln_orient==qc_sig_next->aln_orient and qc_sig->cigar_op!=BAM_CSOFT_CLIP and qc_sig_next->cigar_op!=BAM_CHARD_CLIP){
+				end_ref_pos = getEndRefPosAlnSeg(qc_sig->ref_pos, qc_sig->cigar_op, qc_sig->cigar_op_len);
+				end_ref_pos2 = getEndRefPosAlnSeg(qc_sig_next->ref_pos, qc_sig_next->cigar_op, qc_sig_next->cigar_op_len);
+				//end_query_pos = getEndQueryPosAlnSeg(qc_sig->query_pos, qc_sig->cigar_op, qc_sig->cigar_op_len);
+				end_query_pos2 = getEndQueryPosAlnSeg(qc_sig_next->query_pos, qc_sig_next->cigar_op, qc_sig_next->cigar_op_len);
+				overlap_flag = isOverlappedPos(qc_sig->ref_pos-MAX_DIST_MATCH_INDEL, end_ref_pos+MAX_DIST_MATCH_INDEL, qc_sig_next->ref_pos-MAX_DIST_MATCH_INDEL, end_ref_pos2+MAX_DIST_MATCH_INDEL);
+				if(overlap_flag){
+					dist = abs(end_query_pos2 - qc_sig->query_pos - (end_ref_pos2 - qc_sig->ref_pos));
+					qc_sig->cigar_op_len = dist + 1;
+
+					if(end_ref_pos2<qc_sig->ref_pos) end_ref_pos2 = qc_sig->ref_pos;
+					reg_str = qc_sig->chrname + ":" + to_string(qc_sig->ref_pos) + "-" + to_string(end_ref_pos2);
+					pthread_mutex_lock(&mutex_fai);
+					p_seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+					pthread_mutex_unlock(&mutex_fai);
+					qc_sig->refseq = p_seq;
+					free(p_seq);
+
+					dist = abs(end_query_pos2 - qc_sig->query_pos);
+					if(qc_sig->aln_orient==query_orient)
+						qc_sig->altseq = queryseq_whole.substr(qc_sig->query_pos-1, dist+1);
+					else{
+						//cout << "line=" << __LINE__ << ", " << chrname << ":" << var_startRefPos << "-" << var_endRefPos << ": " << queryseq_node->qname << ", aln_orient is not the same!" << endl;
+
+						start_qpos_tmp = queryseq_whole.size() - qc_sig->query_pos;
+						reverse_seq = queryseq_whole.substr(start_qpos_tmp-1, dist+1);
+						reverseComplement(reverse_seq);
+						qc_sig->altseq = reverse_seq;
+					}
+
+					delete qc_sig_next;
+					qcSig_vec.erase(qcSig_vec.begin()+i);
+
+					merge_flag = true;
+				}
+			}
+			if(merge_flag==false) i++;
+		}
+	}
+
 	// assign neighbour information
 	for(i=1; i<qcSig_vec.size(); i++){
 		qc_sig = qcSig_vec.at(i-1);
@@ -1051,7 +1099,8 @@ vector<int8_t> clipRegCluster::computeQcMatchProfileSingleQueryClipReg(qcSigList
 			for(j=1; j<colsNum; j++){
 				qc_sig1 = queryCluSig->qcSig_vec.at(i-1);
 				qc_sig2 = seed_qcQuery->qcSig_vec.at(j-1);
-				matchFlag = isQcSigMatchClipReg(qc_sig1, qc_sig2, MAX_DIST_MATCH_CLIP_POS, MIN_SIZE_RATIO_MATCH_CLIP_POS, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_IDENTITY_RATIO_MATCH_THRES);
+				//matchFlag = isQcSigMatchClipReg(qc_sig1, qc_sig2, MAX_DIST_MATCH_CLIP_POS, MIN_SIZE_RATIO_MATCH_CLIP_POS, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_IDENTITY_RATIO_MATCH_THRES);
+				matchFlag = isQcSigMatchClipReg(qc_sig1, qc_sig2, MAX_DIST_MATCH_CLIP_POS, MIN_SIZE_RATIO_MATCH_CLIP_POS, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_identity_match);
 				if(matchFlag) scoreIJ = matchScore;
 				else scoreIJ = mismatchScore;//
 

@@ -69,8 +69,8 @@ void Genome::init(){
 	out_filename_result_indel = out_dir_result + "/" + result_prefix + "INDEL.bed";
 	out_filename_result_clipReg = out_dir_result + "/" + result_prefix + "clipReg.bed";
 	out_filename_result_tra = out_dir_result + "/" + result_prefix + "TRA.bedpe";
-	out_filename_result_vars = out_dir_result + "/" + result_prefix + "variants.bed";
-	out_filename_result_vars_vcf = out_dir_result + "/" + result_prefix + "variants.vcf";
+	out_filename_result_vars = out_dir_result + "/" + result_prefix + "asvclr.bed";
+	out_filename_result_vars_vcf = out_dir_result + "/" + result_prefix + "asvclr.vcf";
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
 	work_finish_filename = out_dir + "/" + "work_finished";
@@ -726,13 +726,13 @@ int Genome::processConsWork(){
 	cnsWork *cns_work;
 	ofstream *var_cand_file;
 	size_t num_threads_work, num_work, num_work_percent;
-	int64_t sv_len_sum;
+	int64_t sv_len_sum, min_pos, max_pos, dist;
 	size_t i, j;
 
 	if(paras->cns_work_vec.empty()) return 0;  // no consensus work, then return directly
 
-	//num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
-	num_threads_work = (paras->num_threads>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
+	num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
+	//num_threads_work = (paras->num_threads>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
 
 	if(num_threads_work<1) num_threads_work = 1;
 
@@ -759,7 +759,7 @@ int Genome::processConsWork(){
 		}
 		// clipReg_reads_1_26966226-26974816.fq, clipReg_reads_1_21506254-21506762.fq, clipReg_cns_16_209822-210880.fa, clipReg_cns_1_197756788-197757987.fa (INV)
 		// cns_chr1_1461692-1461767.fa, cns_chr1_1595082-1595934.fa, cns_chr1_1663381-1663402.fa
-//		if(cns_work_opt->contigfilename.compare("output_test_tmp/2_cns/X/clipReg_cns_X_49012184-49019157.fa")==0){
+//		if(cns_work_opt->contigfilename.compare("output_minimap2_chr2_tmp/2_cns/2/cns_2_156527822-156527850.fa")==0){
 //			cout << "cnsfilename=" << cns_work_opt->contigfilename << endl;
 //		}else continue;
 
@@ -772,9 +772,18 @@ int Genome::processConsWork(){
 		cns_work->p_mtx_cns_reg_workDone_num = &(paras->mtx_cns_reg_workDone_num);
 		cns_work->num_threads_per_cns_work = paras->num_threads_per_cns_work;
 		cns_work->minClipEndSize = paras->minClipEndSize;
+		cns_work->min_identity_match = paras->min_identity_match;
 
 		sv_len_sum = 0;
-		for(j=0; j<cns_work_opt->arr_size; j++) sv_len_sum += cns_work_opt->var_array[j]->sv_len;
+		min_pos = INT_MAX, max_pos = 0;
+		for(j=0; j<cns_work_opt->arr_size; j++) {
+			sv_len_sum += cns_work_opt->var_array[j]->sv_len;
+			if(min_pos>cns_work_opt->var_array[j]->startRefPos) min_pos = cns_work_opt->var_array[j]->startRefPos;
+			if(max_pos<cns_work_opt->var_array[j]->endRefPos) max_pos = cns_work_opt->var_array[j]->endRefPos;
+		}
+		dist = max_pos - min_pos + 1;
+		if(sv_len_sum<dist) sv_len_sum = dist;
+
 		if(cns_work_opt->clip_reg_flag==false){ // indel
 			if(sv_len_sum>paras->cnsChunkSize)
 				cns_work->cnsSideExtSize = paras->cnsSideExtSize * CNS_EXT_INDEL_FACTOR_1K + sv_len_sum;
@@ -802,6 +811,7 @@ int Genome::processConsWork(){
 		cns_work->minConReadLen = paras->minConReadLen;
 		cns_work->min_sv_size = paras->min_sv_size_usr;
 		cns_work->min_supp_num = paras->minReadsNumSupportSV;
+		cns_work->sv_len_est = sv_len_sum;
 		cns_work->max_seg_size_ratio = paras->max_seg_size_ratio_usr;
 		cns_work->inBamFile = paras->inBamFile;
 		cns_work->fai = fai;
@@ -812,7 +822,7 @@ int Genome::processConsWork(){
 		cns_work->delete_reads_flag = paras->delete_reads_flag;
 		cns_work->keep_failed_reads_flag = paras->keep_failed_reads_flag;
 		cns_work->technology = paras->technology;
-		cns_work->canu_version = paras->canu_version;
+		//cns_work->canu_version = paras->canu_version;
 		cns_work->minMapQ = paras->minMapQ;
 
 		hts_tpool_dispatch(p, q, processSingleConsWork, cns_work);
@@ -1788,8 +1798,10 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 
 		var_cand_new->min_sv_size = paras->min_sv_size_usr;
 		var_cand_new->minReadsNumSupportSV = paras->minReadsNumSupportSV;
-		var_cand_tmp->minClipEndSize = paras->minClipEndSize;
-		var_cand_tmp->minConReadLen = paras->minConReadLen;
+		var_cand_new->minClipEndSize = paras->minClipEndSize;
+		var_cand_new->minConReadLen = paras->minConReadLen;
+		var_cand_new->min_identity_match = paras->min_identity_match;
+		var_cand_new->max_seg_num_per_read = paras->max_seg_num_per_read;
 
 		var_cand_new->cns_success = var_cand->cns_success;
 		var_cand_new->ctg_num = var_cand->ctg_num;
@@ -2825,6 +2837,8 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
 				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
+				var_cand_tmp->min_identity_match = paras->min_identity_match;
+				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
 
 				var_cand_tmp->leftClipRefPos = clip_reg->leftClipPosTra1;
 				//var_cand_tmp->rightClipRefPos = clip_reg->rightClipPosTra1;
@@ -2875,7 +2889,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				for(i=0; i<3; i++){
 					cns_extend_size = paras->cnsSideExtSizeClip * i;
 					// local consensus
-					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
+					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->min_identity_match, reg->endRefPos-reg->startRefPos+1, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -2949,6 +2963,8 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
 				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
+				var_cand_tmp->min_identity_match = paras->min_identity_match;
+				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
 
 				reg = new reg_t();
 				//reg->chrname = clip_reg->chrname_leftTra2;
@@ -2996,7 +3012,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				for(i=0; i<3; i++){
 					cns_extend_size = paras->cnsSideExtSizeClip * i;
 					// local consensus
-					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->canu_version, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
+					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->min_identity_match, reg->endRefPos-reg->startRefPos+1, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -3044,12 +3060,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 }
 
 // perform local consensus
-void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
+void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
 
-	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->max_ultra_high_cov, paras->minMapQ, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr);
-
-	//localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
-
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_identity_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->max_ultra_high_cov, paras->minMapQ, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr);
 
 	// extract the corresponding refseq from reference
 	local_cns.extractRefseq();

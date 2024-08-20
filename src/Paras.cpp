@@ -16,6 +16,9 @@ Paras::Paras(int argc, char **argv){
 	init();
 	if(parseParas(argc, argv)!=0) exit(1);
 
+	// initialize preset parameters
+	initPreset();
+
 	// check bam file
 	if(checkBamFile()!=0) exit(1);
 }
@@ -43,6 +46,9 @@ void Paras::init(){
 	minConReadLen = MIN_CONS_READ_LEN;
 	technology = SEQUENCING_TECH_DEFAULT;
 	include_decoy = false;
+
+	min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES;
+	max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_CCS;
 
 	min_ins_size_filt = 0;
 	min_del_size_filt = 0;
@@ -128,6 +134,14 @@ bool Paras::isRecommendCanuVersion(string &canu_version, const string &recommend
 	if(result<0) flag = false;
 
 	return flag;
+}
+
+// initialize preset parameters
+void Paras::initPreset(){
+	if(technology.compare(PACBIO_CCS_TECH_STR)!=0){ // CLR, ONT, ...
+		min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES2;
+		max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_OTHER;
+	}
 }
 
 // check Bam file, and generate the BAM index if it is unavailable
@@ -1157,10 +1171,10 @@ void Paras::outputParas(){
 		cout << "Expected sampling coverage: " << expected_cov_cns << endl;
 		cout << "Local consensus chunk size : " << cnsChunkSize << " bp" << endl;
 	}
-	if(command.compare(CMD_DET_STR)!=0){
-		cout << "Local consensus chunk extend size for indels: " << cnsSideExtSize << " bp" << endl; // not det
-		cout << "Local consensus chunk extend size for clippings: " << cnsSideExtSizeClip << " bp" << endl;
-	}
+//	if(command.compare(CMD_DET_STR)!=0){
+//		cout << "Local consensus chunk extend size for indels: " << cnsSideExtSize << " bp" << endl; // not det
+//		cout << "Local consensus chunk extend size for clippings: " << cnsSideExtSizeClip << " bp" << endl;
+//	}
 	if(command.compare(CMD_CALL_STR)!=0){
 		cout << "Minimal read segment size to generate consensus sequence: " << minConReadLen << " bp" << endl;
 	}
@@ -1180,6 +1194,8 @@ void Paras::outputParas(){
 //	if(command.compare("call")==0 or command.compare("all")==0)
 //		cout << "Maximum monitored process running minutes for call: " << max_proc_running_minutes_call << endl;
 
+	cout << "Maximal number of align segments per read: " << max_seg_num_per_read << endl;
+	cout << "Minimal sequence identity threshold for SV match: " << min_identity_match << endl;
 	if(command.compare(CMD_CALL_STR)==0 or command.compare(CMD_ALL_STR)==0){
 		cout << "Minimal sequence identity threshold for allele merge: " << gt_min_identity_merge << endl;
 		cout << "Minimal allele ratio threshold for homozygous alleles: " << gt_homo_ratio << endl;
@@ -1196,8 +1212,7 @@ void Paras::outputParas(){
 //	if(recommend_ver_flag==false)
 //		cout << "Warning: detected the installed canu version is " << canu_version << ", however, it is highly recommended to use the latest version or the version " << CANU_RECOMMEND_VERSION << " and higher." << endl;
 
-	string desc = "Regions to process:";
-	printLimitRegs(limit_reg_vec, desc);
+	printLimitRegs(limit_reg_vec, "Regions to process:");
 }
 
 // output the estimation parameters

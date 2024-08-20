@@ -73,8 +73,8 @@ class varCand {
 
 		string refseqfilename, ctgfilename, readsfilename, alnfilename, clusterfilename;
 //		string rescue_refseqfilename, rescue_cnsfilename, rescue_readsfilename, rescue_alnfilename;
-		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, minConReadLen, minMapQ;
-		double max_ultra_high_cov;
+		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, minConReadLen, minMapQ: 16, max_seg_num_per_read: 16;
+		double max_ultra_high_cov, min_identity_match;
 		vector<reg_t*> varVec, newVarVec;
 		bool cns_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
 		vector<blat_aln_t*> blat_aln_vec;               	// blat aligned segments

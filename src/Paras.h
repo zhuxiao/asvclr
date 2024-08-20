@@ -17,7 +17,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Allele-aware Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.4.3"
+#define PROG_VERSION				"1.4.4"
 #define VCF_VERSION					"4.2"
 
 #define CMD_DET_STR					"det"
@@ -153,6 +153,8 @@ using namespace std;
 #define CNS_STEP_SIZE						10000
 #define CNS_SIDE_EXT_SIZE					5000
 
+#define MAX_RESCUE_VAR_SIZE					40000
+
 // program parameters
 class Paras
 {
@@ -167,11 +169,11 @@ class Paras
 		string out_dir_tra = out_dir_call + "/" + "tra";
 		string out_dir_result = "4_results";	// "4_results"
 		int32_t blockSize, slideSize, min_sv_size_usr, max_sv_size_usr, num_threads, large_indel_size_thres;
-		double max_seg_size_ratio_usr;
+		double max_seg_size_ratio_usr, min_identity_match;
 		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy;
 		size_t misAlnRegLenSum = 0;
 		int32_t minReadsNumSupportSV: 29, min_Nsupp_est_flag: 3; //, minClipReadsNumSupportSV; Nsupp_est_flag: 1 for estimated, 0 for user-specified
-		int32_t minMapQ;
+		int32_t minMapQ: 16, max_seg_num_per_read: 16;
 
 		// process monitor
 		string monitoring_proc_names_cns, monitoring_proc_names_call;
@@ -250,6 +252,7 @@ class Paras
 		bool isRecommendCanuVersion(string &canu_version, const string &recommend_version);
 //		string getMinimap2Version();
 //		string getAbpoaVersion();
+		void initPreset();
 		int checkBamFile();
 		int parseParas(int argc, char **argv);
 		string getPgCmd(int argc, char **argv);

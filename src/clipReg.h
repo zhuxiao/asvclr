@@ -42,7 +42,8 @@ using namespace std;
 
 #define MAX_DIST_SAME_CLIP_END				100000
 
-#define MAX_ALN_SEG_NUM_PER_READ_TRA		5  // to be parameterized, 4
+#define MAX_ALN_SEG_NUM_PER_READ_CCS		5  // to be parameterized, 4
+#define MAX_ALN_SEG_NUM_PER_READ_OTHER		15  // to be parameterized, 4
 #define MAX_CLIP_REG_MERGE_DIST				50  // to be parameterized, 50
 #define MAX_CLIP_REG_MERGE_DIST_ADJUST		500  //self
 #define MAX_INNER_MISSING_IGNORE_SIZE		100

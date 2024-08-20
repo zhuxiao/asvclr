@@ -86,7 +86,7 @@ void destroyConsWorkOptVec(vector<cnsWork_opt*> &cns_work_vec);
 void deleteItemFromCnsWorkVec(int32_t item_id, vector<cnsWork_opt*> &cns_work_vec);
 int32_t getItemIDFromCnsWorkVec(string &contigfilename, vector<cnsWork_opt*> &cns_work_vec);
 void* processSingleConsWork(void *arg);
-void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 bool isReadableFile(string &filename);
 void* processSingleMinimap2AlnWork(void *arg);
 void* processSingleBlatAlnWork(void *arg);
@@ -104,7 +104,7 @@ bool isFullyContainedReg(string &chrname1, int64_t begPos1, int64_t endPos1, str
 vector<simpleReg_t*> getPosContainedSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec);
 simpleReg_t* allocateSimpleReg(string &simple_reg_str);
 void destroyLimitRegVector(vector<simpleReg_t*> &limit_reg_vec);
-void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, string &description);
+void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, const string &description);
 void getRegByFilename(simpleReg_t *reg, string &filename, string &pattern_str);
 vector<simpleReg_t*> extractSimpleRegsByStr(string &regs_str);
 string getLimitRegStr(vector<simpleReg_t*> &limit_reg_vec);

@@ -2622,6 +2622,8 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
 				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
+				var_cand_tmp->min_identity_match = paras->min_identity_match;
+				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
 
 				var_cand_tmp->blat_aligned_info_vec = NULL;
 				var_cand_tmp->blat_var_cand_file = NULL;
@@ -3100,6 +3102,8 @@ void Chrome::loadPrevMinimapAlnItems(bool clipReg_flag, bool limit_reg_process_f
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
 				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
+				var_cand_tmp->min_identity_match = paras->min_identity_match;
+				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
 
 				if(line_vec[3].compare(ALIGN_SUCCESS)==0) var_cand_tmp->align_success = true;
 				else var_cand_tmp->align_success = false;

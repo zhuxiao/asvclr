@@ -1715,9 +1715,9 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 				qname = clipAlnDataVector.at(i)->queryname;
 				query_aln_segs = getQueryClipAlnSegs(qname, clipAlnDataVector);  // get query clip align segments
 
-//				if(qname.compare("SRR8858465.1.28902")==0){
+//				if(qname.compare("SRR11008518.1.3409301")==0){
 //					cout << "i=" << i << ", qname=" << qname << endl;
-//				}else continue;
+//				}
 
 				if(clip_reg_flag==false){
 					noHardClipIdx = getNoHardClipAlnItem(query_aln_segs);
@@ -2121,18 +2121,18 @@ void* processSingleConsWork(void *arg){
 	time.setStartTime();
 
 //	pthread_mutex_lock(cns_work->p_mtx_cns_reg_workDone_num);
-//	cout << "consensus region [" << cns_work->work_id << "]: " << cns_work_opt->contigfilename << endl;
+//	cout << "consensus region [" << cns_work->work_id << "]: " << cns_work_opt->contigfilename << ", sv_len_est=" << cns_work->sv_len_est << endl;
 //	pthread_mutex_unlock(cns_work->p_mtx_cns_reg_workDone_num);
 
 	for(i=0; i<cns_work_opt->arr_size; i++) varVec.push_back(cns_work_opt->var_array[i]);
 	for(i=0; i<cns_work_opt->limit_reg_array_size; i++) sub_limit_reg_vec.push_back(cns_work_opt->limit_reg_array[i]);
 
 //	cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << cns_work->minMapQ << endl;
-	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->clusterfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->canu_version, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->max_ultra_high_cov, cns_work->minMapQ, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
+	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->clusterfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->min_identity_match, cns_work->sv_len_est, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->max_ultra_high_cov, cns_work->minMapQ, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
 //	double run_seconds = time.getElapsedSeconds();
 //	if(run_seconds>10) {
-//		cout << "run_seconds=" << run_seconds << ", consensus region [" << cns_work->work_id << "]: " << cns_work_opt->contigfilename << endl;
+//		cout << "run_seconds=" << run_seconds << ", consensus region [" << cns_work->work_id << "]: " << cns_work_opt->contigfilename << ", sv_len_est=" << cns_work->sv_len_est << endl;
 //	}
 
 	// release memory
@@ -2163,9 +2163,9 @@ void* processSingleConsWork(void *arg){
 }
 
 
-void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 
-	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, canu_version, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, max_ultra_high_cov, minMapQ, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_identity_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, max_ultra_high_cov, minMapQ, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
 
 	local_cns.setLimitRegs(limit_reg_process_flag, limit_reg_vec);
 	if(local_cns.cns_success_preDone_flag==false){
@@ -2175,10 +2175,8 @@ void performLocalCons(string &readsfilename, string &contigfilename, string &ref
 		// extract the reads data from BAM file
 		local_cns.extractReadsDataFromBAM();
 
-		if(local_cns.clip_reg_flag==false){
-			local_cns.cnsByPoa(); // local consensus using abPOA
-		}else
-			local_cns.localCnsWtdbg2(); // local consensus using wtdbg2
+		// perform consensus
+		local_cns.localConsensus();
 	}
 
 	// record consensus information
@@ -2556,7 +2554,7 @@ void destroyLimitRegVector(vector<simpleReg_t*> &limit_reg_vec){
 }
 
 // print limit regions
-void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, string &description){
+void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, const string &description){
 	simpleReg_t *limit_reg;
 	string limit_reg_str;
 

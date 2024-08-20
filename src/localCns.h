@@ -24,6 +24,7 @@ using namespace std;
 #define MIN_CANU_VERSION_NO_GNPPLOT		"1.8"
 
 #define EXT_SIZE_ENTIRE_FLANKING		50
+#define MAX_SV_LEN_USING_POA			1000
 
 #define POA_ALIGN_DEBUG					0
 
@@ -34,8 +35,8 @@ class localCns {
 		string readsfilename_prefix, readsfilename_suffix;
 		vector<string> readsfilename_vec;
 		int64_t chrlen, cns_extend_size, startRefPos_cns, endRefPos_cns;
-		int32_t num_threads_per_cns_work, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, minMapQ;
-		double max_ultra_high_cov, max_seg_size_ratio;
+		int32_t num_threads_per_cns_work, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, minMapQ, sv_len_est;
+		double max_ultra_high_cov, max_seg_size_ratio, min_identity_match;
 		bool cns_success_preDone_flag, cns_success_flag, use_poa_flag, clip_reg_flag;
 		double min_input_cov_canu;
 
@@ -61,13 +62,14 @@ class localCns {
 		vector<clipAlnData_t*> clipAlnDataVector;
 
 	public:
-		localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &canu_version, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio);
+		localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio);
 		virtual ~localCns();
 		void extractRefseq();
 		void extractReadsDataFromBAM();
 		bool localCnsCanu();
 		bool localCnsWtdbg2();
 		bool cnsByPoa();
+		bool localConsensus();
 		void recordCnsInfo(ofstream &cns_info_file);
 		void setLimitRegs(bool limit_reg_process_flag, vector<simpleReg_t*> limit_reg_vec);
 

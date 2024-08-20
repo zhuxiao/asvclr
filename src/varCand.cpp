@@ -1619,7 +1619,7 @@ vector<reg_t*> varCand::rescueIndelVarLoc(){
 						}
 
 						output_prefix = "tmp_rescue_wtdbg2_" + tmp_reg_str;
-						cmd = "wtdbg2.pl -x " + technology + " -o " + output_prefix + " -a -q " + rescue_readsfilename + " > /dev/null 2>&1";
+						cmd = "wtdbg2.pl -t 8 -x " + technology + " -o " + output_prefix + " -a -q " + rescue_readsfilename + " > /dev/null 2>&1";
 						system(cmd.c_str());
 
 						pthread_mutex_lock(&mutex_mem);
@@ -5646,7 +5646,8 @@ vector<reg_t*> varCand::computeClipRegVarLocOp(string &alnfilename, string &cnsf
 									val = computeVarseqIdentity(tmp_queryseq, tmp_refseq);
 									//cout << "identity=" << val << endl;
 								}
-								if(val>=QC_IDENTITY_RATIO_MATCH_THRES){ // identity confirm
+								//if(val>=QC_IDENTITY_RATIO_MATCH_THRES){ // identity confirm
+								if(val>=min_identity_match){ // identity confirm
 									// allocate new node
 									clip_reg_tmp = new reg_t();
 									clip_reg_tmp->var_type = sv_type;
@@ -5991,7 +5992,8 @@ vector<reg_t*> varCand::rescueDupInvClipReg(){
 						if(find(qname_vec.begin(), qname_vec.end(), qname) != qname_vec.end()){
 
 							query_aln_segs = getQueryClipAlnSegsAll(qname, clipAlnDataVector);  // get query clip align segments
-							if(query_aln_segs.size()>MAX_ALN_SEG_NUM_PER_READ_TRA) { // ignore reads of too many align segments
+							//if(query_aln_segs.size()>MAX_ALN_SEG_NUM_PER_READ_TRA) { // ignore reads of too many align segments
+							if(query_aln_segs.size()>(size_t)max_seg_num_per_read) { // ignore reads of too many align segments
 								//cout << "clipReg: " << chrname << ":" << startRefPos << "-" << endRefPos << ", qname=" << queryname << ", align segment number=" << query_aln_segs.size() << endl;
 								continue;
 							}
@@ -6145,149 +6147,95 @@ vector<reg_t*> varCand::rescueDupInvClipReg(){
 			}
 		}
 
-		if(rescue_seqs_vec.size()>0){
-			//rescue_readsfilename = out_dir_call + "/rescue_reads_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
-			rescue_refseqfilename = out_dir_call + "/rescue_refseq_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
-			rescue_cnsfilename = out_dir_call + "/rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
-			//tmp_rescue_cnsfilename = out_dir_call + "/tmp_rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
-			rescue_alnfilename = out_dir_call + "/rescue_minimap2_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".paf";
+		if(rightClipRefPos-leftClipRefPos<=MAX_RESCUE_VAR_SIZE) {
+			if(rescue_seqs_vec.size()>0){
+				//rescue_readsfilename = out_dir_call + "/rescue_reads_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
+				rescue_refseqfilename = out_dir_call + "/rescue_refseq_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
+				rescue_cnsfilename = out_dir_call + "/rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
+				//tmp_rescue_cnsfilename = out_dir_call + "/tmp_rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
+				rescue_alnfilename = out_dir_call + "/rescue_minimap2_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".paf";
 
-			outfile_rescue_refseq.open(rescue_refseqfilename);
-			if(outfile_rescue_refseq.is_open()==false){
-				cerr << "In " << __func__ << "(), cannot open file '" << rescue_refseqfilename << "', error!" << endl;
-				exit(1);
-			}
-			outfile_rescue_cns.open(rescue_cnsfilename);
-			if(outfile_rescue_cns.is_open()==false){
-				cerr << "In " << __func__ << "(), cannot open file '" << rescue_cnsfilename << "', error!" << endl;
-				exit(1);
-			}
-
-			// refseq file
-			cons_header = ">" + reg_str + "___" + to_string(left_shift_size) + "___" + to_string(right_shift_size) + "___" + rescue_refseqfilename;
-			outfile_rescue_refseq << cons_header << endl;
-			outfile_rescue_refseq << refseq << endl;
-			outfile_rescue_refseq.close();
-		}
-
-		serial_number = 1;
-		for(cluster_id=0; cluster_id<rescue_seqs_vec.size(); cluster_id++){
-			rescue_readsfilename = out_dir_call + "/rescue_reads_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + "_" + to_string(cluster_id) + ".fa";
-			tmp_rescue_cnsfilename = out_dir_call + "/tmp_rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + "_" + to_string(cluster_id) + ".fa";
-
-			re_seq_vec = rescue_seqs_vec.at(cluster_id);
-			if(re_seq_vec.size()>0){
-				outfile_rescue_reads.open(rescue_readsfilename);
-				if(outfile_rescue_reads.is_open()==false){
-					cerr << "In " << __func__ << "(), cannot open file '" << rescue_readsfilename << "', error!" << endl;
+				outfile_rescue_refseq.open(rescue_refseqfilename);
+				if(outfile_rescue_refseq.is_open()==false){
+					cerr << "In " << __func__ << "(), cannot open file '" << rescue_refseqfilename << "', error!" << endl;
+					exit(1);
+				}
+				outfile_rescue_cns.open(rescue_cnsfilename);
+				if(outfile_rescue_cns.is_open()==false){
+					cerr << "In " << __func__ << "(), cannot open file '" << rescue_cnsfilename << "', error!" << endl;
 					exit(1);
 				}
 
-				// reads file
-				for(i=0; i<re_seq_vec.size(); i++){
-					rescue_seq_node = re_seq_vec.at(i);
-		//			cout << "[" << i << "]: " << rescue_seq_node->chrname << ":" << rescue_seq_node->startRefPos << "-" << rescue_seq_node->endRefPos << endl;
-		//			cout << rescue_seq_node->refseq << endl;
-					outfile_rescue_reads << ">" << rescue_seq_node->qname << ":" << rescue_seq_node->startQueryPos << "-" << rescue_seq_node->endQueryPos << ":" << rescue_seq_node->aln_orient << endl;
-					outfile_rescue_reads << rescue_seq_node->qseq << endl;
-				}
-				outfile_rescue_reads.close();
+				// refseq file
+				cons_header = ">" + reg_str + "___" + to_string(left_shift_size) + "___" + to_string(right_shift_size) + "___" + rescue_refseqfilename;
+				outfile_rescue_refseq << cons_header << endl;
+				outfile_rescue_refseq << refseq << endl;
+				outfile_rescue_refseq.close();
+			}
 
-				// perform abpoa consensus
-				abpoa_cmd = "abpoa " + rescue_readsfilename + " -o " + tmp_rescue_cnsfilename + " > /dev/null 2>&1";
-				system(abpoa_cmd.c_str());
+			serial_number = 1;
+			for(cluster_id=0; cluster_id<rescue_seqs_vec.size(); cluster_id++){
+				rescue_readsfilename = out_dir_call + "/rescue_reads_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + "_" + to_string(cluster_id) + ".fa";
+				tmp_rescue_cnsfilename = out_dir_call + "/tmp_rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + "_" + to_string(cluster_id) + ".fa";
 
-				flag = isFileExist(tmp_rescue_cnsfilename);
-				if(flag){ // cons generated successfully
-					// reorganize the consensus sequence
-					FastaSeqLoader fa_loader(tmp_rescue_cnsfilename);
-					for(i=0; i<fa_loader.getFastaSeqCount(); i++){
-						cons_header = ">abpoa_rescueCns_";
-						cons_header += to_string(serial_number) + "_"; //serial number
-						cons_header += to_string(fa_loader.getFastaSeqLen(i)) + "_"; //consensus sequence length
-						cons_header += to_string(re_seq_vec.size()) + "-";  //reads count
+				re_seq_vec = rescue_seqs_vec.at(cluster_id);
+				if(re_seq_vec.size()>0){
+					outfile_rescue_reads.open(rescue_readsfilename);
+					if(outfile_rescue_reads.is_open()==false){
+						cerr << "In " << __func__ << "(), cannot open file '" << rescue_readsfilename << "', error!" << endl;
+						exit(1);
+					}
 
-						for(j=0; j<re_seq_vec.size()-1; j++) cons_header += re_seq_vec.at(j)->qname + "-";
-						cons_header += re_seq_vec.at(re_seq_vec.size()-1)->qname;
+					// reads file
+					for(i=0; i<re_seq_vec.size(); i++){
+						rescue_seq_node = re_seq_vec.at(i);
+			//			cout << "[" << i << "]: " << rescue_seq_node->chrname << ":" << rescue_seq_node->startRefPos << "-" << rescue_seq_node->endRefPos << endl;
+			//			cout << rescue_seq_node->refseq << endl;
+						outfile_rescue_reads << ">" << rescue_seq_node->qname << ":" << rescue_seq_node->startQueryPos << "-" << rescue_seq_node->endQueryPos << ":" << rescue_seq_node->aln_orient << endl;
+						outfile_rescue_reads << rescue_seq_node->qseq << endl;
+					}
+					outfile_rescue_reads.close();
 
-						outfile_rescue_cns << cons_header << endl; // header
-						outfile_rescue_cns << fa_loader.getFastaSeq(i) << endl;  // seq
+					// perform abpoa consensus
+					abpoa_cmd = "abpoa -o " + tmp_rescue_cnsfilename + " " + rescue_readsfilename + " > /dev/null 2>&1";
+					system(abpoa_cmd.c_str());
 
-						serial_number ++;
+					flag = isFileExist(tmp_rescue_cnsfilename);
+					if(flag){ // cons generated successfully
+						// reorganize the consensus sequence
+						FastaSeqLoader fa_loader(tmp_rescue_cnsfilename);
+						for(i=0; i<fa_loader.getFastaSeqCount(); i++){
+							cons_header = ">abpoa_rescueCns_";
+							cons_header += to_string(serial_number) + "_"; //serial number
+							cons_header += to_string(fa_loader.getFastaSeqLen(i)) + "_"; //consensus sequence length
+							cons_header += to_string(re_seq_vec.size()) + "-";  //reads count
+
+							for(j=0; j<re_seq_vec.size()-1; j++) cons_header += re_seq_vec.at(j)->qname + "-";
+							cons_header += re_seq_vec.at(re_seq_vec.size()-1)->qname;
+
+							outfile_rescue_cns << cons_header << endl; // header
+							outfile_rescue_cns << fa_loader.getFastaSeq(i) << endl;  // seq
+
+							serial_number ++;
+						}
 					}
 				}
 			}
-		}
-		outfile_rescue_cns.close();
+			outfile_rescue_cns.close();
 
-		flag = isFileExist(rescue_cnsfilename);
-		if(flag){
-			minimap2_cmd = "minimap2 -c -x asm5 -o " + rescue_alnfilename + " " + rescue_refseqfilename + " " + rescue_cnsfilename + " > /dev/null 2>&1";
-			status = system(minimap2_cmd.c_str());
-			ret_status = getSuccessStatusSystemCmd(status);
-			if(ret_status==0){ // command executed successfully
-				// parse alignment information
-				minimap2_aln_vec = minimap2Parse(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename);
+			flag = isFileExist(rescue_cnsfilename);
+			if(flag){
+				minimap2_cmd = "minimap2 -c -x asm5 -o " + rescue_alnfilename + " " + rescue_refseqfilename + " " + rescue_cnsfilename + " > /dev/null 2>&1";
+				status = system(minimap2_cmd.c_str());
+				ret_status = getSuccessStatusSystemCmd(status);
+				if(ret_status==0){ // command executed successfully
+					// parse alignment information
+					minimap2_aln_vec = minimap2Parse(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename);
 
-				// get reference sequence and query sequence
-				rescue_var_vec = computeClipRegVarLocOp(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename, clusterfilename, minimap2_aln_vec, true);
+					// get reference sequence and query sequence
+					rescue_var_vec = computeClipRegVarLocOp(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename, clusterfilename, minimap2_aln_vec, true);
+				}
 			}
-//			else{ // align failed, then pick the first query sequence
-//
-//				// get reference sequence and query sequence
-//				FastaSeqLoader fa_loader(rescue_cnsfilename);
-//				queryseq = fa_loader.getFastaSeq(0);
-//
-//				sv_len = queryseq.size() - (rightClipRefPos - leftClipRefPos + 1);
-//
-//				// allocate new node
-//				reg = new reg_t();
-//				reg->var_type = sv_type;
-//				reg->chrname = chrname;
-//				reg->startRefPos = leftClipRefPos-1;
-//				reg->endRefPos = rightClipRefPos;
-//				reg->startLocalRefPos = -1;
-//				reg->endLocalRefPos = -1;
-//				reg->startQueryPos = 1;
-//				reg->endQueryPos = queryseq.size();
-//				reg->query_id = -1;
-//				reg->sv_len = sv_len;
-//				if(sv_len<0) reg->sv_len = -reg->sv_len;
-//				reg->dup_num = dup_num; //--------------
-//				//reg->blat_aln_id = i;
-//				reg->minimap2_aln_id = -1;
-//				reg->call_success_status = true;
-//				reg->short_sv_flag = false;
-//				reg->zero_cov_flag = false;
-//				reg->aln_seg_end_flag = false;
-//				reg->query_pos_invalid_flag = false;
-//				reg->large_indel_flag = false;  //-----------
-//				reg->aln_orient = ALN_PLUS_ORIENT;
-//				reg->gt_type = -1;
-//				reg->gt_seq = "";
-//				reg->supp_num = re_seq_vec.size();
-//				reg->DP = 0;
-//				reg->AF = 0;
-//				reg->discover_level = VAR_DISCOV_L_UNUSED;
-//				reg->refseq =  refseq.substr(leftClipRefPos-startRefPos_cns-1, rightClipRefPos-leftClipRefPos+1+1);
-//				reg->altseq = refseq.at(leftClipRefPos-startRefPos_cns-1) + queryseq;
-//
-//				switch(sv_type){
-//					case VAR_DUP: // DUP
-//						reg->dup_num = dup_num;
-//						reg->large_indel_flag = false;
-//						break;
-//					case VAR_INV: // INV
-//						reg->dup_num = 0;
-//						reg->large_indel_flag = false;
-//						break;
-//					case VAR_INS: // large INS or DEL
-//					case VAR_DEL:
-//						reg->dup_num = 0;
-//						reg->large_indel_flag = true;
-//						break;
-//				}
-//			}
 		}
 
 		if(rescue_var_vec.size()==0){ // failed, then pick the first query sequence
@@ -6461,7 +6409,8 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 						if(find(qname_vec.begin(), qname_vec.end(), qname) != qname_vec.end()){
 
 							query_aln_segs = getQueryClipAlnSegsAll(qname, clipAlnDataVector);  // get query clip align segments
-							if(query_aln_segs.size()>MAX_ALN_SEG_NUM_PER_READ_TRA) { // ignore reads of too many align segments
+							//if(query_aln_segs.size()>MAX_ALN_SEG_NUM_PER_READ_TRA) { // ignore reads of too many align segments
+							if(query_aln_segs.size()>(size_t)max_seg_num_per_read) { // ignore reads of too many align segments
 								//cout << "clipReg: " << chrname << ":" << startRefPos << "-" << endRefPos << ", qname=" << queryname << ", align segment number=" << query_aln_segs.size() << endl;
 								continue;
 							}
@@ -6719,92 +6668,94 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 			}
 		}
 
-		if(rescue_seqs_vec.size()>0){
-			//rescue_readsfilename = out_dir_call + "/rescue_reads_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
-			rescue_refseqfilename = out_dir_call + "/rescue_refseq_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
-			rescue_cnsfilename = out_dir_call + "/rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
-			//tmp_rescue_cnsfilename = out_dir_call + "/tmp_rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
-			rescue_alnfilename = out_dir_call + "/rescue_minimap2_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".paf";
+		if(rightClipRefPos-leftClipRefPos<=MAX_RESCUE_VAR_SIZE) {
+			if(rescue_seqs_vec.size()>0){
+				//rescue_readsfilename = out_dir_call + "/rescue_reads_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
+				rescue_refseqfilename = out_dir_call + "/rescue_refseq_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
+				rescue_cnsfilename = out_dir_call + "/rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
+				//tmp_rescue_cnsfilename = out_dir_call + "/tmp_rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".fa";
+				rescue_alnfilename = out_dir_call + "/rescue_minimap2_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + ".paf";
 
-			outfile_rescue_refseq.open(rescue_refseqfilename);
-			if(outfile_rescue_refseq.is_open()==false){
-				cerr << "In " << __func__ << "(), cannot open file '" << rescue_refseqfilename << "', error!" << endl;
-				exit(1);
-			}
-			outfile_rescue_cns.open(rescue_cnsfilename);
-			if(outfile_rescue_cns.is_open()==false){
-				cerr << "In " << __func__ << "(), cannot open file '" << rescue_cnsfilename << "', error!" << endl;
-				exit(1);
-			}
-
-			// refseq file
-			cons_header = ">" + reg_str + "___" + to_string(left_shift_size) + "___" + to_string(right_shift_size) + "___" + rescue_refseqfilename;
-			outfile_rescue_refseq << cons_header << endl;
-			outfile_rescue_refseq << refseq << endl;
-			outfile_rescue_refseq.close();
-		}
-
-		serial_number = 1;
-		for(cluster_id=0; cluster_id<rescue_seqs_vec.size(); cluster_id++){
-			rescue_readsfilename = out_dir_call + "/rescue_reads_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + "_" + to_string(cluster_id) + ".fa";
-			tmp_rescue_cnsfilename = out_dir_call + "/tmp_rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + "_" + to_string(cluster_id) + ".fa";
-
-			re_seq_vec = rescue_seqs_vec.at(cluster_id);
-			if(re_seq_vec.size()>0){
-				outfile_rescue_reads.open(rescue_readsfilename);
-				if(outfile_rescue_reads.is_open()==false){
-					cerr << "In " << __func__ << "(), cannot open file '" << rescue_readsfilename << "', error!" << endl;
+				outfile_rescue_refseq.open(rescue_refseqfilename);
+				if(outfile_rescue_refseq.is_open()==false){
+					cerr << "In " << __func__ << "(), cannot open file '" << rescue_refseqfilename << "', error!" << endl;
+					exit(1);
+				}
+				outfile_rescue_cns.open(rescue_cnsfilename);
+				if(outfile_rescue_cns.is_open()==false){
+					cerr << "In " << __func__ << "(), cannot open file '" << rescue_cnsfilename << "', error!" << endl;
 					exit(1);
 				}
 
-				// reads file
-				for(i=0; i<re_seq_vec.size(); i++){
-					rescue_seq_node = re_seq_vec.at(i);
-		//			cout << "[" << i << "]: " << rescue_seq_node->chrname << ":" << rescue_seq_node->startRefPos << "-" << rescue_seq_node->endRefPos << endl;
-		//			cout << rescue_seq_node->refseq << endl;
-					outfile_rescue_reads << ">" << rescue_seq_node->qname << ":" << rescue_seq_node->startQueryPos << "-" << rescue_seq_node->endQueryPos << ":" << rescue_seq_node->aln_orient << endl;
-					outfile_rescue_reads << rescue_seq_node->qseq << endl;
-				}
-				outfile_rescue_reads.close();
+				// refseq file
+				cons_header = ">" + reg_str + "___" + to_string(left_shift_size) + "___" + to_string(right_shift_size) + "___" + rescue_refseqfilename;
+				outfile_rescue_refseq << cons_header << endl;
+				outfile_rescue_refseq << refseq << endl;
+				outfile_rescue_refseq.close();
+			}
 
-				// perform abpoa consensus
-				abpoa_cmd = "abpoa " + rescue_readsfilename + " -o " + tmp_rescue_cnsfilename + " > /dev/null 2>&1";
-				system(abpoa_cmd.c_str());
+			serial_number = 1;
+			for(cluster_id=0; cluster_id<rescue_seqs_vec.size(); cluster_id++){
+				rescue_readsfilename = out_dir_call + "/rescue_reads_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + "_" + to_string(cluster_id) + ".fa";
+				tmp_rescue_cnsfilename = out_dir_call + "/tmp_rescue_cns_" + chrname + "_" + to_string(leftClipRefPos) + "-" + to_string(rightClipRefPos) + "_" + to_string(cluster_id) + ".fa";
 
-				flag = isFileExist(tmp_rescue_cnsfilename);
-				if(flag){ // cons generated successfully
-					// reorganize the consensus sequence
-					FastaSeqLoader fa_loader(tmp_rescue_cnsfilename);
-					for(i=0; i<fa_loader.getFastaSeqCount(); i++){
-						cons_header = ">abpoa_rescueCns_";
-						cons_header += to_string(serial_number) + "_"; //serial number
-						cons_header += to_string(fa_loader.getFastaSeqLen(i)) + "_"; //consensus sequence length
-						cons_header += to_string(re_seq_vec.size()) + "-";  //reads count
+				re_seq_vec = rescue_seqs_vec.at(cluster_id);
+				if(re_seq_vec.size()>0){
+					outfile_rescue_reads.open(rescue_readsfilename);
+					if(outfile_rescue_reads.is_open()==false){
+						cerr << "In " << __func__ << "(), cannot open file '" << rescue_readsfilename << "', error!" << endl;
+						exit(1);
+					}
 
-						for(j=0; j<re_seq_vec.size()-1; j++) cons_header += re_seq_vec.at(j)->qname + "-";
-						cons_header += re_seq_vec.at(re_seq_vec.size()-1)->qname;
+					// reads file
+					for(i=0; i<re_seq_vec.size(); i++){
+						rescue_seq_node = re_seq_vec.at(i);
+			//			cout << "[" << i << "]: " << rescue_seq_node->chrname << ":" << rescue_seq_node->startRefPos << "-" << rescue_seq_node->endRefPos << endl;
+			//			cout << rescue_seq_node->refseq << endl;
+						outfile_rescue_reads << ">" << rescue_seq_node->qname << ":" << rescue_seq_node->startQueryPos << "-" << rescue_seq_node->endQueryPos << ":" << rescue_seq_node->aln_orient << endl;
+						outfile_rescue_reads << rescue_seq_node->qseq << endl;
+					}
+					outfile_rescue_reads.close();
 
-						outfile_rescue_cns << cons_header << endl; // header
-						outfile_rescue_cns << fa_loader.getFastaSeq(i) << endl;  // seq
+					// perform abpoa consensus
+					abpoa_cmd = "abpoa -o " + tmp_rescue_cnsfilename + " " + rescue_readsfilename + " > /dev/null 2>&1";
+					system(abpoa_cmd.c_str());
 
-						serial_number ++;
+					flag = isFileExist(tmp_rescue_cnsfilename);
+					if(flag){ // cons generated successfully
+						// reorganize the consensus sequence
+						FastaSeqLoader fa_loader(tmp_rescue_cnsfilename);
+						for(i=0; i<fa_loader.getFastaSeqCount(); i++){
+							cons_header = ">abpoa_rescueCns_";
+							cons_header += to_string(serial_number) + "_"; //serial number
+							cons_header += to_string(fa_loader.getFastaSeqLen(i)) + "_"; //consensus sequence length
+							cons_header += to_string(re_seq_vec.size()) + "-";  //reads count
+
+							for(j=0; j<re_seq_vec.size()-1; j++) cons_header += re_seq_vec.at(j)->qname + "-";
+							cons_header += re_seq_vec.at(re_seq_vec.size()-1)->qname;
+
+							outfile_rescue_cns << cons_header << endl; // header
+							outfile_rescue_cns << fa_loader.getFastaSeq(i) << endl;  // seq
+
+							serial_number ++;
+						}
 					}
 				}
 			}
-		}
-		outfile_rescue_cns.close();
+			outfile_rescue_cns.close();
 
-		flag = isFileExist(rescue_cnsfilename);
-		if(flag){
-			minimap2_cmd = "minimap2 -c -x asm5 -o " + rescue_alnfilename + " " + rescue_refseqfilename + " " + rescue_cnsfilename + " > /dev/null 2>&1";
-			status = system(minimap2_cmd.c_str());
-			ret_status = getSuccessStatusSystemCmd(status);
-			if(ret_status==0){ // command executed successfully
-				// parse alignment information
-				minimap2_aln_vec = minimap2Parse(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename);
+			flag = isFileExist(rescue_cnsfilename);
+			if(flag){
+				minimap2_cmd = "minimap2 -c -x asm5 -o " + rescue_alnfilename + " " + rescue_refseqfilename + " " + rescue_cnsfilename + " > /dev/null 2>&1";
+				status = system(minimap2_cmd.c_str());
+				ret_status = getSuccessStatusSystemCmd(status);
+				if(ret_status==0){ // command executed successfully
+					// parse alignment information
+					minimap2_aln_vec = minimap2Parse(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename);
 
-				// get reference sequence and query sequence
-				rescue_var_vec = computeClipRegVarLocOp(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename, clusterfilename, minimap2_aln_vec, true);
+					// get reference sequence and query sequence
+					rescue_var_vec = computeClipRegVarLocOp(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename, clusterfilename, minimap2_aln_vec, true);
+				}
 			}
 		}
 

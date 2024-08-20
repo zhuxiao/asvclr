@@ -195,7 +195,8 @@ void clipReg::extractClipPosVec(){
 			queryname = clipAlnDataVector.at(i)->queryname;
 			query_aln_segs = getQueryClipAlnSegsAll(queryname, clipAlnDataVector);  // get query clip align segments
 
-			if(query_aln_segs.size()>MAX_ALN_SEG_NUM_PER_READ_TRA) { // ignore reads of too many align segments
+			//if(query_aln_segs.size()>MAX_ALN_SEG_NUM_PER_READ_TRA) { // ignore reads of too many align segments
+			if(query_aln_segs.size()>(size_t)paras->max_seg_num_per_read) { // ignore reads of too many align segments
 				//cout << "clipReg: " << chrname << ":" << startRefPos << "-" << endRefPos << ", qname=" << queryname << ", align segment number=" << query_aln_segs.size() << endl;
 				continue;
 			}

@@ -117,10 +117,10 @@ typedef struct {
 	int32_t work_id, num_work, num_work_percent;  // 'work_id' starts from 1
 	int32_t *p_cns_reg_workDone_num;   // pointer to the global variable which was declared in Paras.h
 	pthread_mutex_t *p_mtx_cns_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
-	int32_t num_threads_per_cns_work, minClipEndSize, cnsSideExtSize, minConReadLen, min_sv_size, min_supp_num, minMapQ;
-	double max_seg_size_ratio;
+	int32_t num_threads_per_cns_work, minClipEndSize, cnsSideExtSize, minConReadLen, min_sv_size, min_supp_num, minMapQ, sv_len_est;
+	double max_seg_size_ratio, min_identity_match;
 
-	string inBamFile, technology, canu_version;
+	string inBamFile, technology; //, canu_version;
 	faidx_t *fai;
 	ofstream *var_cand_file;
 	double expected_cov_cns, min_input_cov_canu, max_ultra_high_cov;
@@ -140,7 +140,7 @@ typedef struct qcSigNode{
 	int64_t ref_pos, query_pos, dist_next_clip; // query_pos not used
 	string chrname, chrname_next_clip;
 	int64_t start_ref_pos, end_ref_pos; // ------- not used
-	string refseq, altseq; //------ not used
+	string refseq, altseq;
 	//vector<int32_t> adjClipAlnSegInfo;
 	struct qcSigNode *mate_qcSig;
 }qcSig_t;
