@@ -47,6 +47,7 @@ void Chrome::init(){
 	process_block_num = 0;
 	print_flag = true;
 	decoy_flag = isDecoyChr(chrname);
+	alt_flag = isAltChr(chrname);
 }
 
 // set the output directory
@@ -492,7 +493,7 @@ void Chrome::processMateClipRegDetectWork(){
 
 			//cout << "[" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
-//			if(i>=2 and i<=2)
+//			if(i>=13 and i<=13)
 //				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 //			else continue;
 
@@ -2624,6 +2625,8 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
 				var_cand_tmp->min_identity_match = paras->min_identity_match;
 				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
+				var_cand_tmp->minMapQ = paras->minMapQ;
+				var_cand_tmp->minHighMapQ = paras->minHighMapQ;
 
 				var_cand_tmp->blat_aligned_info_vec = NULL;
 				var_cand_tmp->blat_var_cand_file = NULL;
@@ -3104,6 +3107,8 @@ void Chrome::loadPrevMinimapAlnItems(bool clipReg_flag, bool limit_reg_process_f
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
 				var_cand_tmp->min_identity_match = paras->min_identity_match;
 				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
+				var_cand_tmp->minMapQ = paras->minMapQ;
+				var_cand_tmp->minHighMapQ = paras->minHighMapQ;
 
 				if(line_vec[3].compare(ALIGN_SUCCESS)==0) var_cand_tmp->align_success = true;
 				else var_cand_tmp->align_success = false;

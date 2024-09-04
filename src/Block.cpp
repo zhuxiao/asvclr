@@ -297,7 +297,7 @@ void Block::blockDetect(){
 
 // load alignment data with specified region in the format like `chr2:100-200'
 int Block::loadAlnData(){
-	alnDataLoader data_loader(chrname, startPos, endPos, paras->inBamFile, paras->minMapQ);
+	alnDataLoader data_loader(chrname, startPos, endPos, paras->inBamFile, paras->minMapQ, paras->minHighMapQ);
 	data_loader.loadAlnData(alnDataVector, paras->max_ultra_high_cov);
 	return 0;
 }

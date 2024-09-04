@@ -6,7 +6,7 @@ pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 //extern pthread_mutex_t mutex_down_sample;
 extern pthread_mutex_t mutex_fai;
 
-localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio){
+localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio){
 
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
@@ -20,6 +20,7 @@ localCns::localCns(string &readsfilename, string &contigfilename, string &refseq
 	this->num_threads_per_cns_work = num_threads_per_cns_work;
 	this->minClipEndSize = minClipEndSize;
 	this->minMapQ = minMapQ;
+	this->minHighMapQ = minHighMapQ;
 	this->minConReadLen = minConReadLen;
 	this->min_sv_size = min_sv_size;
 	this->min_supp_num = min_supp_num;
@@ -187,7 +188,7 @@ void localCns::extractReadsDataFromBAM(){
 	if(endRefPos_cns>chrlen) endRefPos_cns = chrlen;
 
 	// load the clipping data ---20220705
-	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ);
+	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ, minHighMapQ);
 	if(clip_reg_flag) data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
 	else data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, max_ultra_high_cov, max_seg_size_ratio);
 
@@ -1211,6 +1212,10 @@ void localCns::samplingReadsOp(vector<struct querySeqInfoNode*> &query_seq_info_
 	size_t i, index, num, count, max_reads_num, reg_size;
 	struct querySeqInfoNode* qseq_node;
 	set<string> selected_qname_vec;
+	//int32_t k, min_id, max_id;
+	//clipAlnData_t *clip_aln;
+	//vector<int32_t> high_qual_id_vec;
+	//string qname;
 
 	// reset the select flag
 	for(i=0; i<query_seq_info_all.size(); i++) query_seq_info_all.at(i)->selected_flag = false;
@@ -1219,7 +1224,118 @@ void localCns::samplingReadsOp(vector<struct querySeqInfoNode*> &query_seq_info_
 	expected_total_bases = reg_size * expect_cov_val;
 	max_reads_num = query_seq_info_all.size();
 
+//	for(i=0; i<query_seq_info_all.size(); i++) {
+//		clip_aln = query_seq_info_all.at(i)->clip_aln;
+//		if(clip_aln and clip_aln->bam and clip_aln->bam->core.qual>=minHighMapQ and clip_aln->bam->core.qual!=255)
+//			high_qual_id_vec.push_back(i);
+//	}
+//
+//	num = count = total_bases = 0;
+//
+//	if(high_qual_id_vec.size()>0){
+//		// [1/4, 1/2]
+//		min_id = high_qual_id_vec.size() / 4;
+//		max_id = high_qual_id_vec.size() / 2;
+//		for(k=max_id; k>=min_id; k--){
+//			index = high_qual_id_vec.at(k);
+//			qseq_node = query_seq_info_all.at(index);
+//			if(qseq_node->selected_flag==false){
+//				qname = qseq_node->qname;
+//				qseq_node->selected_flag = true;
+//				count ++;
+//				if(selected_qname_vec.find(qname)==selected_qname_vec.end()){ // new item
+//					selected_qname_vec.insert(qname);
+//					total_bases += qseq_node->clip_aln->querylen;
+//					num ++;
+//					if(total_bases >= expected_total_bases) break;
+//				}
+//			}
+//		}
+//		// [1/2, 3/4]
+//		if(total_bases < expected_total_bases){
+//			min_id = high_qual_id_vec.size() / 2 + 1;
+//			max_id = high_qual_id_vec.size() / 4 * 3;
+//			if(max_id+1>(int32_t)high_qual_id_vec.size()) max_id = (int32_t)high_qual_id_vec.size() - 1;
+//			for(k=min_id; k<=max_id; k++){
+//				index = high_qual_id_vec.at(k);
+//				qseq_node = query_seq_info_all.at(index);
+//				if(qseq_node->selected_flag==false){
+//					qname = qseq_node->qname;
+//					qseq_node->selected_flag = true;
+//					count ++;
+//					if(selected_qname_vec.find(qname)==selected_qname_vec.end()){ // new item
+//						selected_qname_vec.insert(qname);
+//						total_bases += qseq_node->clip_aln->querylen;
+//						num ++;
+//						if(total_bases >= expected_total_bases) break;
+//					}
+//				}
+//			}
+//		}
+//		// [0, 1/4]
+//		if(total_bases < expected_total_bases){
+//			min_id = 0;
+//			max_id = high_qual_id_vec.size() / 4;
+//			for(k=max_id; k>=min_id; k--){
+//				index = high_qual_id_vec.at(k);
+//				if(qseq_node->selected_flag==false){
+//					qname = qseq_node->qname;
+//					qseq_node->selected_flag = true;
+//					count ++;
+//					if(selected_qname_vec.find(qname)==selected_qname_vec.end()){ // new item
+//						selected_qname_vec.insert(qname);
+//						total_bases += qseq_node->clip_aln->querylen;
+//						num ++;
+//						if(total_bases >= expected_total_bases) break;
+//					}
+//				}
+//			}
+//		}
+//		// [3/4, 1]
+//		if(total_bases < expected_total_bases){
+//			min_id = high_qual_id_vec.size() / 4 * 3 + 1;
+//			max_id = high_qual_id_vec.size() - 1;
+//			if(max_id+1>(int32_t)high_qual_id_vec.size()) max_id = (int32_t)high_qual_id_vec.size() - 1;
+//			for(k=min_id; k<=max_id; k++){
+//				index = high_qual_id_vec.at(k);
+//				if(qseq_node->selected_flag==false){
+//					qname = qseq_node->qname;
+//					qseq_node->selected_flag = true;
+//					count ++;
+//					if(selected_qname_vec.find(qname)==selected_qname_vec.end()){ // new item
+//						selected_qname_vec.insert(qname);
+//						total_bases += qseq_node->clip_aln->querylen;
+//						num ++;
+//						if(total_bases >= expected_total_bases) break;
+//					}
+//				}
+//			}
+//		}
+//	}
+//	else{
+//		cout << "high_qual_id_vec.size=" << high_qual_id_vec.size() << ", " << chrname << ":" << startRefPos_cns << "-" << endRefPos_cns << endl;
+//	}
+
 	//pthread_mutex_lock(&mutex_down_sample);
+//	count = qual_num = 0;
+//	while(total_bases<=expected_total_bases and qual_num<total_high_qual_num){
+//		index = rand() % max_reads_num;
+//		qseq_node = query_seq_info_all.at(index);
+//		if(qseq_node->selected_flag==false){
+//			clip_aln = qseq_node->clip_aln;
+//			if(clip_aln and clip_aln->bam and clip_aln->bam->core.qual>=minHighMapQ and clip_aln->bam->core.qual!=255){
+//				qseq_node->selected_flag = true;
+//				if(selected_qname_vec.find(qseq_node->qname)==selected_qname_vec.end()){ // new item
+//					selected_qname_vec.insert(qseq_node->qname);
+//					total_bases += qseq_node->seq.size();
+//					num ++;
+//				}
+//				count ++;
+//				qual_num ++;
+//			}
+//		}
+//	}
+
 	srand(1);
 	num = count = total_bases = 0;
 	while(total_bases<=expected_total_bases and count<max_reads_num){
@@ -1505,7 +1621,7 @@ bool localCns::cnsByPoa(){
 				pthread_mutex_lock(&mutex_mem);
 				mem_avail = getMemInfo("MemAvailable", 2);
 				// prepare for alignment computation
-				if(mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
+				if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
 //				if(mem_seqAln+mem_cost<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
 					work_num ++;
 					abpoa_flag = true;
@@ -1621,7 +1737,7 @@ bool localCns::localCnsWtdbg2(){
 				pthread_mutex_lock(&mutex_mem);
 				mem_avail = getMemInfo("MemAvailable", 2);
 				// prepare for alignment computation
-				if(mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
+				if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
 					work_num ++;
 					wtdbg2_flag = true;
 				}

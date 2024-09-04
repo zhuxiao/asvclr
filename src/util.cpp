@@ -2128,10 +2128,10 @@ void* processSingleConsWork(void *arg){
 	for(i=0; i<cns_work_opt->limit_reg_array_size; i++) sub_limit_reg_vec.push_back(cns_work_opt->limit_reg_array[i]);
 
 //	cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << cns_work->minMapQ << endl;
-	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->clusterfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->min_identity_match, cns_work->sv_len_est, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->max_ultra_high_cov, cns_work->minMapQ, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
+	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->clusterfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->min_identity_match, cns_work->sv_len_est, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->max_ultra_high_cov, cns_work->minMapQ, cns_work->minHighMapQ, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
 //	double run_seconds = time.getElapsedSeconds();
-//	if(run_seconds>10) {
+//	if(run_seconds>30) {
 //		cout << "run_seconds=" << run_seconds << ", consensus region [" << cns_work->work_id << "]: " << cns_work_opt->contigfilename << ", sv_len_est=" << cns_work->sv_len_est << endl;
 //	}
 
@@ -2163,9 +2163,9 @@ void* processSingleConsWork(void *arg){
 }
 
 
-void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 
-	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_identity_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, max_ultra_high_cov, minMapQ, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_identity_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, max_ultra_high_cov, minMapQ, minHighMapQ, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio);
 
 	local_cns.setLimitRegs(limit_reg_process_flag, limit_reg_vec);
 	if(local_cns.cns_success_preDone_flag==false){
@@ -2974,7 +2974,7 @@ vector<mismatchReg_t*> getMismatchRegVecWithoutPos(localAln_t *local_aln){
 	return misReg_vec;
 }
 
-void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ, double max_ultra_high_cov){
+void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov){
 	size_t m;
 	int64_t start_ref_pos, end_ref_pos, chrlen_tmp;
 	int32_t i, j, start_check_idx, end_check_idx;
@@ -2999,7 +2999,7 @@ void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchRe
 
 	// load align data
 
-	alnDataLoader data_loader(chrname_tmp, start_ref_pos, end_ref_pos, inBamFile, minMapQ);
+	alnDataLoader data_loader(chrname_tmp, start_ref_pos, end_ref_pos, inBamFile, minMapQ, minHighMapQ);
 	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
 
 	// load coverage
@@ -3930,7 +3930,7 @@ void copyClipPosVec(vector<clipPos_t*> &sourceClipPosVector, vector<clipPos_t*> 
 }
 
 // compute the coverage of a clipping position
-int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile, int32_t minMapQ, double max_ultra_high_cov){
+int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov){
 	int64_t start_pos, end_pos, chr_len, pos, totalReadBeseNum, totalRefBaseNum;
 	double mean_cov_num;
 	Base *baseArray;
@@ -3947,7 +3947,7 @@ int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faid
 	covLoader cov_loader(chrname, start_pos, end_pos, fai, 0, 0);
 	baseArray = cov_loader.initBaseArray();
 
-	alnDataLoader data_loader(chrname, start_pos, end_pos, inBamFile, minMapQ);
+	alnDataLoader data_loader(chrname, start_pos, end_pos, inBamFile, minMapQ, minHighMapQ);
 	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
 
 	// generate the base coverage array
@@ -4082,6 +4082,16 @@ bool isDecoyChr(string &chrname){
 		pos = chrname.find(DECOY_PREFIX2);
 		if(pos==0) flag = true;
 	}
+
+	return flag;
+}
+
+// determine whether the chrome is alt chrome
+bool isAltChr(string &chrname){
+	bool flag = false;
+
+	if(chrname.find("_random")!=string::npos or chrname.find("_alt")!=string::npos or chrname.find("chrUn_")!=string::npos or chrname.substr(0, 2).compare("GL")==0 or chrname.substr(0, 3).compare("NC_")==0)
+		flag = true;
 
 	return flag;
 }

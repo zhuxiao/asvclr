@@ -16,6 +16,7 @@ extern int64_t mem_seqAln;		// in kB
 extern double mem_use_block_factor;
 extern double extend_use_block_factor;
 extern int32_t mem_wait_seconds;	// wait time
+extern int64_t min_mem_avail;	// minimum memory available, in kB
 
 extern int32_t work_num;
 

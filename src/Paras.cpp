@@ -46,8 +46,10 @@ void Paras::init(){
 	minConReadLen = MIN_CONS_READ_LEN;
 	technology = SEQUENCING_TECH_DEFAULT;
 	include_decoy = false;
+	include_alt = false;
 
-	min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES;
+	//min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES; // deleted on 2024-09-04
+	min_identity_match = -1;
 	max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_CCS;
 
 	min_ins_size_filt = 0;
@@ -60,6 +62,7 @@ void Paras::init(){
 	mean_read_len = total_read_num_est = 0;
 	min_Nsupp_est_flag = 0;
 
+	minHighMapQ = MIN_HIGH_MAPQ_THRES;
 	reg_sum_size_est = 0;
 	max_reg_sum_size_est = MAX_REG_SUM_SIZE_EST;
 
@@ -116,9 +119,10 @@ string Paras::getProgramVersion(const string &cmd_str){
 
 	sprintf(tmp, "%s", cmd_str.c_str());
 	stream = popen(tmp, "r");
-	if(fread(info, 1, sizeof(info), stream)>0){
+	if(fread(info, 1, sizeof(tmp), stream)>0){
 		pg_version_str = info;
 		if(pg_version_str.at(pg_version_str.size()-1)=='\n') pg_version_str.at(pg_version_str.size()-1) = '\0';
+		if(pg_version_str.at(pg_version_str.size()-1)=='\0') pg_version_str.erase(pg_version_str.begin()+pg_version_str.size()-1);
 	}
 	pclose(stream);
 
@@ -138,9 +142,11 @@ bool Paras::isRecommendCanuVersion(string &canu_version, const string &recommend
 
 // initialize preset parameters
 void Paras::initPreset(){
-	if(technology.compare(PACBIO_CCS_TECH_STR)!=0){ // CLR, ONT, ...
-		min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES2;
-		max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_OTHER;
+	if(technology.compare(PACBIO_CCS_TECH_STR)==0){  // CCS
+		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES;
+		//max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_OTHER;
+	}else{// CLR, ONT
+		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES2;
 	}
 }
 
@@ -286,6 +292,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 		{ "min-cons-read-size", required_argument, NULL, 0 },
 		{ "sample", required_argument, NULL, 0 },
 		//{ "mask-noisy-region", no_argument, NULL, 0 },
+		{ "include-alt", no_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
@@ -416,13 +423,14 @@ int Paras::parseCnsParas(int argc, char **argv){
 		//{ "monitor-proc-names-cns", required_argument, NULL, 0 },
 		//{ "max_proc_running_minutes_cns", required_argument, NULL, 0 },
 		//{ "technology", required_argument, NULL, 0 },
+		{ "include-alt", no_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:n:x:r:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:n:x:i:r:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -431,6 +439,7 @@ int Paras::parseCnsParas(int argc, char **argv){
 					min_Nsupp_est_flag = 0;
 					break;
 			case 'x': technology = optarg; break;
+			case 'i': min_identity_match = stod(optarg); break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
@@ -533,6 +542,7 @@ int Paras::parseCallParas(int argc, char **argv){
 		//{ "monitor-proc-names-call", required_argument, NULL, 0 },
 		//{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
 		{ "sample", required_argument, NULL, 0 },
+		{ "include-alt", no_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "gt-min-sig-size", required_argument, NULL, 0 },
 		{ "gt-size-ratio-match", required_argument, NULL, 0 },
@@ -544,7 +554,7 @@ int Paras::parseCallParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:n:x:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:n:x:i:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -553,6 +563,7 @@ int Paras::parseCallParas(int argc, char **argv){
 					min_Nsupp_est_flag = 0;
 					break;
 			case 'x': technology = optarg; break;
+			case 'i': min_identity_match = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
@@ -661,6 +672,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		//{ "max_proc_running_minutes_cns", required_argument, NULL, 0 },
 		//{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
 		//{ "technology", required_argument, NULL, 0 },
+		{ "include-alt", no_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "gt-min-sig-size", required_argument, NULL, 0 },
 		{ "gt-size-ratio-match", required_argument, NULL, 0 },
@@ -672,7 +684,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:x:r:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:x:i:r:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
@@ -682,6 +694,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 					min_Nsupp_est_flag = 0;
 					break;
 			case 'x': technology = optarg; break;
+			case 'i': min_identity_match = stod(optarg); break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
@@ -800,10 +813,10 @@ void Paras::showUsage(){
 
 	cout << "Example:" << endl;
 	cout << "   # run the pipeline on the whole genome for PacBio CCS sequencing" << endl;
-	cout << "   $ asvclr all -t 32 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr all -t 32 -n 3 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl << endl;
 
 	cout << "   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000" << endl;
-	cout << "   $ asvclr all -t 32 -m 20 -x ccs -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr all -t 32 -n 3 -m 20 -x ccs -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for detect command
@@ -827,8 +840,7 @@ void Paras::showDetectUsage(){
 	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
 	cout << "   -n INT        minimal number of reads supporting a SV [" << MIN_SUPPORT_READS_NUM_EST << "]." << endl;
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
-	cout << "                 estimated to be "<< MIN_SUPPORT_READS_NUM_FACTOR << " times of the sequencing depth of" << endl;
-	cout << "                 the data set (rounded)" << endl;
+	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
 	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
@@ -840,8 +852,10 @@ void Paras::showDetectUsage(){
 	cout << "                 of threads in machine" << endl;
 	cout << "   --min-cons-read-size INT" << endl;
 	cout << "                 minimal read segment size to generate consensus sequences " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
+	cout << "   --include-alt" << endl;
+	cout << "                 include alt chromosomal items in result [False]" << endl;
 	cout << "   --include-decoy" << endl;
-	cout << "                 include decoy items in result" << endl;
+	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 
 	cout << "   -v,--version  show version information" << endl;
@@ -849,10 +863,10 @@ void Paras::showDetectUsage(){
 
 	cout << "Example:" << endl;
 	cout << "   # run 'det' command on the whole genome" << endl;
-	cout << "   $ asvclr det -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr det -t 32 -n 3 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
 
 	cout << "   # run 'det' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
-	cout << "   $ asvclr det -t 32 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr det -t 32 -n 3 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for 'cns' command
@@ -871,9 +885,11 @@ void Paras::showCnsUsage(){
 	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
 	cout << "   -n INT        minimal number of reads supporting a SV [" << MIN_SUPPORT_READS_NUM_EST << "]." << endl;
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
-	cout << "                 estimated to be "<< MIN_SUPPORT_READS_NUM_FACTOR << " times of the sequencing depth of" << endl;
-	cout << "                 the data set (rounded)" << endl;
+	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
+	cout << "                         ccs: -i 0.9" << endl;
+	cout << "                   sq/rs/ont: -i 0.75" << endl;
+	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
 	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
@@ -923,15 +939,17 @@ void Paras::showCnsUsage(){
 //	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
 //	cout << "                   nanopore   : the Nanopore sequencing technology;" << endl;
 //	cout << "                   pacbio-hifi: the PacBio CCS sequencing technology." << endl;
+	cout << "   --include-alt" << endl;
+	cout << "                 include alt chromosomal items in result [False]" << endl;
 	cout << "   --include-decoy" << endl;
-	cout << "                 include decoy items in result" << endl;
+	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl << endl;
 
 	cout << "Example:" << endl;
 	cout << "   # run 'cns' command on the whole genome or the user-specified regions according to previous 'det' command." << endl;
-	cout << "   $ asvclr cns -t 32 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl;
+	cout << "   $ asvclr cns -t 32 -n 3 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl;
 }
 
 // show the usage for call command
@@ -948,7 +966,13 @@ void Paras::showCallUsage(){
 	cout << "   -m INT        minimal SV size to report [" << MIN_SV_SIZE_USR << "]" << endl;
 	cout << "   -M INT        maximal SV size to report [" << MAX_SV_SIZE_USR << "]" << endl;
 	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
+	cout << "   -n INT        minimal number of reads supporting a SV [" << MIN_SUPPORT_READS_NUM_EST << "]." << endl;
+	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
+	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
+	cout << "                         ccs: -i 0.9" << endl;
+	cout << "                   sq/rs/ont: -i 0.75" << endl;
+	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
 	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
@@ -966,8 +990,10 @@ void Paras::showCallUsage(){
 //	cout << "   --max_proc_running_minutes_call INT" << endl;
 //	cout << "                 Monitored processes for call will be terminated if their CPU running time" << endl;
 //	cout << "                 exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CALL << "]" << endl;
+	cout << "   --include-alt" << endl;
+	cout << "                 include alt chromosomal items in result [False]" << endl;
 	cout << "   --include-decoy" << endl;
-	cout << "                 include decoy items in result" << endl;
+	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 
 //	cout << "   --gt-min-sig-size INT" << endl;
@@ -991,7 +1017,7 @@ void Paras::showCallUsage(){
 
 	cout << "Example:" << endl;
 	cout << "   # run 'call' command on the whole genome or the user-specified regions according to previous 'det' command." << endl;
-	cout << "   $ asvclr call -t 32 -m 20 -o output ref.fa genome_sorted.bam" << endl;
+	cout << "   $ asvclr call -t 32 -n 3 -m 20 -o output ref.fa genome_sorted.bam" << endl;
 }
 
 // show the usage for all command
@@ -1015,9 +1041,11 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 Variants with size smaller than threshold will be ignored" << endl;
 	cout << "   -n INT        minimal number of reads supporting a SV [" << MIN_SUPPORT_READS_NUM_EST << "]." << endl;
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
-	cout << "                 estimated to be "<< MIN_SUPPORT_READS_NUM_FACTOR << " times of the sequencing depth of" << endl;
-	cout << "                 the data set (rounded)" << endl;
+	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
+	cout << "                         ccs: -i 0.9" << endl;
+	cout << "                   sq/rs/ont: -i 0.75" << endl;
+	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
 	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
@@ -1084,8 +1112,10 @@ void Paras::showAllUsage(const string &cmd_str){
 //	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
 //	cout << "                   nanopore   : the Nanopore sequencing technology;" << endl;
 //	cout << "                   pacbio-hifi: the PacBio CCS sequencing technology." << endl;
+	cout << "   --include-alt" << endl;
+	cout << "                 include alt chromosomal items in result [False]" << endl;
 	cout << "   --include-decoy" << endl;
-	cout << "                 include decoy items in result" << endl;
+	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
 
 if(cmd_str.compare(CMD_CALL_STR)==0 or cmd_str.compare(CMD_ALL_STR)==0){
@@ -1115,14 +1145,14 @@ if(cmd_str.compare(CMD_ALL_STR)==0){
 }else{
 	cout << "   # run the '" << cmd_str << "' command on the whole genome for PacBio CCS sequencing" << endl;
 }
-	cout << "   $ asvclr all -t 32 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr all -t 32 -n 3 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl << endl;
 
 if(cmd_str.compare(CMD_ALL_STR)==0){
 	cout << "   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
 }else{
 	cout << "   # run the '" << cmd_str << "' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
 }
-	cout << "   $ asvclr all -t 32 -m 20 -x ccs -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr all -t 32 -n 3 -m 20 -x ccs -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for det-cns command
@@ -1167,6 +1197,7 @@ void Paras::outputParas(){
 		cout << "Minimal ratio of max-segment for indel calling: " << max_seg_size_ratio_usr << endl; // not det
 	cout << "Minimal clipping end size: " << minClipEndSize << " bp" << endl;
 	cout << "Minimal read mapping quality threshold: " << minMapQ << endl;
+	//cout << "Minimal high read mapping quality threshold: " << minHighMapQ << endl;
 	if(command.compare(CMD_CNS_STR)==0 or command.compare(CMD_ALL_STR)==0 or command.compare(CMD_DET_CNS_STR)==0){ // cns, all, det-cns
 		cout << "Expected sampling coverage: " << expected_cov_cns << endl;
 		cout << "Local consensus chunk size : " << cnsChunkSize << " bp" << endl;
@@ -1202,6 +1233,7 @@ void Paras::outputParas(){
 		cout << "Minimal allele ratio threshold for heterozygous alleles: " << gt_hete_ratio << endl;
 	}
 
+	if(include_alt) cout << "Include reference alt items: yes" << endl;
 	if(include_decoy) cout << "Include decoy items: yes" << endl;
 	cout << "Sequencing technology: " << technology << endl;
 	cout << "abPOA version: " << abpoa_version << endl;
@@ -1360,7 +1392,9 @@ int64_t Paras::estimateMinReadsNumSupportSV(vector<int64_t> &mean_depth_vec){
 	}
 	total_depth = 0;
 	for(i=0; i<support_match_vec.at(max_id)->support_num.size(); i++) total_depth += support_match_vec.at(max_id)->support_num.at(i);
-	min_supp_reads_num = 2 + round(((double)total_depth / support_match_vec.at(max_id)->support_num.size()) * MIN_SUPPORT_READS_NUM_FACTOR);
+	//min_supp_reads_num = 2 + round(((double)total_depth / support_match_vec.at(max_id)->support_num.size()) * MIN_SUPPORT_READS_NUM_FACTOR); // deleted on 2024-09-04
+	min_supp_reads_num = 2 + floor(((double)total_depth / support_match_vec.at(max_id)->support_num.size()) * MIN_SUPPORT_READS_NUM_FACTOR);
+	if(min_supp_reads_num<MIN_SUPPORT_READS_NUM_DEFAULT) min_supp_reads_num = MIN_SUPPORT_READS_NUM_DEFAULT;
 
 	//destroy and support_match_vec
 	for(i=0; i<support_match_vec.size(); i++){
@@ -1458,6 +1492,9 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 //			ret = 1;
 //		}
 //	}
+	else if(opt_name_str.compare("include-decoy")==0){ // include-alt
+		include_alt = true;
+	}
 	else if(opt_name_str.compare("include-decoy")==0){ // include-decoy
 		include_decoy = true;
 	}

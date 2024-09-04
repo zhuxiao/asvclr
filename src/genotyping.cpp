@@ -2,7 +2,7 @@
 
 extern pthread_mutex_t mutex_fai;
 
-genotyping::genotyping(reg_t *reg, faidx_t *fai, string &inBamFile, int32_t sig_size_thres, double size_ratio_match_thres, double min_dip_ratio_thres, double max_dip_ratio_thres, int32_t min_sup_num_recover, int32_t minMapQ, double max_ultra_high_cov){
+genotyping::genotyping(reg_t *reg, faidx_t *fai, string &inBamFile, int32_t sig_size_thres, double size_ratio_match_thres, double min_dip_ratio_thres, double max_dip_ratio_thres, int32_t min_sup_num_recover, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov){
 	this->reg = reg;
 	this->fai = fai;
 	this->inBamFile = inBamFile;
@@ -17,6 +17,7 @@ genotyping::genotyping(reg_t *reg, faidx_t *fai, string &inBamFile, int32_t sig_
 	this->min_sup_num_recover = min_sup_num_recover;
 	seed_gtQuery = NULL;
 	this->minMapQ = minMapQ;
+	this->minHighMapQ = minHighMapQ;
 	this->max_ultra_high_cov = max_ultra_high_cov;
 }
 
@@ -35,7 +36,7 @@ void genotyping::destroyMatchProfilePatVec(vector<profile_pat_t*> &match_profile
 // compute genotype of variants
 void genotyping::computeGenotype(){
 //	cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << minMapQ << endl;
-	alnDataLoader data_loader(reg->chrname, reg->startRefPos, reg->endRefPos, inBamFile, minMapQ);
+	alnDataLoader data_loader(reg->chrname, reg->startRefPos, reg->endRefPos, inBamFile, minMapQ, minHighMapQ);
 	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
 
 	filterInvalidAlnData(alnDataVector, valid_summed_size_ratio_read);

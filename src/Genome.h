@@ -25,7 +25,6 @@ class Genome{
 		faidx_t *fai;
 		bam_hdr_t *header;
 		int64_t genomeSize;
-//		int32_t minMapQ;
 
 		// output directory and files
 		string out_dir, out_dir_detect, out_dir_cns, out_dir_call, out_dir_tra, out_dir_result;

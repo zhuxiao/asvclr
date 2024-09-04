@@ -73,7 +73,7 @@ class varCand {
 
 		string refseqfilename, ctgfilename, readsfilename, alnfilename, clusterfilename;
 //		string rescue_refseqfilename, rescue_cnsfilename, rescue_readsfilename, rescue_alnfilename;
-		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, minConReadLen, minMapQ: 16, max_seg_num_per_read: 16;
+		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, minConReadLen, minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12;
 		double max_ultra_high_cov, min_identity_match;
 		vector<reg_t*> varVec, newVarVec;
 		bool cns_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
@@ -128,7 +128,6 @@ class varCand {
 
 	public:
 		varCand();
-		varCand(int32_t minMapQ);
 		virtual ~varCand();
 		void callVariants();
 		void callVariants02();
@@ -176,7 +175,7 @@ class varCand {
 		vector<reg_t*> computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec);
 		vector<reg_t*> rescueIndelVarLoc();
 		void svPosCorrection(reg_t* reg);
-		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, vector<clipAlnData_t*> &clipAlnDataVector, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, int32_t minMapQ);
+		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, vector<clipAlnData_t*> &clipAlnDataVector, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres);
 		void computeGenotypeIndelReg(vector<reg_t*> &var_vec);
 		void destoryClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void destoryPosCorrectionVec();
@@ -221,7 +220,7 @@ class varCand {
 		// clippings
 		void computeClipRegVarLoc();
 		vector<reg_t*> computeClipRegVarLocOp(string &alnfilename, string &refseqfilename, string &cnsfilename, string &clusterfilename, vector<minimap2_aln_t*> &minimap2_aln_vec, bool rescue_flag);
-		int32_t computeSuppNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, int32_t minMapQ, double max_ultra_high_cov, vector<string> &target_qname_vec);
+		int32_t computeSuppNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov, vector<string> &target_qname_vec);
 		void computeGenotypeClipReg(vector<reg_t*> &var_vec);
 		vector<reg_t*> rescueDupInvClipReg();
 		vector<reg_t*> rescueLargeIndelClipReg();

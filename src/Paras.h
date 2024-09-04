@@ -80,8 +80,9 @@ using namespace std;
 
 //#define MIN_CLIP_READS_NUM_THRES	7
 #define MIN_SUPPORT_READS_NUM_EST		-1
-#define MIN_SUPPORT_READS_NUM_FACTOR	0.05f	// 0.07f (updated 2024-06-25)
+#define MIN_SUPPORT_READS_NUM_FACTOR	0.03f	// 0.07f (updated 2024-06-25), 0.05f (updated 2024-09-04)
 #define READS_NUM_SUPPORT_FACTOR		0.5f
+#define MIN_SUPPORT_READS_NUM_DEFAULT	3
 
 #define MAX_VAR_REG_SIZE			50000
 #define CNS_CHUNK_SIZE_INDEL		1000	// 10000
@@ -129,6 +130,7 @@ using namespace std;
 
 #define MAX_ULTRA_HIGH_COV_THRES	300		// maximal coverage threshold for ultra-high coverage, 100
 #define MIN_MAPQ_THRES				0		// 10
+#define MIN_HIGH_MAPQ_THRES			10
 
 #define MIN_ADJACENT_REG_DIST		20		// 50
 
@@ -170,10 +172,10 @@ class Paras
 		string out_dir_result = "4_results";	// "4_results"
 		int32_t blockSize, slideSize, min_sv_size_usr, max_sv_size_usr, num_threads, large_indel_size_thres;
 		double max_seg_size_ratio_usr, min_identity_match;
-		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy;
+		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy, include_alt;
 		size_t misAlnRegLenSum = 0;
 		int32_t minReadsNumSupportSV: 29, min_Nsupp_est_flag: 3; //, minClipReadsNumSupportSV; Nsupp_est_flag: 1 for estimated, 0 for user-specified
-		int32_t minMapQ: 16, max_seg_num_per_read: 16;
+		int32_t minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12;
 
 		// process monitor
 		string monitoring_proc_names_cns, monitoring_proc_names_call;

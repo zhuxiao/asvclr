@@ -312,11 +312,8 @@ int Genome::genomeDetect(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-//		if(chr->chrname =="1"){
-		//if((chr->decoy_flag==false or paras->include_decoy) and (chr->chrname.find("_random")==string::npos and chr->chrname.find("_alt")==string::npos and chr->chrname.find("chrUn_")==string::npos)) // no alt
-		if(chr->decoy_flag==false or paras->include_decoy)
+		if((chr->decoy_flag==false or paras->include_decoy) and (chr->alt_flag==false or paras->include_alt))
 			chr->chrDetect();
-//		}
 	}
 
 	Time time;
@@ -685,15 +682,15 @@ void Genome::genomeLoadDataCons(){
 
 	if(chromeVector.size()==0) return;
 
-	// load X, Y, hs37d5
+	// load X, Y, hs37d5, alt
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->decoy_flag==false or paras->include_decoy==false){ // non-decoy
+		if((chr->decoy_flag==false or paras->include_decoy==false) and (chr->alt_flag==false or paras->include_alt==false)){ // non-decoy, non-alt
 			if(chr->chrname.compare(CHR_X_STR1)==0 or chr->chrname.compare(CHR_X_STR2)==0 or chr->chrname.compare(CHR_Y_STR1)==0 or chr->chrname.compare(CHR_Y_STR2)==0){
 				chr->chrLoadDataCons();  // load the variant data
 				chr->chrGenerateLocalConsWorkOpt();     // generate local consensus work
 			}
-		}else if(chr->decoy_flag and paras->include_decoy){ // decoy
+		}else if((chr->decoy_flag and paras->include_decoy) or (chr->alt_flag and paras->include_alt)){ // decoy and alt
 			chr->chrLoadDataCons();  // load the variant data
 			chr->chrGenerateLocalConsWorkOpt();     // generate local consensus work
 		}
@@ -702,9 +699,7 @@ void Genome::genomeLoadDataCons(){
 	// load other chrs
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("GL000225.1")==0)
-		//if(chr->decoy_flag==false and (chr->chrname.find("_random")==string::npos and chr->chrname.find("_alt")==string::npos and chr->chrname.find("chrUn_")==string::npos)) // non-decoy and no alt
-		if(chr->decoy_flag==false) // non-decoy
+		if(chr->decoy_flag==false and chr->alt_flag==false)
 		{
 			if(chr->chrname.compare(CHR_X_STR1)!=0 and chr->chrname.compare(CHR_X_STR2)!=0 and chr->chrname.compare(CHR_Y_STR1)!=0 and chr->chrname.compare(CHR_Y_STR2)!=0){
 				chr->chrLoadDataCons();  // load the variant data
@@ -759,7 +754,7 @@ int Genome::processConsWork(){
 		}
 		// clipReg_reads_1_26966226-26974816.fq, clipReg_reads_1_21506254-21506762.fq, clipReg_cns_16_209822-210880.fa, clipReg_cns_1_197756788-197757987.fa (INV)
 		// cns_chr1_1461692-1461767.fa, cns_chr1_1595082-1595934.fa, cns_chr1_1663381-1663402.fa
-//		if(cns_work_opt->contigfilename.compare("output_minimap2_chr2_tmp/2_cns/2/cns_2_156527822-156527850.fa")==0){
+//		if(cns_work_opt->contigfilename.compare("output_minimap2_hg002_tmp/2_cns/16/clipReg_cns_16_46398465-46435590.fa")==0){
 //			cout << "cnsfilename=" << cns_work_opt->contigfilename << endl;
 //		}else continue;
 
@@ -824,6 +819,7 @@ int Genome::processConsWork(){
 		cns_work->technology = paras->technology;
 		//cns_work->canu_version = paras->canu_version;
 		cns_work->minMapQ = paras->minMapQ;
+		cns_work->minHighMapQ = paras->minHighMapQ;
 
 		hts_tpool_dispatch(p, q, processSingleConsWork, cns_work);
 	}
@@ -1070,15 +1066,15 @@ void Genome::genomeCollectCallWork(){
 
 	if(chromeVector.size()==0) return;
 
-	// load X, Y, hs37d5
+	// load X, Y, hs37d5, alt
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->decoy_flag==false or paras->include_decoy==false){ // non-decoy
+		if((chr->decoy_flag==false or paras->include_decoy==false) and (chr->alt_flag==false or paras->include_alt==false)){ // non-decoy, non-alt
 			if(chr->chrname.compare(CHR_X_STR1)==0 or chr->chrname.compare(CHR_X_STR2)==0 or chr->chrname.compare(CHR_Y_STR1)==0 or chr->chrname.compare(CHR_Y_STR2)==0){
 				chr->chrLoadDataCall();
 				chr->chrCollectCallWork();
 			}
-		}else if(chr->decoy_flag and paras->include_decoy){ // decoy
+		}else if((chr->decoy_flag and paras->include_decoy) or (chr->alt_flag and paras->include_alt)){ // decoy or alt
 			chr->chrLoadDataCall();
 			chr->chrCollectCallWork();
 		}
@@ -1087,14 +1083,10 @@ void Genome::genomeCollectCallWork(){
 	// load other chrs
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->chrname.compare("1")==0)
-		{
-			//if(chr->decoy_flag==false and (chr->chrname.find("_random")==string::npos and chr->chrname.find("_alt")==string::npos and chr->chrname.find("chrUn_")==string::npos)){ // non-decoy and no alt
-			if(chr->decoy_flag==false){ // non-decoy
-				if(chr->chrname.compare(CHR_X_STR1)!=0 and chr->chrname.compare(CHR_X_STR2)!=0 and chr->chrname.compare(CHR_Y_STR1)!=0 and chr->chrname.compare(CHR_Y_STR2)!=0){
-					chr->chrLoadDataCall();
-					chr->chrCollectCallWork();
-				}
+		if(chr->decoy_flag==false and chr->alt_flag==false){ // non-decoy and no alt
+			if(chr->chrname.compare(CHR_X_STR1)!=0 and chr->chrname.compare(CHR_X_STR2)!=0 and chr->chrname.compare(CHR_Y_STR1)!=0 and chr->chrname.compare(CHR_Y_STR2)!=0){
+				chr->chrLoadDataCall();
+				chr->chrCollectCallWork();
 			}
 		}
 	}
@@ -1218,7 +1210,8 @@ int Genome::processCallWork(){
 
 	paras->call_workDone_num = 0;
 	num_work = paras->call_work_vec.size();
-	num_work_percent = num_work / (paras->num_parts_progress >> 1);
+	//num_work_percent = num_work / (paras->num_parts_progress >> 1); // deleted on 2024-09-04
+	num_work_percent = num_work / (paras->num_parts_progress / 10);
 	if(num_work_percent==0) num_work_percent = 1;
 	for(size_t i=0; i<num_work; i++){
 		var_cand = paras->call_work_vec.at(i);
@@ -1231,7 +1224,7 @@ int Genome::processCallWork(){
 		// minimap2_1_2213173-2214000.paf, minimap2_contig_1_26966226-26974816.paf, minimap2_contig_1_21506254-21506762.paf, minimap2_contig_1_29382165-29382465.paf
 		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf, minimap2_chr1_143246329-143247038.paf, minimap2_1_649705-650290.paf
 		// minimap2_1_2765904-2766241.paf, minimap2_1_5447230-5447236.paf,
-//		if(var_cand->alnfilename.compare("output_test_tmp2/3_call/1/minimap2_1_48710409-48710409.paf")!=0){
+//		if(var_cand->alnfilename.compare("output_minimap2_hg002_ont_filt_20240820_2/3_call/11/minimap2_cns_11_1961067-1961733.paf")!=0){
 //			continue;
 //		}
 
@@ -1802,6 +1795,8 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->minConReadLen = paras->minConReadLen;
 		var_cand_new->min_identity_match = paras->min_identity_match;
 		var_cand_new->max_seg_num_per_read = paras->max_seg_num_per_read;
+		var_cand_new->minMapQ = paras->minMapQ;
+		var_cand_new->minHighMapQ = paras->minHighMapQ;
 
 		var_cand_new->cns_success = var_cand->cns_success;
 		var_cand_new->ctg_num = var_cand->ctg_num;
@@ -2839,6 +2834,8 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
 				var_cand_tmp->min_identity_match = paras->min_identity_match;
 				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
+				var_cand_tmp->minMapQ = paras->minMapQ;
+				var_cand_tmp->minHighMapQ = paras->minHighMapQ;
 
 				var_cand_tmp->leftClipRefPos = clip_reg->leftClipPosTra1;
 				//var_cand_tmp->rightClipRefPos = clip_reg->rightClipPosTra1;
@@ -2965,6 +2962,8 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
 				var_cand_tmp->min_identity_match = paras->min_identity_match;
 				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
+				var_cand_tmp->minMapQ = paras->minMapQ;
+				var_cand_tmp->minHighMapQ = paras->minHighMapQ;
 
 				reg = new reg_t();
 				//reg->chrname = clip_reg->chrname_leftTra2;
@@ -3062,7 +3061,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 // perform local consensus
 void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
 
-	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_identity_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->max_ultra_high_cov, paras->minMapQ, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr);
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_identity_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->max_ultra_high_cov, paras->minMapQ, paras->minHighMapQ, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr);
 
 	// extract the corresponding refseq from reference
 	local_cns.extractRefseq();

@@ -32,7 +32,7 @@ class Chrome{
 		string chrname;
 		int64_t chrlen;
 		//bool process_flag;
-		bool print_flag, decoy_flag;
+		bool print_flag, decoy_flag, alt_flag;
 
 		// output directory
 		string out_dir_detect, out_dir_cns, out_dir_call;

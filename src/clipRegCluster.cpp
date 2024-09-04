@@ -479,7 +479,7 @@ vector<qcSigList_t*> clipRegCluster::extractQcSigsClipReg(vector<struct querySeq
 		queryseq_node = query_seq_info_vec.at(i);
 		if(queryseq_node->selected_flag==false){
 
-//			if(queryseq_node->qname.compare("SRR11008518.1.6316273")==0){
+//			if(queryseq_node->qname.compare("SRR8858433.1.99178")==0){
 //				cout << "i=" << i << ", " << queryseq_node->qname << endl;
 //			}
 
@@ -504,10 +504,10 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 	qcSig_t *qc_sig, *qc_sig_next, *last_clip_sig;
 	int32_t id, leftmost_id, increase_direction;
 	int32_t left_clip_end_flag, right_clip_end_flag, end_flag;
-	bool overlap_flag, valid_query_left_end_flag, valid_query_right_end_flag, self_overlap_flag, ref_skip_flag, query_skip_flag, merge_flag;
+	bool overlap_flag, valid_query_left_end_flag, valid_query_right_end_flag, self_overlap_flag, ref_skip_flag, query_skip_flag, merge_flag, valid_flag;
 	size_t i, j;
 	int32_t mate_arr_idx, mate_clip_end_flag, mate_arr_idx_same_chr, mate_clip_end_flag_same_chr, min_dist, min_ref_dist, min_dist_same_chr, min_ref_dist_same_chr, seq_len, ignore_end_flag;
-	int64_t var_startRefPos_tmp, var_endRefPos_tmp, end_ref_pos, end_ref_pos2, end_query_pos2, dist, start_qpos_tmp;
+	int64_t var_startRefPos_tmp, var_endRefPos_tmp, end_ref_pos, end_ref_pos2, end_query_pos, end_query_pos2, dist, start_qpos_tmp;
 	int8_t query_orient;
 	string reg_str, refseq, queryseq_whole, reverse_seq;
 	char *p_seq;
@@ -536,6 +536,7 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 	sidemost_idx_vec = getLeftRightMostAlnSegIdx(query_seqs);
 	//cout << "leftmost_id=" << sidemost_idx_vec.at(0) << ", rightmost_id=" << sidemost_idx_vec.at(1) << endl;
 
+	valid_flag = true;
 	leftmost_id = sidemost_idx_vec.at(0);
 	if(leftmost_id==-1) leftmost_id = 0;
 	id = leftmost_id;
@@ -780,16 +781,22 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						free(p_seq);
 
 						//last_clip_sig->altseq = queryseq_node->seq.substr(last_clip_sig->query_pos-1, last_clip_sig->cigar_op_len);
-						if(last_clip_sig->aln_orient==query_orient)
-							last_clip_sig->altseq = queryseq_whole.substr(last_clip_sig->query_pos-1, last_clip_sig->cigar_op_len);
-						else{
+						if(last_clip_sig->aln_orient==query_orient){
+							if(last_clip_sig->query_pos+last_clip_sig->cigar_op_len-1<(int64_t)queryseq_whole.size())
+								last_clip_sig->altseq = queryseq_whole.substr(last_clip_sig->query_pos-1, last_clip_sig->cigar_op_len);
+							else valid_flag = false;
+						}else{
 							//cout << "line=" << __LINE__ << ", " << chrname << ":" << var_startRefPos << "-" << var_endRefPos << ": " << queryseq_node->qname << ", aln_orient is not the same!" << endl;
 
-							start_qpos_tmp = queryseq_whole.size() - last_clip_sig->query_pos;
-							reverse_seq = queryseq_whole.substr(start_qpos_tmp-1, last_clip_sig->cigar_op_len);
-							reverseComplement(reverse_seq);
-							last_clip_sig->altseq = reverse_seq;
+							end_query_pos = getEndQueryPosAlnSeg(last_clip_sig->query_pos, last_clip_sig->cigar_op, last_clip_sig->cigar_op_len);
+							if(end_query_pos-1<(int64_t)queryseq_whole.size()){
+								start_qpos_tmp = queryseq_whole.size() - end_query_pos;
+								reverse_seq = queryseq_whole.substr(start_qpos_tmp-1, last_clip_sig->cigar_op_len);
+								reverseComplement(reverse_seq);
+								last_clip_sig->altseq = reverse_seq;
+							}else valid_flag = false;
 						}
+						if(valid_flag==false) break;
 
 					}else if(ref_skip_flag){
 						last_clip_sig->dist_next_clip = last_clip_sig->cigar_op_len = abs(dist) + 1;
@@ -803,16 +810,22 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						free(p_seq);
 
 						//last_clip_sig->altseq = queryseq_node->seq.substr(last_clip_sig->query_pos-1, 1);
-						if(last_clip_sig->aln_orient==query_orient)
-							last_clip_sig->altseq = queryseq_whole.substr(last_clip_sig->query_pos-1, 1);
-						else{
+						if(last_clip_sig->aln_orient==query_orient){
+							if(last_clip_sig->query_pos<(int64_t)queryseq_whole.size())
+								last_clip_sig->altseq = queryseq_whole.substr(last_clip_sig->query_pos-1, 1);
+							else valid_flag = false;
+						}else{
 							//cout << "line=" << __LINE__ << ", " << chrname << ":" << var_startRefPos << "-" << var_endRefPos << ": " << queryseq_node->qname << ", aln_orient is not the same!" << endl;
 
-							start_qpos_tmp = queryseq_whole.size() - last_clip_sig->query_pos;
-							reverse_seq = queryseq_whole.substr(start_qpos_tmp-1, 1);
-							reverseComplement(reverse_seq);
-							last_clip_sig->altseq = reverse_seq;
+							end_query_pos = getEndQueryPosAlnSeg(last_clip_sig->query_pos, last_clip_sig->cigar_op, last_clip_sig->cigar_op_len);
+							if(end_query_pos-1<(int64_t)queryseq_whole.size()){
+								start_qpos_tmp = queryseq_whole.size() - end_query_pos;
+								reverse_seq = queryseq_whole.substr(start_qpos_tmp-1, 1);
+								reverseComplement(reverse_seq);
+								last_clip_sig->altseq = reverse_seq;
+							}else valid_flag = false;
 						}
+						if(valid_flag==false) break;
 					}
 				}else{
 					query_skip_flag = ref_skip_flag = false;
@@ -829,84 +842,93 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 		}
 	}
 
-	// merge nearest signatures for non-ccs data
-	if(technology.compare(PACBIO_CCS_TECH_STR)!=0){
-		for(i=1; i<qcSig_vec.size(); ){
-			qc_sig = qcSig_vec.at(i-1);
-			qc_sig_next = qcSig_vec.at(i);
-			merge_flag = false;
-			if(qc_sig->cigar_op==qc_sig_next->cigar_op and qc_sig->aln_orient==qc_sig_next->aln_orient and qc_sig->cigar_op!=BAM_CSOFT_CLIP and qc_sig_next->cigar_op!=BAM_CHARD_CLIP){
-				end_ref_pos = getEndRefPosAlnSeg(qc_sig->ref_pos, qc_sig->cigar_op, qc_sig->cigar_op_len);
-				end_ref_pos2 = getEndRefPosAlnSeg(qc_sig_next->ref_pos, qc_sig_next->cigar_op, qc_sig_next->cigar_op_len);
-				//end_query_pos = getEndQueryPosAlnSeg(qc_sig->query_pos, qc_sig->cigar_op, qc_sig->cigar_op_len);
-				end_query_pos2 = getEndQueryPosAlnSeg(qc_sig_next->query_pos, qc_sig_next->cigar_op, qc_sig_next->cigar_op_len);
-				overlap_flag = isOverlappedPos(qc_sig->ref_pos-MAX_DIST_MATCH_INDEL, end_ref_pos+MAX_DIST_MATCH_INDEL, qc_sig_next->ref_pos-MAX_DIST_MATCH_INDEL, end_ref_pos2+MAX_DIST_MATCH_INDEL);
-				if(overlap_flag){
-					dist = abs(end_query_pos2 - qc_sig->query_pos - (end_ref_pos2 - qc_sig->ref_pos));
-					qc_sig->cigar_op_len = dist + 1;
+	if(valid_flag){
+		// merge nearest signatures for non-ccs data
+		if(technology.compare(PACBIO_CCS_TECH_STR)!=0){
+			for(i=1; i<qcSig_vec.size(); ){
+				qc_sig = qcSig_vec.at(i-1);
+				qc_sig_next = qcSig_vec.at(i);
+				merge_flag = false;
+				if(qc_sig->cigar_op==qc_sig_next->cigar_op and qc_sig->aln_orient==qc_sig_next->aln_orient and qc_sig->cigar_op!=BAM_CSOFT_CLIP and qc_sig_next->cigar_op!=BAM_CHARD_CLIP){
+					end_ref_pos = getEndRefPosAlnSeg(qc_sig->ref_pos, qc_sig->cigar_op, qc_sig->cigar_op_len);
+					end_ref_pos2 = getEndRefPosAlnSeg(qc_sig_next->ref_pos, qc_sig_next->cigar_op, qc_sig_next->cigar_op_len);
+					//end_query_pos = getEndQueryPosAlnSeg(qc_sig->query_pos, qc_sig->cigar_op, qc_sig->cigar_op_len);
+					end_query_pos2 = getEndQueryPosAlnSeg(qc_sig_next->query_pos, qc_sig_next->cigar_op, qc_sig_next->cigar_op_len);
+					overlap_flag = isOverlappedPos(qc_sig->ref_pos-MAX_DIST_MATCH_INDEL, end_ref_pos+MAX_DIST_MATCH_INDEL, qc_sig_next->ref_pos-MAX_DIST_MATCH_INDEL, end_ref_pos2+MAX_DIST_MATCH_INDEL);
+					if(overlap_flag){
+						dist = abs(end_query_pos2 - qc_sig->query_pos - (end_ref_pos2 - qc_sig->ref_pos));
+						qc_sig->cigar_op_len = dist + 1;
 
-					if(end_ref_pos2<qc_sig->ref_pos) end_ref_pos2 = qc_sig->ref_pos;
-					reg_str = qc_sig->chrname + ":" + to_string(qc_sig->ref_pos) + "-" + to_string(end_ref_pos2);
-					pthread_mutex_lock(&mutex_fai);
-					p_seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
-					pthread_mutex_unlock(&mutex_fai);
-					qc_sig->refseq = p_seq;
-					free(p_seq);
+						if(end_ref_pos2<qc_sig->ref_pos) end_ref_pos2 = qc_sig->ref_pos;
+						reg_str = qc_sig->chrname + ":" + to_string(qc_sig->ref_pos) + "-" + to_string(end_ref_pos2);
+						pthread_mutex_lock(&mutex_fai);
+						p_seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+						pthread_mutex_unlock(&mutex_fai);
+						qc_sig->refseq = p_seq;
+						free(p_seq);
 
-					dist = abs(end_query_pos2 - qc_sig->query_pos);
-					if(qc_sig->aln_orient==query_orient)
-						qc_sig->altseq = queryseq_whole.substr(qc_sig->query_pos-1, dist+1);
-					else{
-						//cout << "line=" << __LINE__ << ", " << chrname << ":" << var_startRefPos << "-" << var_endRefPos << ": " << queryseq_node->qname << ", aln_orient is not the same!" << endl;
+						dist = abs(end_query_pos2 - qc_sig->query_pos);
+						if(qc_sig->aln_orient==query_orient)
+							qc_sig->altseq = queryseq_whole.substr(qc_sig->query_pos-1, dist+1);
+						else{
+							//cout << "line=" << __LINE__ << ", " << chrname << ":" << var_startRefPos << "-" << var_endRefPos << ": " << queryseq_node->qname << ", aln_orient is not the same!" << endl;
 
-						start_qpos_tmp = queryseq_whole.size() - qc_sig->query_pos;
-						reverse_seq = queryseq_whole.substr(start_qpos_tmp-1, dist+1);
-						reverseComplement(reverse_seq);
-						qc_sig->altseq = reverse_seq;
+							end_query_pos = getEndQueryPosAlnSeg(qc_sig->query_pos, qc_sig->cigar_op, qc_sig->cigar_op_len);
+							start_qpos_tmp = queryseq_whole.size() - end_query_pos;
+							reverse_seq = queryseq_whole.substr(start_qpos_tmp-1, dist+1);
+							reverseComplement(reverse_seq);
+							qc_sig->altseq = reverse_seq;
+						}
+
+						delete qc_sig_next;
+						qcSig_vec.erase(qcSig_vec.begin()+i);
+
+						merge_flag = true;
 					}
-
-					delete qc_sig_next;
-					qcSig_vec.erase(qcSig_vec.begin()+i);
-
-					merge_flag = true;
 				}
+				if(merge_flag==false) i++;
 			}
-			if(merge_flag==false) i++;
 		}
-	}
 
-	// assign neighbour information
-	for(i=1; i<qcSig_vec.size(); i++){
-		qc_sig = qcSig_vec.at(i-1);
-		if(qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP){ // clipping
-			// find the next clip
-			for(j=i; j<qcSig_vec.size(); j++){
-				qc_sig_next = qcSig_vec.at(j);
-				if(qc_sig_next->cigar_op==BAM_CSOFT_CLIP or qc_sig_next->cigar_op==BAM_CHARD_CLIP){ // clipping
-					qc_sig->chrname_next_clip = qc_sig_next->chrname;
-					qc_sig->dist_next_clip = qc_sig_next->ref_pos - qc_sig->ref_pos;
-					qc_sig->have_next_clip = true;
-					i = j;
-					break;
+		// assign neighbour information
+		for(i=1; i<qcSig_vec.size(); i++){
+			qc_sig = qcSig_vec.at(i-1);
+			if(qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP){ // clipping
+				// find the next clip
+				for(j=i; j<qcSig_vec.size(); j++){
+					qc_sig_next = qcSig_vec.at(j);
+					if(qc_sig_next->cigar_op==BAM_CSOFT_CLIP or qc_sig_next->cigar_op==BAM_CHARD_CLIP){ // clipping
+						qc_sig->chrname_next_clip = qc_sig_next->chrname;
+						qc_sig->dist_next_clip = qc_sig_next->ref_pos - qc_sig->ref_pos;
+						qc_sig->have_next_clip = true;
+						i = j;
+						break;
+					}
 				}
 			}
 		}
+
+		qcSigList_node = new qcSigList_t();
+		qcSigList_node->startSpanRefPos = sidemost_idx_vec.at(2);
+		qcSigList_node->endSpanRefPos = sidemost_idx_vec.at(3);
+		qcSigList_node->query_seqs_vec = query_seqs;
+		qcSigList_node->qcSig_vec = qcSig_vec;
+
+		var_startRefPos_tmp = var_startRefPos - EXT_SIZE_CHK_VAR_LOC;
+		if(var_startRefPos_tmp<1) var_startRefPos_tmp = 1;
+		var_endRefPos_tmp = var_endRefPos + EXT_SIZE_CHK_VAR_LOC;
+		if(var_endRefPos_tmp>chrlen) var_endRefPos_tmp = chrlen;
+		if(qcSigList_node->startSpanRefPos<=var_startRefPos_tmp and qcSigList_node->endSpanRefPos>=var_endRefPos_tmp) qcSigList_node->entire_flanking_flag = true;
+		else qcSigList_node->entire_flanking_flag = false;
+
+		return qcSigList_node;
+	}else{
+
+		for(i=1; i<qcSig_vec.size(); i++) delete qcSig_vec.at(i);
+		vector<qcSig_t*>().swap(qcSig_vec);
+
+		return NULL;
 	}
-
-	qcSigList_node = new qcSigList_t();
-	qcSigList_node->startSpanRefPos = sidemost_idx_vec.at(2);
-	qcSigList_node->endSpanRefPos = sidemost_idx_vec.at(3);
-	qcSigList_node->query_seqs_vec = query_seqs;
-	qcSigList_node->qcSig_vec = qcSig_vec;
-
-	var_startRefPos_tmp = var_startRefPos - EXT_SIZE_CHK_VAR_LOC;
-	if(var_startRefPos_tmp<1) var_startRefPos_tmp = 1;
-	var_endRefPos_tmp = var_endRefPos + EXT_SIZE_CHK_VAR_LOC;
-	if(var_endRefPos_tmp>chrlen) var_endRefPos_tmp = chrlen;
-	if(qcSigList_node->startSpanRefPos<=var_startRefPos_tmp and qcSigList_node->endSpanRefPos>=var_endRefPos_tmp) qcSigList_node->entire_flanking_flag = true;
-	else qcSigList_node->entire_flanking_flag = false;
-
-	return qcSigList_node;
 }
 
 // get the left and right most align segments
