@@ -55,6 +55,14 @@ int32_t computeDisagreeNum(Base *baseArray, int32_t arr_size);
 void mergeOverlappedReg(vector<reg_t*> &regVector);
 void updateReg(reg_t* reg1, reg_t* reg2);
 void mergeAdjacentReg(vector<reg_t*> &regVec, size_t dist_thres);
+
+// merge neighbouring indels
+void mergeNeighbouringVars(vector<reg_t*> &regVector, int32_t max_ref_dist_thres, double min_merge_identity_thres, faidx_t *fai, string contigfilename, string reffilename);
+double calculate_merge_identity_threshold(int32_t common_length, int32_t max_common_length, double min_merge_identity_thres);
+int32_t calculate_merge_distance_threshold(int32_t max_ref_dist_thres, int32_t support_num, int32_t sv_len, int32_t comp_sv_size);
+int32_t calculate_merge_distance_threshold(bool complex_region_flag, int32_t query_supp_num, int32_t query_sv_size, int32_t total_sv_num, double query_sv_support_different);
+bool ComplexRegionFlag(vector<reg_t*> regVector);
+
 void printRegVec(vector<reg_t*> &regVec, string header);
 void printMateClipReg(mateClipReg_t *mate_clip_reg);
 vector<string> getLeftRightPartChrname(mateClipReg_t *mate_clip_reg);
@@ -76,6 +84,10 @@ void cleanPrevConsTmpDir(const string &cns_dir_str, const string &dir_prefix);
 string getCallFileHeaderBed(string &sample);
 string getCallFileHeaderBedpe(string &sample);
 vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAlnData_t*> &clipAlnDataVector, const string &refseq_given, string &chrname, int64_t startRefPos, int64_t endRefPos, faidx_t *fai, int32_t minConReadLen, bool clip_reg_flag, pthread_mutex_t *p_mutex_fai);
+
+// void mergeNeighbouringSigs(vector<struct querySeqInfoNode*> &query_seq_info_vec, int32_t max_ref_dist_thres, double min_merge_identity_thres, faidx_t *fai);
+void mergeNeighbouringSigs(struct querySeqInfoNode* query_seq_info_node, vector<qcSig_t*> &sig_vec, int32_t max_ref_dist_thres, double min_merge_identity_thres, faidx_t *fai);
+
 int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &query_aln_segs);
 vector<string> getQuerySeqWithSoftClipSeqs(clipAlnData_t* clip_aln, string &refseq, int64_t startRefPos, int64_t endRefPos, int32_t bam_type, bool clip_reg_flag);
 vector<int32_t> computeQueryStartEndLocByRefPos(bam1_t *b, int64_t startRefPos, int64_t endRefPos, string &refseq, int32_t bam_type);

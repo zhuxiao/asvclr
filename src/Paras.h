@@ -17,7 +17,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Allele-aware Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.4.4"
+#define PROG_VERSION				"1.4.5"
 #define VCF_VERSION					"4.2"
 
 #define CMD_DET_STR					"det"
@@ -129,8 +129,12 @@ using namespace std;
 #define RESULT_PREFIX_DEFAULT		"asvclr"
 
 #define MAX_ULTRA_HIGH_COV_THRES	300		// maximal coverage threshold for ultra-high coverage, 100
-#define MIN_MAPQ_THRES				0		// 10
-#define MIN_HIGH_MAPQ_THRES			10
+#define MIN_MAPQ_THRES				20		// 0, 10
+#define MIN_HIGH_MAPQ_THRES			(MIN_MAPQ_THRES+10)
+
+#define CALL_MIN_IDENTITY_MERGE_THRES		0.95
+#define CALL_MIN_IDENTITY_MERGE_THRES2		0.7
+#define CALL_MIN_DISTANCE_MERGE_THRES		300
 
 #define MIN_ADJACENT_REG_DIST		20		// 50
 
@@ -171,12 +175,13 @@ class Paras
 		string out_dir_tra = out_dir_call + "/" + "tra";
 		string out_dir_result = "4_results";	// "4_results"
 		int32_t blockSize, slideSize, min_sv_size_usr, max_sv_size_usr, num_threads, large_indel_size_thres;
-		double max_seg_size_ratio_usr, min_identity_match;
+		double max_seg_size_ratio_usr, min_identity_match, min_identity_merge;
 		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy, include_alt;
 		size_t misAlnRegLenSum = 0;
 		int32_t minReadsNumSupportSV: 29, min_Nsupp_est_flag: 3; //, minClipReadsNumSupportSV; Nsupp_est_flag: 1 for estimated, 0 for user-specified
 		int32_t minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12;
-
+		int32_t min_distance_merge;
+		
 		// process monitor
 		string monitoring_proc_names_cns, monitoring_proc_names_call;
 		int32_t max_proc_running_minutes_cns, max_proc_running_minutes_call;

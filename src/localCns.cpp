@@ -36,6 +36,7 @@ localCns::localCns(string &readsfilename, string &contigfilename, string &refseq
 	mean_read_len = 0;
 
 	if(sv_len_est<=MAX_SV_LEN_USING_POA and clip_reg_flag==false) use_poa_flag = true;
+//	if(sv_len_est<=MAX_SV_LEN_USING_POA and varVec.at(varVec.size()-1)->endRefPos-varVec.at(0)->startRefPos<=MIN_SEQ_LEN_USING_MINIMIZER and clip_reg_flag==false) use_poa_flag = true;
 	else use_poa_flag = false;
 	//cout << "sv_len_est=" << sv_len_est << ", use_poa_flag=" << use_poa_flag << endl;
 
@@ -192,6 +193,14 @@ void localCns::extractReadsDataFromBAM(){
 	if(clip_reg_flag) data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
 	else data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, max_ultra_high_cov, max_seg_size_ratio);
 
+	// update the use_poa_flag
+//	if(use_poa_flag) {
+//		use_poa_flag = updateUsepoaFlag(clipAlnDataVector, MAX_VAR_REG_SIZE, 0.8);
+////		if(use_poa_flag==false){
+////			cout << "line=" << __LINE__ << ", clipAlnDataVector.size=" << clipAlnDataVector.size() << ", use_poa_flag=" << use_poa_flag << endl;
+////		}
+//	}
+
 	if(clipAlnDataVector.size()>0){
 
 		for(i=0; i<clipAlnDataVector.size(); i++) clipAlnDataVector.at(i)->query_checked_flag = false;
@@ -325,6 +334,43 @@ void localCns::saveClusterInfo(string &clusterfilename, vector<struct seqsVec*> 
 	outfile.close();
 }
 
+bool localCns::updateUsepoaFlag(vector<clipAlnData_t*> &clipAlnDataVector, int32_t maxVarRegSize, double repeat_reads_thres){
+	bool flag = true;
+	size_t i, j, total_reads_num;
+	string query_name_tmp;
+	double repeat_ratio;
+	int32_t repeat_reads_num = 0;
+	vector<clipAlnData_t*> query_aln_segs;
+
+	for(i=0; i<clipAlnDataVector.size(); i++) clipAlnDataVector.at(i)->query_checked_flag = false;
+
+	total_reads_num = clipAlnDataVector.size();
+	for(i=0; i<total_reads_num; i++){
+		if(clipAlnDataVector.at(i)->query_checked_flag==false){
+			query_name_tmp = clipAlnDataVector.at(i)->queryname;
+			query_aln_segs = getQueryClipAlnSegsAll(query_name_tmp, clipAlnDataVector);
+			if(query_aln_segs.size()>=2) {
+				if(isQuerySelfOverlap(query_aln_segs, MAX_VAR_REG_SIZE)){
+					repeat_reads_num += query_aln_segs.size();
+				}
+			}
+			for(j=0; j<query_aln_segs.size(); j++) query_aln_segs.at(j)->query_checked_flag = true;
+		}
+	}
+	for(i=0; i<clipAlnDataVector.size(); i++) clipAlnDataVector.at(i)->query_checked_flag = false;
+
+	if(repeat_reads_num>0 and total_reads_num>0){
+		repeat_ratio = (double)repeat_reads_num/total_reads_num;
+		//cout << "repeat_reads_num=" << repeat_reads_num << ", repeat_ratio=" << repeat_ratio << ", clipAlnDataVector.size=" << clipAlnDataVector.size() << endl;
+	}else
+		repeat_ratio = 0;
+	if(repeat_ratio>repeat_reads_thres) {
+		flag = false;
+		cout << contigfilename << ", repeat_reads_num=" << repeat_reads_num << ", repeat_ratio=" << repeat_ratio << ", clipAlnDataVector.size=" << clipAlnDataVector.size() << endl;
+	}
+	return flag;
+}
+
 vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInfoNode*> &query_seq_info_all){
 	vector<struct querySeqInfoVec*> query_clu_vec;
 	struct querySeqInfoVec *q_cluster_node_a, *q_cluster_node_b;
@@ -338,7 +384,7 @@ vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInf
 	vector<double> score_ratio_vec;
 	vector<srmin_match_t*> srmin_match_vec;
 	srmin_match_t *srmin_match_node;
-	bool flag;
+	bool flag, q_cluster_b_null_valid_flag;
 
 	for(i=0; i<query_seq_info_all.size(); i++) query_seq_info_all.at(i)->cluster_finished_flag = false;
 
@@ -357,6 +403,7 @@ vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInf
 		sco_min = INT_MAX; //0.99
 		score_ratio_vec.clear();
 		min_id_vec.clear();
+		q_cluster_b_null_valid_flag = false;
 
 //		score_ratio_vec.push_back(1);
 
@@ -434,9 +481,21 @@ vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInf
 
 			query_seq_info_all.at(srmin_match_vec.at(0)->pos_id.at(0))->cluster_finished_flag = true;
 			q_cluster_a.push_back(query_seq_info_all.at(srmin_match_vec.at(0)->pos_id.at(0)));
+			// if(srmin_match_vec.size()>1 and srmin_match_vec.at(1)->num>=0.6*min_supp_num) {
 			if(srmin_match_vec.size()>1 and srmin_match_vec.at(1)->num>=0.6*min_supp_num) {
-				query_seq_info_all.at(srmin_match_vec.at(1)->pos_id.at(0))->cluster_finished_flag = true;
-				q_cluster_b.push_back(query_seq_info_all.at(srmin_match_vec.at(1)->pos_id.at(0)));
+				if((double)srmin_match_vec.at(1)->num/srmin_match_vec.at(0)->num>=0.2){
+					query_seq_info_all.at(srmin_match_vec.at(1)->pos_id.at(0))->cluster_finished_flag = true;
+					q_cluster_b.push_back(query_seq_info_all.at(srmin_match_vec.at(1)->pos_id.at(0)));
+				}else
+					q_cluster_b_null_valid_flag = true;
+			}else{
+				if(srmin_match_vec.size()==1){
+					if(srmin_match_vec.at(0)->num>=0.6*min_supp_num){
+						q_cluster_b_null_valid_flag = true;
+					}
+				}else if((double)srmin_match_vec.at(1)->num/srmin_match_vec.at(0)->num<0.2){
+					q_cluster_b_null_valid_flag = true;
+				}
 			}
 		}else{
 			query_seq_info_all.at(k)->cluster_finished_flag = true;
@@ -449,7 +508,7 @@ vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInf
 			vector<srmin_match_t*>().swap(srmin_match_vec);
 		}
 
-		if(q_cluster_b.size()==0){
+		if(q_cluster_b.size()==0 and !q_cluster_b_null_valid_flag){
 			q_cluster_a.pop_back();
 			query_seq_info_all.at(k)->cluster_finished_flag = false;
 		}else{ // two initial sets
@@ -781,6 +840,10 @@ double localCns::computeScoreRatio(struct querySeqInfoNode* query_seq_info_node,
 	queryCluSig->qcSig_vec = extractQcSigsFromAlnSegsSingleQuery(query_seq_info_node, query_seq_info_node->clip_aln->chrname, startSpanPos, endSpanPos, min_sv_size);
 	seed_qcQuery = new queryCluSig_t();
 	seed_qcQuery->qcSig_vec = extractQcSigsFromAlnSegsSingleQuery(q_cluster_node, q_cluster_node->clip_aln->chrname, startSpanPos, endSpanPos, min_sv_size);
+
+	//merge queryCluSig->qcSig_vec and seed_qcQuery->qcSig_vec
+	mergeNeighbouringSigs(query_seq_info_node, queryCluSig->qcSig_vec, 100, 0.7, fai);
+	mergeNeighbouringSigs(q_cluster_node, seed_qcQuery->qcSig_vec, 100, 0.7, fai);
 
 	//matching
 	queryCluSig->match_profile_vec = computeQcMatchProfileSingleQuery(queryCluSig, seed_qcQuery);
@@ -1567,10 +1630,10 @@ bool localCns::localConsensus(){
 		}
 	}else{
 		flag = localCnsWtdbg2(); // local consensus using wtdbg2
-		if(flag==false){
-			flag = cnsByPoa();
-			//cout << "--------- " << flag << ": rescued by abpoa, " << contigfilename  << ", sv_len_est=" << sv_len_est << endl;
-		}
+		// if(flag==false){
+		// 	flag = cnsByPoa();
+		// 	//cout << "--------- " << flag << ": rescued by abpoa, " << contigfilename  << ", sv_len_est=" << sv_len_est << endl;
+		// }
 	}
 
 	destorySeqsVec(seqs_vec);
@@ -1633,7 +1696,11 @@ bool localCns::cnsByPoa(){
 					sleep(mem_wait_seconds);
 				}else{
 					tmp_cons_filename = tmpdir + "/consensus_" + to_string(k) + ".fa";
-					cmd2 = "abpoa -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
+					// cmd2 = "abpoa -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
+					cmd2 = "abpoa";
+					if(mean_read_len>=MIN_SEQ_LEN_USING_MINIMIZER) cmd2 =+ " -S";
+					cmd2 += " -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
+
 					//cout << cmd2 << endl;
 					system(cmd2.c_str());
 

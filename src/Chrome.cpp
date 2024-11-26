@@ -2624,6 +2624,8 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
 				var_cand_tmp->min_identity_match = paras->min_identity_match;
+				var_cand_tmp->min_identity_merge = paras->min_identity_merge;
+				var_cand_tmp->min_distance_merge = paras->min_distance_merge;
 				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
 				var_cand_tmp->minMapQ = paras->minMapQ;
 				var_cand_tmp->minHighMapQ = paras->minHighMapQ;
@@ -3106,6 +3108,8 @@ void Chrome::loadPrevMinimapAlnItems(bool clipReg_flag, bool limit_reg_process_f
 				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
 				var_cand_tmp->min_identity_match = paras->min_identity_match;
+				var_cand_tmp->min_identity_merge = paras->min_identity_merge;
+				var_cand_tmp->min_distance_merge = paras->min_distance_merge;
 				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
 				var_cand_tmp->minMapQ = paras->minMapQ;
 				var_cand_tmp->minHighMapQ = paras->minHighMapQ;
@@ -3805,6 +3809,7 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 	reg_t *reg;
 	string line, sv_type, header_line_bed, discov_level_str;
 	int32_t ref_dist, query_dist;
+	static int32_t ins_num = 0, del_num = 0, dup_num= 0, inv_num = 0, tra_num = 0, sv_num;
 	bool size_satisfied; //, no_existed;
 
 	outfile.open(outfilename_indel);
@@ -3832,17 +3837,19 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 //			if(no_existed) no_existed = isNotAlreadyExists(var_cand->newVarVec, reg, j);
 
 			//if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied and no_existed){ // deleted on 2024-08-02
+			sv_num = 0;
 			if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied){
 				switch(reg->var_type){
 					case VAR_UNC: sv_type = VAR_UNC_STR; break;
-					case VAR_INS: sv_type = VAR_INS_STR; break;
-					case VAR_DEL: sv_type = VAR_DEL_STR; break;
-					case VAR_DUP: sv_type = VAR_DUP_STR; break;
-					case VAR_INV: sv_type = VAR_INV_STR; break;
-					case VAR_TRA: sv_type = VAR_TRA_STR; break;
+					case VAR_INS: sv_type = VAR_INS_STR; ins_num++; sv_num = ins_num; break;
+					case VAR_DEL: sv_type = VAR_DEL_STR; del_num++; sv_num = del_num; break;
+					case VAR_DUP: sv_type = VAR_DUP_STR; dup_num++; sv_num = dup_num; break;
+					case VAR_INV: sv_type = VAR_INV_STR; inv_num++; sv_num = inv_num; break;
+					case VAR_TRA: sv_type = VAR_TRA_STR; tra_num++; sv_num = tra_num; break;
 					default: sv_type = VAR_MIX_STR; break;
 				}
-				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+				// line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\tASVCLR." + sv_type + "." + to_string(sv_num) + "\t" + sv_type;
 				if(reg->var_type!=VAR_TRA)
 					line += "\t" + to_string(reg->sv_len);
 				else
@@ -3853,7 +3860,6 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 					line += "\t-";
 
 				//upperSeq
-
 				if(reg->refseq.size()) {
 					upperSeq(reg->refseq);
 					line += "\t" + reg->refseq;
@@ -3928,15 +3934,16 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 			if(reg and reg->var_type!=VAR_UNC and var_cand->call_success and size_satisfied){
 				switch(reg->var_type){
 					case VAR_UNC: sv_type = VAR_UNC_STR; break;
-					case VAR_INS: sv_type = VAR_INS_STR; break;
-					case VAR_DEL: sv_type = VAR_DEL_STR; break;
-					case VAR_DUP: sv_type = VAR_DUP_STR; break;
-					case VAR_INV: sv_type = VAR_INV_STR; break;
-					case VAR_TRA: sv_type = VAR_TRA_STR; break;
+					case VAR_INS: sv_type = VAR_INS_STR; ins_num++; sv_num = ins_num; break;
+					case VAR_DEL: sv_type = VAR_DEL_STR; del_num++; sv_num = del_num; break;
+					case VAR_DUP: sv_type = VAR_DUP_STR; dup_num++; sv_num = dup_num; break;
+					case VAR_INV: sv_type = VAR_INV_STR; inv_num++; sv_num = inv_num; break;
+					case VAR_TRA: sv_type = VAR_TRA_STR; tra_num++; sv_num = tra_num; break;
 					default: sv_type = VAR_MIX_STR; break;
 				}
 
-				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+				// line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
+				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "." + to_string(sv_num) + "\t" + sv_type;
 				if(reg->var_type!=VAR_TRA)
 					line += "\t" + to_string(reg->sv_len);
 				else

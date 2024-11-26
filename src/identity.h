@@ -16,7 +16,7 @@ using namespace std;
 #define WINDOWSIZE          10
 #define KMERSIZE            15
 
-#define MAX_SEQ_LEN			20000
+#define MAX_SEQ_LEN			5000
 
 #define MATCHSCORE			2
 #define	MISMATCHSCORE		-1

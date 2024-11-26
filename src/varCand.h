@@ -66,15 +66,15 @@ using namespace std;
 
 class varCand {
 	public:
-		string var_cand_filename, out_dir_call, chrname, inBamFile, misAln_filename, technology;
+		string var_cand_filename, out_dir_call, out_dir_cns, chrname, inBamFile, misAln_filename, technology;
 		faidx_t *fai;
 		vector<simpleReg_t*> sub_limit_reg_vec;
 		bool limit_reg_process_flag, limit_reg_delete_flag;
 
 		string refseqfilename, ctgfilename, readsfilename, alnfilename, clusterfilename;
 //		string rescue_refseqfilename, rescue_cnsfilename, rescue_readsfilename, rescue_alnfilename;
-		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, minConReadLen, minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12;
-		double max_ultra_high_cov, min_identity_match;
+		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, minConReadLen, minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12, min_distance_merge;
+		double max_ultra_high_cov, min_identity_match, min_identity_merge;
 		vector<reg_t*> varVec, newVarVec;
 		bool cns_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
 		vector<blat_aln_t*> blat_aln_vec;               	// blat aligned segments
@@ -172,7 +172,7 @@ class varCand {
 		float computeRepeatCovRatio(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void determineIndelType();
-		vector<reg_t*> computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec);
+		vector<reg_t*> computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, string &refseqfilename_para);
 		vector<reg_t*> rescueIndelVarLoc();
 		void svPosCorrection(reg_t* reg);
 		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, vector<clipAlnData_t*> &clipAlnDataVector, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres);

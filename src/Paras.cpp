@@ -50,6 +50,7 @@ void Paras::init(){
 
 	//min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES; // deleted on 2024-09-04
 	min_identity_match = -1;
+	min_identity_merge = -1;
 	max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_CCS;
 
 	min_ins_size_filt = 0;
@@ -144,9 +145,11 @@ bool Paras::isRecommendCanuVersion(string &canu_version, const string &recommend
 void Paras::initPreset(){
 	if(technology.compare(PACBIO_CCS_TECH_STR)==0){  // CCS
 		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES;
+		if(min_identity_merge==-1) min_identity_merge = CALL_MIN_IDENTITY_MERGE_THRES;
 		//max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_OTHER;
 	}else{// CLR, ONT
 		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES2;
+		if(min_identity_merge==-1) min_identity_merge = CALL_MIN_IDENTITY_MERGE_THRES2;
 	}
 }
 
@@ -528,6 +531,8 @@ int Paras::parseCallParas(int argc, char **argv){
 	minMapQ = MIN_MAPQ_THRES;
 	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
 	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
+	min_distance_merge = CALL_MIN_DISTANCE_MERGE_THRES;
+	
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
 	gt_min_identity_merge = GT_MIN_IDENTITY_MERGE_THRES;
@@ -554,7 +559,7 @@ int Paras::parseCallParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:n:x:i:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:n:x:i:I:d:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr = stoi(optarg); break;
@@ -564,6 +569,8 @@ int Paras::parseCallParas(int argc, char **argv){
 					break;
 			case 'x': technology = optarg; break;
 			case 'i': min_identity_match = stod(optarg); break;
+			case 'I': min_identity_merge = stod(optarg); break;
+			case 'd': min_distance_merge = stoi(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
@@ -649,6 +656,8 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	minClipEndSize = MIN_CLIP_END_SIZE;
 	expected_cov_cns = EXPECTED_COV_CNS;
+	min_distance_merge = CALL_MIN_DISTANCE_MERGE_THRES;
+
 	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
@@ -684,7 +693,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:x:i:r:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:x:i:I:d:r:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
@@ -695,6 +704,8 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 					break;
 			case 'x': technology = optarg; break;
 			case 'i': min_identity_match = stod(optarg); break;
+			case 'I': min_identity_merge = stod(optarg); break;
+			case 'd': min_distance_merge = stoi(optarg); break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
@@ -843,7 +854,7 @@ void Paras::showDetectUsage(){
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
-	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
+	cout << "   -q INT        minimal mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
 	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
 	//cout << "   -r FILE       limit reference regions to process [null]: CHR|CHR:START-END" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
@@ -894,7 +905,7 @@ void Paras::showCnsUsage(){
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
-	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
+	cout << "   -q INT        minimal mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
 	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
 	cout << "   -c FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
 	cout << "                 0 for no coverage sampling" << endl;
@@ -970,12 +981,16 @@ void Paras::showCallUsage(){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9" << endl;
-	cout << "                   sq/rs/ont: -i 0.75" << endl;
+	cout << "                         ccs: -i 0.9 -I 0.95" << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -I 0.7" << endl;
 	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
+	cout << "   -I FLOAT      minimum merging identity [" << CALL_MIN_IDENTITY_MERGE_THRES << "]" << endl;
+	cout << "   -d INT        minimal merging distance [" << CALL_MIN_DISTANCE_MERGE_THRES << "]" << endl;
+	cout << "                 neighboring SVs with distance smaller than INT and merging identity" << endl;
+	cout << "                 larger than FLOAT will be merged" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
-	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
+	cout << "   -q INT        minimal mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
 	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
 	cout << "   -o DIR        output directory [output]" << endl;
 	cout << "   -p STR        prefix of output result files [null]" << endl;
@@ -1043,14 +1058,18 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9" << endl;
-	cout << "                   sq/rs/ont: -i 0.75" << endl;
+	cout << "                         ccs: -i 0.9 -I 0.95" << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -I 0.7" << endl;
 	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
+	cout << "   -I FLOAT      minimum merging identity [" << CALL_MIN_IDENTITY_MERGE_THRES << "]" << endl;
+	cout << "   -d INT        minimal merging distance [" << CALL_MIN_DISTANCE_MERGE_THRES << "]" << endl;
+	cout << "                 neighboring SVs with distance smaller than INT and merging identity" << endl;
+	cout << "                 larger than FLOAT will be merged" << endl;
 	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
-	cout << "   -q INT        minimal read mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
+	cout << "   -q INT        minimal mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
 	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
 	cout << "   -c FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
 	cout << "                 0 for no coverage sampling" << endl;
@@ -1196,7 +1215,7 @@ void Paras::outputParas(){
 	if(command.compare(CMD_DET_STR)!=0)
 		cout << "Minimal ratio of max-segment for indel calling: " << max_seg_size_ratio_usr << endl; // not det
 	cout << "Minimal clipping end size: " << minClipEndSize << " bp" << endl;
-	cout << "Minimal read mapping quality threshold: " << minMapQ << endl;
+	cout << "Minimal mapping quality: " << minMapQ << endl;
 	//cout << "Minimal high read mapping quality threshold: " << minHighMapQ << endl;
 	if(command.compare(CMD_CNS_STR)==0 or command.compare(CMD_ALL_STR)==0 or command.compare(CMD_DET_CNS_STR)==0){ // cns, all, det-cns
 		cout << "Expected sampling coverage: " << expected_cov_cns << endl;

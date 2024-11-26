@@ -288,6 +288,8 @@ void LongSequenceSplitAlignment(vector<Minimizer>& minimizers, vector<Minimizer>
         else if (i == Length) {
             Exact_len = sequece_len - (minimizers[i - 1].position + k);
             Exact_len1 = seqence_len1 - (minimizers1[i - 1].position + k);
+            if(Exact_len < 0) Exact_len =0; 
+            if(Exact_len1 < 0) Exact_len1 =0;
             seq = sequence.substr(minimizers[i - 1].position + k, Exact_len); 
 
             seq1 = sequence1.substr(minimizers1[i - 1].position + k, Exact_len1);
@@ -295,6 +297,8 @@ void LongSequenceSplitAlignment(vector<Minimizer>& minimizers, vector<Minimizer>
         else {
             Exact_len = minimizers[i].position - (minimizers[i - 1].position + k);
             Exact_len1 = minimizers1[i].position - (minimizers1[i - 1].position + k);
+            if(Exact_len < 0) Exact_len =0; 
+            if(Exact_len1 < 0) Exact_len1 =0;
             seq = sequence.substr(minimizers[i - 1].position + k, Exact_len);
             seq1 = sequence1.substr(minimizers1[i - 1].position + k, Exact_len1);
 

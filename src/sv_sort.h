@@ -38,8 +38,8 @@ vector<vector<SV_item*>> constructSubsetByChr(vector<SV_item*> &sv_vec);
 bool sortFunSameChr(const SV_item *item1, const SV_item *item2);
 void sortSVitem(vector<vector<SV_item*>> &subsets);
 void sortSubset(vector<SV_item*> &sv_vec);
-void rmDupSVitem(vector<vector<SV_item*>> &subsets,double identity_thres);
-void rmDupSVitemSubset(vector<SV_item*> &sv_vec, double identity_thres);
+void rmDupSVitem(vector<vector<SV_item*>> &subsets, double size_ratio_thres, double identity_thres);
+void rmDupSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, double identity_thres);
 
 
 #endif /* SRC_SV_SORT_H_ */

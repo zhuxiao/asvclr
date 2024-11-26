@@ -726,8 +726,8 @@ int Genome::processConsWork(){
 
 	if(paras->cns_work_vec.empty()) return 0;  // no consensus work, then return directly
 
-	num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
-	//num_threads_work = (paras->num_threads>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
+	//num_threads_work = (paras->num_threads>=0.5*sysconf(_SC_NPROCESSORS_ONLN)) ? 0.5*sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
+	num_threads_work = (paras->num_threads>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : paras->num_threads;
 
 	if(num_threads_work<1) num_threads_work = 1;
 
@@ -754,7 +754,7 @@ int Genome::processConsWork(){
 		}
 		// clipReg_reads_1_26966226-26974816.fq, clipReg_reads_1_21506254-21506762.fq, clipReg_cns_16_209822-210880.fa, clipReg_cns_1_197756788-197757987.fa (INV)
 		// cns_chr1_1461692-1461767.fa, cns_chr1_1595082-1595934.fa, cns_chr1_1663381-1663402.fa
-//		if(cns_work_opt->contigfilename.compare("output_minimap2_hg002_tmp/2_cns/16/clipReg_cns_16_46398465-46435590.fa")==0){
+//		if(cns_work_opt->contigfilename.compare("output_minimap2_hg002_ont_filt_n3_q20_20241002/2_cns/1/cns_1_10247654-10248175.fa")==0){
 //			cout << "cnsfilename=" << cns_work_opt->contigfilename << endl;
 //		}else continue;
 
@@ -864,7 +864,7 @@ void Genome::generateFile(string &filename){
 // call variants for genome
 int Genome::genomeCall(){
 	Time time;
-
+	
 	// initialize the variables for process monitor killed blat works
 	//initMonitorKilledBlatWorkMem();
 	//initMonitorKilledMinimap2WorkMem();
@@ -1224,7 +1224,7 @@ int Genome::processCallWork(){
 		// minimap2_1_2213173-2214000.paf, minimap2_contig_1_26966226-26974816.paf, minimap2_contig_1_21506254-21506762.paf, minimap2_contig_1_29382165-29382465.paf
 		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf, minimap2_chr1_143246329-143247038.paf, minimap2_1_649705-650290.paf
 		// minimap2_1_2765904-2766241.paf, minimap2_1_5447230-5447236.paf,
-//		if(var_cand->alnfilename.compare("output_minimap2_hg002_ont_filt_20240820_2/3_call/11/minimap2_cns_11_1961067-1961733.paf")!=0){
+//		if(var_cand->alnfilename.compare("debug_minimap2_hg007_ccs_n3_q20_chr_20241122/3_call/chr15/minimap2_chr15_21111599-21112682.paf")!=0){
 //			continue;
 //		}
 
@@ -1794,6 +1794,8 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->minClipEndSize = paras->minClipEndSize;
 		var_cand_new->minConReadLen = paras->minConReadLen;
 		var_cand_new->min_identity_match = paras->min_identity_match;
+		var_cand_new->min_identity_merge = paras->min_identity_merge;
+		var_cand_new->min_distance_merge = paras->min_distance_merge;
 		var_cand_new->max_seg_num_per_read = paras->max_seg_num_per_read;
 		var_cand_new->minMapQ = paras->minMapQ;
 		var_cand_new->minHighMapQ = paras->minHighMapQ;
@@ -2833,6 +2835,8 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
 				var_cand_tmp->min_identity_match = paras->min_identity_match;
+				var_cand_tmp->min_identity_merge = paras->min_identity_merge;
+				var_cand_tmp->min_distance_merge = paras->min_distance_merge;
 				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
 				var_cand_tmp->minMapQ = paras->minMapQ;
 				var_cand_tmp->minHighMapQ = paras->minHighMapQ;
@@ -2961,6 +2965,8 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
 				var_cand_tmp->min_identity_match = paras->min_identity_match;
+				var_cand_tmp->min_identity_merge = paras->min_identity_merge;
+				var_cand_tmp->min_distance_merge = paras->min_distance_merge;
 				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
 				var_cand_tmp->minMapQ = paras->minMapQ;
 				var_cand_tmp->minHighMapQ = paras->minHighMapQ;
@@ -3431,7 +3437,7 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 	string bnd_id_str, mate_bnd_id_str, mate_reg_str, mate_bnd_str, mate_bnd_str2, reg_str, mate_chr, chrname1, chrname2;
 	vector<string> bnd_str_vec, bnd_str_vec2;
 	int64_t tra_pos_arr[4];
-	int32_t i, j, checked_arr[4][2];
+	int32_t i, j, checked_arr[4][2]; //, ins_id, del_id, dup_id, inv_id, tra_id;
 	vector<BND_t*> bnd_vec, sub_bnd_vec;
 	string format_name_bnd;
 
@@ -3452,7 +3458,6 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 	saveVCFHeader(outfile, paras->sample);
 
 	format_name_bnd = "GT:AD:DP";
-
 	// save results
 	while(getline(infile, line))
 		if(line.size()>0 and line.at(0)!='#'){	// skip header
@@ -3465,10 +3470,10 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 			if(str_vec.size()<=MAX_BED_COLS_NUM){ // INS, DEL, DUP, INV, MIX, UNC
 				chr = str_vec.at(0);		// CHROM
 				start_pos = str_vec.at(1);	// POS
-				id = ".";					// ID
-				ref = str_vec.at(6);		// REF
-				alt = str_vec.at(7);		// ALT
-				extra_info = str_vec.at(8);	// ExtraInfo
+				id = str_vec.at(3);			// ID
+				ref = str_vec.at(7);		// REF
+				alt = str_vec.at(8);		// ALT
+				extra_info = str_vec.at(9);	// ExtraInfo
 				qual = ".";					// QUAL
 				filter = "PASS";			// FILTER
 
@@ -3476,12 +3481,12 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 				if(alt.compare("-")==0) alt = ".";
 
 				end_pos = str_vec.at(2);
-				sv_type = str_vec.at(3);
-				sv_len = str_vec.at(4);
-				if(sv_type.compare(VAR_UNC_STR)==0 or sv_type.compare(VAR_UNC_STR1)==0 or sv_type.compare(VAR_UNC_STR2)==0) ref = alt = "."; // UNC
+				sv_type = str_vec.at(4);
+				sv_len = str_vec.at(5);
+				if(sv_type.compare(VAR_UNC_STR)==0 or sv_type.compare(VAR_UNC_STR1)==0 or sv_type.compare(VAR_UNC_STR2)==0) id = ref = alt = "."; // UNC
 				info = "SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len + ";END=" + end_pos;	// INFO: SVTYPE=sv_type;SVLEN=sv_len;END=end
 				if(sv_type.compare(VAR_DUP_STR)==0 or sv_type.compare(VAR_DUP_STR1)==0) { // DUPNUM=dup_num
-					dup_num = str_vec.at(5);
+					dup_num = str_vec.at(6);
 					info += ";DUPNUM=" + dup_num;
 				}
 				info += ";" + extra_info; // DP=xx;AF=yy
@@ -3492,17 +3497,35 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 
 //				format = "GT";		// FORMAT and the values
 //				format_val = "./.";
-//
+
+				// id = "";
+				// if(sv_type.compare(VAR_INS_STR)==0){
+				// 	ins_id++;
+				// 	id = sv_type + "." + to_string(ins_id);
+				// }else if(sv_type.compare(VAR_DEL_STR)==0){
+				// 	del_id++;
+				// 	id = sv_type + "." + to_string(del_id);
+				// }else if(sv_type.compare(VAR_DUP_STR)==0){
+				// 	dup_id++;
+				// 	id = sv_type + "." + to_string(dup_id);
+				// }else if(sv_type.compare(VAR_INV_STR)==0){
+				// 	inv_id++;
+				// 	id = sv_type + "." + to_string(inv_id);
+				// }else if(sv_type.compare(VAR_TRA_STR)==0){
+				// 	tra_id++;
+				// 	id = sv_type + "." + to_string(tra_id);
+				// }
+
 //				line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
 
-				format = str_vec.at(9);			// FORMAT
-				format_val = str_vec.at(10);		// gt_value
+				format = str_vec.at(10);			// FORMAT
+				format_val = str_vec.at(11);		// gt_value
 
 				line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
 				outfile << line_vcf << endl;
 
 			}else{	// TRA, MIX
-				if(str_vec.at(6).compare(VAR_TRA_STR)==0){ // TRA, then convert to BND
+				if(str_vec.at(7).compare(VAR_TRA_STR)==0){ // TRA, then convert to BND
 
 					for(i=0; i<4; i++) { checked_arr[i][0] = checked_arr[i][1] = 0; } // initialize
 
@@ -3518,7 +3541,7 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 					if(str_vec.at(5).compare("-")!=0) tra_pos_arr[3] = stoi(str_vec.at(5));
 					else tra_pos_arr[3] = -1;
 
-					bnd_str_vec = split(str_vec.at(9), ";"); // "2+,3-"
+					bnd_str_vec = split(str_vec.at(10), ";"); // "2+,3-"
 
 					// four regions
 					for(i=0; i<4; i++){
@@ -3819,7 +3842,7 @@ size_t Genome::getSVTypeSingleLine(string &line){
 	string str_tmp;
 
 	str_vec = split(line, "\t");
-	str_tmp = str_vec.at(3);
+	str_tmp = str_vec.at(4);
 	if(str_tmp.compare(VAR_UNC_STR)==0 or str_tmp.compare(VAR_UNC_STR1)==0 or str_tmp.compare(VAR_UNC_STR2)==0){
 		sv_type = VAR_UNC;
 	}else if(str_tmp.compare(VAR_INS_STR)==0 or str_tmp.compare(VAR_INS_STR1)==0 or str_tmp.compare(VAR_INS_STR2)==0){
@@ -3831,8 +3854,8 @@ size_t Genome::getSVTypeSingleLine(string &line){
 	}else if(str_tmp.compare(VAR_INV_STR)==0 or str_tmp.compare(VAR_INV_STR1)==0 or str_tmp.compare(VAR_INV_STR2)==0){
 		sv_type = VAR_INV;
 	}else{
-		if(str_vec.size()>MAX_BED_COLS_NUM and (str_vec.at(6).compare(VAR_TRA_STR)==0 or str_vec.at(6).compare(VAR_TRA_STR1)==0 or str_vec.at(6).compare(VAR_BND_STR)==0)){
-			if(str_vec.at(6).compare(VAR_TRA_STR)==0 or str_vec.at(6).compare(VAR_TRA_STR1)==0) sv_type = VAR_TRA;
+		if(str_vec.size()>MAX_BED_COLS_NUM and (str_vec.at(7).compare(VAR_TRA_STR)==0 or str_vec.at(7).compare(VAR_TRA_STR1)==0 or str_vec.at(7).compare(VAR_BND_STR)==0)){
+			if(str_vec.at(7).compare(VAR_TRA_STR)==0 or str_vec.at(7).compare(VAR_TRA_STR1)==0) sv_type = VAR_TRA;
 			else sv_type = VAR_BND;
 		}else{
 			sv_type = VAR_MIX;
@@ -3858,7 +3881,7 @@ void Genome::sortVarResults(string &infilename, int32_t filetype){
 
 	subsets = constructSubsetByChr(sv_vec);
 	sortSVitem(subsets);
-	rmDupSVitem(subsets, paras->gt_min_identity_merge); // remove identical items
+	rmDupSVitem(subsets, paras->gt_size_ratio_match, paras->gt_min_identity_merge); // remove identical items
 	outputResult(outfilename, subsets, filetype);
 
 	remove(infilename.c_str());

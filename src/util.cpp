@@ -1047,6 +1047,247 @@ void mergeAdjacentReg(vector<reg_t*> &regVec, size_t dist_thres){
 	}
 }
 
+// merge neighbouring indels
+void mergeNeighbouringVars(vector<reg_t*> &regVector, int32_t max_ref_dist_thres, double min_merge_identity_thres, faidx_t *fai, string contigfilename, string reffilename){
+	size_t i;
+	int32_t query_id, common_len, pos1_tmp, pos2_tmp, distance;
+	int64_t start_querypos_comp, start_refpos_comp, pre_refpos_comp;
+	reg_t *reg_1, *reg_2;
+	string comp_queryseq, comp_refseq, reg_str, seq, new_queryseq;
+    double iden_val, merge_identity_thres, merge_ref_dist_thres, sv_supp_diff;
+	int32_t sv_supp_num2 = 0, sv_size = 0, total_sv_num = 0, sv_supp_num1 = 0;
+	bool complex_reg_flag;
+
+	//debug
+	// if(regVector.size()>=2){
+	// 	cout << "regVector.size=" << regVector.size() << endl;
+	// 	for(i=0; i<regVector.size(); i++){
+	// 		cout << to_string(regVector.at(i)->query_id) << ":" << regVector.at(i)->startRefPos << "," << to_string(regVector.at(i)->var_type) << "," << regVector.at(i)->sv_len << ", support=" << regVector.at(i)->supp_num << endl;
+	// 	}
+	// }
+
+	distance = -1;
+	pre_refpos_comp = -1;
+	common_len = 0;
+
+	merge_identity_thres = min_merge_identity_thres;
+	merge_ref_dist_thres = max_ref_dist_thres;
+	
+	complex_reg_flag = false;
+	if(regVector.size()>=2) complex_reg_flag = ComplexRegionFlag(regVector);
+	
+	for(i=0; i<regVector.size(); i++){
+		reg_1 = regVector.at(i);
+		query_id = reg_1->query_id;
+		if(i+1<regVector.size()){
+			reg_2 = regVector.at(i+1);
+
+			if(query_id == reg_2->query_id and reg_1->var_type == reg_2->var_type){
+				if(pre_refpos_comp<0) distance = reg_2->startRefPos - reg_1->endRefPos - 1;
+				else distance = reg_2->startRefPos - pre_refpos_comp - 1;
+
+				// cout << "svtype:" << to_string(reg_1->var_type) << ", reg_1: sv_len=" << reg_1->sv_len << ", reg_2: sv_len=" << reg_2->sv_len << ", distance=" << distance << endl;
+
+				//update merge_distance_thres
+				if(distance > merge_ref_dist_thres){
+					sv_size = reg_2->sv_len;
+					total_sv_num = regVector.size();
+
+					sv_supp_num1 = reg_1->supp_num;
+					sv_supp_num2 = reg_2->supp_num;
+					sv_supp_diff = 1 - (double)min(sv_supp_num1, sv_supp_num2)/max(sv_supp_num1, sv_supp_num2);
+					// cout << sv_supp_diff << endl;
+					merge_ref_dist_thres = calculate_merge_distance_threshold(complex_reg_flag, sv_supp_num2, sv_size, total_sv_num, sv_supp_diff);
+					// cout << "distance:" << distance << ", dist_thres:" << merge_ref_dist_thres << endl;
+				}
+
+				if(distance<=merge_ref_dist_thres and distance>=0){
+
+					// update merge_identity_thres
+					if(distance >= reg_2->sv_len){
+						if(pre_refpos_comp<0){
+							common_len = distance - reg_2->sv_len;
+							merge_identity_thres = calculate_merge_identity_threshold(common_len, distance, min_merge_identity_thres);
+						}else{
+							pos1_tmp = reg_1->endQueryPos + distance;
+							pos2_tmp = reg_2->startQueryPos - (distance - reg_2->sv_len);
+							if(pos1_tmp > pos2_tmp){
+								common_len = pos1_tmp - pos2_tmp;
+								merge_identity_thres = calculate_merge_identity_threshold(common_len, distance, min_merge_identity_thres);
+								// merge_identity_thres = calculate_merge_identity_threshold2(common_len, distance, query_sv_type);
+							}
+						}
+					}
+									
+					//DEL
+					if(reg_1->var_type==BAM_CDEL){
+						// get compared queryseq
+						start_querypos_comp = reg_1->endQueryPos;
+						FastaSeqLoader cns_fa_loader(contigfilename);
+						comp_queryseq = cns_fa_loader.getFastaSeq(query_id).substr(start_querypos_comp, distance);
+						// cout << start_querypos_comp << "-" << end_querypos_comp << ", " << comp_queryseq << "," << comp_queryseq.size() << endl;
+
+						start_refpos_comp = reg_1->endLocalRefPos + reg_2->sv_len;
+						FastaSeqLoader ref_fa_loader(reffilename);
+						comp_refseq = ref_fa_loader.getFastaSeq(0).substr(start_refpos_comp, distance);
+						// cout << "comp_refseq: " << comp_refseq << endl;
+
+						iden_val = computeVarseqIdentity(comp_queryseq, comp_refseq);
+						// cout << "DEL:identity=" << iden_val << ", merge_identity_thres=" << merge_identity_thres << endl;
+
+						if(iden_val >= merge_identity_thres) {
+							reg_1->endRefPos += reg_2->sv_len - 1;
+							reg_1->endLocalRefPos += reg_2->sv_len - 1;
+							reg_1->sv_len += reg_2->sv_len;
+							reg_1->refseq += reg_2->refseq;
+							pre_refpos_comp = reg_2->endRefPos;
+							delete reg_2;
+							regVector.erase(regVector.begin()+i+1);
+							i--;
+						}else pre_refpos_comp = -1;
+					}
+					//INS
+					else if(reg_1->var_type==BAM_CINS){
+						// get query_comp seq
+						start_querypos_comp = reg_1->endQueryPos + reg_2->sv_len - 1;
+						FastaSeqLoader cns_fa_loader(contigfilename);
+						comp_queryseq = cns_fa_loader.getFastaSeq(query_id).substr(start_querypos_comp, distance);
+
+						// get ref_comp seq
+						start_refpos_comp = reg_1->endLocalRefPos;
+						FastaSeqLoader ref_fa_loader(reffilename);
+						comp_refseq = ref_fa_loader.getFastaSeq(0).substr(start_refpos_comp , distance);
+
+						iden_val = computeVarseqIdentity(comp_queryseq, comp_refseq);
+
+						// cout << "INS:identity=" << iden_val << ", merge_identity_thres=" << merge_identity_thres << endl;
+
+						if(iden_val >= merge_identity_thres){
+							reg_1->sv_len += reg_2->sv_len;
+							pre_refpos_comp = reg_2->startRefPos;
+						
+							start_querypos_comp = reg_1->endQueryPos;
+							FastaSeqLoader cns_fa_loader(contigfilename);
+							new_queryseq = cns_fa_loader.getFastaSeq(query_id).substr(start_querypos_comp, reg_2->sv_len - 1);
+
+							reg_1->altseq += new_queryseq;
+							reg_1->endQueryPos = reg_1->endQueryPos + reg_2->sv_len;
+							delete reg_2;
+							regVector.erase(regVector.begin()+i+1);
+							i--;
+						}else pre_refpos_comp = -1;
+					}
+				}else pre_refpos_comp = -1;
+			}else pre_refpos_comp = -1;
+		}
+	}	
+	regVector.shrink_to_fit();
+	
+	//extract seq from contig or reference
+
+}
+
+double calculate_merge_identity_threshold(int32_t common_length, int32_t max_common_length, double min_merge_identity_thres){
+	double merge_identity_threshold, max_merge_identity_threshold;
+	merge_identity_threshold = 0;
+	max_merge_identity_threshold = 0.95;
+	// cout << "common_length:" << common_length << ",max_common_length:" << max_common_length << endl;
+	merge_identity_threshold = min_merge_identity_thres + ((max_merge_identity_threshold - min_merge_identity_thres) * ((double)common_length/(double)max_common_length));
+	// cout << merge_identity_threshold << endl;
+
+	if(merge_identity_threshold <= max_merge_identity_threshold)
+		return merge_identity_threshold;
+	else
+		return max_merge_identity_threshold;
+}
+
+// int32_t calculate_merge_distance_threshold(int32_t base_distance_threshold, int32_t query_supp_num, int32_t query_sv_size, int32_t total_sv_num){
+// 	double w1, w2, w3;
+// 	int32_t merge_distance_threshold;
+
+// 	w1 = 20;
+// 	w2 = 0.8; // 0.3
+// 	w3 = 5; // 4
+
+// 	merge_distance_threshold = 0;
+// 	merge_distance_threshold = base_distance_threshold + w1 * log(query_supp_num) + w2 * sqrt(query_sv_size) + w3 * log(total_sv_num);
+// 	return merge_distance_threshold;
+// }
+
+int32_t calculate_merge_distance_threshold(bool complex_region_flag, int32_t query_supp_num, int32_t query_sv_size, int32_t total_sv_num, double query_sv_support_different){
+	double w1_normal, w2_normal, w3_normal, w4_normal, w1_complex, w2_complex, w3_complex, w4_complex;
+	int32_t merge_distance_threshold, nomal_regions_dis_thres, complex_regions_dis_thres;
+
+	w1_normal = 10; // sv2_support_num
+	w2_normal = 0.5; // sv2_size
+	w3_normal = 5; // total num of sv same type
+	w4_normal = 0; // 50
+	nomal_regions_dis_thres = 300;
+
+	w1_complex = 20;
+	w2_complex = 0.8;
+	w3_complex = 5;
+	w4_complex = 0; // 50
+	complex_regions_dis_thres = 400;
+
+	merge_distance_threshold = 0;
+	if(complex_region_flag)
+		merge_distance_threshold = complex_regions_dis_thres + w1_complex * log(query_supp_num) + w2_complex * sqrt(query_sv_size) + w3_complex * log(total_sv_num) - w4_complex * query_sv_support_different;
+	else
+		merge_distance_threshold = nomal_regions_dis_thres + w1_normal * log(query_supp_num) + w2_normal * sqrt(query_sv_size) + w3_normal * log(total_sv_num) - w4_normal * query_sv_support_different;
+	return merge_distance_threshold;
+}
+
+bool ComplexRegionFlag(vector<reg_t*> regVector){
+	size_t i;
+	int32_t total_sv_num1, total_sv_num2, tmp_supp_num1, tmp_supp_num2, max_sv_size;
+	double aver_supp_num1, aver_supp_num2;
+	
+	total_sv_num1 = 0;
+	tmp_supp_num1 = 0;
+	aver_supp_num1 = 0;
+
+	total_sv_num2 = 0;
+	tmp_supp_num2 = 0;
+	aver_supp_num2 = 0;
+
+	max_sv_size = 0;
+	for(i=0;i<regVector.size();i++){
+		if(regVector.at(i)->sv_len > max_sv_size) max_sv_size = regVector.at(i)->sv_len;
+		if(regVector.at(i)->query_id == 0){
+			total_sv_num1++;
+			tmp_supp_num1 += regVector.at(i)->supp_num;
+		}else{
+			total_sv_num2++;
+			tmp_supp_num2 += regVector.at(i)->supp_num;
+		}
+	}
+	if(total_sv_num2>0 and total_sv_num1>0){
+		aver_supp_num1 = (double)tmp_supp_num1/(double)total_sv_num1;
+		aver_supp_num2 = (double)tmp_supp_num2/(double)total_sv_num2;
+		// cout << "aver_supp_num1:" << aver_supp_num1 << ", aver_supp_num2:" << aver_supp_num2 << ", max_sv_size:" << max_sv_size << endl;
+		if(aver_supp_num1+aver_supp_num2>=20 or regVector.size()>=5 or max_sv_size>=800) 
+			return true;
+		else 
+			return false;
+	}else if(total_sv_num1>0 and total_sv_num2==0){
+		aver_supp_num1 = double(tmp_supp_num1/total_sv_num1);
+		// cout << "aver_supp_num1:" << aver_supp_num1 << ", max_sv_size:" << max_sv_size << endl;
+		if(aver_supp_num1>=10 or regVector.size()>=5 or max_sv_size>=800)
+			return true;
+		else
+			return false;
+	}else if(total_sv_num2>0 and total_sv_num1==0){
+		aver_supp_num2 = double(tmp_supp_num2/total_sv_num2);
+		// cout << "aver_supp_num2:" << aver_supp_num1 << ", max_sv_size:" << max_sv_size << endl;
+		if(aver_supp_num2>=10 or regVector.size()>=5 or max_sv_size>=800)
+			return true;
+		else
+			return false;
+	}else
+		return false;
+}
+
 void printRegVec(vector<reg_t*> &regVec, string header){
 	reg_t *reg;
 	cout << header << " region size: " << regVec.size() << endl;
@@ -1169,6 +1410,7 @@ void removeRedundantItems(vector<reg_t*> &reg_vec){
 		}
 	}
 }
+
 
 // get line count of file
 int32_t getLineCount(string &filename){
@@ -1661,14 +1903,16 @@ void cleanPrevConsTmpDir(const string &cns_dir_str, const string &dir_prefix)
 // get call file header line for INDEL which starts with '#'
 string getCallFileHeaderBed(string &sample){
 	string header_line;
-	header_line = "#Chr\tStart\tEnd\tSVType\tSVLen\tDupNum\tRef\tAlt\tExtra\tFORMAT\t" + sample;
+	// header_line = "#Chr\tStart\tEnd\tSVType\tSVLen\tDupNum\tRef\tAlt\tExtra\tFORMAT\t" + sample;
+	header_line = "#Chr\tStart\tEnd\tID\tSVType\tSVLen\tDupNum\tRef\tAlt\tExtra\tFORMAT\t" + sample;
 	return header_line;
 }
 
 // get call file header line for INDEL which starts with '#'
 string getCallFileHeaderBedpe(string &sample){
 	string header_line;
-	header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tSVType\tSVLen1\tSVLen2\tMateReg\tRef1\tAlt1\tRef2\tAlt2\tFORMAT\t" + sample;
+	// header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tSVType\tSVLen1\tSVLen2\tMateReg\tRef1\tAlt1\tRef2\tAlt2\tFORMAT\t" + sample;
+	header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tID\tSVType\tSVLen1\tSVLen2\tMateReg\tRef1\tAlt1\tRef2\tAlt2\tFORMAT\t" + sample;
 	return header_line;
 }
 
@@ -1790,7 +2034,144 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 		for(i=0; i<clipAlnDataVector.size(); i++) clipAlnDataVector.at(i)->query_checked_flag = false;
 	}
 
+	// // merge signatures distance <= 100 
+	// mergeNeighbouringSigs(query_seq_info_all, 175, 0.7, fai);
+
 	return query_seq_info_all;
+}
+
+// merge neighbouring signatures for indels
+void mergeNeighbouringSigs(struct querySeqInfoNode* query_seq_info_node, vector<qcSig_t*> &sig_vec, int32_t max_ref_dist_thres, double min_merge_identity_thres, faidx_t *fai){
+	size_t i, j;
+	int32_t distance, query_opflag, seq_len;
+	int64_t l, query1_startRpos, query1_endRpos, query1_svlen, query1_startQpos, query1_endQpos, query2_startRpos, query2_svlen, query2_startQpos, query2_endQpos, start_querypos_comp, end_querypos_comp, start_refpos_comp, end_refpos_comp, start_querypos_merged, end_querypos_merged, pre_refpos_comp;
+	uint8_t *seq_int;
+	string comp_refseq, comp_queryseq, reg_str, merging_seq;
+	double iden_val;
+	qcSig_t *sig1, *sig2;
+	char *seq;
+	
+	distance=-1;
+	// if(query_seq_info_all.at(k)->qname.compare("SRR24462133.2823625")==0){  //1:2520000-2530000 SRR24462133.2183684, SRR24462133.2823625
+	// 	cout << "k=" << k << ", query_seq_info_all.at(k)->qname=" << query_seq_info_all.at(k)->qname << endl;
+	// }
+
+	if(query_seq_info_node->clip_aln and query_seq_info_node->clip_aln->bam){
+		seq_int = bam_get_seq(query_seq_info_node->clip_aln->bam);
+		for(i=0; i<sig_vec.size(); i++){
+			sig1 = sig_vec.at(i);
+			// skip normal 
+			if(sig1->cigar_op!=BAM_CINS and sig1->cigar_op!=BAM_CDEL) continue;
+
+			query_opflag = sig1->cigar_op;
+
+			query1_startRpos = sig1->ref_pos;
+			query1_svlen = sig1->cigar_op_len;
+			query1_endRpos = getEndRefPosAlnSeg(query1_startRpos, query_opflag, query1_svlen);
+			// query1_endRpos = q_node_tmp->query_alnSegs.at(i)->startRpos + query1_svlen -1 ;
+			query1_startQpos = sig1->query_pos;
+			query1_endQpos = getEndQueryPosAlnSeg(query1_startQpos, query_opflag, query1_svlen);
+			pre_refpos_comp = -1;
+			// cout << "qname= " << q_node_tmp->qname << endl;
+			for(j=i+1; j<sig_vec.size(); j++){
+				sig2 = sig_vec.at(j);
+				// skip normal
+				if(sig2->cigar_op!=BAM_CINS and sig2->cigar_op!=BAM_CDEL) continue;
+				
+				query2_startRpos = sig2->ref_pos;
+				if(pre_refpos_comp < 0) distance = query2_startRpos - query1_endRpos -1;
+				else distance = query2_startRpos - pre_refpos_comp - 1;
+
+				if(distance > max_ref_dist_thres) break;
+				if(query_opflag == sig2->cigar_op and distance <= max_ref_dist_thres){
+					query2_svlen = sig2->cigar_op_len;
+					query2_startQpos = sig2->query_pos;
+					query2_endQpos = getEndQueryPosAlnSeg(query2_startQpos, sig2->cigar_op, query2_svlen);
+					if(query_opflag==BAM_CDEL){ // DEL
+
+						comp_queryseq = "";
+						// get compared queryseq
+						start_querypos_comp = query1_endQpos;
+						end_querypos_comp = query2_startQpos - 1;
+						for(l=start_querypos_comp-1; l<end_querypos_comp; l++) comp_queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];  // seq
+						
+						// cout << start_querypos_comp << "-" << end_querypos_comp << ", " << comp_queryseq << "," << comp_queryseq.size() << endl;
+
+						// get compared refseq
+						start_refpos_comp = query1_endRpos + query2_svlen;
+						end_refpos_comp = start_refpos_comp + distance;
+						reg_str = query_seq_info_node->clip_aln->chrname + ":" + to_string(start_refpos_comp) + "-" + to_string(end_refpos_comp);
+						pthread_mutex_lock(&mutex_fai);
+						seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+						pthread_mutex_unlock(&mutex_fai);
+						comp_refseq = seq;
+						free(seq);
+
+						// cout << reg_str << ", " << comp_refseq << "," << comp_refseq.size() << endl;
+
+						iden_val = computeVarseqIdentity(comp_queryseq, comp_refseq);
+						// cout << "identity=" << iden_val << endl;
+
+						if(iden_val >= min_merge_identity_thres) {
+							// cout << " before merge :" << sig_vec.size() << endl;
+							sig1->cigar_op_len += query2_svlen;
+							sig1->altseq += sig2->altseq;
+							pre_refpos_comp = sig2->end_ref_pos;
+							delete sig2;
+							sig_vec.erase(sig_vec.begin()+j);
+							// cout << "after merge :" << sig_vec.size() << endl;
+							j--;
+							// break; 
+						}
+					}else if(query_opflag==BAM_CINS){ // INS
+						// get compared queryseq
+						start_querypos_comp = query1_endQpos + query2_svlen + 1;
+						end_querypos_comp = query2_endQpos;
+
+						comp_queryseq = "";
+						for(l=start_querypos_comp-1; l<end_querypos_comp; l++) comp_queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];  // seq
+						// cout << start_querypos_comp << "-" << end_querypos_comp << ", " << comp_queryseq << "," << comp_queryseq.size() << endl;
+
+						// get compared refseq
+						start_refpos_comp = query1_endRpos;
+						end_refpos_comp = query2_startRpos - 1;
+						reg_str = query_seq_info_node->clip_aln->chrname + ":" + to_string(start_refpos_comp) + "-" + to_string(end_refpos_comp);
+						pthread_mutex_lock(&mutex_fai);
+						seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+						pthread_mutex_unlock(&mutex_fai);
+						comp_refseq = seq;
+						free(seq);
+
+						// cout << reg_str << ", " << comp_refseq << "," << comp_refseq.size() << endl;
+
+						iden_val = computeVarseqIdentity(comp_queryseq, comp_refseq);
+						// cout << "identity=" << iden_val << endl;
+
+						if(iden_val >= min_merge_identity_thres) {
+							// cout << " before merge :" << sig_vec.size() << endl;
+							sig1->cigar_op_len += query2_svlen;
+
+							// get altseq after merge
+							start_querypos_merged = query1_endQpos;
+							end_querypos_merged = query1_endQpos + query2_svlen;
+
+							for(l=start_querypos_merged-1; l<end_querypos_merged; l++) merging_seq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];  // seq
+							sig1->altseq += merging_seq;
+							// cout << start_querypos_merged << "-" << end_querypos_merged << ", " << sig_vec.at(i)->altseq << "," << sig_vec.at(i)->altseq.size() << endl;
+
+							pre_refpos_comp = sig2->end_ref_pos;
+							delete sig2;
+							sig_vec.erase(sig_vec.begin()+j);
+							// cout << "after merge :" << sig_vec.size() << endl;
+							j--;
+							// break;
+						}
+					}
+				}
+			}
+		}
+		sig_vec.shrink_to_fit();
+	}
 }
 
 // get the non hard-clip align item
@@ -2131,7 +2512,7 @@ void* processSingleConsWork(void *arg){
 	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->clusterfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->min_identity_match, cns_work->sv_len_est, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->max_ultra_high_cov, cns_work->minMapQ, cns_work->minHighMapQ, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
 //	double run_seconds = time.getElapsedSeconds();
-//	if(run_seconds>30) {
+//	if(run_seconds>60) {
 //		cout << "run_seconds=" << run_seconds << ", consensus region [" << cns_work->work_id << "]: " << cns_work_opt->contigfilename << ", sv_len_est=" << cns_work->sv_len_est << endl;
 //	}
 
@@ -5927,8 +6308,8 @@ int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len){
 
 bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double consist_ratio_match_thres, faidx_t *fai){
 	bool match_flag = false;
-	double size_ratio, identity_val;
-	int64_t ref_distance, min_val;
+	double size_ratio, identity_val, min_val;
+	int64_t ref_distance;
 	vector<string> comp_seqs;
 
 	if(qc_sig and seed_qc_sig){
@@ -5943,7 +6324,7 @@ bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_ma
 						if(qc_sig->cigar_op==BAM_CINS){
 							if(qc_sig->altseq.size()>0 and seed_qc_sig->altseq.size()>0 and ref_distance < MAX_REF_DIST_IDENTITY){
 								min_val = min(qc_sig->cigar_op_len, seed_qc_sig->cigar_op_len);
-								if(ref_distance>0 and min_val/ref_distance > 1-consist_ratio_match_thres){
+								 if(ref_distance>0 and min_val/ref_distance > 1-consist_ratio_match_thres){
 									// get sequences
 									comp_seqs = extractQcSigCompSeqs(qc_sig, seed_qc_sig, fai);
 									identity_val = computeVarseqIdentity(comp_seqs.at(0), comp_seqs.at(1));
@@ -6200,6 +6581,7 @@ struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNod
 	}
 	return smmothed_seqs_info;
 }
+
 
 Time::Time() {
 	timestamp = start = end = start_all = end_all = 0;

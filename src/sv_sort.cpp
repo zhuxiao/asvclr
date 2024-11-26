@@ -22,7 +22,7 @@ SV_item *constructSVItem(string &line){
 		item->startPos2 = item->endPos2 = 0;
 		item->valid_flag = true;
 
-		str_tmp = str_vec.at(3);
+		str_tmp = str_vec.at(4);
 		if(str_tmp.compare("INS")==0 or str_tmp.compare("insertion")==0){
 			item->sv_type = VAR_INS;
 		}else if(str_tmp.compare("DEL")==0 or str_tmp.compare("deletion")==0){
@@ -36,21 +36,21 @@ SV_item *constructSVItem(string &line){
 		}else if(str_tmp.compare("CNV")==0 or str_tmp.compare("cnv")==0){
 			item->sv_type = VAR_CNV;
 		}else{
-			if(str_vec.size()>=9 and (str_vec.at(6).compare("TRA")==0 or str_vec.at(6).compare("translocation")==0 or str_vec.at(6).compare("BND")==0)){
+			if(str_vec.size()>=10 and (str_vec.at(7).compare("TRA")==0 or str_vec.at(7).compare("translocation")==0 or str_vec.at(7).compare("BND")==0)){
 				item->chrname2 = str_vec.at(3);
 				if(str_vec.at(4).compare("-")==0) item->startPos2 = 0;
 				else item->startPos2 = stoi(str_vec.at(4));
 				if(str_vec.at(5).compare("-")==0) item->endPos2 = 0;
 				else item->endPos2 = stoi(str_vec.at(5));
-				if(str_vec.at(6).compare("TRA")==0 or str_vec.at(6).compare("translocation")==0) item->sv_type = VAR_TRA;
+				if(str_vec.at(7).compare("TRA")==0 or str_vec.at(7).compare("translocation")==0) item->sv_type = VAR_TRA;
 				else item->sv_type = VAR_BND;
 			}else
 				item->sv_type = VAR_MIX;
 		}
 
 		if(item->sv_type!=VAR_TRA and item->sv_type!=VAR_BND and item->sv_type!=VAR_MIX){
-			item->sv_len = stoi(str_vec.at(4));
-			item->altseq = str_vec.at(7);
+			item->sv_len = stoi(str_vec.at(5));
+			item->altseq = str_vec.at(8);
 		}
 	}
 	return item;
@@ -599,22 +599,30 @@ void sortSVitem(vector<vector<SV_item*>> &subsets){
 }
 
 // remove duplicated items
-void rmDupSVitem(vector<vector<SV_item*>> &subsets, double identity_thres){
+void rmDupSVitem(vector<vector<SV_item*>> &subsets, double size_ratio_thres, double identity_thres){
 	cout << "remove duplicated items ..." << endl;
 	for(size_t i=0;i<subsets.size();i++)
-		rmDupSVitemSubset(subsets.at(i), identity_thres);
+		rmDupSVitemSubset(subsets.at(i), size_ratio_thres, identity_thres);
 }
 
-void rmDupSVitemSubset(vector<SV_item*> &sv_vec, double identity_thres){
+void rmDupSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, double identity_thres){
 	SV_item *item1, *item2;
-	double val;
+	double val, max_len, secmax_len, size_ratio;
 
 	for(size_t i=1;i<sv_vec.size(); i++){
 		item1 = sv_vec.at(i-1);
 		item2 = sv_vec.at(i);
-		if(item1->sv_type==item2->sv_type and item1->chrname.compare(item2->chrname)==0 and item1->startPos==item2->startPos and item1->endPos==item2->endPos and item1->sv_len==item2->sv_len){
-			val = computeVarseqIdentity(item1->altseq, item2->altseq);
-			if(val>=identity_thres) item2->valid_flag = false;
+		if(item1->sv_type==item2->sv_type and item1->chrname.compare(item2->chrname)==0 and item1->startPos==item2->startPos and item1->endPos==item2->endPos){
+			if(item1->sv_len==item2->sv_len) size_ratio = 1;
+			else{
+				max_len = item1->sv_len>item2->sv_len ? (max_len=item1->sv_len, secmax_len=item2->sv_len) : (max_len=item2->sv_len, secmax_len=item1->sv_len);
+				size_ratio = secmax_len / max_len;
+			}
+
+			if(size_ratio>=size_ratio_thres){
+				val = computeVarseqIdentity(item1->altseq, item2->altseq);
+				if(val>=identity_thres) item2->valid_flag = false;
+			}
 		}
 	}
 }

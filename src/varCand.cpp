@@ -14,6 +14,7 @@ varCand::varCand(){
 	this->chrname = "";
 	this->var_cand_filename = "";
 	this->out_dir_call = "";
+	this->out_dir_cns = "";
 	inBamFile = "";
 	fai = NULL;
 	init();
@@ -297,9 +298,9 @@ bool varCand::getBlatAlnDoneFlag(){
 // call variants according to BLAT alignment
 void varCand::callVariants02(){
 	if(sv_type!=VAR_TRA){
-//		pthread_mutex_lock(&mutex_print_var_cand);
-//		cout << "process: " << alnfilename << endl;
-//		pthread_mutex_unlock(&mutex_print_var_cand);
+		// pthread_mutex_lock(&mutex_print_var_cand);
+		// cout << "process: " << alnfilename << endl;
+		// pthread_mutex_unlock(&mutex_print_var_cand);
 
 		loadMinimap2AlnData(); // load align data
 
@@ -416,9 +417,8 @@ void varCand::callIndelVariants(){
 void varCand::callIndelVariants02(){
 	vector<reg_t*> var_vec;
 
-
 	if(align_success){
-		var_vec = computeIndelVarLoc(minimap2_aln_vec);
+		var_vec = computeIndelVarLoc(minimap2_aln_vec, ctgfilename, refseqfilename);
 
 		// rescue the variant by wtdbg2
 		if(var_vec.size()==0){
@@ -510,8 +510,9 @@ vector<minimap2_aln_t*> varCand::minimap2Parse(string &alnfilename, string &ctgf
 			// get the query name
 			query_loc = getQueryNameLoc(line_vec.at(0), query_name_vec);
 			if(query_loc==-1){
-				cerr << __func__ << "(), line=" << __LINE__ << ": cannot get queryloc by query_name: " << line_vec.at(0) << endl;
-				exit(1);
+				//cerr << __func__ << "(), line=" << __LINE__ << ": cannot get queryloc by query_name: " << line_vec.at(0) << endl;
+				//exit(1);
+				continue;
 			}
 			i += 1;
 
@@ -1300,12 +1301,12 @@ void varCand::determineIndelType(){
 	vector<reg_t*>().swap(candRegVec);
 }
 
-vector<reg_t*> varCand::computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec){
+vector<reg_t*> varCand::computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, string &refseqfilename_para){
 	vector<reg_t*> var_vec;
 	size_t  i, j;
 	uint32_t op;
 	vector<clipAlnData_t*> clipAlnDataVector;
-	string chrname_tmp, gt_header, gt_str, dp_str, ad_str1, ad_str2;
+	string chrname_tmp, gt_header, gt_str, dp_str, ad_str1, ad_str2, reg_str;
 	minimap2_aln_t *minimap2_aln;
 	vector<int32_t> supp_num_vec;
 	struct pafalnSeg* paf_alnseg;
@@ -1469,6 +1470,15 @@ vector<reg_t*> varCand::computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln
 			}
 		}
 	}
+
+
+	// mergeNeighbouringVars(var_vec, 100, 0.7, fai, ctgfilename, refseqfilename);
+	// cout << min_distance_merge << "," << min_identity_merge << endl;
+	if(var_vec.size()>0)
+		mergeNeighbouringVars(var_vec, min_distance_merge, min_identity_merge, fai, ctgfilename_para, refseqfilename_para);
+
+	var_vec.shrink_to_fit();
+	
 	if(!clipAlnDataVector.empty()) destoryClipAlnData(clipAlnDataVector);
 
 	// delete minimap2_aln_vec
@@ -1676,7 +1686,7 @@ vector<reg_t*> varCand::rescueIndelVarLoc(){
 			minimap2_aln_vec = minimap2Parse(rescue_alnfilename, rescue_cnsfilename, rescue_refseqfilename);
 
 			// get reference sequence and query sequence
-			var_vec = computeIndelVarLoc(minimap2_aln_vec);
+			var_vec = computeIndelVarLoc(minimap2_aln_vec, rescue_cnsfilename, rescue_refseqfilename);
 		}
 	}
 
@@ -2019,6 +2029,7 @@ void varCand::computeGenotypeIndelReg(vector<reg_t*> &var_vec){
 		int32_t supp_num, depth : 27, gt_type: 5;
 		double AF_val;
 		struct alleleNode *mate_allele;
+		bool valid_flag;
 	};
 
 	size_t  i, j;
@@ -2036,6 +2047,7 @@ void varCand::computeGenotypeIndelReg(vector<reg_t*> &var_vec){
 			allele_node->mate_allele = NULL;
 			allele_node->supp_num = var_vec.at(i)->supp_num;
 			allele_node->depth = var_vec.at(i)->DP;
+			allele_node->valid_flag = true;
 			allele_vec.push_back(allele_node);
 		}
 	}
@@ -2063,20 +2075,62 @@ void varCand::computeGenotypeIndelReg(vector<reg_t*> &var_vec){
 		if(allele_node->mate_allele==NULL){
 			for(j=i+1; j<allele_vec.size(); j++){
 				allele_node2 = allele_vec.at(j);
-				if(allele_node->reg->query_id!=allele_node2->reg->query_id){ // on different queries
-					overlap_flag = isOverlappedRegExtSize(allele_node->reg, allele_node2->reg, 5, 5);
-					if(overlap_flag){
-						if(allele_node->reg->var_type==allele_node2->reg->var_type){ // same variant type
-							val = 0;
-							if(allele_node->reg->var_type==VAR_INS){ // INS
-								// compute identity
-								val = computeVarseqIdentity(allele_node->reg->altseq, allele_node2->reg->altseq); // ?
-							}else{ // DEL
-								if(allele_node->reg->refseq.size()<=allele_node2->reg->refseq.size()) val = (double)allele_node->reg->refseq.size() / allele_node2->reg->refseq.size();
-								else val = (double)allele_node2->reg->refseq.size() / allele_node->reg->refseq.size();
-							}
+				if(allele_node->valid_flag and allele_node2->valid_flag){
+					if(allele_node->reg->query_id!=allele_node2->reg->query_id){ // on different queries
+						//overlap_flag = isOverlappedRegExtSize(allele_node->reg, allele_node2->reg, 5, 5); // deleted on 2024-10-01
+						overlap_flag = isOverlappedRegExtSize(allele_node->reg, allele_node2->reg, 100, 100);
+						if(overlap_flag){
+							if(allele_node->reg->var_type==allele_node2->reg->var_type){ // same variant type
+								val = 0;
+								if(allele_node->reg->var_type==VAR_INS){ // INS
+									// compute identity
+									val = computeVarseqIdentity(allele_node->reg->altseq, allele_node2->reg->altseq); // ?
+								}else{ // DEL
+									if(allele_node->reg->refseq.size()<=allele_node2->reg->refseq.size()) val = (double)allele_node->reg->refseq.size() / allele_node2->reg->refseq.size();
+									else val = (double)allele_node2->reg->refseq.size() / allele_node->reg->refseq.size();
+								}
 
-							if(val<gt_min_identity_merge){ // heterozygous
+								if(val<gt_min_identity_merge){ // heterozygous
+									allele_node->mate_allele = allele_node2;
+									allele_node2->mate_allele = allele_node;
+									allele_node->reg->gt_type = GT_HETEROZYGOUS;
+									allele_node2->reg->gt_type = GT_HETEROZYGOUS;
+									allele_node->gt_type = GT_HETEROZYGOUS;
+									allele_node2->gt_type = GT_HETEROZYGOUS;
+									allele_node->AF_val = (double)allele_node->supp_num / allele_node->depth;
+									allele_node2->AF_val = (double)allele_node2->supp_num / allele_node2->depth;
+									allele_node->reg->DP = allele_node->depth;
+									allele_node2->reg->DP = allele_node2->depth;
+									allele_node->reg->AF = allele_node->AF_val;
+									allele_node2->reg->AF = allele_node2->AF_val;
+								}else{ // homozygous, merge the same variant, prefer the larger supp_num
+									if(allele_node->supp_num>=allele_node2->supp_num){
+										allele_node->reg->gt_type = GT_HOMOZYGOUS;
+										allele_node->gt_type = GT_HOMOZYGOUS;
+										allele_node->supp_num += allele_node2->supp_num;
+										allele_node->depth = max(allele_node->supp_num, allele_node->depth);
+										allele_node->AF_val = (double)allele_node->supp_num / allele_node->depth;
+										allele_node->reg->DP = allele_node->depth;
+										allele_node->reg->AF = allele_node->AF_val;
+										allele_node2->reg->call_success_status = false;
+										//delete allele_node2;
+										//allele_vec.erase(allele_vec.begin()+j);
+										allele_node2->valid_flag = false;
+									}else{
+										allele_node2->reg->gt_type = GT_HOMOZYGOUS;
+										allele_node2->gt_type = GT_HOMOZYGOUS;
+										allele_node2->supp_num += allele_node->supp_num;
+										allele_node2->depth = max(allele_node2->supp_num, allele_node2->depth);
+										allele_node2->AF_val = (double)allele_node2->supp_num / allele_node2->depth;
+										allele_node2->reg->DP = allele_node2->depth;
+										allele_node2->reg->AF = allele_node2->AF_val;
+										allele_node->reg->call_success_status = false;
+										//delete allele_node;
+										//allele_vec.erase(allele_vec.begin()+i);
+										allele_node->valid_flag = false;
+									}
+								}
+							}else{ // different variant type, heterozygous
 								allele_node->mate_allele = allele_node2;
 								allele_node2->mate_allele = allele_node;
 								allele_node->reg->gt_type = GT_HETEROZYGOUS;
@@ -2089,34 +2143,10 @@ void varCand::computeGenotypeIndelReg(vector<reg_t*> &var_vec){
 								allele_node2->reg->DP = allele_node2->depth;
 								allele_node->reg->AF = allele_node->AF_val;
 								allele_node2->reg->AF = allele_node2->AF_val;
-							}else{ // homozygous, merge the same variant
-								allele_node->reg->gt_type = GT_HOMOZYGOUS;
-								allele_node->gt_type = GT_HOMOZYGOUS;
-								allele_node->supp_num += allele_node2->supp_num;
-								allele_node->depth = max(allele_node->supp_num, allele_node->depth);
-								allele_node->AF_val = (double)allele_node->supp_num / allele_node->depth;
-								allele_node->reg->DP = allele_node->depth;
-								allele_node->reg->AF = allele_node->AF_val;
-								allele_node2->reg->call_success_status = false;
-								delete allele_node2;
-								allele_vec.erase(allele_vec.begin()+j);
 							}
-						}else{ // different variant type, heterozygous
-							allele_node->mate_allele = allele_node2;
-							allele_node2->mate_allele = allele_node;
-							allele_node->reg->gt_type = GT_HETEROZYGOUS;
-							allele_node2->reg->gt_type = GT_HETEROZYGOUS;
-							allele_node->gt_type = GT_HETEROZYGOUS;
-							allele_node2->gt_type = GT_HETEROZYGOUS;
-							allele_node->AF_val = (double)allele_node->supp_num / allele_node->depth;
-							allele_node2->AF_val = (double)allele_node2->supp_num / allele_node2->depth;
-							allele_node->reg->DP = allele_node->depth;
-							allele_node2->reg->DP = allele_node2->depth;
-							allele_node->reg->AF = allele_node->AF_val;
-							allele_node2->reg->AF = allele_node2->AF_val;
+							flag = true;
+							//break;
 						}
-						flag = true;
-						//break;
 					}
 				}
 			}
@@ -2138,33 +2168,39 @@ void varCand::computeGenotypeIndelReg(vector<reg_t*> &var_vec){
 				allele_node->AF_val = allele_node->reg->AF = val;
 			}
 		}
-
-		// compute the genotype
-		gt_header = "GT:AD:DP";
-		gt_str = "./.";
-		ad_str1 = ".";
-		ad_str2 = ".";
-		dp_str = ".";
-
-		if(allele_node->gt_type==GT_HOMOZYGOUS){
-			gt_str = GT_HOMOZYGOUS_STR;
-		}else if(allele_node->gt_type==GT_HETEROZYGOUS){
-			gt_str = GT_HETEROZYGOUS_STR;
-		}else if(allele_node->gt_type==GT_NOZYGOUS){
-			gt_str = GT_NOZYGOUS_STR;
-		}else {
-			cout << "line=" << __LINE__ << ", unknown genotype=" << allele_node->gt_type << ", error!" << endl;
-			exit(1);
-		}
-		ad_str1 = to_string(allele_node->depth-allele_node->supp_num);
-		ad_str2 = to_string(allele_node->supp_num);
-		dp_str = to_string(allele_node->depth);
-
-		allele_node->reg->gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
-
-		newVarVec.push_back(allele_node->reg);
 	}
 
+	// compute the genotype
+	for(i=0; i<allele_vec.size(); i++){
+		allele_node = allele_vec.at(i);
+		if(allele_node->valid_flag){
+			gt_header = "GT:AD:DP";
+			gt_str = "./.";
+			ad_str1 = ".";
+			ad_str2 = ".";
+			dp_str = ".";
+
+			if(allele_node->gt_type==GT_HOMOZYGOUS){
+				gt_str = GT_HOMOZYGOUS_STR;
+			}else if(allele_node->gt_type==GT_HETEROZYGOUS){
+				gt_str = GT_HETEROZYGOUS_STR;
+			}else if(allele_node->gt_type==GT_NOZYGOUS){
+				gt_str = GT_NOZYGOUS_STR;
+			}else {
+				cout << "line=" << __LINE__ << ", unknown genotype=" << allele_node->gt_type << ", error!" << endl;
+				exit(1);
+			}
+			ad_str1 = to_string(allele_node->depth-allele_node->supp_num);
+			ad_str2 = to_string(allele_node->supp_num);
+			dp_str = to_string(allele_node->depth);
+
+			allele_node->reg->gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
+
+			newVarVec.push_back(allele_node->reg);
+		}
+	}
+
+	// release memory
 	for(i=0; i<allele_vec.size(); i++) delete allele_vec.at(i);
 	vector<struct alleleNode*>().swap(allele_vec);
 }
@@ -6232,7 +6268,7 @@ vector<reg_t*> varCand::rescueDupInvClipReg(){
 					outfile_rescue_reads.close();
 
 					// perform abpoa consensus
-					abpoa_cmd = "abpoa -o " + tmp_rescue_cnsfilename + " " + rescue_readsfilename + " > /dev/null 2>&1";
+					abpoa_cmd = "abpoa -S -o " + tmp_rescue_cnsfilename + " " + rescue_readsfilename + " > /dev/null 2>&1";
 					system(abpoa_cmd.c_str());
 
 					flag = isFileExist(tmp_rescue_cnsfilename);
@@ -6799,7 +6835,7 @@ vector<reg_t*> varCand::rescueLargeIndelClipReg(){
 					outfile_rescue_reads.close();
 
 					// perform abpoa consensus
-					abpoa_cmd = "abpoa -o " + tmp_rescue_cnsfilename + " " + rescue_readsfilename + " > /dev/null 2>&1";
+					abpoa_cmd = "abpoa -S -o " + tmp_rescue_cnsfilename + " " + rescue_readsfilename + " > /dev/null 2>&1";
 					system(abpoa_cmd.c_str());
 
 					flag = isFileExist(tmp_rescue_cnsfilename);

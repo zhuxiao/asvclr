@@ -17,6 +17,7 @@
 #include "util.h"
 #include "clipRegCluster.h"
 
+
 using namespace std;
 
 #define MIN_CANU_VERSION_NO_RAW			"2.0"
@@ -24,7 +25,8 @@ using namespace std;
 #define MIN_CANU_VERSION_NO_GNPPLOT		"1.8"
 
 #define EXT_SIZE_ENTIRE_FLANKING		50
-#define MAX_SV_LEN_USING_POA			1000
+#define MAX_SV_LEN_USING_POA			2000 // 2000
+#define MIN_SEQ_LEN_USING_MINIMIZER		5000
 
 #define POA_ALIGN_DEBUG					0
 
@@ -80,6 +82,7 @@ class localCns {
 		void destoryQueryCluVecClipReg(vector<qcSigListVec_t*> &query_clu_vec_clipReg);
 		void destroyQueryQcSig(queryCluSig_t *qc_Sig);
 		void saveClusterInfo(string &clusterfilename, vector<struct seqsVec*> &seqs_vec);
+		bool updateUsepoaFlag(vector<clipAlnData_t*> &clipAlnDataVector, int32_t maxVarRegSize, double repeat_reads_thres);
 		vector<struct querySeqInfoVec*> queryCluster(vector<struct querySeqInfoNode*> &query_seq_info_all);
 		void prepareQueryInfoForCluster(vector<struct querySeqInfoNode*> &query_seq_info_vec);
 		void sortQueryInfoByNumCategory(vector<struct querySeqInfoNode*> &query_seq_info_vec);

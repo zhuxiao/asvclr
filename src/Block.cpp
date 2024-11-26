@@ -911,8 +911,17 @@ void Block::blockGenerateLocalConsWorkOpt_Indel(){
 			if(tmp_Pos-begPos<paras->cnsChunkSize){
 				tmp_reg_id = j;
 			}else{
-				end_reg_id = tmp_reg_id;
-				break;
+//				if(tmp_Pos-indelVector[j-1]->endRefPos<EXT_SIZE_CHK_VAR_LOC){
+//					if(tmp_Pos-begPos<paras->cnsChunkSize*2)
+//						tmp_reg_id = j;
+//					else{
+//						end_reg_id = tmp_reg_id;
+//						break;
+//					}
+//				}else{
+					end_reg_id = tmp_reg_id;
+					break;
+//				}
 			}
 		}
 		if(end_reg_id==-1){

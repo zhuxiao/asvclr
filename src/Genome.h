@@ -15,7 +15,7 @@
 using namespace std;
 
 #define MIN_VALID_TRA_RATIO			(0.95f)
-#define MAX_BED_COLS_NUM			12		//	maximum column number of BED file
+#define MAX_BED_COLS_NUM			13		//	maximum column number of BED file
 
 
 class Genome{
