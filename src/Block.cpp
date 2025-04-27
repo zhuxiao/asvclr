@@ -911,6 +911,8 @@ void Block::blockGenerateLocalConsWorkOpt_Indel(){
 			if(tmp_Pos-begPos<paras->cnsChunkSize){
 				tmp_reg_id = j;
 			}else{
+//				if(j+1<(int32_t)indelVector.size() and abs(indelVector.at(j+1)->startRefPos-indelVector.at(j)->endRefPos)<MIN_AVER_SIZE_ALN_SEG){
+//					tmp_reg_id = j;
 //				if(tmp_Pos-indelVector[j-1]->endRefPos<EXT_SIZE_CHK_VAR_LOC){
 //					if(tmp_Pos-begPos<paras->cnsChunkSize*2)
 //						tmp_reg_id = j;

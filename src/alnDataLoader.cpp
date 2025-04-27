@@ -657,10 +657,10 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 			b = bam_init1();
 		}
 		free(selected_flag_array);
-	}else{ // load all data
+	}else{ // load all data according to target_qname_vec
 		b = bam_init1();
 		while ((result = sam_itr_next(in, iter, b)) >= 0) {
-			if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)) alnDataVector.push_back(b);
+			if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)) alnDataVector.push_back(b); // found
 			else bam_destroy1(b);
 			b = bam_init1();
 		}

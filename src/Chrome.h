@@ -21,6 +21,9 @@ using namespace std;
 #define DIST_CHR_END		20000
 #define MIN_CHR_SIZE_EST	((DIST_CHR_END*2+BLOCK_SIZE_EST)*2)
 
+#define MIN_SIZE_RATIO_REDUNDANT_FILTER		(0.98f)
+#define MIN_IDENTITY_REDUNDANT_FILTER		(0.95f)
+
 #define REFSEQ_PATTERN		"refseq"
 #define CLIPREG_PATTERN		"clipReg_refseq"
 

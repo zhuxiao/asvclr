@@ -126,9 +126,9 @@ void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAln
 	addAdjacentInfo(clipAlnDataVector); // order clipping segments
 }
 
-void clipAlnDataLoader::loadClipAlnDataWithSATagWithSegSize(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, double primary_seg_size_ratio){
+void clipAlnDataLoader::loadClipAlnDataWithSATagWithSegSize(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, double primary_seg_size_ratio, double primary_seg_nm_ratio){
 	loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
-	removeClipAlnDataWithLowPrimarySegSizeRatio(clipAlnDataVector, primary_seg_size_ratio);
+	removeClipAlnDataWithLowPrimarySegSizeRatio(clipAlnDataVector, primary_seg_size_ratio, primary_seg_nm_ratio);
 }
 
 void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, vector<string> &qname_vec){
@@ -146,6 +146,7 @@ void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAln
 clipAlnData_t* clipAlnDataLoader::generateClipAlnData(bam1_t* b, bam_hdr_t *header){
 	clipAlnData_t *clip_aln = NULL;
 	uint32_t *c, op1, op2;
+	uint8_t *nm_ptr;
 
 	clip_aln = new clipAlnData_t();
 	clip_aln->bam = b;
@@ -155,6 +156,7 @@ clipAlnData_t* clipAlnDataLoader::generateClipAlnData(bam1_t* b, bam_hdr_t *head
 	clip_aln->endRefPos = bam_endpos(b);
 	clip_aln->left_aln = clip_aln->right_aln = NULL;
 	clip_aln->leftmost_flag = clip_aln->rightmost_flag = false;
+	clip_aln->NM = -1;
 
 	c = bam_get_cigar(b);  // CIGAR
 	// left clip
@@ -174,6 +176,13 @@ clipAlnData_t* clipAlnDataLoader::generateClipAlnData(bam1_t* b, bam_hdr_t *head
 	}else
 		clip_aln->rightClipSize = 0;
 
+	// NM
+	nm_ptr = bam_aux_get(b, "NM");
+	if(nm_ptr){
+		clip_aln->NM = bam_aux2i(nm_ptr);
+		// cout << "clip_aln->startRefPos=" << clip_aln->startRefPos << ",clip_aln->queryname=" << clip_aln->queryname << ",clip_aln->NM=" << clip_aln->NM << endl;
+	}
+
 	// querylen
 	clip_aln->querylen = b->core.l_qseq;
 	if(op1==BAM_CHARD_CLIP)
@@ -181,6 +190,7 @@ clipAlnData_t* clipAlnDataLoader::generateClipAlnData(bam1_t* b, bam_hdr_t *head
 	if(op2==BAM_CHARD_CLIP)
 		clip_aln->querylen += clip_aln->rightClipSize;
 
+	// cout << "clip_aln->querylen=" << clip_aln->querylen << endl;
 	//clip_aln->alnsize = clip_aln->querylen - clip_aln->leftClipSize - clip_aln->rightClipSize;
 
 	// orientation
@@ -325,8 +335,8 @@ void clipAlnDataLoader::fillClipAlnDataBySATag(vector<clipAlnData_t*> &clipAlnDa
 					addNewSAItemToClipAlnDataVec(clip_aln->queryname,  aln_seg_info_str, clipAlnDataVector);
 				}
 
-				//cout << clip_aln->queryname << ":" << clip_aln->startRefPos << "-" << clip_aln->endRefPos << endl;
-				//cout << cigar_str << endl;
+				// cout << clip_aln->queryname << ":" << clip_aln->startRefPos << "-" << clip_aln->endRefPos << endl;
+				// cout << cigar_str << endl;
 			}
 		}
 	}
@@ -408,6 +418,9 @@ void clipAlnDataLoader::parseSingleAlnStrSA(clipAlnData_t &clip_aln_ret, string 
 			str_tmp = "";
 		}
 	}
+
+	// NM
+	// clip_aln_ret.NM = stoi(aln_info_vec.at(aln_info_vec.size()-1));
 
 	// leftClipSize and leftClipSize
 	if(op_vec.at(0)=='S' or op_vec.at(0)=='H') clip_aln_ret.leftClipSize = op_len_vec.at(0);
@@ -639,46 +652,55 @@ void clipAlnDataLoader::assignSideMostFlag(vector<clipAlnData_t*> &query_aln_vec
 }
 
 // remove clip alignment data with low primary segment size ratio
-void clipAlnDataLoader::removeClipAlnDataWithLowPrimarySegSizeRatio(vector<clipAlnData_t*> &clipAlnDataVector, double primary_seg_size_ratio){
+void clipAlnDataLoader::removeClipAlnDataWithLowPrimarySegSizeRatio(vector<clipAlnData_t*> &clipAlnDataVector, double primary_seg_size_ratio, double primary_seg_nm_ratio){
 	size_t i, j, n;
 	string queryname;
 	vector<clipAlnData_t*> query_aln_segs;//query_aln_segs_no_SA;
 	int64_t max_id, max_len;
 	vector<string> remove_qname_vec;
-	double max_primary_size_ratio;
+	double max_primary_size_ratio, max_primary_seg_nm_ratio;
 	vector<string>::iterator q;
 
-	for(i=0; i<clipAlnDataVector.size(); i++){
-		queryname = clipAlnDataVector.at(i)->queryname;
+	if(primary_seg_size_ratio>0){
 
-		q = find(remove_qname_vec.begin(), remove_qname_vec.end(), queryname);
-		if(q == remove_qname_vec.end()){
-			// get query_aln_segs and query_aln_segs_no_SA
-			query_aln_segs = getQueryClipAlnSegsAll(queryname, clipAlnDataVector);  // get all query clip align segments
-			//query_aln_segs_no_SA = getQueryClipAlnSegs(queryname, clipAlnDataVector);  // get all query clip align segments without SA tag
+		for(i=0; i<clipAlnDataVector.size(); i++){
+			queryname = clipAlnDataVector.at(i)->queryname;
+			
+			q = find(remove_qname_vec.begin(), remove_qname_vec.end(), queryname);
+			if(q == remove_qname_vec.end()){
+				// get query_aln_segs and query_aln_segs_no_SA
+				query_aln_segs = getQueryClipAlnSegsAll(queryname, clipAlnDataVector);  // get all query clip align segments
+				//query_aln_segs_no_SA = getQueryClipAlnSegs(queryname, clipAlnDataVector);  // get all query clip align segments without SA tag
 
-			if(query_aln_segs.size()>1){
-				// if the max_primary_size_ratio < primary_seg_size_ratio, then remove these segs from clipAlnDataVector
-				max_len = INT_MIN;
-				max_id = -1;
-				for(j=0; j<query_aln_segs.size(); j++){
-					if(query_aln_segs.at(j)->SA_tag_flag==false and query_aln_segs.at(j)->query_dist>max_len){
-						max_len = query_aln_segs.at(j)->query_dist;
-						max_id = j;
+				if(query_aln_segs.size()>1){
+					// if the max_primary_size_ratio < primary_seg_size_ratio, then remove these segs from clipAlnDataVector
+					max_len = INT_MIN;
+					max_id = -1;
+					for(j=0; j<query_aln_segs.size(); j++){
+						if(query_aln_segs.at(j)->SA_tag_flag==false and query_aln_segs.at(j)->query_dist>max_len){
+							max_len = query_aln_segs.at(j)->query_dist;
+							max_id = j;
+						}
 					}
-				}
-				max_primary_size_ratio = (double)max_len/clipAlnDataVector.at(i)->querylen;
-				if(max_primary_size_ratio<primary_seg_size_ratio){
-					remove_qname_vec.push_back(query_aln_segs.at(max_id)->queryname);
+					max_primary_size_ratio = (double)max_len/clipAlnDataVector.at(i)->querylen;
+
+					if(query_aln_segs.at(max_id)->SA_tag_flag==false){
+						max_primary_seg_nm_ratio = (double)query_aln_segs.at(max_id)->NM/query_aln_segs.at(max_id)->query_dist;
+						// cout << clipAlnDataVector.at(i)->chrname << ":" << queryname << " query_aln_segs.at(max_id)->NM=" << query_aln_segs.at(max_id)->NM << ",query_aln_segs.at(max_id)->query_dist=" << query_aln_segs.at(max_id)->query_dist <<",primary_seg_nm_ratio=" << max_primary_seg_nm_ratio << endl;					
+					}
+
+					if(max_primary_size_ratio<primary_seg_size_ratio and max_primary_seg_nm_ratio>primary_seg_nm_ratio){ // primary_seg_nm_ratio ccs 0.1, clr/rs/ont 0.2
+						remove_qname_vec.push_back(query_aln_segs.at(max_id)->queryname);
+					}
 				}
 			}
 		}
-	}
 
-	//remove unreliable alignment segments
-	for(n=0; n<clipAlnDataVector.size();){
-		q = find(remove_qname_vec.begin(), remove_qname_vec.end(), clipAlnDataVector.at(n)->queryname);
-		if(q != remove_qname_vec.end()) removeSingleItemClipAlnData(clipAlnDataVector, n);
-		else n++;
+		//remove unreliable alignment segments
+		for(n=0; n<clipAlnDataVector.size();){
+			q = find(remove_qname_vec.begin(), remove_qname_vec.end(), clipAlnDataVector.at(n)->queryname);
+			if(q != remove_qname_vec.end()) removeSingleItemClipAlnData(clipAlnDataVector, n);
+			else n++;
+		}
 	}
 }

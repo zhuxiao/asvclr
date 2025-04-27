@@ -18,7 +18,7 @@ typedef struct clipAlnData_node{
 	bam1_t *bam;
 	string queryname, chrname;
 	int64_t startRefPos, endRefPos:60, aln_orient:4;
-	int32_t querylen, startQueryPos, endQueryPos, leftClipSize, rightClipSize;
+	int32_t querylen, startQueryPos, endQueryPos, leftClipSize, rightClipSize, NM;
 	int32_t ref_dist, query_dist;
 	bool leftHardClippedFlag, rightHardClippedFlag, leftmost_flag, rightmost_flag;
 	bool left_clip_checked_flag, right_clip_checked_flag, query_checked_flag, SA_tag_flag;
@@ -118,7 +118,7 @@ typedef struct {
 	int32_t *p_cns_reg_workDone_num;   // pointer to the global variable which was declared in Paras.h
 	pthread_mutex_t *p_mtx_cns_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
 	int32_t num_threads_per_cns_work, minClipEndSize, cnsSideExtSize, minConReadLen, min_sv_size, min_supp_num, minMapQ: 16, minHighMapQ: 16, sv_len_est;
-	double max_seg_size_ratio, min_identity_match;
+	double max_seg_size_ratio, min_identity_match, max_seg_nm_ratio;
 
 	string inBamFile, technology; //, canu_version;
 	faidx_t *fai;
@@ -137,9 +137,9 @@ struct fqSeqNode{
 typedef struct qcSigNode{
 	int32_t sig_id: 24, cigar_op: 8, cigar_op_len: 28, aln_orient: 4; // align_orient not used
 	bool reg_contain_flag, have_next_clip;
-	int64_t ref_pos, query_pos, dist_next_clip; // query_pos not used
+	int64_t ref_pos, query_pos, dist_next_clip;
 	string chrname, chrname_next_clip;
-	int64_t start_ref_pos, end_ref_pos; // ------- not used
+	//int64_t start_ref_pos, end_ref_pos; // ------- not used
 	string refseq, altseq;
 	//vector<int32_t> adjClipAlnSegInfo;
 	struct qcSigNode *mate_qcSig;
@@ -148,9 +148,11 @@ typedef struct qcSigNode{
 struct querySeqInfoNode{
 	clipAlnData_t *clip_aln;
 	string qname, seq;
-	bool cluster_finished_flag, selected_flag, entire_flanking_flag;
+	bool cluster_finished_flag, selected_flag, entire_flanking_flag, qcSig_merge_flag;
 	int16_t overlap_sig_num;
+	int32_t aver_sig_size, ins_sum, del_sum;
 	vector<struct alnSeg*> query_alnSegs;
+	vector<qcSig_t *> qcSig_vec;
 };
 
 typedef struct qcSigListNode{
@@ -166,6 +168,7 @@ typedef struct qcSigListVecNode{
 }qcSigListVec_t;
 
 struct querySeqInfoVec{
+	bool rescue_flag;
 	vector<struct querySeqInfoNode*> query_seq_info_all;
 };
 
@@ -176,15 +179,16 @@ struct seqsVec{
 
 struct seedQueryInfo{
 	int64_t startSpanPos, endSpanPos, span_intersection;
-	int32_t id;
+	int32_t id, indel_mode;
 };
 
 //for q_cluster init B
 typedef struct{
 	int32_t num;
 	vector<int32_t> pos_id;
-	double SR;
-}srmin_match_t;
+	double MR, MR_recluster;
+	bool candidate_flag;
+}mrmin_match_t;
 
 
 // cluster signatures of a query
@@ -236,7 +240,7 @@ typedef struct{
 	int32_t minimap2_aln_id, query_len, subject_len, query_start, query_end, subject_start, subject_end, region_startRefPos, region_endRefPos;
 	//int32_t ref_start, ref_end;
 	int32_t query_id:24, relative_strand:8;
-	string cigar, chrname;
+	string cigar, chrname, type;
 	vector<string> qname;
 	vector<struct pafalnSeg*> pafalnsegs;
 }minimap2_aln_t;

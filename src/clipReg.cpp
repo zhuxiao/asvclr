@@ -87,7 +87,7 @@ void clipReg::computeMateClipReg(){
 void clipReg::fillClipAlnDataVectorWithSATag(){
 	clipAlnDataLoader clip_aln_data_loader(chrname, startRefPos, endRefPos, inBamFile, minClipEndSize, paras->minMapQ, paras->minHighMapQ);
 //	clip_aln_data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, paras->max_ultra_high_cov); // removed 2023-12-08
-	clip_aln_data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, paras->max_ultra_high_cov, paras->max_seg_size_ratio_usr); // modified 2023-12-08
+	clip_aln_data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, paras->max_ultra_high_cov, paras->max_seg_size_ratio_usr, paras->max_seg_nm_ratio_usr); // modified 2023-12-08
 }
 
 void clipReg::removeNonclipItems(){
@@ -201,9 +201,9 @@ void clipReg::extractClipPosVec(){
 				continue;
 			}
 
-//			if(queryname.compare("SRR8858449.1.125122")==0){
-//				cout << queryname << endl;
-//			}
+			// if(queryname.compare("SRR8858439.1.131686")==0){
+			// 	cout << queryname << endl;
+			// }
 
 			for(j=0; j<query_aln_segs.size(); j++){
 				clip_aln_seg = query_aln_segs.at(j);

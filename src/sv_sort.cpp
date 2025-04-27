@@ -608,20 +608,33 @@ void rmDupSVitem(vector<vector<SV_item*>> &subsets, double size_ratio_thres, dou
 void rmDupSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, double identity_thres){
 	SV_item *item1, *item2;
 	double val, max_len, secmax_len, size_ratio;
+	bool overlap_flag;
 
 	for(size_t i=1;i<sv_vec.size(); i++){
 		item1 = sv_vec.at(i-1);
 		item2 = sv_vec.at(i);
-		if(item1->sv_type==item2->sv_type and item1->chrname.compare(item2->chrname)==0 and item1->startPos==item2->startPos and item1->endPos==item2->endPos){
-			if(item1->sv_len==item2->sv_len) size_ratio = 1;
-			else{
-				max_len = item1->sv_len>item2->sv_len ? (max_len=item1->sv_len, secmax_len=item2->sv_len) : (max_len=item2->sv_len, secmax_len=item1->sv_len);
-				size_ratio = secmax_len / max_len;
-			}
+		if(item1->sv_type==item2->sv_type and item1->chrname.compare(item2->chrname)==0){
+			overlap_flag = false;
+			if(item1->startPos==item2->startPos and item1->endPos==item2->endPos) overlap_flag = true;
+			else overlap_flag = isOverlappedPos(item1->startPos-SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item1->endPos+SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item2->startPos-SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item2->endPos+SHORT_VAR_ALN_CHECK_EXTEND_SIZE);
 
-			if(size_ratio>=size_ratio_thres){
-				val = computeVarseqIdentity(item1->altseq, item2->altseq);
-				if(val>=identity_thres) item2->valid_flag = false;
+			if(overlap_flag){
+				if(item1->sv_len==item2->sv_len) size_ratio = 1;
+				else{
+					if(item1->sv_len>item2->sv_len){ max_len = item1->sv_len; secmax_len = item2->sv_len; }
+					else{ max_len = item2->sv_len; secmax_len = item1->sv_len; }
+					// max_len = item1->sv_len>item2->sv_len ? (max_len=item1->sv_len, secmax_len=item2->sv_len) : (max_len=item2->sv_len, secmax_len=item1->sv_len);
+					size_ratio = secmax_len / max_len;
+				}
+
+				if(size_ratio>=size_ratio_thres){
+					if(item1->sv_type!=VAR_DEL){
+						val = computeVarseqIdentity(item1->altseq, item2->altseq);
+						if(val>=identity_thres) item2->valid_flag = false;
+					}else{
+						item2->valid_flag = false;
+					}
+				}
 			}
 		}
 	}

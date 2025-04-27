@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
 
 	// estimate the parameters for noisy background
 	genome.estimateSVSizeNum();
-	paras.outputEstParas("After estimation:");
+	paras.outputEstParas();
 
 	genome.generateGenomeBlocks();
 

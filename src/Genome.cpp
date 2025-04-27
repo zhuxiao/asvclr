@@ -65,12 +65,17 @@ void Genome::init(){
 	out_filename_detect_snv = out_dir_detect + "/" + result_prefix + "SNV_candidates";
 	out_filename_detect_indel = out_dir_detect + "/" + result_prefix + "INDEL_candidate";
 	out_filename_detect_clipReg = out_dir_detect + "/" + result_prefix + "clipReg_candidate";
-	out_filename_result_snv = out_dir_result + "/" + result_prefix + "SNV";
-	out_filename_result_indel = out_dir_result + "/" + result_prefix + "INDEL.bed";
+	out_filename_result_snv = out_dir_result + "/" + result_prefix + "snv";
+	out_filename_result_indel = out_dir_result + "/" + result_prefix + "indelReg.bed";
 	out_filename_result_clipReg = out_dir_result + "/" + result_prefix + "clipReg.bed";
-	out_filename_result_tra = out_dir_result + "/" + result_prefix + "TRA.bedpe";
-	out_filename_result_vars = out_dir_result + "/" + result_prefix + "asvclr.bed";
-	out_filename_result_vars_vcf = out_dir_result + "/" + result_prefix + "asvclr.vcf";
+	out_filename_result_tra = out_dir_result + "/" + result_prefix + "tra.bedpe";
+	if(paras->outFilePrefix.compare(RESULT_PREFIX_DEFAULT)==0){
+		out_filename_result_vars = out_dir_result + "/" + result_prefix + "sv.bed";
+		out_filename_result_vars_vcf = out_dir_result + "/" + result_prefix + "sv.vcf";
+	}else{
+		out_filename_result_vars = out_dir_result + "/" + result_prefix + "asvclr.bed";
+		out_filename_result_vars_vcf = out_dir_result + "/" + result_prefix + "asvclr.vcf";
+	}
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
 	work_finish_filename = out_dir + "/" + "work_finished";
@@ -409,6 +414,14 @@ void Genome::removeInvalidMateClipItem(){
 		for(j=0; j<chr->mateClipRegVector.size(); ){
 			clip_reg = chr->mateClipRegVector.at(j);
 			if(clip_reg->valid_flag==false){
+				// cout << "\t";
+				// if(clip_reg->leftClipReg) { cout << ", leftClipReg=" << clip_reg->leftClipReg->chrname << ":" << clip_reg->leftClipReg->startRefPos << "-" << clip_reg->leftClipReg->endRefPos; }
+				// if(clip_reg->leftClipReg2) { cout << ", leftClipReg2=" << clip_reg->leftClipReg2->chrname << ":" << clip_reg->leftClipReg2->startRefPos << "-" << clip_reg->leftClipReg2->endRefPos; }
+				// if(clip_reg->rightClipReg) { cout << ", rightClipReg=" << clip_reg->rightClipReg->chrname << ":" << clip_reg->rightClipReg->startRefPos << "-" << clip_reg->rightClipReg->endRefPos; }
+				// if(clip_reg->rightClipReg2) { cout << ", rightClipReg2=" << clip_reg->rightClipReg2->chrname << ":" << clip_reg->rightClipReg2->startRefPos << "-" << clip_reg->rightClipReg2->endRefPos; }
+				// if(clip_reg->largeIndelClipReg) { cout << ", largeIndelClipReg=" << clip_reg->largeIndelClipReg->chrname << ":" << clip_reg->largeIndelClipReg->startRefPos << "-" << clip_reg->largeIndelClipReg->endRefPos << ", sv_len=" << clip_reg->largeIndelClipReg->sv_len << ", var_type=" << clip_reg->sv_type; }
+				// cout << endl;
+
 				if(clip_reg->leftClipReg) { delete clip_reg->leftClipReg; clip_reg->leftClipReg = NULL; }
 				if(clip_reg->leftClipReg2) { delete clip_reg->leftClipReg2; clip_reg->leftClipReg2 = NULL; }
 				if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; }
@@ -754,7 +767,11 @@ int Genome::processConsWork(){
 		}
 		// clipReg_reads_1_26966226-26974816.fq, clipReg_reads_1_21506254-21506762.fq, clipReg_cns_16_209822-210880.fa, clipReg_cns_1_197756788-197757987.fa (INV)
 		// cns_chr1_1461692-1461767.fa, cns_chr1_1595082-1595934.fa, cns_chr1_1663381-1663402.fa
-//		if(cns_work_opt->contigfilename.compare("output_minimap2_hg002_ont_filt_n3_q20_20241002/2_cns/1/cns_1_10247654-10248175.fa")==0){
+		// chr1_hg002_clr_20241218/2_cns/1/cns_1_19387785-19387946.fa
+		// chr1_hg002_clr_20241218/2_cns/1/cns_1_19386711-19386935.fa
+		// chr1_hg002_clr_20241218/2_cns/1/cns_1_1074689-1076105.fa, cns_1_3097653-3098167.fa, cns_1_670807-676101.fa, cns_1_1223650-1224865.fa, cns_1_7174821-7175786.fa, cns_1_8391251-8391639.fa
+		// cns_1_844226-845192.fa, cns_1_46679031-46679316.fa, cns_1_48187816-48187819, cns_1_44605948-44606254.fa, cns_1_30243897-30244578.fa
+//		if(cns_work_opt->contigfilename.compare("debug_tmp_chr1_1-50m_20250413/2_cns/1/cns_1_9683995-2256585.fa")==0){
 //			cout << "cnsfilename=" << cns_work_opt->contigfilename << endl;
 //		}else continue;
 
@@ -1223,10 +1240,11 @@ int Genome::processCallWork(){
 		// blat_contig_chr1_253768-256236.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_1772083-1775128.sim4, blat_contig_chr1_2068132-2073121.sim4
 		// minimap2_1_2213173-2214000.paf, minimap2_contig_1_26966226-26974816.paf, minimap2_contig_1_21506254-21506762.paf, minimap2_contig_1_29382165-29382465.paf
 		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf, minimap2_chr1_143246329-143247038.paf, minimap2_1_649705-650290.paf
-		// minimap2_1_2765904-2766241.paf, minimap2_1_5447230-5447236.paf,
-//		if(var_cand->alnfilename.compare("debug_minimap2_hg007_ccs_n3_q20_chr_20241122/3_call/chr15/minimap2_chr15_21111599-21112682.paf")!=0){
-//			continue;
-//		}
+		// minimap2_1_2765904-2766241.paf, minimap2_1_5447230-5447236.paf, minimap2_1_3097653-3098167.paf, minimap2_1_2618216-2619007.paf, minimap2_1_1184268-1184983.paf, minimap2_1_5446916-5447358
+		// minimap2_1_3560147-3560992.paf, minimap2_1_801940-802476.paf, minimap2_1_3560147-3560992.paf, minimap2_1_3561166-3562123.paf
+//		 if(var_cand->alnfilename.compare("debug_tmp_chr1_1-50m_20250413/3_call/1/minimap2_1_2256290-2256585.paf")==0){
+//		 	cout << var_cand->alnfilename << endl;
+//		 }else continue;
 
 		call_work_opt = new callWork_opt();
 		call_work_opt->var_cand = var_cand;
@@ -3067,7 +3085,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 // perform local consensus
 void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
 
-	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_identity_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->max_ultra_high_cov, paras->minMapQ, paras->minHighMapQ, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr);
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_identity_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->max_ultra_high_cov, paras->minMapQ, paras->minHighMapQ, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr, paras->max_seg_nm_ratio_usr);
 
 	// extract the corresponding refseq from reference
 	local_cns.extractRefseq();
@@ -3344,7 +3362,8 @@ void Genome::saveTraCall2File(){
 //				line += "\t" + reg->gt_seq;
 
 				// size select
-				if((sv_len==-1 and sv_len2==-1) or (sv_len!=-1 and sv_len>=paras->min_sv_size_usr and sv_len<=paras->max_sv_size_usr) or (sv_len2!=-1 and sv_len2>=paras->min_sv_size_usr and sv_len2<=paras->max_sv_size_usr))
+				//if((sv_len==-1 and sv_len2==-1) or (sv_len!=-1 and sv_len>=paras->min_sv_size_usr and sv_len<=paras->max_sv_size_usr) or (sv_len2!=-1 and sv_len2>=paras->min_sv_size_usr and sv_len2<=paras->max_sv_size_usr)) // deleted on 2025-03-20
+				if((sv_len==-1 and sv_len2==-1) or (sv_len!=-1 and sv_len>=paras->min_sv_size_usr_final and sv_len<=paras->max_sv_size_usr) or (sv_len2!=-1 and sv_len2>=paras->min_sv_size_usr_final and sv_len2<=paras->max_sv_size_usr))
 					outfile_tra << line << endl;
 					//cout << line << endl;
 			}
@@ -3881,7 +3900,8 @@ void Genome::sortVarResults(string &infilename, int32_t filetype){
 
 	subsets = constructSubsetByChr(sv_vec);
 	sortSVitem(subsets);
-	rmDupSVitem(subsets, paras->gt_size_ratio_match, paras->gt_min_identity_merge); // remove identical items
+	//rmDupSVitem(subsets, paras->gt_size_ratio_match, paras->gt_min_identity_merge); // remove identical items, deleted on 2025-03-28
+	rmDupSVitem(subsets, MIN_SIZE_RATIO_REDUNDANT_FILTER, MIN_IDENTITY_REDUNDANT_FILTER); // remove identical items
 	outputResult(outfilename, subsets, filetype);
 
 	remove(infilename.c_str());

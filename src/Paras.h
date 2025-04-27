@@ -17,7 +17,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"Allele-aware Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.4.5"
+#define PROG_VERSION				"1.4.6"
 #define VCF_VERSION					"4.2"
 
 #define CMD_DET_STR					"det"
@@ -73,22 +73,27 @@ using namespace std;
 #define MIN_INDEL_EVENT_SIZE		2
 #define MIN_INDEL_EVENT_NUM			5
 #define MIN_SV_SIZE_USR				20
-#define MAX_SEG_SIZE_RATIO			0.5f
+#define MIN_SV_SIZE_USR_FACTOR		(0.9f) // 0.8, 0.9
+#define MAX_SEG_SIZE_RATIO			(0.5f)
+
+#define MAX_SEG_NM_RATIO_1		(0.1f)
+#define MAX_SEG_NM_RATIO_2		(0.2f)
 #define MAX_SV_SIZE_USR				50000
 
 #define MIN_DUP_SIZE				30  // 2021-07-27
 
 //#define MIN_CLIP_READS_NUM_THRES	7
-#define MIN_SUPPORT_READS_NUM_EST		-1
-#define MIN_SUPPORT_READS_NUM_FACTOR	0.03f	// 0.07f (updated 2024-06-25), 0.05f (updated 2024-09-04)
-#define READS_NUM_SUPPORT_FACTOR		0.5f
+#define MIN_SUPPORT_READS_NUM_EST		(-1L)
+#define MIN_SUPPORT_READS_NUM_FACTOR	(0.03f)	// 0.07f (updated 2024-06-25), 0.05f (updated 2024-09-04)
+#define READS_NUM_SUPPORT_FACTOR		(0.5f)
 #define MIN_SUPPORT_READS_NUM_DEFAULT	3
+#define MIN_SUPPORT_READS_NUM_CLR		4
 
 #define MAX_VAR_REG_SIZE			50000
 #define CNS_CHUNK_SIZE_INDEL		1000	// 10000
 #define CNS_CHUNK_SIZE_EXT_INDEL	1000	//1000
-#define CNS_EXT_INDEL_FACTOR_500BP	2	// side extend size factor for mid chunk (> 500bp)
-#define CNS_EXT_INDEL_FACTOR_1K		5	// side extend size factor for large chunk (> 1kb)
+#define CNS_EXT_INDEL_FACTOR_500BP	3	// side extend size factor for mid chunk (> 500bp), 2
+#define CNS_EXT_INDEL_FACTOR_1K		6	// side extend size factor for large chunk (> 1kb), 5
 #define CNS_CHUNK_SIZE_EXT_CLIP		5000	//1000, 10000, 20000
 #define CNS_EXT_CLIPREG_FACTOR_1K	(1.5f)	// side extend size factor for mid chunk (> 1kb)
 #define CNS_EXT_CLIPREG_FACTOR_2K	2	// side extend size factor for mid chunk (> 2kb)
@@ -98,8 +103,8 @@ using namespace std;
 
 #define MAX_REF_DIST_IDENTITY		2000
 
-#define SIZE_PERCENTILE_EST			0.95	//0.95 (d-2024-03-23)
-#define NUM_PERCENTILE_EST			0.99995
+#define SIZE_PERCENTILE_EST			(0.95)	//0.95 (d-2024-03-23)
+#define NUM_PERCENTILE_EST			(0.99995)
 #define AUX_ARR_SIZE				1001
 
 #define MAX_REG_SUM_SIZE_EST		500000
@@ -119,7 +124,7 @@ using namespace std;
 #define LIMIT_REG_ALL_STR			"ALL"
 
 #define MIN_INPUT_COV_CANU			5  		// 2021-08-01
-#define EXPECTED_COV_CNS			40.0f	// 30.0f
+#define EXPECTED_COV_CNS			(40.0f)	// 30.0f
 
 #define NUM_PARTS_PROGRESS			100
 #define NUM_THREADS_PER_CNS_WORK	0  		// 0: unspecify the limited number of threads for each CNS work
@@ -132,14 +137,21 @@ using namespace std;
 #define MIN_MAPQ_THRES				20		// 0, 10
 #define MIN_HIGH_MAPQ_THRES			(MIN_MAPQ_THRES+10)
 
-#define CALL_MIN_IDENTITY_MERGE_THRES		0.95
-#define CALL_MIN_IDENTITY_MERGE_THRES2		0.7
+#define CALL_MIN_IDENTITY_MERGE_THRES		(0.95)
+#define CALL_MIN_IDENTITY_MERGE_THRES2		(0.8) // 0.7
 #define CALL_MIN_DISTANCE_MERGE_THRES		300
 
-#define MIN_ADJACENT_REG_DIST		20		// 50
+#define CNS_MIN_IDENTITY_MERGE_THRES		(0.95f)
+#define CNS_MIN_IDENTITY_MERGE_THRES2		(0.6f) // 0.7
+#define CNS_MIN_DIST_MERGE_THRES			1000
+#define MAX_DIST_MERGE_ARBITARY				100
+#define MIN_VALID_SIG_SIZE_RATIO_THRES		(0.1f)
+#define MIN_SIG_SIZE_RATIO_FILTER_THRES		(0.2f)
 
-#define MIN_HIGH_CONSENSUS_INS_RATIO		0.3f
-#define MIN_HIGH_CONSENSUS_DEL_RATIO		0.5f	// 0.4
+#define MIN_ADJACENT_REG_DIST				20 // 50
+
+#define MIN_HIGH_CONSENSUS_INS_RATIO		(0.3f)
+#define MIN_HIGH_CONSENSUS_DEL_RATIO		(0.5f)	// 0.4
 
 #define MAX_CNS_MINUTES						15
 #define MAX_ALN_MINUTES						15
@@ -174,8 +186,8 @@ class Paras
 		string out_dir_call = "3_call";      // "3_call"
 		string out_dir_tra = out_dir_call + "/" + "tra";
 		string out_dir_result = "4_results";	// "4_results"
-		int32_t blockSize, slideSize, min_sv_size_usr, max_sv_size_usr, num_threads, large_indel_size_thres;
-		double max_seg_size_ratio_usr, min_identity_match, min_identity_merge;
+		int32_t blockSize, slideSize, min_sv_size_usr, min_sv_size_usr_final, max_sv_size_usr, num_threads, large_indel_size_thres;
+		double max_seg_size_ratio_usr, min_identity_match, min_identity_merge, max_seg_nm_ratio_usr, min_sv_size_usr_factor;
 		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy, include_alt;
 		size_t misAlnRegLenSum = 0;
 		int32_t minReadsNumSupportSV: 29, min_Nsupp_est_flag: 3; //, minClipReadsNumSupportSV; Nsupp_est_flag: 1 for estimated, 0 for user-specified
@@ -251,7 +263,7 @@ class Paras
 		void initEst();
 		void estimate(size_t op_est);
 		void outputParas();
-		void outputEstParas(string info);
+		void outputEstParas();
 
 	private:
 		void init();

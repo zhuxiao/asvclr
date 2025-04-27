@@ -6,7 +6,7 @@ pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 //extern pthread_mutex_t mutex_down_sample;
 extern pthread_mutex_t mutex_fai;
 
-localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio){
+localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio){
 
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
@@ -25,6 +25,7 @@ localCns::localCns(string &readsfilename, string &contigfilename, string &refseq
 	this->min_sv_size = min_sv_size;
 	this->min_supp_num = min_supp_num;
 	this->max_seg_size_ratio = max_seg_size_ratio;
+	this->max_seg_nm_ratio = max_seg_nm_ratio;
 	this->max_ultra_high_cov = max_ultra_high_cov;
 	this->min_identity_match = min_identity_match;
 	this->varVec = varVec;
@@ -191,7 +192,7 @@ void localCns::extractReadsDataFromBAM(){
 	// load the clipping data ---20220705
 	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ, minHighMapQ);
 	if(clip_reg_flag) data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
-	else data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, max_ultra_high_cov, max_seg_size_ratio);
+	else data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, max_ultra_high_cov, max_seg_size_ratio, max_seg_nm_ratio);
 
 	// update the use_poa_flag
 //	if(use_poa_flag) {
@@ -263,11 +264,16 @@ void localCns::extractReadsDataFromBAM(){
 			if(query_seq_info_all.size()>0){
 				insufficient_flag = false;
 				if(query_seq_info_all.size()>(size_t)min_supp_num){
-					query_clu_vec = queryCluster(query_seq_info_all);
+
+					indelRegCluster indel_reg_cluster(varVec[0]->chrname, varVec[0]->startRefPos, varVec[varVec.size()-1]->endRefPos, sv_len_est, startRefPos_cns, endRefPos_cns, min_sv_size, min_supp_num, min_identity_match, fai);
+
+					query_clu_vec = indel_reg_cluster.queryCluster(query_seq_info_all);
 
 					maxValue = 0;
-					for(i=0; i<query_clu_vec.size(); i++)
-						if(maxValue<(int32_t)query_clu_vec.at(i)->query_seq_info_all.size()) maxValue = query_clu_vec.at(i)->query_seq_info_all.size();
+					for(i=0; i<query_clu_vec.size(); i++){
+						q_cluster_node = query_clu_vec.at(i);
+						if(q_cluster_node->rescue_flag==false and maxValue<(int32_t)q_cluster_node->query_seq_info_all.size()) maxValue = q_cluster_node->query_seq_info_all.size();
+					}
 					if(maxValue<min_supp_num) { // remove insufficient items
 						insufficient_flag = true;
 						destoryQueryCluVec(query_clu_vec);
@@ -282,8 +288,11 @@ void localCns::extractReadsDataFromBAM(){
 				}
 				//smooth read segments
 				for(i=0; i<query_clu_vec.size(); i++){
-					smoothed_seqs = smoothQuerySeqData(refseq, query_clu_vec.at(i)->query_seq_info_all, startRefPos_cns, min_sv_size);
-					seqs_vec.push_back(smoothed_seqs);
+					q_cluster_node = query_clu_vec.at(i);
+					if(q_cluster_node->rescue_flag==false){
+						smoothed_seqs = smoothQuerySeqData(refseq, query_clu_vec.at(i)->query_seq_info_all, startRefPos_cns, min_sv_size);
+						seqs_vec.push_back(smoothed_seqs);
+					}
 				}
 			}
 		}
@@ -297,15 +306,6 @@ void localCns::extractReadsDataFromBAM(){
 	if(!query_seq_info_all.empty()) destoryQuerySeqInfoAll(query_seq_info_all);
 	if(!query_clu_vec.empty()) destoryQueryCluVec(query_clu_vec);
 
-}
-void localCns::destroyQueryQcSig(queryCluSig_t *qc_Sig){
-	qcSig_t *qcluSig_t;
-	for(size_t i=0; i<qc_Sig->qcSig_vec.size(); i++){
-		qcluSig_t = qc_Sig->qcSig_vec.at(i);
-		delete qcluSig_t;
-	}
-	vector<qcSig_t*>().swap(qc_Sig->qcSig_vec);
-	delete qc_Sig;
 }
 
 void localCns::saveClusterInfo(string &clusterfilename, vector<struct seqsVec*> &seqs_vec){
@@ -371,765 +371,15 @@ bool localCns::updateUsepoaFlag(vector<clipAlnData_t*> &clipAlnDataVector, int32
 	return flag;
 }
 
-vector<struct querySeqInfoVec*> localCns::queryCluster(vector<struct querySeqInfoNode*> &query_seq_info_all){
-	vector<struct querySeqInfoVec*> query_clu_vec;
-	struct querySeqInfoVec *q_cluster_node_a, *q_cluster_node_b;
-	vector<struct querySeqInfoNode*> q_cluster_a, q_cluster_b, q_cluster_rescue, q_cluster_a_final, q_cluster_b_final;
-	struct seedQueryInfo *seed_info_a;
-	struct seedQueryInfo *seed_info_b;
-	size_t i, j, k, smin_id;
-	double score_ratio_a, score_ratio_b, sco_min;
-	//queryCluSig_t *queryCluSig;
-	vector<size_t> min_id_vec;
-	vector<double> score_ratio_vec;
-	vector<srmin_match_t*> srmin_match_vec;
-	srmin_match_t *srmin_match_node;
-	bool flag, q_cluster_b_null_valid_flag;
+int32_t localCns::calculateSignalDistance(alnSeg *query_alnSeg1, alnSeg *query_alnSeg2){
+	int32_t alnSeg1_end, alnSeg2_start, alnSegs_distance;
 
-	for(i=0; i<query_seq_info_all.size(); i++) query_seq_info_all.at(i)->cluster_finished_flag = false;
-
-	prepareQueryInfoForCluster(query_seq_info_all); // prepare query information for cluster
-
-	// select initial clusters
-	for(k=0; k<query_seq_info_all.size(); k++){
-		// validate the signature
-		if(query_seq_info_all.at(k)->overlap_sig_num==0) continue; // skip items of no signatures
-
-		//initializing a_cluster
-		query_seq_info_all.at(k)->cluster_finished_flag = true;
-		q_cluster_a.push_back(query_seq_info_all.at(k));
-
-		//initializing b_cluster: choose one that is most different query from a_cluster add in b_cluster
-		sco_min = INT_MAX; //0.99
-		score_ratio_vec.clear();
-		min_id_vec.clear();
-		q_cluster_b_null_valid_flag = false;
-
-//		score_ratio_vec.push_back(1);
-
-		for(i=0; i<query_seq_info_all.size(); i++){
-			if(query_seq_info_all.at(i)->overlap_sig_num==0 or query_seq_info_all.at(i)->entire_flanking_flag==false) continue; // skip items of no signatures
-
-//			if(query_seq_info_all.at(i)->cluster_finished_flag == false){
-				seed_info_a = chooseSeedClusterQuery(query_seq_info_all.at(i), q_cluster_a);
-				//span_vec1.push_back(seed_info_a->span_intersection);
-				if(seed_info_a->span_intersection>0){
-					if(i!=k) {
-						score_ratio_a = computeScoreRatio(query_seq_info_all.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size);
-						score_ratio_vec.push_back(score_ratio_a);
-					}else{
-						score_ratio_a = 1;
-						score_ratio_vec.push_back(score_ratio_a);
-					}
-					if(score_ratio_a<sco_min){
-						sco_min = score_ratio_a;
-						//smin_id = i;
-						//sam_min_id.push_back(i);
-					}
-
-//					cout << "query.qname=[" << query_seq_info_all.at(i)->qname << "], q_cluster_a.qname=[" << q_cluster_a.at(seed_info_a->id)->qname << "], score_ratio_a=" << score_ratio_a << ", sco_min=" << sco_min << endl;
-
-				}else{
-					score_ratio_vec.push_back(2);
-				}
-				delete seed_info_a;
-//			}else{
-//				//span_vec1.push_back(0);
-//				score_ratio_vec.push_back(1);
-//			}
-		}
-		query_seq_info_all.at(k)->cluster_finished_flag = false;
-		q_cluster_a.pop_back();
-
-		//exist_flag = false;
-		if(sco_min < 1){
-			for(i=0; i<score_ratio_vec.size(); i++){
-				if(score_ratio_vec.at(i)<=1)
-					min_id_vec.push_back(i);
-			}
-			for(i=0; i<min_id_vec.size(); i++){
-				flag = false;
-				for(j=0; j<srmin_match_vec.size(); j++){
-					if(score_ratio_vec.at(min_id_vec.at(i))==srmin_match_vec.at(j)->SR){
-						smin_id = j;
-						flag = true;
-						break;
-					}
-				}
-				if(flag==false){
-					srmin_match_node = new srmin_match_t();
-					srmin_match_node->pos_id.push_back(min_id_vec.at(i));
-					srmin_match_node->num = 1;
-					srmin_match_node->SR = score_ratio_vec.at(min_id_vec.at(i));
-					srmin_match_vec.push_back(srmin_match_node);
-				}else{
-					srmin_match_vec.at(smin_id)->num += 1;
-					srmin_match_vec.at(smin_id)->pos_id.push_back(min_id_vec.at(i));
-				}
-			}
-
-			// sort descendingly and initialize clusters adaptively
-			for(i=0; i<srmin_match_vec.size(); i++){
-				for(j=i+1; j<srmin_match_vec.size(); j++){
-					if(srmin_match_vec.at(i)->num<srmin_match_vec.at(j)->num){
-						srmin_match_node = srmin_match_vec.at(i);
-						srmin_match_vec.at(i) = srmin_match_vec.at(j);
-						srmin_match_vec.at(j) = srmin_match_node;
-					}
-				}
-			}
-
-			query_seq_info_all.at(srmin_match_vec.at(0)->pos_id.at(0))->cluster_finished_flag = true;
-			q_cluster_a.push_back(query_seq_info_all.at(srmin_match_vec.at(0)->pos_id.at(0)));
-			// if(srmin_match_vec.size()>1 and srmin_match_vec.at(1)->num>=0.6*min_supp_num) {
-			if(srmin_match_vec.size()>1 and srmin_match_vec.at(1)->num>=0.6*min_supp_num) {
-				if((double)srmin_match_vec.at(1)->num/srmin_match_vec.at(0)->num>=0.2){
-					query_seq_info_all.at(srmin_match_vec.at(1)->pos_id.at(0))->cluster_finished_flag = true;
-					q_cluster_b.push_back(query_seq_info_all.at(srmin_match_vec.at(1)->pos_id.at(0)));
-				}else
-					q_cluster_b_null_valid_flag = true;
-			}else{
-				if(srmin_match_vec.size()==1){
-					if(srmin_match_vec.at(0)->num>=0.6*min_supp_num){
-						q_cluster_b_null_valid_flag = true;
-					}
-				}else if((double)srmin_match_vec.at(1)->num/srmin_match_vec.at(0)->num<0.2){
-					q_cluster_b_null_valid_flag = true;
-				}
-			}
-		}else{
-			query_seq_info_all.at(k)->cluster_finished_flag = true;
-			q_cluster_a.push_back(query_seq_info_all.at(k));
-		}
-
-		if(srmin_match_vec.size()>0){
-			vector<srmin_match_t*>::iterator svp;
-			for(svp=srmin_match_vec.begin(); svp!=srmin_match_vec.end(); svp++) delete *svp;
-			vector<srmin_match_t*>().swap(srmin_match_vec);
-		}
-
-		if(q_cluster_b.size()==0 and !q_cluster_b_null_valid_flag){
-			q_cluster_a.pop_back();
-			query_seq_info_all.at(k)->cluster_finished_flag = false;
-		}else{ // two initial sets
-			break;
-		}
-	}
-
-	if(q_cluster_b.size()==0){
-		for(i=0; i<query_seq_info_all.size(); i++){
-			if(query_seq_info_all.at(i)->cluster_finished_flag == false and query_seq_info_all.at(i)->overlap_sig_num>0){
-				query_seq_info_all.at(i)->cluster_finished_flag = true;
-				q_cluster_a.push_back(query_seq_info_all.at(i));
-			}
-		}
-	}else{
-		for(i=0; i<query_seq_info_all.size(); i++){
-			if(query_seq_info_all.at(i)->cluster_finished_flag == false and query_seq_info_all.at(i)->overlap_sig_num>0){
-				//choose seed query from a_cluster
-				seed_info_a = chooseSeedClusterQuery(query_seq_info_all.at(i), q_cluster_a);
-				seed_info_b = chooseSeedClusterQuery(query_seq_info_all.at(i), q_cluster_b);
-				if(seed_info_a->span_intersection>0){
-					score_ratio_a = computeScoreRatio(query_seq_info_all.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size);
-					if(seed_info_b->span_intersection>0){
-						score_ratio_b = computeScoreRatio(query_seq_info_all.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size);
-						if(score_ratio_a>score_ratio_b){
-							query_seq_info_all.at(i)->cluster_finished_flag = true;
-							q_cluster_a.push_back(query_seq_info_all.at(i));
-						}else{
-							if(score_ratio_b==score_ratio_a){
-								query_seq_info_all.at(i)->cluster_finished_flag = true;
-								q_cluster_rescue.push_back(query_seq_info_all.at(i));
-							}else{
-								query_seq_info_all.at(i)->cluster_finished_flag = true;
-								q_cluster_b.push_back(query_seq_info_all.at(i));
-							}
-						}
-					}else{
-						if(score_ratio_a<1){
-							query_seq_info_all.at(i)->cluster_finished_flag = true;
-							q_cluster_b.push_back(query_seq_info_all.at(i));
-						}else{
-							query_seq_info_all.at(i)->cluster_finished_flag = true;
-							q_cluster_a.push_back(query_seq_info_all.at(i));
-						}
-					}
-					//delete seed_info_b; // removed on 2023-11-23
-				}else{
-					if(seed_info_b->span_intersection>0){
-						score_ratio_b = computeScoreRatio(query_seq_info_all.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size);
-						if(score_ratio_b<1){
-							query_seq_info_all.at(i)->cluster_finished_flag = true;
-							q_cluster_a.push_back(query_seq_info_all.at(i));
-						}else{
-							query_seq_info_all.at(i)->cluster_finished_flag = true;
-							q_cluster_b.push_back(query_seq_info_all.at(i));
-						}
-					}
-//					else{
-//						//no need to deal with it
-//						query_seq_info_all.at(i)->cluster_finished_flag = false;
-//					}
-				}
-				delete seed_info_a;
-				delete seed_info_b; // added on 2023-11-23
-			}
-		}
-	}
-
-	if(q_cluster_rescue.size()>0){
-		for(i=0;i<q_cluster_rescue.size();i++){
-			seed_info_a = chooseSeedClusterQuery(q_cluster_rescue.at(i),q_cluster_a);
-			seed_info_b = chooseSeedClusterQuery(q_cluster_rescue.at(i), q_cluster_b);
-			score_ratio_a = computeScoreRatio(q_cluster_rescue.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size);
-			score_ratio_b = computeScoreRatio(q_cluster_rescue.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size);
-			if(score_ratio_a>score_ratio_b){
-				q_cluster_a.push_back(q_cluster_rescue.at(i));
-			}else{
-				if(score_ratio_a!=score_ratio_b){
-					q_cluster_b.push_back(q_cluster_rescue.at(i));
-				}else{
-					query_seq_info_all.at(i)->cluster_finished_flag = false;
-				}
-			}
-			// added on 2023-11-23
-			delete seed_info_a;
-			delete seed_info_b;
-		}
-	}
-
-	for(i=0; i<q_cluster_a.size(); i++) if(q_cluster_a.at(i)->overlap_sig_num>0) q_cluster_a_final.push_back(q_cluster_a.at(i));
-	for(i=0; i<q_cluster_b.size(); i++) if(q_cluster_b.at(i)->overlap_sig_num>0) q_cluster_b_final.push_back(q_cluster_b.at(i));
-
-	if(q_cluster_a_final.size()>0){
-		q_cluster_node_a = new struct querySeqInfoVec();
-		q_cluster_node_a->query_seq_info_all = q_cluster_a_final;
-		query_clu_vec.push_back(q_cluster_node_a);
-	}
-
-	if(q_cluster_b_final.size()>0){
-		q_cluster_node_b = new struct querySeqInfoVec();
-		q_cluster_node_b->query_seq_info_all = q_cluster_b_final;
-		query_clu_vec.push_back(q_cluster_node_b);
-	}
-
-	return query_clu_vec;
+	alnSeg1_end = getEndRefPosAlnSeg(query_alnSeg1->startRpos, query_alnSeg1->opflag, query_alnSeg1->seglen);
+	alnSeg2_start = query_alnSeg2->startRpos;
+	alnSegs_distance = abs(alnSeg1_end - alnSeg2_start);
+    return alnSegs_distance;
 }
 
-// prepare query information for cluster
-void localCns::prepareQueryInfoForCluster(vector<struct querySeqInfoNode*> &query_seq_info_vec){
-	int32_t span, span_next;
-	struct querySeqInfoNode *q_seq_node;
-	vector<struct alnSeg*> query_alnSegs;
-	struct alnSeg *seg;
-	size_t i, j, k;
-	int64_t end_ref_pos, start_var_pos, end_var_pos;
-	reg_t *reg;
-	bool flag;
-
-	//sort in descending order by |query_endRpos - query_startRpos|
-	//query_seq_info_item = new struct querySeqInfoNode();
-	for(i=0; i<query_seq_info_vec.size(); i++){
-		for(j=0; j<query_seq_info_vec.size()-i-1; j++){
-			span = query_seq_info_vec.at(j)->query_alnSegs.at(query_seq_info_vec.at(j)->query_alnSegs.size() - 1)->startRpos +  query_seq_info_vec.at(j)->query_alnSegs.at(query_seq_info_vec.at(j)->query_alnSegs.size() - 1)->seglen - query_seq_info_vec.at(j)->query_alnSegs.at(0)->startRpos;
-			span_next = query_seq_info_vec.at(j+1)->query_alnSegs.at(query_seq_info_vec.at(j+1)->query_alnSegs.size() - 1)->startRpos +  query_seq_info_vec.at(j+1)->query_alnSegs.at(query_seq_info_vec.at(j+1)->query_alnSegs.size() - 1)->seglen - query_seq_info_vec.at(j+1)->query_alnSegs.at(0)->startRpos;
-			if(span<span_next){ // swap
-				q_seq_node = query_seq_info_vec.at(j);
-				query_seq_info_vec.at(j) = query_seq_info_vec.at(j+1);
-				query_seq_info_vec.at(j+1) = q_seq_node;
-			}
-		}
-	}
-
-	// count the number of overlapped signatures
-	for(i=0; i<query_seq_info_vec.size(); i++){
-		q_seq_node = query_seq_info_vec.at(i);
-		q_seq_node->overlap_sig_num = 0;
-		for(j=0; j<q_seq_node->query_alnSegs.size(); j++){
-			seg = q_seq_node->query_alnSegs.at(j);
-			if(seg->seglen>=min_sv_size and (seg->opflag==BAM_CINS or seg->opflag==BAM_CDEL)){
-				end_ref_pos = getEndRefPosAlnSeg(seg->startRpos, seg->opflag, seg->seglen);
-				flag = false;
-				for(k=0; k<varVec.size(); k++){
-					reg = varVec.at(k);
-					if(isOverlappedPos(seg->startRpos, end_ref_pos, reg->startRefPos, reg->endRefPos)){
-						flag = true;
-						break;
-					}
-				}
-				if(flag){
-					//cout << "i=" << i << ", j=" << j << ", startpos=" << seg->startRpos << ", endpos=" << end_ref_pos << ", op=" << seg->opflag << endl;
-					q_seq_node->overlap_sig_num ++;
-				}
-			}
-		}
-	}
-
-	// sort descendingly according to the number of overlapped signatures
-	for(i=0; i<query_seq_info_vec.size(); i++){
-		for(j=i+1; j<query_seq_info_vec.size(); j++){
-			if(query_seq_info_vec.at(i)->overlap_sig_num<query_seq_info_vec.at(j)->overlap_sig_num){
-				q_seq_node = query_seq_info_vec.at(i);
-				query_seq_info_vec.at(i) = query_seq_info_vec.at(j);
-				query_seq_info_vec.at(j) = q_seq_node;
-			}
-		}
-	}
-
-	// sort according to the category of the number of signatures
-	sortQueryInfoByNumCategory(query_seq_info_vec);
-
-	// calculate the entire flanking flag
-	start_var_pos = varVec.at(0)->startRefPos - EXT_SIZE_ENTIRE_FLANKING;
-	end_var_pos = varVec.at(varVec.size()-1)->endRefPos + EXT_SIZE_ENTIRE_FLANKING;
-	if(start_var_pos<1) start_var_pos = 1;
-	if(end_var_pos>chrlen) end_var_pos = chrlen;
-	for(i=0; i<query_seq_info_vec.size(); i++){
-		query_alnSegs = query_seq_info_vec.at(i)->query_alnSegs;
-		seg = query_alnSegs.at(query_alnSegs.size()-1);
-		end_ref_pos = getEndRefPosAlnSeg(seg->startRpos, seg->opflag, seg->seglen);
-		if(query_alnSegs.at(0)->startRpos<=start_var_pos and end_ref_pos>=end_var_pos) query_seq_info_vec.at(i)->entire_flanking_flag = true;
-		else query_seq_info_vec.at(i)->entire_flanking_flag = false;
-	}
-
-	// prefer the alignments flanking the entire variant region
-	for(i=0; i<query_seq_info_vec.size(); i++){
-		if(query_seq_info_vec.at(i)->entire_flanking_flag==false){
-			flag = false;
-			for(j=i+1; j<query_seq_info_vec.size(); j++){
-				if(query_seq_info_vec.at(j)->entire_flanking_flag){
-					flag = true;
-					q_seq_node = query_seq_info_vec.at(i);
-					query_seq_info_vec.at(i) = query_seq_info_vec.at(j);
-					query_seq_info_vec.at(j) = q_seq_node;
-					break;
-				}
-			}
-			if(flag==false) break;
-		}
-	}
-}
-
-void localCns::sortQueryInfoByNumCategory(vector<struct querySeqInfoNode*> &query_seq_info_vec){
-	size_t i, j, sum;
-	vector<struct querySeqInfoNode*> query_seq_info_vec_tmp;
-	int32_t idx;
-	vector<srmin_match_t*> num_id_vec;
-	srmin_match_t *num_id_node;
-	bool flag;
-
-	for(i=0; i<query_seq_info_vec.size(); i++){
-		flag = false;
-		for(j=0; j<num_id_vec.size(); j++){
-			if(num_id_vec.at(j)->num==(int32_t)query_seq_info_vec.at(i)->overlap_sig_num){
-				idx = j;
-				flag = true;
-				break;
-			}
-		}
-		if(flag){ // exist, update item
-			num_id_node  = num_id_vec.at(idx);
-			num_id_node->pos_id.push_back(i);
-		}else{ // add item
-			num_id_node = new srmin_match_t();
-			num_id_node->num = query_seq_info_vec.at(i)->overlap_sig_num;
-			num_id_node->pos_id.push_back(i);
-			num_id_vec.push_back(num_id_node);
-		}
-	}
-
-	// sort descendingly according to the number category of overlapped signatures
-	for(i=0; i<num_id_vec.size(); i++){
-		if(num_id_vec.at(i)->num>0){
-			for(j=i+1; j<num_id_vec.size(); j++){
-				if(num_id_vec.at(j)->num>0){
-					if(num_id_vec.at(i)->pos_id.size()<num_id_vec.at(j)->pos_id.size()){
-						num_id_node = num_id_vec.at(i);
-						num_id_vec.at(i) = num_id_vec.at(j);
-						num_id_vec.at(j) = num_id_node;
-					}
-				}
-			}
-		}
-	}
-
-	// update the query vector
-	sum = 0;
-	for(i=0; i<num_id_vec.size(); i++) sum += num_id_vec.at(i)->pos_id.size();
-	if(sum==query_seq_info_vec.size()){
-		for(i=0; i<num_id_vec.size(); i++){
-			num_id_node = num_id_vec.at(i);
-			for(j=0; j<(size_t)num_id_node->pos_id.size(); j++) query_seq_info_vec_tmp.push_back(query_seq_info_vec.at(num_id_node->pos_id.at(j)));
-		}
-		for(i=0; i<query_seq_info_vec_tmp.size(); i++) query_seq_info_vec.at(i) = query_seq_info_vec_tmp.at(i);
-	}else{
-		cerr << "sum=" << sum << ", query_seq_info_vec.size=" << query_seq_info_vec.size() << ", error!" << endl;
-		exit(1);
-	}
-
-	// release memory
-	for(i=0; i<num_id_vec.size(); i++) delete num_id_vec.at(i);
-	vector<srmin_match_t*>().swap(num_id_vec);
-}
-
-void localCns::resucueCluster(vector<struct querySeqInfoNode*> &query_seq_info_all, vector<struct querySeqInfoNode*> &q_cluster_a, vector<struct querySeqInfoNode*> &q_cluster_b){
-	//initializing b_cluster: choose one that is most different query from a_cluster add in b_cluster
-	struct seedQueryInfo *seed_info_a;
-	struct seedQueryInfo *seed_info_b;
-	double score_ratio_a, score_ratio_b, sco_min;
-	size_t i, smin_id;
-
-	sco_min = 1;
-	for(i=0; i<query_seq_info_all.size(); i++){
-		if(query_seq_info_all.at(i)->cluster_finished_flag == false){
-			seed_info_a = chooseSeedClusterQuery(query_seq_info_all.at(i), q_cluster_a);
-			if(seed_info_a->span_intersection>0){
-				score_ratio_a = computeScoreRatio(query_seq_info_all.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size);
-				if(score_ratio_a<sco_min){
-					sco_min = score_ratio_a;
-					smin_id = i;
-				}
-			}
-			delete seed_info_a;
-		}
-	}
-	if(sco_min < 1){
-		query_seq_info_all.at(smin_id)->cluster_finished_flag = true;
-		q_cluster_b.push_back(query_seq_info_all.at(smin_id));
-	}
-
-	//classify
-	for(i=0; i<query_seq_info_all.size(); i++){
-		if(query_seq_info_all.at(i)->cluster_finished_flag == false){
-			//choose seed query from a_cluster
-			seed_info_a = chooseSeedClusterQuery(query_seq_info_all.at(i),q_cluster_a);
-			if(seed_info_a->span_intersection>0){
-				seed_info_b = chooseSeedClusterQuery02(seed_info_a, q_cluster_b);
-				if(seed_info_b->span_intersection>0){
-					score_ratio_a = computeScoreRatio(query_seq_info_all.at(i), q_cluster_a.at(seed_info_a->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size);
-					score_ratio_b = computeScoreRatio(query_seq_info_all.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size);
-					if(score_ratio_a>score_ratio_b){
-						query_seq_info_all.at(i)->cluster_finished_flag = true;
-						q_cluster_a.push_back(query_seq_info_all.at(i));
-					}
-					if(score_ratio_a<score_ratio_b){
-						query_seq_info_all.at(i)->cluster_finished_flag = true;
-						q_cluster_b.push_back(query_seq_info_all.at(i));
-					}
-				}
-				delete seed_info_b;
-			}
-			delete seed_info_a;
-		}
-	}
-}
-
-double localCns::computeScoreRatio(struct querySeqInfoNode* query_seq_info_node, struct querySeqInfoNode* q_cluster_node, int64_t startSpanPos, int64_t endSpanPos, int32_t min_sv_size){
-	double score_ratio;
-	int32_t score_sum;
-	size_t i;
-	queryCluSig_t *queryCluSig, *seed_qcQuery;
-
-#if POA_ALIGN_DEBUG
-	cout << "qname1=" << query_seq_info_node->qname << ", qname2=" << q_cluster_node->qname << endl;
-#endif
-
-	score_ratio = 0;
-	//matching prepare
-	queryCluSig = new queryCluSig_t();
-	queryCluSig->qcSig_vec = extractQcSigsFromAlnSegsSingleQuery(query_seq_info_node, query_seq_info_node->clip_aln->chrname, startSpanPos, endSpanPos, min_sv_size);
-	seed_qcQuery = new queryCluSig_t();
-	seed_qcQuery->qcSig_vec = extractQcSigsFromAlnSegsSingleQuery(q_cluster_node, q_cluster_node->clip_aln->chrname, startSpanPos, endSpanPos, min_sv_size);
-
-	//merge queryCluSig->qcSig_vec and seed_qcQuery->qcSig_vec
-	mergeNeighbouringSigs(query_seq_info_node, queryCluSig->qcSig_vec, 100, 0.7, fai);
-	mergeNeighbouringSigs(q_cluster_node, seed_qcQuery->qcSig_vec, 100, 0.7, fai);
-
-	//matching
-	queryCluSig->match_profile_vec = computeQcMatchProfileSingleQuery(queryCluSig, seed_qcQuery);
-	if(queryCluSig->match_profile_vec.size()==0){
-		//score_ratio = 2;//have no varsig
-		score_ratio = 0; //0.99
-	}else{
-		score_sum = 0;
-		for(i=0; i<queryCluSig->match_profile_vec.size(); i++) score_sum += queryCluSig->match_profile_vec.at(i);
-		score_ratio = (double)score_sum / queryCluSig->match_profile_vec.size();
-	}
-#if POA_ALIGN_DEBUG
-	cout << "score_ratio=" << score_ratio << endl;
-#endif
-
-	destroyQueryQcSig(queryCluSig);
-	destroyQueryQcSig(seed_qcQuery);
-
-	return score_ratio;
-}
-
-vector<int8_t> localCns::computeQcMatchProfileSingleQuery(queryCluSig_t *queryCluSig, queryCluSig_t *seed_qcQuery){
-	vector<int8_t> match_profile_vec;
-	int32_t rowsNum, colsNum, matchScore, mismatchScore, gapScore, gapOpenScore;
-	int32_t scoreIJ, tmp_gapScore1, tmp_gapScore2, maxValue, path_val, maxValue_ul, maxValue_l, maxValue_u;
-	struct alnScoreNode *scoreArr;
-	int64_t i, j, arrSize;
-	bool matchFlag;
-
-	matchScore = GT_SIG_MATCH_SCORE;
-	mismatchScore = GT_SIG_MISMATCH_SCORE;
-	gapScore = GT_SIG_GAP_SCORE;
-	gapOpenScore = GT_SIG_GAP_OPEN_SCORE;
-
-	if(queryCluSig->qcSig_vec.size()>0 or seed_qcQuery->qcSig_vec.size()>0){
-		rowsNum = queryCluSig->qcSig_vec.size() + 1;
-		colsNum = seed_qcQuery->qcSig_vec.size() + 1;
-
-		arrSize = rowsNum * colsNum;
-		scoreArr = (struct alnScoreNode*) calloc (arrSize, sizeof(struct alnScoreNode));
-		if(scoreArr==NULL){
-			cerr << "line=" << __LINE__ << ", rowsNum=" << rowsNum << ", colsNum=" << colsNum << ", cannot allocate memory, error!" << endl;
-			exit(1);
-		}
-		// set the elements of the first row and the first column to be zero
-		scoreArr[0].path_val = 0;
-		for(j=1; j<colsNum; j++) scoreArr[j].path_val = 2;
-		for(i=1; i<rowsNum; i++) scoreArr[i*colsNum].path_val = 1;
-		// compute the scores of each element
-		for(i=1; i<rowsNum; i++){
-			for(j=1; j<colsNum; j++){
-				//matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_IDENTITY_RATIO_MATCH_THRES, fai);
-				matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_identity_match, fai);
-				if(matchFlag) scoreIJ = matchScore;
-				else scoreIJ = mismatchScore;//
-
-				if(scoreArr[(i-1)*colsNum+j].path_val!=1)//up
-					tmp_gapScore1 = gapOpenScore;
-				else
-					tmp_gapScore1 = gapScore;
-
-				if(scoreArr[i*colsNum+j-1].path_val!=2)//left
-					tmp_gapScore2 = gapOpenScore;//-4
-				else
-					tmp_gapScore2 = gapScore;//-2
-
-				maxValue = maxValue_ul = maxValue_u = maxValue_l = INT_MIN;
-				path_val = -1;
-				// compute the maximal score
-				if(scoreArr[(i-1)*colsNum+j-1].score+scoreIJ>maxValue) {// from (i-1, j-1)
-					maxValue = scoreArr[(i-1)*colsNum+j-1].score + scoreIJ;
-					path_val = 0;
-					maxValue_ul = maxValue;
-				}
-				if(scoreArr[(i-1)*colsNum+j].score+tmp_gapScore1>maxValue) {// from (i-1, j) up
-					maxValue = scoreArr[(i-1)*colsNum+j].score + tmp_gapScore1;
-					path_val = 1;
-					maxValue_u = maxValue;
-				}
-				if(scoreArr[i*colsNum+j-1].score+tmp_gapScore2>maxValue) {// from (i, j-1) left
-					maxValue = scoreArr[i*colsNum+j-1].score + tmp_gapScore2;
-					path_val = 2;
-					maxValue_l = maxValue;
-				}
-
-				if(maxValue_ul>=maxValue_u and maxValue_ul>=maxValue_l){
-					if(matchFlag==false){
-						scoreArr[i*colsNum+j].ismismatch = 1;
-					}else{
-						scoreArr[i*colsNum+j].ismismatch = 0;
-					}
-				}
-				scoreArr[i*colsNum+j].score = maxValue;
-				scoreArr[i*colsNum+j].path_val = path_val;
-			}
-		}
-
-		// compute signature match profile
-		match_profile_vec = qComputeSigMatchProfile(scoreArr, rowsNum, colsNum, queryCluSig, seed_qcQuery);
-		free(scoreArr);
-	}
-
-	return match_profile_vec;
-}
-
-vector<int8_t> localCns::qComputeSigMatchProfile(struct alnScoreNode *scoreArr, int32_t rowsNum, int32_t colsNum, queryCluSig_t *queryCluSig, queryCluSig_t *seed_qcQuery){
-	vector<int8_t> match_profile_vec;
-	int32_t i = rowsNum - 1, j = colsNum - 1, value;
-	if(i==0 or j==0){
-		match_profile_vec.push_back(0);
-	}else{
-		while(i>0 or j>0){
-			value = scoreArr[i*colsNum+j].path_val;
-			if(value==0){ //from (i-1, j-1)
-				if(scoreArr[i*colsNum+j].ismismatch==1){
-					match_profile_vec.push_back(0);
-				}else{
-					match_profile_vec.push_back(1);
-				}
-				queryCluSig->qcSig_vec.at(i-1)->mate_qcSig = seed_qcQuery->qcSig_vec.at(j-1);
-				i--;
-				j--;
-			}
-			else if(value==1){ //from (i-1, j)
-				//?
-				match_profile_vec.push_back(0);
-				i--;
-			}
-			else{ //from (i, j-1)
-				match_profile_vec.push_back(0);
-				j--;
-			}
-			if(i==0 and j==0)
-				break;
-		}
-
-		reverse(match_profile_vec.begin(), match_profile_vec.end());
-	}
-
-//============================================
-#if POA_ALIGN_DEBUG
-	cout << "------------------- Profile -------------------" << endl;
-	// output the profile
-	vector<string> sigseq_vec1, sigseq_vec2;
-	string sig_str1, sig_str2;
-	i = rowsNum - 1; j = colsNum - 1;
-	while(i>0 or j>0){
-		value = scoreArr[i*colsNum+j].path_val;
-		if(value==0){ //from (i-1, j-1)
-			sig_str1 = to_string(queryCluSig->qcSig_vec.at(i-1)->cigar_op_len) + "_" + to_string(queryCluSig->qcSig_vec.at(i-1)->cigar_op);
-			sig_str2 = to_string(seed_qcQuery->qcSig_vec.at(j-1)->cigar_op_len) + "_" + to_string(seed_qcQuery->qcSig_vec.at(j-1)->cigar_op);
-
-			sigseq_vec1.push_back(sig_str1);
-			sigseq_vec2.push_back(sig_str2);
-
-			i--;
-			j--;
-		}
-		else if(value==1){ //from (i-1, j)
-			//?
-			//match_profile_vec.push_back(0);
-			sig_str1 = to_string(queryCluSig->qcSig_vec.at(i-1)->cigar_op_len) + "_" + to_string(queryCluSig->qcSig_vec.at(i-1)->cigar_op);
-			sigseq_vec1.push_back(sig_str1);
-			sigseq_vec2.push_back("-");
-
-			i--;
-		}
-		else{ //from (i, j-1)
-			//match_profile_vec.push_back(0);
-			sig_str2 = to_string(seed_qcQuery->qcSig_vec.at(j-1)->cigar_op_len) + "_" + to_string(seed_qcQuery->qcSig_vec.at(j-1)->cigar_op);
-			sigseq_vec1.push_back("-");
-			sigseq_vec2.push_back(sig_str2);
-
-			j--;
-		}
-		if(i==0 and j==0)
-			break;
-	}
-
-	reverse(sigseq_vec1.begin(), sigseq_vec1.end());
-	reverse(sigseq_vec2.begin(), sigseq_vec2.end());
-
-	size_t k;
-	for(k=0; k<sigseq_vec1.size(); k++) cout << sigseq_vec1.at(k) << "\t";
-	cout << endl;
-	for(k=0; k<sigseq_vec2.size(); k++) cout << sigseq_vec2.at(k) << "\t";
-	cout << endl;
-	for(k=0; k<match_profile_vec.size(); k++) cout << match_profile_vec.at(k) << "\t";
-	cout << endl;
-#endif
-//=====================================
-
-	return match_profile_vec;
-}
-
-
-struct seedQueryInfo* localCns::chooseSeedClusterQuery(struct querySeqInfoNode* query_seq_info_node, vector<struct querySeqInfoNode*> &q_cluster){
-	size_t seed_id, j;
-	int64_t startSpanPos_tmp, endSpanPos_tmp, startSpanPos, endSpanPos, span, span_max;
-	struct seedQueryInfo* seed_info;
-
-	span_max = 0, seed_id = 0;
-	startSpanPos = 0;
-	endSpanPos = 0;
-	for(j=0;j<q_cluster.size();j++){
-		startSpanPos_tmp = max(q_cluster.at(j)->query_alnSegs.at(0)->startRpos, query_seq_info_node->query_alnSegs.at(0)->startRpos);
-		endSpanPos_tmp = min(q_cluster.at(j)->query_alnSegs.at(q_cluster.at(j)->query_alnSegs.size() - 1)->startRpos + q_cluster.at(j)->query_alnSegs.at(q_cluster.at(j)->query_alnSegs.size() - 1)->seglen -1, query_seq_info_node->query_alnSegs.at(query_seq_info_node->query_alnSegs.size() - 1)->startRpos + query_seq_info_node->query_alnSegs.at(query_seq_info_node->query_alnSegs.size() - 1)->seglen - 1);
-		if(startSpanPos_tmp < endSpanPos_tmp){
-			span = endSpanPos_tmp - startSpanPos_tmp;
-			if(span>span_max){
-				span_max = span;
-				startSpanPos = startSpanPos_tmp;
-				endSpanPos = endSpanPos_tmp;
-				seed_id = j;
-			}
-		}
-	}
-
-	seed_info = new struct seedQueryInfo();
-	seed_info->startSpanPos = startSpanPos;
-	seed_info->endSpanPos = endSpanPos;
-	seed_info->span_intersection = span_max;
-	seed_info->id = seed_id;
-	return seed_info;
-}
-
-struct seedQueryInfo* localCns::chooseSeedClusterQuery02(struct seedQueryInfo* seedinfo, vector<struct querySeqInfoNode*> &q_cluster){
-	size_t seed_id, j;
-	int64_t startSpanPos_tmp, endSpanPos_tmp, startSpanPos, endSpanPos, span, span_max, query_start, query_end;
-	struct seedQueryInfo* seed_info;
-
-	span_max = 0, seed_id = 0;
-	startSpanPos = 0;
-	endSpanPos = 0;
-	for(j=0;j<q_cluster.size();j++){
-		query_start = q_cluster.at(j)->query_alnSegs.at(0)->startRpos;
-		query_end = q_cluster.at(j)->query_alnSegs.at(q_cluster.at(j)->query_alnSegs.size() - 1)->startRpos + q_cluster.at(j)->query_alnSegs.at(q_cluster.at(j)->query_alnSegs.size() - 1)->seglen -1;
-		if(query_start<seedinfo->startSpanPos){
-			if(query_end>seedinfo->endSpanPos){
-				startSpanPos_tmp = seedinfo->startSpanPos;
-				endSpanPos_tmp = seedinfo->endSpanPos;
-				span = endSpanPos_tmp - startSpanPos_tmp;
-			}
-			if(query_end>seedinfo->startSpanPos and query_end<=seedinfo->endSpanPos){
-				startSpanPos_tmp = seedinfo->startSpanPos;
-				endSpanPos_tmp = query_end;
-				span = endSpanPos_tmp - startSpanPos_tmp;
-			}
-			if(query_end<seedinfo->startSpanPos){
-				startSpanPos_tmp = 0;
-				endSpanPos_tmp = 0;
-				span = 0;
-			}
-		}else{
-			if(query_start<=seedinfo->endSpanPos){
-				if(query_end>seedinfo->endSpanPos){
-					startSpanPos_tmp = query_start;
-					endSpanPos_tmp = seedinfo->endSpanPos;
-					span = endSpanPos_tmp - startSpanPos_tmp;
-				}else{
-					startSpanPos_tmp = query_start;
-					endSpanPos_tmp = query_end;
-					span = endSpanPos_tmp - startSpanPos_tmp;
-				}
-			}else{
-				startSpanPos_tmp = 0;
-				endSpanPos_tmp = 0;
-				span = 0;
-			}
-		}
-
-		if(span>span_max){
-			span_max = span;
-			startSpanPos = startSpanPos_tmp;
-			endSpanPos = endSpanPos_tmp;
-			seed_id = j;
-		}
-	}
-
-	seed_info = new struct seedQueryInfo();
-	seed_info->startSpanPos = startSpanPos;
-	seed_info->endSpanPos = endSpanPos;
-	seed_info->span_intersection = span_max;
-	seed_info->id = seed_id;
-	return seed_info;
-}
 
 // collect query sequence data
 struct seqsVec* localCns::collectQuerySeqDataClipReg(vector<qcSigList_t*> &qcSigList){
@@ -1621,7 +871,6 @@ int32_t localCns::getLeftMostAlnSeg(vector<clipAlnData_t*> &query_aln_segs){
 bool localCns::localConsensus(){
 	bool flag;
 
-	//if(local_cns.clip_reg_flag==false){
 	if(use_poa_flag){
 		flag = cnsByPoa(); // local consensus using abPOA
 		if(flag==false){
@@ -1696,9 +945,10 @@ bool localCns::cnsByPoa(){
 					sleep(mem_wait_seconds);
 				}else{
 					tmp_cons_filename = tmpdir + "/consensus_" + to_string(k) + ".fa";
-					// cmd2 = "abpoa -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
+					//cmd2 = "abpoa -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
 					cmd2 = "abpoa";
-					if(mean_read_len>=MIN_SEQ_LEN_USING_MINIMIZER) cmd2 =+ " -S";
+					//if(mean_read_len>=MIN_SEQ_LEN_USING_MINIMIZER) cmd2 += " -S"; // deleted on 2025-03-16
+					if(sv_len_est>MIN_SEQ_LEN_USING_MINIMIZER) cmd2 += " -S";
 					cmd2 += " -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
 
 					//cout << cmd2 << endl;

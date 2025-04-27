@@ -264,7 +264,8 @@ int covLoader::updateBaseInfo(Base *baseArr, vector<struct alnSeg*> &alnSegs){
 						}
 						else
 							baseArr[pos-startPos].addDelEvent(allocateDelEvent((*seg)->startRpos, (*seg)->seg_MD));
-					}else
+					}
+					else
 						baseArr[pos-startPos].num_shortdel ++;
 
 //					tmp_endPos = (*seg)->startRpos + (*seg)->seglen - 1;

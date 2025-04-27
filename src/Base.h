@@ -39,6 +39,7 @@ class Base
 		bool isHighConIndelBase(float threshold, float ignore_polymer_ratio_threshold);
 		bool isMatchToRef();
 		size_t getLargeIndelNum(size_t thres);
+		size_t getRegLargeIndelNum(size_t thres);
 		size_t getTotalIndelNum();
 		size_t getTotalClipNum();
 		size_t getTotalCovNum();

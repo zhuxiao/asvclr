@@ -491,11 +491,11 @@ void Chrome::processMateClipRegDetectWork(){
 		//if(clip_processed_flag_vec.at(i)==false){
 			reg = clipRegVector.at(i);
 
-			//cout << "[" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+			// cout << "[" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
-//			if(i>=13 and i<=13)
-//				cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
-//			else continue;
+			// if(i>=36 and i<=36) // 36, 60
+			// 	cout << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+			// else continue;
 
 			mate_clip_reg_work_opt = new mateClipRegDetectWork_opt();
 			mate_clip_reg_work_opt->reg = reg;
@@ -3809,7 +3809,7 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 	reg_t *reg;
 	string line, sv_type, header_line_bed, discov_level_str;
 	int32_t ref_dist, query_dist;
-	static int32_t ins_num = 0, del_num = 0, dup_num= 0, inv_num = 0, tra_num = 0, sv_num;
+	static int32_t ins_num = 0, del_num = 0, dup_num= 0, inv_num = 0, tra_num = 0, sv_num; 
 	bool size_satisfied; //, no_existed;
 
 	outfile.open(outfilename_indel);
@@ -3830,7 +3830,8 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 			//no_existed = true;
 			reg = var_cand->newVarVec.at(j);
 			// choose the size-selected variants
-			size_satisfied = isSizeSatisfied2(reg->sv_len, paras->min_sv_size_usr, paras->max_sv_size_usr);
+			//size_satisfied = isSizeSatisfied2(reg->sv_len, paras->min_sv_size_usr, paras->max_sv_size_usr); // deleted on 2025-03-20
+			size_satisfied = isSizeSatisfied2(reg->sv_len, paras->min_sv_size_usr_final, paras->max_sv_size_usr);
 
 //			if(i>0) no_existed = isNotAlreadyExists(var_cand_pre->newVarVec, reg);
 //			if(i>1 and no_existed) no_existed = isNotAlreadyExists(var_cand_pre_pre->newVarVec, reg);
@@ -3849,7 +3850,7 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 					default: sv_type = VAR_MIX_STR; break;
 				}
 				// line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
-				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\tASVCLR." + sv_type + "." + to_string(sv_num) + "\t" + sv_type;
+				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + "ASVCLR." + sv_type + "." + to_string(sv_num) + "\t" + sv_type;
 				if(reg->var_type!=VAR_TRA)
 					line += "\t" + to_string(reg->sv_len);
 				else
@@ -3928,7 +3929,8 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 			if(reg){
 				ref_dist = reg->endRefPos - reg->startRefPos + 1;
 				query_dist = reg->endQueryPos - reg->startQueryPos + 1;
-				size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr);
+				//size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr, paras->max_sv_size_usr); // deleted on 2025-03-20
+				size_satisfied = isSizeSatisfied(ref_dist, query_dist, paras->min_sv_size_usr_final, paras->max_sv_size_usr);
 			}
 
 			if(reg and reg->var_type!=VAR_UNC and var_cand->call_success and size_satisfied){
@@ -3943,7 +3945,7 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 				}
 
 				// line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type;
-				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + sv_type + "." + to_string(sv_num) + "\t" + sv_type;
+				line = reg->chrname + "\t" + to_string(reg->startRefPos) + "\t" + to_string(reg->endRefPos) + "\t" + "ASVCLR." + sv_type + "." + to_string(sv_num) + "\t" + sv_type;
 				if(reg->var_type!=VAR_TRA)
 					line += "\t" + to_string(reg->sv_len);
 				else

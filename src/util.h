@@ -56,13 +56,6 @@ void mergeOverlappedReg(vector<reg_t*> &regVector);
 void updateReg(reg_t* reg1, reg_t* reg2);
 void mergeAdjacentReg(vector<reg_t*> &regVec, size_t dist_thres);
 
-// merge neighbouring indels
-void mergeNeighbouringVars(vector<reg_t*> &regVector, int32_t max_ref_dist_thres, double min_merge_identity_thres, faidx_t *fai, string contigfilename, string reffilename);
-double calculate_merge_identity_threshold(int32_t common_length, int32_t max_common_length, double min_merge_identity_thres);
-int32_t calculate_merge_distance_threshold(int32_t max_ref_dist_thres, int32_t support_num, int32_t sv_len, int32_t comp_sv_size);
-int32_t calculate_merge_distance_threshold(bool complex_region_flag, int32_t query_supp_num, int32_t query_sv_size, int32_t total_sv_num, double query_sv_support_different);
-bool ComplexRegionFlag(vector<reg_t*> regVector);
-
 void printRegVec(vector<reg_t*> &regVec, string header);
 void printMateClipReg(mateClipReg_t *mate_clip_reg);
 vector<string> getLeftRightPartChrname(mateClipReg_t *mate_clip_reg);
@@ -85,9 +78,6 @@ string getCallFileHeaderBed(string &sample);
 string getCallFileHeaderBedpe(string &sample);
 vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAlnData_t*> &clipAlnDataVector, const string &refseq_given, string &chrname, int64_t startRefPos, int64_t endRefPos, faidx_t *fai, int32_t minConReadLen, bool clip_reg_flag, pthread_mutex_t *p_mutex_fai);
 
-// void mergeNeighbouringSigs(vector<struct querySeqInfoNode*> &query_seq_info_vec, int32_t max_ref_dist_thres, double min_merge_identity_thres, faidx_t *fai);
-void mergeNeighbouringSigs(struct querySeqInfoNode* query_seq_info_node, vector<qcSig_t*> &sig_vec, int32_t max_ref_dist_thres, double min_merge_identity_thres, faidx_t *fai);
-
 int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &query_aln_segs);
 vector<string> getQuerySeqWithSoftClipSeqs(clipAlnData_t* clip_aln, string &refseq, int64_t startRefPos, int64_t endRefPos, int32_t bam_type, bool clip_reg_flag);
 vector<int32_t> computeQueryStartEndLocByRefPos(bam1_t *b, int64_t startRefPos, int64_t endRefPos, string &refseq, int32_t bam_type);
@@ -98,7 +88,7 @@ void destroyConsWorkOptVec(vector<cnsWork_opt*> &cns_work_vec);
 void deleteItemFromCnsWorkVec(int32_t item_id, vector<cnsWork_opt*> &cns_work_vec);
 int32_t getItemIDFromCnsWorkVec(string &contigfilename, vector<cnsWork_opt*> &cns_work_vec);
 void* processSingleConsWork(void *arg);
-void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 bool isReadableFile(string &filename);
 void* processSingleMinimap2AlnWork(void *arg);
 void* processSingleBlatAlnWork(void *arg);
@@ -121,7 +111,7 @@ void getRegByFilename(simpleReg_t *reg, string &filename, string &pattern_str);
 vector<simpleReg_t*> extractSimpleRegsByStr(string &regs_str);
 string getLimitRegStr(vector<simpleReg_t*> &limit_reg_vec);
 void createDir(string &dirname);
-vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_size);
+vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_size, int32_t min_indel_size);
 vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln);
 vector<mismatchReg_t*> getMismatchRegVecWithoutPos(localAln_t *local_aln);
 void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov);
@@ -191,9 +181,11 @@ int64_t getEndSubjectPosAlnSeg(int64_t startSubpos, int32_t opflag, int32_t op_l
 int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len);
 
 bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double identity_ratio_match_thres, faidx_t *fai);
+bool isQcSigMatchBasedOnSVlen(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres);
 vector<qcSig_t*> extractQcSigsFromAlnSegsSingleQuery(struct querySeqInfoNode *query_seq_info_node, string &chrname, int64_t startSpanPos, int64_t endSpanPos, int32_t min_sv_size);
 qcSig_t *allocateQcSigNode(struct alnSeg *aln_seg);
 void destoryQuerySeqInfoAll(vector<struct querySeqInfoNode*> &query_seq_info_all);
+void destroyQueryQcSig(vector<qcSig_t *> &qcSig_vec);
 vector<string> extractQcSigCompSeqs(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, faidx_t *fai);
 struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNode*> &query_seq_info_vec, int64_t startRefPos_cns, int32_t min_sv_size);
 

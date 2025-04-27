@@ -21,7 +21,7 @@ class clipAlnDataLoader {
 		void loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, vector<string> &qname_vec);
 		void loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector);
 		void loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov);
-		void loadClipAlnDataWithSATagWithSegSize(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, double primary_seg_size_ratio);
+		void loadClipAlnDataWithSATagWithSegSize(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, double primary_seg_size_ratio, double primary_seg_nm_ratio);
 		void loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, vector<string> &qname_vec);
 		void loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, vector<string> &qname_vec);
 
@@ -40,7 +40,7 @@ class clipAlnDataLoader {
 		void addAdjacentInfo(vector<clipAlnData_t*> &clipAlnDataVector);
 		void orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &query_aln_vec);
 		void assignSideMostFlag(vector<clipAlnData_t*> &query_aln_vec);
-		void removeClipAlnDataWithLowPrimarySegSizeRatio(vector<clipAlnData_t*> &clipAlnDataVector, double primary_seg_size_ratio);
+		void removeClipAlnDataWithLowPrimarySegSizeRatio(vector<clipAlnData_t*> &clipAlnDataVector, double primary_seg_size_ratio, double primary_seg_nm_ratio);
 		void removeSingleItemClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, int32_t idx);
 };
 

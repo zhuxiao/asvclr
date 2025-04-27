@@ -51,6 +51,7 @@ void Paras::init(){
 	//min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES; // deleted on 2024-09-04
 	min_identity_match = -1;
 	min_identity_merge = -1;
+	max_seg_nm_ratio_usr = -1;
 	max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_CCS;
 
 	min_ins_size_filt = 0;
@@ -144,12 +145,20 @@ bool Paras::isRecommendCanuVersion(string &canu_version, const string &recommend
 // initialize preset parameters
 void Paras::initPreset(){
 	if(technology.compare(PACBIO_CCS_TECH_STR)==0){  // CCS
+		min_sv_size_usr = min_sv_size_usr_final;
 		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES;
 		if(min_identity_merge==-1) min_identity_merge = CALL_MIN_IDENTITY_MERGE_THRES;
-		//max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_OTHER;
+		if(max_seg_nm_ratio_usr==-1) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_1;
+		// max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_OTHER;
 	}else{// CLR, ONT
+		if(technology.compare(NANOPORE_TECH_STR)==0) min_sv_size_usr = min_sv_size_usr_final;
+		else min_sv_size_usr = round(min_sv_size_usr_final * min_sv_size_usr_factor);
 		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES2;
 		if(min_identity_merge==-1) min_identity_merge = CALL_MIN_IDENTITY_MERGE_THRES2;
+		if(max_seg_nm_ratio_usr==-1) {
+			if(technology.compare(NANOPORE_TECH_STR)==0) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_1;
+			else max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_2;
+		}
 	}
 }
 
@@ -273,8 +282,9 @@ int Paras::parseDetectParas(int argc, char **argv){
 
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
-	min_sv_size_usr = MIN_SV_SIZE_USR;
+	min_sv_size_usr_final = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
+	min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	//minReadsNumSupportSV = -1;
@@ -283,7 +293,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 	minMapQ = MIN_MAPQ_THRES;
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
-	//max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
+	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	simpleReg_t *simple_reg;
 	string simple_reg_str, opt_name_str;
 
@@ -302,16 +312,18 @@ int Paras::parseDetectParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:x:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:F:n:x:N:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
-			case 'm': min_sv_size_usr = stoi(optarg); break;
+			case 'm': min_sv_size_usr_final = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
+			case 'F': min_sv_size_usr_factor = stod(optarg); break;
 			case 'n': minReadsNumSupportSV = stoi(optarg);
 					min_Nsupp_est_flag = 0;
 					break;
 			case 'x': technology = optarg; break;
+			case 'N': max_seg_nm_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
@@ -396,8 +408,9 @@ int Paras::parseCnsParas(int argc, char **argv){
 
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
-	min_sv_size_usr = MIN_SV_SIZE_USR;
+	min_sv_size_usr_final = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
+	min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
@@ -433,17 +446,19 @@ int Paras::parseCnsParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:n:x:i:r:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:F:n:x:i:r:N:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
-			case 'm': min_sv_size_usr = stoi(optarg); break;
+			case 'm': min_sv_size_usr_final = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
+			case 'F': min_sv_size_usr_factor = stod(optarg); break;
 			case 'n': minReadsNumSupportSV = stoi(optarg);
 					min_Nsupp_est_flag = 0;
 					break;
 			case 'x': technology = optarg; break;
 			case 'i': min_identity_match = stod(optarg); break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
+			case 'N': max_seg_nm_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'c': expected_cov_cns = stod(optarg); break;
@@ -521,8 +536,9 @@ int Paras::parseCallParas(int argc, char **argv){
 
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
-	min_sv_size_usr = MIN_SV_SIZE_USR;
+	min_sv_size_usr_final = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
+	min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
@@ -559,11 +575,12 @@ int Paras::parseCallParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:n:x:i:I:d:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:F:n:x:i:I:d:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
-			case 'm': min_sv_size_usr = stoi(optarg); break;
+			case 'm': min_sv_size_usr_final = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
+			case 'F': min_sv_size_usr_factor = stod(optarg); break;
 			case 'n': minReadsNumSupportSV = stoi(optarg);
 					min_Nsupp_est_flag = 0;
 					break;
@@ -644,8 +661,9 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
-	min_sv_size_usr = MIN_SV_SIZE_USR;
+	min_sv_size_usr_final = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
+	min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	minMapQ = MIN_MAPQ_THRES;
 	min_Nsupp_est_flag = 1;
@@ -693,12 +711,13 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:n:x:i:I:d:r:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:F:n:x:i:I:d:r:N:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
-			case 'm': min_sv_size_usr = stoi(optarg); break;
+			case 'm': min_sv_size_usr_final = stoi(optarg); break;
 			case 'M': max_sv_size_usr = stoi(optarg); break;
+			case 'F': min_sv_size_usr_factor = stod(optarg); break;
 			case 'n': minReadsNumSupportSV = stoi(optarg);
 					min_Nsupp_est_flag = 0;
 					break;
@@ -707,6 +726,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 			case 'I': min_identity_merge = stod(optarg); break;
 			case 'd': min_distance_merge = stoi(optarg); break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
+			case 'N': max_seg_nm_ratio_usr = stod(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'c': expected_cov_cns = stod(optarg); break;
@@ -852,6 +872,8 @@ void Paras::showDetectUsage(){
 	cout << "   -n INT        minimal number of reads supporting a SV [" << MIN_SUPPORT_READS_NUM_EST << "]." << endl;
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
+	cout << "   -N FLOAT      maximal NM ratio threshold of the largest split-alignment segment" << endl;
+	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_NM_RATIO_1 << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
 	cout << "   -q INT        minimal mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
@@ -862,7 +884,7 @@ void Paras::showDetectUsage(){
 	cout << "   -t INT        number of threads [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
 	cout << "   --min-cons-read-size INT" << endl;
-	cout << "                 minimal read segment size to generate consensus sequences " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
+	cout << "                 minimal segment size for consensus " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
 	cout << "   --include-alt" << endl;
 	cout << "                 include alt chromosomal items in result [False]" << endl;
 	cout << "   --include-decoy" << endl;
@@ -898,11 +920,13 @@ void Paras::showCnsUsage(){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9" << endl;
-	cout << "                   sq/rs/ont: -i 0.75" << endl;
+	cout << "                         ccs: -i 0.9 -N 0.1" << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -N 0.2" << endl;
 	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
 	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
+	cout << "   -N FLOAT      maximal NM ratio threshold of the largest split-alignment segment" << endl;
+	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_NM_RATIO_1 << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
 	cout << "   -q INT        minimal mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
@@ -928,7 +952,7 @@ void Paras::showCnsUsage(){
 	cout << "                 clip region extend size on both sides while generating consensus sequences" << endl;
 	cout << "                 [" << CNS_CHUNK_SIZE_EXT_CLIP << "] bp." << endl;
 	cout << "   --min-cons-read-size INT" << endl;
-	cout << "                 minimal read segment size to generate consensus sequences " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
+	cout << "                 minimal segment size for consensus " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
 	cout << "   --keep-cns-reads" << endl;
 	cout << "                 Keep temporary reads from being deleted during local consensus." << endl;
 	cout << "                 This may take some additional disk space" << endl;
@@ -981,12 +1005,12 @@ void Paras::showCallUsage(){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9 -I 0.95" << endl;
-	cout << "                   sq/rs/ont: -i 0.75 -I 0.7" << endl;
+	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1" << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2" << endl;
 	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
-	cout << "   -I FLOAT      minimum merging identity [" << CALL_MIN_IDENTITY_MERGE_THRES << "]" << endl;
-	cout << "   -d INT        minimal merging distance [" << CALL_MIN_DISTANCE_MERGE_THRES << "]" << endl;
-	cout << "                 neighboring SVs with distance smaller than INT and merging identity" << endl;
+	cout << "   -I FLOAT      minimal sequence identity for merge [" << CALL_MIN_IDENTITY_MERGE_THRES << "]" << endl;
+	cout << "   -d INT        minimal reference distance for merge [" << CALL_MIN_DISTANCE_MERGE_THRES << "]" << endl;
+	cout << "                 Neighboring SVs with distance smaller than INT and sequence identity" << endl;
 	cout << "                 larger than FLOAT will be merged" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
@@ -1018,13 +1042,13 @@ void Paras::showCallUsage(){
 //	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
 //	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
 	cout << "   --gt-min-consist-merge FLOAT" << endl;
-	cout << "                 minimal sequence identity threshold for allele merge [" << GT_MIN_IDENTITY_MERGE_THRES << "]." << endl;
+	cout << "                 minimal sequence identity for allele merge [" << GT_MIN_IDENTITY_MERGE_THRES << "]." << endl;
 	cout << "                 Allelic variants will be merged if their sequence identity are larger than FLOAT. " << endl;
 	cout << "   --gt-homo-ratio FLOAT" << endl;
-	cout << "                 minimal allele ratio threshold for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
+	cout << "                 minimal allele ratio for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is homozygous if the ratio of allele count is larger than FLOAT." << endl;
 	cout << "   --gt_hete_ratio FLOAT" << endl;
-	cout << "                 minimal allele ratio threshold for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
+	cout << "                 minimal allele ratio for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
 
 	cout << "   -v,--version  show version information" << endl;
@@ -1058,15 +1082,17 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9 -I 0.95" << endl;
-	cout << "                   sq/rs/ont: -i 0.75 -I 0.7" << endl;
+	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1" << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2" << endl;
 	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
-	cout << "   -I FLOAT      minimum merging identity [" << CALL_MIN_IDENTITY_MERGE_THRES << "]" << endl;
-	cout << "   -d INT        minimal merging distance [" << CALL_MIN_DISTANCE_MERGE_THRES << "]" << endl;
-	cout << "                 neighboring SVs with distance smaller than INT and merging identity" << endl;
+	cout << "   -I FLOAT      minimal sequence identity for merge [" << CALL_MIN_IDENTITY_MERGE_THRES << "]" << endl;
+	cout << "   -d INT        minimal reference distance for merge [" << CALL_MIN_DISTANCE_MERGE_THRES << "]" << endl;
+	cout << "                 Neighboring SVs with distance smaller than INT and sequence identity" << endl;
 	cout << "                 larger than FLOAT will be merged" << endl;
 	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
+	cout << "   -N FLOAT      maximal NM ratio threshold of the largest split-alignment segment" << endl;
+	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_NM_RATIO_1 << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
 	cout << "   -q INT        minimal mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
@@ -1092,7 +1118,7 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 clip region extend size on both sides while generating consensus sequences" << endl;
 	cout << "                 [" << CNS_CHUNK_SIZE_EXT_CLIP << "] bp." << endl;
 	cout << "   --min-cons-read-size INT" << endl;
-	cout << "                 minimal read segment size to generate consensus sequences " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
+	cout << "                 minimal segment size for consensus " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
 	cout << "   --keep-cns-reads" << endl;
 	cout << "                 Keep temporary reads from being deleted during local consensus." << endl;
 	cout << "                 This may take some additional disk space" << endl;
@@ -1145,13 +1171,13 @@ if(cmd_str.compare(CMD_CALL_STR)==0 or cmd_str.compare(CMD_ALL_STR)==0){
 //	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
 //	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
 	cout << "   --gt-min-consist-merge FLOAT" << endl;
-	cout << "                 minimal sequence identity threshold for allele merge [" << GT_MIN_IDENTITY_MERGE_THRES << "]." << endl;
+	cout << "                 minimal sequence identity for allele merge [" << GT_MIN_IDENTITY_MERGE_THRES << "]." << endl;
 	cout << "                 Allelic Variants will be merged if their sequence identity are larger than FLOAT. " << endl;
 	cout << "   --gt-homo-ratio FLOAT" << endl;
-	cout << "                 minimal allele ratio threshold for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
+	cout << "                 minimal allele ratio for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is homozygous if the ratio of allele count is larger than FLOAT." << endl;
 	cout << "   --gt_hete_ratio FLOAT" << endl;
-	cout << "                 minimal allele ratio threshold for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
+	cout << "                 minimal allele ratio for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
 }
 
@@ -1206,12 +1232,13 @@ void Paras::outputParas(){
 
 	cout << "Sample: " << sample << endl;
 	if(min_Nsupp_est_flag==0){ // user-specified
-		cout << "Minimal number of reads supporting SV: " << minReadsNumSupportSV << endl;
+		cout << "Minimal number of supporting reads: " << minReadsNumSupportSV << endl;
 	}
 	cout << "Block size: " << blockSize << " bp" << endl;
 	cout << "Slide size: " << slideSize << " bp" << endl;
-	cout << "Minimal SV size to report: " << min_sv_size_usr << " bp" << endl;
+	cout << "Minimal SV size to report: " << min_sv_size_usr_final << " bp" << endl;
 	cout << "Maximal SV size to report: " << max_sv_size_usr << " bp" << endl;
+	//cout << "======== min_sv_size_usr: " << min_sv_size_usr << " bp" << endl;
 	if(command.compare(CMD_DET_STR)!=0)
 		cout << "Minimal ratio of max-segment for indel calling: " << max_seg_size_ratio_usr << endl; // not det
 	cout << "Minimal clipping end size: " << minClipEndSize << " bp" << endl;
@@ -1226,7 +1253,7 @@ void Paras::outputParas(){
 //		cout << "Local consensus chunk extend size for clippings: " << cnsSideExtSizeClip << " bp" << endl;
 //	}
 	if(command.compare(CMD_CALL_STR)!=0){
-		cout << "Minimal read segment size to generate consensus sequence: " << minConReadLen << " bp" << endl;
+		cout << "minimal segment size for consensus: " << minConReadLen << " bp" << endl;
 	}
 	cout << "Number of threads: " << num_threads << endl;
 	//cout << "Limited number of threads for each consensus work: " << num_threads_per_cns_work << endl;
@@ -1245,11 +1272,12 @@ void Paras::outputParas(){
 //		cout << "Maximum monitored process running minutes for call: " << max_proc_running_minutes_call << endl;
 
 	cout << "Maximal number of align segments per read: " << max_seg_num_per_read << endl;
-	cout << "Minimal sequence identity threshold for SV match: " << min_identity_match << endl;
+	cout << "Minimal sequence identity for SV match: " << min_identity_match << endl;
+	cout << "Maximal NM ratio for largest align segment: " << max_seg_nm_ratio_usr << endl;
 	if(command.compare(CMD_CALL_STR)==0 or command.compare(CMD_ALL_STR)==0){
-		cout << "Minimal sequence identity threshold for allele merge: " << gt_min_identity_merge << endl;
-		cout << "Minimal allele ratio threshold for homozygous alleles: " << gt_homo_ratio << endl;
-		cout << "Minimal allele ratio threshold for heterozygous alleles: " << gt_hete_ratio << endl;
+		cout << "Minimal sequence identity for allele merge: " << gt_min_identity_merge << endl;
+		cout << "Minimal allele ratio for homozygous alleles: " << gt_homo_ratio << endl;
+		cout << "Minimal allele ratio for heterozygous alleles: " << gt_hete_ratio << endl;
 	}
 
 	if(include_alt) cout << "Include reference alt items: yes" << endl;
@@ -1267,11 +1295,11 @@ void Paras::outputParas(){
 }
 
 // output the estimation parameters
-void Paras::outputEstParas(string info){
-	cout << info << endl;
+void Paras::outputEstParas(){
+	//cout << info << endl;
 	cout << "Mean read length: " << mean_read_len << " bp" << endl;
 	if(min_Nsupp_est_flag==1){ // estimated
-		cout << "Minimal number of reads supporting SV: " << minReadsNumSupportSV << endl;
+		cout << "Minimal number of supporting reads: " << minReadsNumSupportSV << endl;
 	}
 
 	cout << "min_ins_size_filt: " << min_ins_size_filt << " bp" << endl;
@@ -1320,6 +1348,10 @@ void Paras::estimate(size_t op_est){
 		if(minReadsNumSupportSV==-1) {
 			min_Nsupp_est_flag = 1;
 			minReadsNumSupportSV = estimateMinReadsNumSupportSV(mean_depth_vec);
+			if(technology.compare(PACBIO_RS_TECH_STR)==0 or technology.compare(PACBIO_SQ_TECH_STR)==0){ // CLR
+				minReadsNumSupportSV ++;
+				if(minReadsNumSupportSV<MIN_SUPPORT_READS_NUM_CLR) minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_CLR;
+			}
 		}
 
 

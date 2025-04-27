@@ -246,6 +246,25 @@ size_t Base::getLargeIndelNum(size_t thres){
 	return large_indel_num;
 }
 
+size_t Base::getRegLargeIndelNum(size_t thres){
+	size_t i, large_indel_num;
+
+	large_indel_num = 0;
+	for(i=0; i<insVector.size(); i++){
+		if(insVector.at(i)->seq.size()>=thres)
+			large_indel_num ++;
+	}
+	for(i=0; i<delVector.size(); i++){
+		if(delVector.at(i)->seq.size()>=thres)
+			large_indel_num ++;
+	}
+	// for(i=0; i<extendDelVector.size(); i++){
+	// 	if(extendDelVector.at(i)->seq.size()>=thres)
+	// 		large_indel_num ++;
+	// }
+	return large_indel_num;
+}
+
 size_t Base::getTotalIndelNum(){
 	//return insVector.size() + delVector.size() + num_shortIns + num_shortdel;
 	return insVector.size() + del_num_from_del_vec + num_shortIns + num_shortdel;
@@ -258,3 +277,4 @@ size_t Base::getTotalClipNum(){
 size_t Base::getTotalCovNum(){
 	return coverage.num_bases[5];
 }
+

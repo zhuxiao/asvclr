@@ -23,9 +23,8 @@
 
 using namespace std;
 
-
-#define BLAT_ALN							1
 #define ALIGN_DEBUG							0
+#define BLAT_ALN							1
 
 #define MIN_VALID_BLAT_SEG_SIZE				200  // the minimal valid blat align segment size
 #define MIN_VALID_BLAT_SEG_FRATCION			0.6  //0.6 the minimal valid blat align segment fraction
@@ -57,11 +56,14 @@ using namespace std;
 
 
 #define EXT_SIZE_CHK_VAR_LOC				500		// 100
+#define EXT_SIZE_CHK_VAR_LOC_SMALL			300
 
 #define MIN_VALID_POLYMER_SIZE				3
 #define MAX_SHORT_MIS_REG_SIZE				1
 
 #define MIN_INNER_BLAT_SEG_SIZE				50
+
+#define MIN_SPAN_SINGLE_QUERY				2000
 
 
 class varCand {
@@ -173,9 +175,24 @@ class varCand {
 		void updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void determineIndelType();
 		vector<reg_t*> computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, string &refseqfilename_para);
+		void computeIntraMisPafAlnSeg(vector<reg_t*> &var_vec, vector<reg_t*> &varVec, vector<int32_t> &cand_mm2_aln_idx_vec, vector<struct pafalnSeg*> &cand_paf_alnseg_vec);
+		void computeIndelFromSplitSegs(vector<reg_t*> &var_vec, vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
+		vector<reg_t*> computeIndelFromSplitSegsSingleQuery(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, int32_t query_id_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
+
+		// merge neighbouring indels
+		void mergeNeighbouringVars(vector<reg_t*> &regVector, int32_t min_ref_dist_arbitary_thres, int32_t max_ref_dist_thres, double min_merge_identity_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai, string &contigfilename, string &reffilename);
+		double calculate_merge_identity_threshold(int32_t common_length, int32_t max_common_length, double min_merge_identity_thres);
+		int32_t calculate_merge_distance_threshold(int32_t max_ref_dist_thres, int32_t support_num, int32_t sv_len, int32_t comp_sv_size);
+		int32_t calculate_merge_distance_threshold(bool complex_region_flag, int32_t query_supp_num, int32_t query_sv_size, int32_t total_sv_num, double query_sv_support_different);
+		bool ComplexRegionFlag(vector<reg_t*> regVector, int32_t average_support_num_thres, int32_t sv_num_thres, int32_t sv_size_thres);
+
+//		void removeRedundantVarFromDifferentQueries(vector<reg_t*> &var_vec, faidx_t *fai, string &contigfilename, string &reffilename);
+//		void removeRedundantVarFromDifferentQueriesOp(vector<reg_t*> &var_vec1, vector<reg_t*> &var_vec2);
+
 		vector<reg_t*> rescueIndelVarLoc();
 		void svPosCorrection(reg_t* reg);
-		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, vector<clipAlnData_t*> &clipAlnDataVector, string chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres);
+		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, vector<clipAlnData_t*> &clipAlnDataVector, string &chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
+		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, int32_t opflag_para, int32_t oplen_para, string &chrname_para, int64_t start_var_pos_para, int64_t end_var_pos_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
 		void computeGenotypeIndelReg(vector<reg_t*> &var_vec);
 		void destoryClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void destoryPosCorrectionVec();

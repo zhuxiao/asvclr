@@ -35,15 +35,15 @@ vector<qcSigListVec_t*> clipRegCluster::queryCluster(vector<struct querySeqInfoN
 	vector<qcSigListVec_t*> query_clu_vec;
 	vector<qcSigList_t*> qcSigList_vec;
 	qcSigListVec_t *q_cluster_node_a, *q_cluster_node_b, *tmp;
-	size_t i, j, k, smin_id;
+	size_t i, j, k, smin_id, match_id;
 	vector<qcSigList_t*> q_cluster_a, q_cluster_b, q_cluster_rescue, q_cluster_a_final, q_cluster_b_final;
 	double match_ratio_a, match_ratio_b, match_min;
-	vector<size_t> min_id_vec;// span_vec2_id;
+	vector<size_t> min_id_vec, match_id_vec;// span_vec2_id;
 	vector<double> match_ratio_vec;
 	struct seedQueryInfo *seed_info_a, *seed_info_b;
-	bool exist_flag;
-	vector<srmin_match_t*> mrmin_match_vec;
-	srmin_match_t *mrmin_match_node;
+	bool exist_flag, single_cluster_flag;
+	vector<mrmin_match_t*> mrmin_match_vec;
+	mrmin_match_t *mrmin_match_node;
 
 	// extract the features
 	qcSigList_vec = extractQcSigsClipReg(query_seq_info_vec);
@@ -69,15 +69,18 @@ vector<qcSigListVec_t*> clipRegCluster::queryCluster(vector<struct querySeqInfoN
 		//initializing b_cluster: choose one that is most different query from a_cluster add in b_cluster
 		match_min = INT_MAX; //0.99
 		match_ratio_vec.clear();
+		match_id_vec.clear();
 		min_id_vec.clear();
 
 		match_ratio_vec.push_back(1);
+		match_id_vec.push_back(k);
 		for(i=1; i<qcSigList_vec.size(); i++){
 			if(qcSigList_vec.at(i)->qcSig_vec.size()>0 and qcSigList_vec.at(i)->entire_flanking_flag){ // prefer the items flanking the entire region
 				seed_info_a = chooseSeedClusterQueryClipReg(qcSigList_vec.at(i), q_cluster_a);
 				if(seed_info_a->span_intersection>0){
 					match_ratio_a = computeMatchRatioClipReg(qcSigList_vec.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos);
 					match_ratio_vec.push_back(match_ratio_a);
+					match_id_vec.push_back(i);
 					if(match_ratio_a<match_min){
 						match_min = match_ratio_a;
 						//smin_id = i;
@@ -101,17 +104,19 @@ vector<qcSigListVec_t*> clipRegCluster::queryCluster(vector<struct querySeqInfoN
 			for(i=0; i<min_id_vec.size(); i++){
 				exist_flag = false;
 				for(j=0; j<mrmin_match_vec.size(); j++){
-					if(match_ratio_vec.at(min_id_vec.at(i))==mrmin_match_vec.at(j)->SR){
+					if(match_ratio_vec.at(min_id_vec.at(i))==mrmin_match_vec.at(j)->MR){
 						smin_id = j;
 						exist_flag = true;
 						break;
 					}
 				}
 				if(exist_flag==false){
-					mrmin_match_node = new srmin_match_t();
+					mrmin_match_node = new mrmin_match_t();
 					mrmin_match_node->pos_id.push_back(min_id_vec.at(i));
 					mrmin_match_node->num = 1;
-					mrmin_match_node->SR = match_ratio_vec.at(min_id_vec.at(i));
+					mrmin_match_node->MR = match_ratio_vec.at(min_id_vec.at(i));
+					mrmin_match_node->MR_recluster = -1;
+					mrmin_match_node->candidate_flag = false;
 					mrmin_match_vec.push_back(mrmin_match_node);
 				}else{
 					mrmin_match_vec.at(smin_id)->num += 1;
@@ -141,12 +146,17 @@ vector<qcSigListVec_t*> clipRegCluster::queryCluster(vector<struct querySeqInfoN
 			q_cluster_a.push_back(qcSigList_vec.at(k));
 		}
 
+		single_cluster_flag = false;
+		if(match_min==1 or (mrmin_match_vec.size()>=2 and mrmin_match_vec.at(0)->MR==1 and (double)mrmin_match_vec.at(0)->num/(mrmin_match_vec.at(0)->num+mrmin_match_vec.at(1)->num)>=MIN_NUM_RATIO_SINGLE_CLUSTER))
+			single_cluster_flag = true;
+
 		if(mrmin_match_vec.size()>0){
-			vector<srmin_match_t*>::iterator svp;
+			vector<mrmin_match_t*>::iterator svp;
 			for(svp=mrmin_match_vec.begin(); svp!=mrmin_match_vec.end(); svp++) delete *svp;
-			vector<srmin_match_t*>().swap(mrmin_match_vec);
+			vector<mrmin_match_t*>().swap(mrmin_match_vec);
 		}
-		if(q_cluster_b.size()==0){
+		// if(q_cluster_b.size()==0){ // deleted on 2024-12-24
+		if(q_cluster_b.size()==0 and single_cluster_flag == false){
 			q_cluster_a.pop_back();
 			qcSigList_vec.at(k)->cluster_finished_flag = false;
 		}else{
@@ -155,10 +165,17 @@ vector<qcSigListVec_t*> clipRegCluster::queryCluster(vector<struct querySeqInfoN
 	}
 
 	if(q_cluster_b.size()==0){
-		for(i=0; i<qcSigList_vec.size(); i++){
-			if(qcSigList_vec.at(i)->qcSig_vec.size()>0 and qcSigList_vec.at(i)->cluster_finished_flag == false){
-				qcSigList_vec.at(i)->cluster_finished_flag = true;
-				q_cluster_a.push_back(qcSigList_vec.at(i));
+		// for(i=0; i<qcSigList_vec.size(); i++){
+		// 	if(qcSigList_vec.at(i)->qcSig_vec.size()>0 and qcSigList_vec.at(i)->cluster_finished_flag == false){
+		// 		qcSigList_vec.at(i)->cluster_finished_flag = true;
+		// 		q_cluster_a.push_back(qcSigList_vec.at(i));
+		// 	}
+		// }
+		for(i=0; i<match_id_vec.size(); i++){
+			match_id = match_id_vec.at(i);
+			if(qcSigList_vec.at(match_id)->qcSig_vec.size()>0 and qcSigList_vec.at(match_id)->cluster_finished_flag == false){
+				qcSigList_vec.at(match_id)->cluster_finished_flag = true;
+				q_cluster_a.push_back(qcSigList_vec.at(match_id));
 			}
 		}
 	}else{
@@ -323,8 +340,8 @@ void clipRegCluster::sortQueryInfoByNumCategoryClipReg(vector<qcSigList_t*> &qcS
 	size_t i, j, sum;
 	vector<qcSigList_t*> qcSigList_vec_tmp;
 	int32_t idx;
-	vector<srmin_match_t*> num_id_vec;
-	srmin_match_t *num_id_node;
+	vector<mrmin_match_t*> num_id_vec;
+	mrmin_match_t *num_id_node;
 	bool flag;
 
 	for(i=0; i<qcSigList_vec.size(); i++){
@@ -340,9 +357,11 @@ void clipRegCluster::sortQueryInfoByNumCategoryClipReg(vector<qcSigList_t*> &qcS
 			num_id_node  = num_id_vec.at(idx);
 			num_id_node->pos_id.push_back(i);
 		}else{ // add item
-			num_id_node = new srmin_match_t();
+			num_id_node = new mrmin_match_t();
 			num_id_node->num = qcSigList_vec.at(i)->qcSig_vec.size();
 			num_id_node->pos_id.push_back(i);
+			num_id_node->MR_recluster = -1;
+			num_id_node->candidate_flag = false;
 			num_id_vec.push_back(num_id_node);
 		}
 	}
@@ -378,7 +397,7 @@ void clipRegCluster::sortQueryInfoByNumCategoryClipReg(vector<qcSigList_t*> &qcS
 
 	// release memory
 	for(i=0; i<num_id_vec.size(); i++) delete num_id_vec.at(i);
-	vector<srmin_match_t*>().swap(num_id_vec);
+	vector<mrmin_match_t*>().swap(num_id_vec);
 }
 
 

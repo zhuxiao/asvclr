@@ -25,10 +25,13 @@ using namespace std;
 #define SUB_REG_SIZE			10
 #define SUB_CLIP_REG_SIZE		100
 
+#define MIN_REG_SIZE_EXTRACT_SIG			30 // added on 2025-03-06
+
 #define LARGE_INDEL_RATIO_THRES				(0.1f)
 #define HIGH_INDEL_CLIP_RATIO_THRES			(0.6f)
 #define SECOND_INDEL_CLIP_RATIO_THRES		(0.3f)
 #define HIGH_INDEL_CLIP_BASE_RATIO_THRES	(0.1f)
+#define MIN_VALID_SIG_COV_RATIO				(0.05f)
 
 
 class Region {
@@ -108,6 +111,7 @@ class Region {
 		int32_t getDisZeroCovNum(int64_t startPos, int64_t endPos);
 		int32_t getLargeIndelBaseNum(int64_t startPos, int64_t endPos);
 		int32_t getLargeIndelNum(int64_t startPos, int64_t endPos);
+		int32_t rescueByLargeIndelNum(int64_t startPos, int64_t endPos, int32_t large_indel_size_thres);
 		int32_t getHighConIndelNum(int64_t startPos, int64_t endPos, float threshold, float polymer_ignore_ratio_thres);
 		int32_t computeEstSVLen(int64_t startPos, int64_t endPos);
 

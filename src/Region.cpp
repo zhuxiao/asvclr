@@ -477,7 +477,7 @@ void Region::detectIndelReg(){
 	if(i<minRPos) i = minRPos;
 	while(i<endMidPartPos){
 
-//		if(i>23603490)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>, 9786000, 12876474
+//		if(i>236260000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>, 9786000, 12876474
 //			cout << i << endl;  // breakpoints
 
 		reg = getIndelReg(i);
@@ -497,7 +497,7 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 	int32_t reg_size1, reg_size2, num1, num3, num4, extendSize, high_con_indel_base_num, large_indel_base_num, sv_len;
 	vector<double> num_vec;
 	double high_indel_clip_ratio;
-	int64_t i, checkPos, startPos1, endPos1, startPos2;
+	int64_t i, checkPos, startPos1, endPos1, startPos2, start_pos_extract_sig, end_pos_extract_sig;
 	int64_t startPos_indel = -1, endPos_indel = -1, valid_sig_num;
 	bool indel_beg_flag, indel_end_flag, valid_flag;
 
@@ -584,14 +584,25 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 		// allocate the indel region
 		if(indel_beg_flag and indel_end_flag){
 			valid_flag = true;
+
 			// compute mean coverage, the number of SVs with valid size
 //			tmp_cov = computeMeanCovReg(startPos_indel, endPos_indel);  // localRegCov
 //			if(tmp_cov<paras->minReadsNumSupportSV) valid_flag = false;
 //			if(localRegCov<paras->minReadsNumSupportSV) valid_flag = false;
 //			if(valid_flag){
-				valid_sig_num = computeValidSigNumReg(startPos_indel, endPos_indel, paras->min_sv_size_usr);
+				start_pos_extract_sig = startPos_indel; // added on 2025-03-06
+				end_pos_extract_sig = endPos_indel;
+				if(endPos_indel-startPos_indel<MIN_REG_SIZE_EXTRACT_SIG){
+					start_pos_extract_sig -= MIN_REG_SIZE_EXTRACT_SIG;
+					end_pos_extract_sig += MIN_REG_SIZE_EXTRACT_SIG;
+					if(start_pos_extract_sig<startRPos) start_pos_extract_sig = startRPos;
+					if(end_pos_extract_sig>endRPos) end_pos_extract_sig = endRPos;
+				}
+				valid_sig_num = computeValidSigNumReg(start_pos_extract_sig, end_pos_extract_sig, paras->min_sv_size_usr);
 				//if(localRegCov<paras->minReadsNumSupportSV and valid_sig_num<paras->minReadsNumSupportSV) valid_flag = false;
-				if(localRegCov<paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR or valid_sig_num<paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR) valid_flag = false;
+				//if(localRegCov<paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR or valid_sig_num<paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR) valid_flag = false; // deleted on 2025-03-23
+				// if(localRegCov<paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR or valid_sig_num<paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR or valid_sig_num/localRegCov<MIN_VALID_SIG_COV_RATIO) valid_flag = false; // deleted on 2025-04-17
+				if(localRegCov<=paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR or valid_sig_num<=paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR or valid_sig_num/localRegCov<MIN_VALID_SIG_COV_RATIO) valid_flag = false;
 //			}
 
 			if(valid_flag){
@@ -600,18 +611,30 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 				if(endPos_indel-startPos_indel+1<paras->min_sv_size_usr and high_con_indel_base_num<1 and large_indel_base_num<1)
 					valid_flag = false;
 			}
+
+			num3 = 0;
+			if(valid_flag==false){ // rescure by large indels
+				startPos1 = startPos_indel - EXT_SIZE_CHK_VAR_LOC_SMALL;
+				endPos1 = endPos_indel + EXT_SIZE_CHK_VAR_LOC_SMALL;
+				if(startPos1<startRPos) startPos1 = startRPos;
+				if(endPos1>endRPos) endPos1 = endRPos;
+				num3 = rescueByLargeIndelNum(startPos1, endPos1, 4*paras->large_indel_size_thres);
+				if(num3>=2*paras->minReadsNumSupportSV) valid_flag = true;
+			}
+
 			//if(endPos_indel-startPos_indel+1>=paras->min_sv_size_usr or high_con_indel_base_num>=1 or large_indel_base_num>=1){
 			//if(endPos_indel-startPos_indel+1>=paras->min_sv_size_usr){
 			if(valid_flag){
 				num1 = getDisZeroCovNum(startPos_indel, endPos_indel);
 				//num2 = getMismatchBasesAround(startPos_indel, endPos_indel);
-				num_vec = getTotalHighIndelClipRatioBaseNum(regBaseArr+startPos_indel-startRPos, endPos_indel-startPos_indel+1);
+				//num_vec = getTotalHighIndelClipRatioBaseNum(regBaseArr+startPos_indel-startRPos, endPos_indel-startPos_indel+1); // deleted on 2025-03-23
+				num_vec = getTotalHighIndelClipRatioBaseNum(regBaseArr+start_pos_extract_sig-startRPos, end_pos_extract_sig-start_pos_extract_sig+1, 3);
 				num4 = num_vec.at(0);
 				high_indel_clip_ratio = num_vec.at(1);
 				//if(num1>0 or num2>=DISAGREE_NUM_THRES_REG or num3>0) {
 				//if(num1>0 or num4>0 or high_indel_clip_ratio>=0.1f) {
 				//if(num1>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) { // deleted 2024-02-05
-				if(valid_sig_num>paras->minReadsNumSupportSV or num1>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
+				if(valid_sig_num>=paras->minReadsNumSupportSV or num1>0 or num3>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
 					sv_len = computeEstSVLen(startPos_indel, endPos_indel);
 					//reg = allocateReg(chrname, startPos_indel, endPos_indel); // delete on 2024-04-06
 					reg = allocateReg(chrname, startPos_indel, endPos_indel, sv_len);
@@ -695,6 +718,27 @@ int32_t Region::getLargeIndelNum(int64_t startPos, int64_t endPos){
 	large_indel_num = 0;
 	for(i=startPos; i<=endPos; i++){
 		large_indel_num += regBaseArr[i-startRPos].getLargeIndelNum(paras->large_indel_size_thres);
+	}
+	return large_indel_num;
+}
+
+// // get the number of bases with long indels
+// int32_t Region::getRegLargeIndelNum(int64_t startPos, int64_t endPos){
+// 	int64_t i, large_indel_num;
+// 	large_indel_num = 0;
+// 	for(i=startPos; i<=endPos; i++){
+// 		large_indel_num += regBaseArr[i-startRPos].getLargeIndelNum(paras->large_indel_size_thres);
+// 	}
+// 	return large_indel_num;
+// }
+
+// get the number of bases with long indels
+int32_t Region::rescueByLargeIndelNum(int64_t startPos, int64_t endPos, int32_t large_indel_size_thres){
+	int64_t i, large_indel_num;
+	large_indel_num = 0;
+	for(i=startPos; i<=endPos; i++){
+		// large_indel_num += regBaseArr[i-startRPos].getLargeIndelNum(large_indel_size_thres);
+		large_indel_num += regBaseArr[i-startRPos].getRegLargeIndelNum(large_indel_size_thres);
 	}
 	return large_indel_num;
 }
