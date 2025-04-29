@@ -145,21 +145,18 @@ bool Paras::isRecommendCanuVersion(string &canu_version, const string &recommend
 // initialize preset parameters
 void Paras::initPreset(){
 	if(technology.compare(PACBIO_CCS_TECH_STR)==0){  // CCS
-		min_sv_size_usr = min_sv_size_usr_final;
+		if(min_sv_size_usr_factor==-1) min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR_CCS;
 		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES;
 		if(min_identity_merge==-1) min_identity_merge = CALL_MIN_IDENTITY_MERGE_THRES;
 		if(max_seg_nm_ratio_usr==-1) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_1;
 		// max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_OTHER;
 	}else{// CLR, ONT
-		if(technology.compare(NANOPORE_TECH_STR)==0) min_sv_size_usr = min_sv_size_usr_final;
-		else min_sv_size_usr = round(min_sv_size_usr_final * min_sv_size_usr_factor);
+		if(min_sv_size_usr_factor==-1) min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
 		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES2;
 		if(min_identity_merge==-1) min_identity_merge = CALL_MIN_IDENTITY_MERGE_THRES2;
-		if(max_seg_nm_ratio_usr==-1) {
-			if(technology.compare(NANOPORE_TECH_STR)==0) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_1;
-			else max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_2;
-		}
+		if(max_seg_nm_ratio_usr==-1) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_2;
 	}
+	min_sv_size_usr = round(min_sv_size_usr_final * min_sv_size_usr_factor);
 }
 
 // check Bam file, and generate the BAM index if it is unavailable
@@ -284,7 +281,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 	slideSize = SLIDESIZE;
 	min_sv_size_usr_final = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
-	min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
+	min_sv_size_usr_factor = -1;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	//minReadsNumSupportSV = -1;
@@ -410,7 +407,7 @@ int Paras::parseCnsParas(int argc, char **argv){
 	slideSize = SLIDESIZE;
 	min_sv_size_usr_final = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
-	min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
+	min_sv_size_usr_factor = -1;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
@@ -538,7 +535,7 @@ int Paras::parseCallParas(int argc, char **argv){
 	slideSize = SLIDESIZE;
 	min_sv_size_usr_final = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
-	min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
+	min_sv_size_usr_factor = -1;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
@@ -663,7 +660,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	slideSize = SLIDESIZE;
 	min_sv_size_usr_final = MIN_SV_SIZE_USR;
 	max_sv_size_usr = MAX_SV_SIZE_USR;
-	min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
+	min_sv_size_usr_factor = -1;
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	minMapQ = MIN_MAPQ_THRES;
 	min_Nsupp_est_flag = 1;
