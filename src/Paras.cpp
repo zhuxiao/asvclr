@@ -144,19 +144,18 @@ bool Paras::isRecommendCanuVersion(string &canu_version, const string &recommend
 
 // initialize preset parameters
 void Paras::initPreset(){
+	if(min_sv_size_usr_factor==-1) min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
+	min_sv_size_usr = round(min_sv_size_usr_final * min_sv_size_usr_factor);
+
 	if(technology.compare(PACBIO_CCS_TECH_STR)==0){  // CCS
-		if(min_sv_size_usr_factor==-1) min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR_CCS;
 		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES;
 		if(min_identity_merge==-1) min_identity_merge = CALL_MIN_IDENTITY_MERGE_THRES;
 		if(max_seg_nm_ratio_usr==-1) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_1;
-		// max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_OTHER;
 	}else{// CLR, ONT
-		if(min_sv_size_usr_factor==-1) min_sv_size_usr_factor = MIN_SV_SIZE_USR_FACTOR;
 		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES2;
 		if(min_identity_merge==-1) min_identity_merge = CALL_MIN_IDENTITY_MERGE_THRES2;
 		if(max_seg_nm_ratio_usr==-1) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_2;
 	}
-	min_sv_size_usr = round(min_sv_size_usr_final * min_sv_size_usr_factor);
 }
 
 // check Bam file, and generate the BAM index if it is unavailable

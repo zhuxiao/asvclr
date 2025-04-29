@@ -74,7 +74,7 @@ using namespace std;
 #define MIN_INDEL_EVENT_NUM			5
 #define MIN_SV_SIZE_USR				20
 #define MIN_SV_SIZE_USR_FACTOR		(0.9f) // 0.8
-#define MIN_SV_SIZE_USR_FACTOR_CCS	(1.0f)
+//#define MIN_SV_SIZE_USR_FACTOR_CCS	(1.0f)
 #define MAX_SEG_SIZE_RATIO			(0.5f)
 
 #define MAX_SEG_NM_RATIO_1		(0.1f)
