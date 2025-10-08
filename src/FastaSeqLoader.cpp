@@ -1,6 +1,10 @@
 #include "FastaSeqLoader.h"
 #include "util.h"
 
+FastaSeqLoader::FastaSeqLoader() {
+	fastafilename = "";
+}
+
 FastaSeqLoader::FastaSeqLoader(string &fastafilename) {
 	this->fastafilename = fastafilename;
 	initFastaSeq();
@@ -50,7 +54,7 @@ string FastaSeqLoader::getFastaSeq(size_t fa_id){
 string FastaSeqLoader::getFastaSeq(size_t fa_id, size_t aln_orient){
 	string ret;
 	if(fa_id<0 or fa_id>=fastaSeqVec.size()) {
-		cerr << "FastaSeqLoader: invalid ctg_idx=" << fa_id << ", fastaSeqVec.size=" << fastaSeqVec.size() << endl;
+		cerr << "FastaSeqLoader: invalid ctg_idx=" << fa_id << ", fastaSeqVec.size=" << fastaSeqVec.size() << ", fastafilename=" << fastafilename << endl;
 		exit(1);
 	}
 	ret = fastaSeqVec.at(fa_id);
@@ -64,7 +68,7 @@ string FastaSeqLoader::getFastaSeqByPos(size_t fa_id, size_t startPos, size_t en
 	string ret;
 
 	if(fa_id<0 or fa_id>=fastaSeqVec.size()) {
-		cerr << "FastaSeqLoader: invalid ctg_idx=" << fa_id << endl;
+		cerr << "FastaSeqLoader: invalid ctg_idx=" << fa_id << ", fastafilename=" << fastafilename << endl;
 		exit(1);
 	}
 	if((startPos<1 or startPos>fastaSeqVec[fa_id].size()) or (endPos<1 or endPos>fastaSeqVec[fa_id].size())){
@@ -112,3 +116,77 @@ string FastaSeqLoader::getFastaSeqNameByID(int32_t fa_id){
 	return fastaSeqNameVec.at(fa_id);
 }
 
+// determine whether the sequence is valid
+bool FastaSeqLoader::isValidSeq(string &fastafilename){
+	bool flag;
+	string line;
+	ifstream infile(fastafilename);
+	if(!infile.is_open()) {
+		cerr << "line=" << __LINE__ << ", FastaSeqLoader: Cannot open file " << fastafilename << endl;
+		exit(1);
+	}
+
+	flag = true;
+	while(getline(infile, line))
+		if(line.size()>0){
+			if(line[0]!='>'){ // skip header line
+				flag = isValidBaseSeq(line);
+				if(flag==false) break;
+			}
+		}
+
+	infile.close();
+
+	return flag;
+}
+
+// determine whether the sequence is valid
+bool FastaSeqLoader::isValidSeq(){
+	bool flag;
+	string seq;
+
+	if(fastafilename.size()==0){
+		cerr << "FastaSeqLoader: sequence file is not specified!" << endl;
+		flag = false;
+	}else{
+		flag = true;
+		if(fastaSeqVec.size()>0){
+			for(size_t i=0; i<fastaSeqVec.size(); i++){
+				seq = fastaSeqVec.at(i);
+				flag = isValidSeq(seq);
+				if(flag==false) break;
+			}
+		}else flag = false;
+	}
+
+	return flag;
+}
+
+// get read names from consensus headers
+vector< vector<string> > FastaSeqLoader::getReadNamesFromCnsHeaders(){
+	vector<string> cns_header_vec = getFastaSeqNames();
+	return getReadNamesFromCnsHeaders(cns_header_vec);
+}
+
+// get read names from consensus headers
+vector< vector<string> > FastaSeqLoader::getReadNamesFromCnsHeaders(vector<string> &cns_header_vec){
+	vector< vector<string> > qnames_vec;
+	vector<string> qname_vec;
+
+	for(size_t i=0; i<cns_header_vec.size(); i++){
+		qname_vec = getReadNamesFromSingleCnsHeader(cns_header_vec.at(i));
+		qnames_vec.push_back(qname_vec);
+	}
+
+	return qnames_vec;
+}
+
+// get read names from single consensus header
+vector<string> FastaSeqLoader::getReadNamesFromSingleCnsHeader(string &cns_header){
+	vector<string> qname_vec, str_vec;
+
+	str_vec = split(cns_header, "-");
+	for(size_t i=1; i<str_vec.size(); i++) qname_vec.push_back(str_vec.at(i));
+
+	return qname_vec;
+}

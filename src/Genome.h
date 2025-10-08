@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <htslib/faidx.h>
 
 #include "structures.h"
 #include "Paras.h"
@@ -24,7 +25,7 @@ class Genome{
 		vector<Chrome*> chromeVector;
 		faidx_t *fai;
 		bam_hdr_t *header;
-		int64_t genomeSize;
+		int64_t genomeSize, ps_num, phased_var_num;
 
 		// output directory and files
 		string out_dir, out_dir_detect, out_dir_cns, out_dir_call, out_dir_tra, out_dir_result;
@@ -49,9 +50,11 @@ class Genome{
 		int genomeCall();
 		void estimateSVSizeNum();
 		void saveResultVCF();
+		void removeTempResults();
 
 	private:
 		void init();
+		void genomeSetMaxOpenFileNum(size_t chr_num);
 		void saveLimitRegsToFile(string &limit_reg_filename, vector<simpleReg_t*> &limit_reg_vec);
 		void loadLimitRegs();
 		Chrome* allocateChrome(string& chrname, int chrlen, faidx_t *fai);
@@ -105,10 +108,11 @@ class Genome{
 		void mergeCloseRangeTra();
 		mateClipReg_t* getNearDistedClipReg(mateClipReg_t *clip_reg, vector<Chrome*> &chrome_vec);
 		vector<int32_t> computeDistsTra(mateClipReg_t *clip_reg1, mateClipReg_t *clip_reg2);
+		void genomePhasing();
 		void genomeFillVarseq();
 		void genomeFillVarseqTra();
 		void fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_info_file);
-		void performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file);
+		void performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file);
 		vector<int32_t> getRefShiftSize(string &refseqfilename);
 		vector<size_t> computeQueryLocTra(varCand *var_cand, mateClipReg_t *clip_reg, size_t end_flag);
 		void genomeSaveCallSV2File();
@@ -128,6 +132,9 @@ class Genome{
 		void computeVarNumStatCall();
 		size_t getSVTypeSingleLine(string &line);
 		void sortVarResults(string &infilename, int32_t filetype);
+		void computePhaseSetNum(vector<vector<SV_item*>> &subsets);
+		vector<int32_t> computePhaseSetNumSubset(vector<SV_item*> &subset);
+		string extractPSFromVCFLine(string &line);
 		void outputResult(string &outfilename, vector<vector<SV_item*>> &subsets, int32_t filetype);
 };
 

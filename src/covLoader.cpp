@@ -48,7 +48,7 @@ void covLoader::freeBaseArray(Base *baseArray){
 int covLoader::assignRefBase(Base *baseArray, faidx_t *fai){
 	int64_t pos, start_pos, end_pos, chrlen, left_ext_size, right_ext_size;
 
-	chrlen = faidx_seq_len(fai, chrname.c_str()); // get the reference length
+	chrlen = faidx_seq_len64(fai, chrname.c_str()); // get the reference length
 	if(startPos==1) { start_pos = startPos;	left_ext_size = 0; }	// first base is the left base
 	else { start_pos = startPos - 1; left_ext_size = 1; }
 	if(endPos==chrlen) { end_pos = endPos; right_ext_size = 0; }	// last base is the right base

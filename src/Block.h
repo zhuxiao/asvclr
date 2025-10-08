@@ -82,6 +82,7 @@ class Block{
 		int loadAlnData();
 		int computeBlockBaseInfo();
 		void computeBlockMeanCov();
+		void computeBlockMismatchesEst(); // added on 2025-07-10
 		void fillDataEst(size_t op_est);
 		void AddReadLenEstInfo();
 		void AddCovDepthEstInfo();
@@ -111,6 +112,7 @@ class Block{
 
 		// duplication and inversion
 		void mergeOverlappedClipReg();
+
 };
 
 #endif /* SRC_BLOCK_H_ */

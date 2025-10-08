@@ -6,10 +6,10 @@ pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 //extern pthread_mutex_t mutex_down_sample;
 extern pthread_mutex_t mutex_fai;
 
-localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio){
+localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, double max_absig_density){
 
 	this->chrname = chrname;
-	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
+	this->chrlen = faidx_seq_len64(fai, chrname.c_str()); // get reference size
 	this->readsfilename = preprocessPipeChar(readsfilename);
 	this->contigfilename = preprocessPipeChar(contigfilename);
 	this->refseqfilename = preprocessPipeChar(refseqfilename);
@@ -19,6 +19,7 @@ localCns::localCns(string &readsfilename, string &contigfilename, string &refseq
 	this->sv_len_est = sv_len_est;
 	this->num_threads_per_cns_work = num_threads_per_cns_work;
 	this->minClipEndSize = minClipEndSize;
+	this->maxVarRegSize = maxVarRegSize;
 	this->minMapQ = minMapQ;
 	this->minHighMapQ = minHighMapQ;
 	this->minConReadLen = minConReadLen;
@@ -26,8 +27,9 @@ localCns::localCns(string &readsfilename, string &contigfilename, string &refseq
 	this->min_supp_num = min_supp_num;
 	this->max_seg_size_ratio = max_seg_size_ratio;
 	this->max_seg_nm_ratio = max_seg_nm_ratio;
+	this->max_absig_density = max_absig_density;
 	this->max_ultra_high_cov = max_ultra_high_cov;
-	this->min_identity_match = min_identity_match;
+	this->min_seqsim_match = min_seqsim_match;
 	this->varVec = varVec;
 	this->fai = fai;
 	this->inBamFile = inBamFile;
@@ -175,6 +177,7 @@ void localCns::extractReadsDataFromBAM(){
 	vector<qcSigListVec_t*> query_clu_vec_clipReg;
 	vector<struct querySeqInfoNode*> query_seq_info_all;
 	int32_t seq_len, maxValue;
+	int64_t startRefPos_core, endRefPos_core;
 	char *p_seq;
 	struct seqsVec *smoothed_seqs;
 	struct seqsVec *seqs_vec_node;
@@ -184,19 +187,22 @@ void localCns::extractReadsDataFromBAM(){
 	qcSigListVec_t *qc_vec_node;
 	bool insufficient_flag;
 
-	startRefPos_cns = varVec[0]->startRefPos - cns_extend_size;
+	startRefPos_core = varVec[0]->startRefPos;
+	endRefPos_core = varVec[varVec.size()-1]->endRefPos;
+	startRefPos_cns = startRefPos_core - cns_extend_size;
 	if(startRefPos_cns<1) startRefPos_cns = 1;
-	endRefPos_cns = varVec[varVec.size()-1]->endRefPos + cns_extend_size;
+	endRefPos_cns = endRefPos_core + cns_extend_size;
 	if(endRefPos_cns>chrlen) endRefPos_cns = chrlen;
 
 	// load the clipping data ---20220705
-	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, minMapQ, minHighMapQ);
+	clipAlnDataLoader data_loader(varVec[0]->chrname, startRefPos_cns, endRefPos_cns, inBamFile, minClipEndSize, maxVarRegSize, minMapQ, minHighMapQ);
 	if(clip_reg_flag) data_loader.loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
-	else data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, max_ultra_high_cov, max_seg_size_ratio, max_seg_nm_ratio);
+	// else data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, max_ultra_high_cov, max_seg_size_ratio, max_seg_nm_ratio); // deleted on 2025-07-03
+	else data_loader.loadClipAlnDataWithSATagWithSegSize(clipAlnDataVector, max_ultra_high_cov, max_seg_size_ratio, max_seg_nm_ratio, fai, max_absig_density);
 
 	// update the use_poa_flag
 //	if(use_poa_flag) {
-//		use_poa_flag = updateUsepoaFlag(clipAlnDataVector, MAX_VAR_REG_SIZE, 0.8);
+//		use_poa_flag = updateUsepoaFlag(clipAlnDataVector, maxVarRegSize, 0.8);
 ////		if(use_poa_flag==false){
 ////			cout << "line=" << __LINE__ << ", clipAlnDataVector.size=" << clipAlnDataVector.size() << ", use_poa_flag=" << use_poa_flag << endl;
 ////		}
@@ -214,7 +220,7 @@ void localCns::extractReadsDataFromBAM(){
 		free(p_seq);
 
 		// extract queries from clip align data vector
-		query_seq_info_all = extractQueriesFromClipAlnDataVec(clipAlnDataVector, refseq, chrname, startRefPos_cns, endRefPos_cns, fai, minConReadLen, clip_reg_flag, &mutex_fai);
+		query_seq_info_all = extractQueriesFromClipAlnDataVec(clipAlnDataVector, refseq, chrname, startRefPos_cns, endRefPos_cns, startRefPos_core, endRefPos_core, fai, minConReadLen, clip_reg_flag, &mutex_fai);
 
 		// sampling for ultra-high coverage regions
 		expected_cov_cons = expected_cov;
@@ -232,8 +238,7 @@ void localCns::extractReadsDataFromBAM(){
 		if(clip_reg_flag){ // clipping region
 			if(query_seq_info_all.size()>0){
 				insufficient_flag = false;
-				clipRegCluster clip_reg_cluster(varVec[0]->chrname, varVec[0]->startRefPos, varVec[varVec.size()-1]->endRefPos, minClipEndSize, min_sv_size, min_supp_num, min_identity_match, technology, fai);
-				//if(query_seq_info_all.size()>1){
+				clipRegCluster clip_reg_cluster(varVec[0]->chrname, varVec[0]->startRefPos, varVec[varVec.size()-1]->endRefPos, minClipEndSize, maxVarRegSize, min_sv_size, min_supp_num, min_seqsim_match, technology, fai);
 				if(query_seq_info_all.size()>=(size_t)min_supp_num){ // 2024-01-28
 					query_clu_vec_clipReg = clip_reg_cluster.queryCluster(query_seq_info_all);
 
@@ -262,11 +267,11 @@ void localCns::extractReadsDataFromBAM(){
 			}
 		}else{ // indel region
 			if(query_seq_info_all.size()>0){
+				min_supp_num = adjustMinSuppNumLowCov(min_supp_num, query_seq_info_all); // added on 2025-05-21
 				insufficient_flag = false;
 				if(query_seq_info_all.size()>(size_t)min_supp_num){
 
-					indelRegCluster indel_reg_cluster(varVec[0]->chrname, varVec[0]->startRefPos, varVec[varVec.size()-1]->endRefPos, sv_len_est, startRefPos_cns, endRefPos_cns, min_sv_size, min_supp_num, min_identity_match, fai);
-
+					indelRegCluster indel_reg_cluster(varVec[0]->chrname, varVec[0]->startRefPos, varVec[varVec.size()-1]->endRefPos, sv_len_est, startRefPos_cns, endRefPos_cns, min_sv_size, min_supp_num, min_seqsim_match, fai);
 					query_clu_vec = indel_reg_cluster.queryCluster(query_seq_info_all);
 
 					maxValue = 0;
@@ -350,7 +355,7 @@ bool localCns::updateUsepoaFlag(vector<clipAlnData_t*> &clipAlnDataVector, int32
 			query_name_tmp = clipAlnDataVector.at(i)->queryname;
 			query_aln_segs = getQueryClipAlnSegsAll(query_name_tmp, clipAlnDataVector);
 			if(query_aln_segs.size()>=2) {
-				if(isQuerySelfOverlap(query_aln_segs, MAX_VAR_REG_SIZE)){
+				if(isQuerySelfOverlap(query_aln_segs, maxVarRegSize)){
 					repeat_reads_num += query_aln_segs.size();
 				}
 			}
@@ -893,7 +898,7 @@ bool localCns::localConsensus(){
 // get heter local consensus using abPOA
 bool localCns::cnsByPoa(){
 	bool flag, abpoa_flag;
-	string tmp_cons_filename, tmp_reads_filename, cons_header, cmd1, cmd2, cmd4;
+	string tmp_cons_filename, tmp_reads_filename, cons_header, cmd0, cmd1, cmd2, cmd3, cmd4;
 	ofstream cons_file, reads_file;
 	size_t k, i, j, n_seqs, serial_number;
 	int64_t mem_avail;
@@ -928,41 +933,59 @@ bool localCns::cnsByPoa(){
 			for (i = 0; i < n_seqs; ++i) reads_file << ">" << seqs_vec.at(k)->qname[i] << endl << seqs_vec.at(k)->seqs[i] << endl;
 			reads_file.close();
 
-			abpoa_flag = false;
-			while(1){
-				pthread_mutex_lock(&mutex_mem);
-				mem_avail = getMemInfo("MemAvailable", 2);
-				// prepare for alignment computation
-				if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
-//				if(mem_seqAln+mem_cost<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
-					work_num ++;
-					abpoa_flag = true;
-				}
-				pthread_mutex_unlock(&mutex_mem);
+			tmp_cons_filename = tmpdir + "/consensus_" + to_string(k) + ".fa";
 
-				if(abpoa_flag==false){ // block the alignment computation
-					//cout << "\t" << __func__ << ": wait " << mem_wait_seconds << " seconds, mem_avail=" << (mem_avail >> 10) << " MB, work_num=" << work_num << ", " << contigfilename << endl;
-					sleep(mem_wait_seconds);
-				}else{
-					tmp_cons_filename = tmpdir + "/consensus_" + to_string(k) + ".fa";
-					//cmd2 = "abpoa -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
-					cmd2 = "abpoa";
-					//if(mean_read_len>=MIN_SEQ_LEN_USING_MINIMIZER) cmd2 += " -S"; // deleted on 2025-03-16
-					if(sv_len_est>MIN_SEQ_LEN_USING_MINIMIZER) cmd2 += " -S";
-					cmd2 += " -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
-
-					//cout << cmd2 << endl;
-					system(cmd2.c_str());
-
+			if(n_seqs==1){ // only one read, added on 2025-05-21
+				cmd0 = "cp " + tmp_reads_filename + " " + tmp_cons_filename;
+				system(cmd0.c_str());
+			}else{ // multiple reads
+				abpoa_flag = false;
+				while(1){
 					pthread_mutex_lock(&mutex_mem);
-					work_num --;
-					if(work_num<0){
-						cerr << "line=" << __LINE__ << ", work_num=" << work_num << ", error." << endl;
-						exit(1);
+					mem_avail = getMemInfo("MemAvailable", 2);
+					// prepare for alignment computation
+					if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
+	//				if(mem_seqAln+mem_cost<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
+						work_num ++;
+						abpoa_flag = true;
 					}
 					pthread_mutex_unlock(&mutex_mem);
 
-					break;
+					if(abpoa_flag==false){ // block the alignment computation
+						//cout << "\t" << __func__ << ": wait " << mem_wait_seconds << " seconds, mem_avail=" << (mem_avail >> 10) << " MB, work_num=" << work_num << ", " << contigfilename << endl;
+						sleep(mem_wait_seconds);
+					}else{
+						//cmd2 = "abpoa -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
+						cmd2 = "abpoa";
+						//if(mean_read_len>=MIN_SEQ_LEN_USING_MINIMIZER) cmd2 += " -S"; // deleted on 2025-03-16
+						if(sv_len_est>MIN_SEQ_LEN_USING_MINIMIZER) cmd2 += " -S";
+						cmd2 += " -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
+
+						//cout << cmd2 << endl;
+						system(cmd2.c_str());
+
+						flag = isFileExist(tmp_cons_filename);
+						if(flag){
+							FastaSeqLoader fa_loader;
+							flag = fa_loader.isValidSeq(tmp_cons_filename);
+							if(flag==false){ // retry consensus
+								//cout << "invalid sequence : " << tmp_cons_filename << ", retry consensus ..." << endl;
+								cmd3 = "rm -f " + tmp_cons_filename;
+								system(cmd3.c_str());  // remove temporary files
+								system(cmd2.c_str()); // try consensus again
+							}
+						}
+
+						pthread_mutex_lock(&mutex_mem);
+						work_num --;
+						if(work_num<0){
+							cerr << "line=" << __LINE__ << ", work_num=" << work_num << ", error." << endl;
+							exit(1);
+						}
+						pthread_mutex_unlock(&mutex_mem);
+
+						break;
+					}
 				}
 			}
 
@@ -1010,7 +1033,7 @@ bool localCns::cnsByPoa(){
 // local consensus using wtdbg2
 bool localCns::localCnsWtdbg2(){
 	bool flag, wtdbg2_flag;
-	string output_prefix, tmp_reg_str, tmp_cns_filename, cmd2, cmd3;
+	string output_prefix, tmp_reg_str, tmp_cns_filename, cmd1, cmd2, cmd3;
 	string tmp_reads_filename, cons_header;
 	size_t id, k, i, j, n_seqs, serial_number;
 	ofstream cons_file, reads_file;
@@ -1049,39 +1072,58 @@ bool localCns::localCnsWtdbg2(){
 			for (i = 0; i < n_seqs; ++i) reads_file << ">" << seqs_vec.at(k)->qname[i] << endl << seqs_vec.at(k)->seqs[i] << endl;
 			reads_file.close();
 
-			wtdbg2_flag = false;
-			while(1){
-				pthread_mutex_lock(&mutex_mem);
-				mem_avail = getMemInfo("MemAvailable", 2);
-				// prepare for alignment computation
-				if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
-					work_num ++;
-					wtdbg2_flag = true;
-				}
-				pthread_mutex_unlock(&mutex_mem);
+			output_prefix = "tmp_wtdbg2_" + tmp_reg_str;
+			tmp_cns_filename = output_prefix + ".cns.fa";
 
-				if(wtdbg2_flag==false){ // block the alignment computation
-					//cout << "\t" << __func__ << ": wait " << mem_wait_seconds << " seconds, mem_avail=" << (mem_avail >> 10) << " MB, work_num=" << work_num << ", " << contigfilename << endl;
-					sleep(mem_wait_seconds);
-				}else{
-					output_prefix = "tmp_wtdbg2_" + tmp_reg_str;
-					cmd2 = "wtdbg2.pl -t 8 -x " + technology + " -o " + output_prefix + " -a -q " + tmp_reads_filename + " > /dev/null 2>&1";
-					//cout << cmd2 << endl;
-					system(cmd2.c_str());
-
+			if(n_seqs==1){ // only one read, added on 2025-05-21
+				cmd1 = "cp " + tmp_reads_filename + " " + tmp_cns_filename;
+				system(cmd1.c_str());
+			}else{ // multiple reads
+				wtdbg2_flag = false;
+				while(1){
 					pthread_mutex_lock(&mutex_mem);
-					work_num --;
-					if(work_num<0){
-						cerr << "line=" << __LINE__ << ", work_num=" << work_num << ", error." << endl;
-						exit(1);
+					mem_avail = getMemInfo("MemAvailable", 2);
+					// prepare for alignment computation
+					if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
+						work_num ++;
+						wtdbg2_flag = true;
 					}
 					pthread_mutex_unlock(&mutex_mem);
 
-					break;
+					if(wtdbg2_flag==false){ // block the alignment computation
+						//cout << "\t" << __func__ << ": wait " << mem_wait_seconds << " seconds, mem_avail=" << (mem_avail >> 10) << " MB, work_num=" << work_num << ", " << contigfilename << endl;
+						sleep(mem_wait_seconds);
+					}else{
+						cmd2 = "wtdbg2.pl -t 8 -x " + technology + " -o " + output_prefix + " -a \"-q -e 2\" " + tmp_reads_filename + " > /dev/null 2>&1";
+						//cout << cmd2 << endl;
+						system(cmd2.c_str());
+
+						flag = isFileExist(tmp_cns_filename);
+						if(flag){
+							FastaSeqLoader fa_loader;
+							flag = fa_loader.isValidSeq(tmp_cns_filename);
+							if(flag==false){ // retry consensus
+								//cout << "invalid sequence : " << tmp_cns_filename << ", retry consensus ..." << endl;
+								cmd3 = "rm -rf " + output_prefix + "*";
+								system(cmd3.c_str());  // remove temporary files
+								system(cmd2.c_str()); // try consensus again
+							}
+						}
+
+						pthread_mutex_lock(&mutex_mem);
+						work_num --;
+						if(work_num<0){
+							cerr << "line=" << __LINE__ << ", work_num=" << work_num << ", error." << endl;
+							exit(1);
+						}
+						pthread_mutex_unlock(&mutex_mem);
+
+						break;
+					}
 				}
 			}
 
-			tmp_cns_filename = output_prefix + ".cns.fa";
+			//tmp_cns_filename = output_prefix + ".cns.fa";
 			flag = isFileExist(tmp_cns_filename);
 			if(flag){
 				FastaSeqLoader fa_loader(tmp_cns_filename);
@@ -1377,10 +1419,10 @@ void localCns::recordCnsInfo(ofstream &cns_info_file){
 	reg_str = "";
 	if(varVec.size()>0){
 		reg = varVec.at(0);
-		reg_str = reg->chrname + ":" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
+		reg_str = reg->chrname + ":" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + "_" + to_string(reg->sv_len);
 		for(size_t i=1; i<varVec.size(); i++){
 			reg = varVec.at(i);
-			reg_str += ";" + reg->chrname + ":" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
+			reg_str += ";" + reg->chrname + ":" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos) + "_" + to_string(reg->sv_len);
 		}
 		line += "\t" + reg_str;
 	}else{
@@ -1420,4 +1462,34 @@ void localCns::recordCnsInfo(ofstream &cns_info_file){
 	pthread_mutex_lock(&mutex_write);
 	cns_info_file << line << endl;
 	pthread_mutex_unlock(&mutex_write);
+}
+
+// adjust the number of minimal support reads for low coverage regions
+int32_t localCns::adjustMinSuppNumLowCov(int32_t min_supp_num_original, vector<struct querySeqInfoNode*> &query_seq_info_all){
+	int32_t min_supp_num_new, flanking_num;
+	size_t i;
+	int64_t start_ref_pos, end_ref_pos;
+	struct querySeqInfoNode *q_node;
+	struct alnSeg *aln_seg;
+	bool low_cov_flag;
+
+	low_cov_flag = true;
+	flanking_num = 0;
+	for(i=0; i<query_seq_info_all.size(); i++){
+		q_node = query_seq_info_all.at(i);
+		aln_seg = q_node->query_alnSegs.at(q_node->query_alnSegs.size()-1);
+		start_ref_pos = q_node->query_alnSegs.at(0)->startRpos;
+		end_ref_pos = getEndRefPosAlnSeg(aln_seg->startRpos, aln_seg->opflag, aln_seg->seglen);
+		if(start_ref_pos<varVec.at(0)->startRefPos and end_ref_pos>varVec.at(varVec.size()-1)->endRefPos) flanking_num ++; // flanking
+		if(flanking_num>COV_DEPTH_LEVEL_1) { low_cov_flag = false; break; }
+	}
+
+	if(low_cov_flag){
+		if(flanking_num<=COV_DEPTH_LEVEL_2) min_supp_num_new = MIN_SUPPORT_READS_NUM_LEVEL_2;
+		else if(flanking_num<=COV_DEPTH_LEVEL_1) min_supp_num_new = MIN_SUPPORT_READS_NUM_LEVEL_1;
+	}else min_supp_num_new = min_supp_num_original;
+
+	//cout << "min_supp_num_new=" << min_supp_num_new << ", flanking_num=" << flanking_num << endl;
+
+	return min_supp_num_new;
 }

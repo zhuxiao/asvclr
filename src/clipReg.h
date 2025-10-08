@@ -26,6 +26,8 @@ using namespace std;
 #define MIN_CLIP_DIST_THRES					1000
 #define GROUP_DIST_THRES					1000
 
+#define MIN_REF_DIST_TRA					5000  // added on 2025-09-19
+
 //#define LONGER_NON_SA_SEG_NUM_THRES			5  // to be parameterized
 #define LONGER_NON_SA_SEG_RATIO_THRES		(0.1f)
 //#define MIN_VALID_CLIP_POS_RATIO			0.7
@@ -131,15 +133,8 @@ class clipReg {
 		void removeFPClipSingleEnd(mateClipReg_t &mate_clip_reg);
 		void checkLocOrder(mateClipReg_t &mate_clip_reg);
 		void computeVarTypeClipReg(mateClipReg_t &mate_clip_reg);
+		void computeLargeIndelTypeClipReg(mateClipReg_t &mate_clip_reg);
 		void resetClipCheckFlag(vector<clipAlnData_t*> &clipAlnDataVector);
-		bool isSameChrome(vector<clipAlnData_t*> &query_aln_segs);
-		bool isSameOrient(vector<clipAlnData_t*> &query_aln_segs);
-		bool ischeckSameOrient(vector<clipAlnData_t*> &query_aln_segs);//self
-		bool Filteredbychrname(vector<clipAlnData_t*> &query_aln_segs);//self
-		void FilteredbyAlignmentSegment(vector<clipAlnData_t*> &query_aln_segs);//self
-		bool isSameAlnReg(vector<clipAlnData_t*> &query_aln_segs);
-		void sortQueryAlnSegs(vector<clipAlnData_t*> &query_aln_segs);
-		bool isAdjacentClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, size_t dist_thres);
 		bool containCompleteDup(vector<clipAlnData_t*> &query_aln_segs, mateClipReg_t &mate_clip_reg);
 		size_t extractVarType(mateClipReg_t &mate_clip_reg, size_t dup_type_num, size_t inv_type_num, size_t tra_type_num, size_t min_reads_thres);
 		size_t computeDupNumClipReg(vector<size_t> &dup_num_vec);

@@ -5,7 +5,10 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <sys/stat.h>
+#include <sys/resource.h>
 #include <dirent.h>
 #include <htslib/sam.h>
 #include <htslib/faidx.h>
@@ -22,10 +25,13 @@ using namespace std;
 
 vector<string> split(const  string& s, const string& delim);
 bool isExistStr(string &str, vector<string> &vec);
+rlim_t getMaxOpenFileNum();
+bool setMaxOpenFileNum(rlim_t newLimit);
 int copySingleFile(string &infilename, ofstream &outfile);
 char getBase(string &seq, size_t pos, size_t orient);
 void reverseSeq(string &seq);
 void reverseComplement(string &seq);
+bool isValidBaseSeq(string &seq);
 void upperSeq(string &seq);
 size_t getCtgCount(string &contigfilename);
 reg_t* dupVarReg(reg_t *reg);
@@ -76,19 +82,19 @@ bool isBlatAlnCompleted(string &alnfilename);
 void cleanPrevConsTmpDir(const string &cns_dir_str, const string &dir_prefix);
 string getCallFileHeaderBed(string &sample);
 string getCallFileHeaderBedpe(string &sample);
-vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAlnData_t*> &clipAlnDataVector, const string &refseq_given, string &chrname, int64_t startRefPos, int64_t endRefPos, faidx_t *fai, int32_t minConReadLen, bool clip_reg_flag, pthread_mutex_t *p_mutex_fai);
+vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAlnData_t*> &clipAlnDataVector, const string &refseq_given, string &chrname, int64_t startRefPos, int64_t endRefPos, int64_t startRefPos_core, int64_t endRefPos_core, faidx_t *fai, int32_t minConReadLen, bool clip_reg_flag, pthread_mutex_t *p_mutex_fai);
 
-int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &query_aln_segs);
+int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &query_aln_segs, string &chrname, int64_t startRefPos_core, int64_t endRefPos_core);
 vector<string> getQuerySeqWithSoftClipSeqs(clipAlnData_t* clip_aln, string &refseq, int64_t startRefPos, int64_t endRefPos, int32_t bam_type, bool clip_reg_flag);
 vector<int32_t> computeQueryStartEndLocByRefPos(bam1_t *b, int64_t startRefPos, int64_t endRefPos, string &refseq, int32_t bam_type);
-void removeHeadTailAlnSegs(vector<struct alnSeg*> &alnSegs);
+void removeHeadTailAlnSegs(vector<struct alnSeg*> &alnSegs, bool remove_clip_end);
 cnsWork_opt* allocateCnsWorkOpt(string &chrname, string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, vector<reg_t*> &varVec, bool clip_reg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 void releaseConsWorkOpt(cnsWork_opt *cns_work_opt);
 void destroyConsWorkOptVec(vector<cnsWork_opt*> &cns_work_vec);
 void deleteItemFromCnsWorkVec(int32_t item_id, vector<cnsWork_opt*> &cns_work_vec);
 int32_t getItemIDFromCnsWorkVec(string &contigfilename, vector<cnsWork_opt*> &cns_work_vec);
 void* processSingleConsWork(void *arg);
-void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, double max_absig_density, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 bool isReadableFile(string &filename);
 void* processSingleMinimap2AlnWork(void *arg);
 void* processSingleBlatAlnWork(void *arg);
@@ -127,14 +133,17 @@ int32_t getVecIdxClipAlnData(clipAlnData_t *clip_aln, vector<clipAlnData_t*> &cl
 vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize, int32_t max_reg_size);
 vector<int32_t> getAdjacentClipAlnSeg(clipAlnData_t *clip_aln, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize, int32_t max_reg_size);
 clipAlnData_t* getAdjacentClipAlnSegPreferSameChr(clipAlnData_t *clip_aln, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize, int32_t max_reg_size);
-vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec, faidx_t *fai);
+vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec, faidx_t *fai, double gt_homo_ratio_thres, double gt_hete_ratio_thres);
+int64_t getClipPosFromBNDStr(string &bnd_str);
 void checkBNDStrVec(mateClipReg_t &mate_clip_reg);
 bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec);
 void checkSuppNum(mateClipReg_t &mate_clip_reg, int32_t support_num_thres);
 void copyClipPosVec(vector<clipPos_t*> &sourceClipPosVector, vector<clipPos_t*> &destClipPosVector);
 int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov);
 bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr, int64_t max_sv_size_usr);
+bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr);
 bool isSizeSatisfied2(int64_t sv_len, int64_t min_sv_size_usr, int64_t max_sv_size_usr);
+bool isSizeSatisfied2(int64_t sv_len, int64_t min_sv_size_usr);
 bool isNotAlreadyExists(vector<reg_t*> &varVec, reg_t *reg);
 bool isNotAlreadyExists(vector<reg_t*> &varVec, reg_t *reg, int32_t pos);
 bool isDecoyChr(string &chrname);
@@ -180,7 +189,7 @@ int64_t getEndRefPosAlnSeg(int64_t startRpos, int32_t opflag, int32_t op_len);
 int64_t getEndSubjectPosAlnSeg(int64_t startSubpos, int32_t opflag, int32_t op_len);
 int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len);
 
-bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double identity_ratio_match_thres, faidx_t *fai);
+bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double seqsim_ratio_match_thres, faidx_t *fai);
 bool isQcSigMatchBasedOnSVlen(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres);
 vector<qcSig_t*> extractQcSigsFromAlnSegsSingleQuery(struct querySeqInfoNode *query_seq_info_node, string &chrname, int64_t startSpanPos, int64_t endSpanPos, int32_t min_sv_size);
 qcSig_t *allocateQcSigNode(struct alnSeg *aln_seg);
@@ -188,6 +197,36 @@ void destoryQuerySeqInfoAll(vector<struct querySeqInfoNode*> &query_seq_info_all
 void destroyQueryQcSig(vector<qcSig_t *> &qcSig_vec);
 vector<string> extractQcSigCompSeqs(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, faidx_t *fai);
 struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNode*> &query_seq_info_vec, int64_t startRefPos_cns, int32_t min_sv_size);
+
+vector<vector<string>> getClusterInfo(string &clusterfilename);
+
+void computeRefSpanForIter(bam1_t *b, int64_t &startpos, int64_t &endpos);
+double computeSigDensityFromAlnData(bam1_t *b, faidx_t *fai, bam_hdr_t *header, int64_t startRpos, int64_t endRpos);
+
+void rmNeighborFalseSig(vector<qcSig_t*> &sig_vec, int64_t max_ref_dist, double min_size_ratio);
+bool mergeNeighbouringSigsFlag(struct querySeqInfoNode* query_seq_info_node, vector<qcSig_t*> &sig_vec, int32_t min_ref_dist_thres, int32_t max_ref_dist_thres, double min_merge_seqsim_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai);
+void filterSmallSigs(vector<qcSig_t *> &qcSig_vec, double valid_size_ratio_thres);
+void computeVarSums(struct querySeqInfoNode* &query_seq_info_node, int64_t start_var_pos, int64_t end_var_pos);
+
+bool desc_cmp_size_vec(const pair<int32_t, vector<int32_t>> &a, const pair<int32_t, vector<int32_t>> &b);
+void sortMRVec(vector<mrmin_match_t *> &match_vec);
+void printMRVec(vector<mrmin_match_t *> &match_vec);
+
+void sortQueryAlnSegs(vector<clipAlnData_t*> &query_aln_segs);
+bool Filteredbychrname(vector<clipAlnData_t*> &query_aln_segs);//self
+void FilteredbyAlignmentSegment(vector<clipAlnData_t*> &query_aln_segs, string &chrname);//self
+bool ischeckSameOrient(vector<clipAlnData_t*> &query_aln_segs);//self
+bool isSameChrome(vector<clipAlnData_t*> &query_aln_segs);
+bool isSameOrient(vector<clipAlnData_t*> &query_aln_segs);
+bool isSameAlnReg(vector<clipAlnData_t*> &query_aln_segs, int64_t maxVarRegSize);
+int32_t getOccNumInVecs(vector<clipAlnData_t*> &query_aln_segs, vector<clipPos_t*> &leftClipPosVector, vector<clipPos_t*> &leftClipPosVector2, vector<clipPos_t*> &rightClipPosVector, vector<clipPos_t*> &rightClipPosVector2);
+bool isAdjacentClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, size_t dist_thres);
+
+// debug operation
+void printQcSigIndelCluster(vector<struct querySeqInfoVec*> &query_clu_vec);
+void printQcSigIndel(vector<struct querySeqInfoNode*> &query_seq_info_all);
+void printQcSigIndelSingleQuery(struct querySeqInfoNode *query_seq_info_node, int32_t idx);
+
 
 
 class Time{

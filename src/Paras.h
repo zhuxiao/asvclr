@@ -7,6 +7,8 @@
 #include <fstream>
 #include <getopt.h>
 #include <unistd.h>
+#include <thread>
+#include <numeric>
 
 #include "structures.h"
 #include "meminfo.h"
@@ -16,8 +18,8 @@ using namespace std;
 
 // program variables
 #define PROG_NAME					"ASVCLR"
-#define PROG_DESC					"Allele-aware Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.4.6"
+#define PROG_DESC					"multi-Allele-aware Structural Variant Caller for Long Reads"
+#define PROG_VERSION				"1.5.0"
 #define VCF_VERSION					"4.2"
 
 #define CMD_DET_STR					"det"
@@ -49,12 +51,14 @@ using namespace std;
 #define VAR_DISCOV_L_CNS_ALN				1
 #define VAR_DISCOV_L_RESCUE_CNS_ALN			2
 #define VAR_DISCOV_L_READS					3
+#define VAR_DISCOV_L_READS2					4
 
 #define VAR_DISCOV_L_TITLE_STR				"LDISCOV"
 #define VAR_DISCOV_L_UNUSED_STR				"UNC"
 #define VAR_DISCOV_L_CNS_ALN_STR			"ALN"
 #define VAR_DISCOV_L_RESCUE_CNS_ALN_STR		"RESCUE_ALN"
 #define VAR_DISCOV_L_READS_STR				"READS"
+#define VAR_DISCOV_L_READS2_STR				"READS"
 
 #define SIZE_EST_OP					0
 #define NUM_EST_OP					1
@@ -77,20 +81,32 @@ using namespace std;
 //#define MIN_SV_SIZE_USR_FACTOR_CCS	(1.0f)
 #define MAX_SEG_SIZE_RATIO			(0.5f)
 
-#define MAX_SEG_NM_RATIO_1		(0.1f)
-#define MAX_SEG_NM_RATIO_2		(0.2f)
-#define MAX_SV_SIZE_USR				50000
+#define MAX_SEG_NM_RATIO_1			(0.1f)
+#define MAX_SEG_NM_RATIO_2			(0.2f)
+#define MAX_SV_SIZE_USR				100000	// 50000
+
+#define MAX_ABSIG_DENSITY_CCS			(10.0f)
+#define MAX_ABSIG_DENSITY_OTHER			(100.0f)
+#define MAX_ABSIG_DENSITY_TUMOR_FACTOR	(1.5f)
+//#define MAX_ABSIG_DENSITY_ONT			(2*MAX_ABSIG_DENSITY_CCS)
+
 
 #define MIN_DUP_SIZE				30  // 2021-07-27
 
 //#define MIN_CLIP_READS_NUM_THRES	7
-#define MIN_SUPPORT_READS_NUM_EST		(-1L)
-#define MIN_SUPPORT_READS_NUM_FACTOR	(0.03f)	// 0.07f (updated 2024-06-25), 0.05f (updated 2024-09-04)
-#define READS_NUM_SUPPORT_FACTOR		(0.5f)
-#define MIN_SUPPORT_READS_NUM_DEFAULT	3
-#define MIN_SUPPORT_READS_NUM_CLR		4
+#define MIN_SUPPORT_READS_NUM_EST			(-1L)
+#define MIN_SUPPORT_READS_NUM_FACTOR		(0.03f)	// 0.07f (updated 2024-06-25), 0.05f (updated 2024-09-04)
+#define READS_NUM_SUPPORT_FACTOR			(0.5f)
+#define READS_NUM_SUPPORT_FACTOR_LOW_COV	(0.6f)
+#define MIN_SUPPORT_READS_NUM_DEFAULT		3
+#define MIN_SUPPORT_READS_NUM_CLR			4
 
-#define MAX_VAR_REG_SIZE			50000
+#define COV_DEPTH_LEVEL_1					15
+#define COV_DEPTH_LEVEL_2					6
+#define MIN_SUPPORT_READS_NUM_LEVEL_1		2
+#define MIN_SUPPORT_READS_NUM_LEVEL_2		1
+
+#define MAX_VAR_REG_SIZE			100000	// 50000
 #define CNS_CHUNK_SIZE_INDEL		1000	// 10000
 #define CNS_CHUNK_SIZE_EXT_INDEL	1000	//1000
 #define CNS_EXT_INDEL_FACTOR_500BP	3	// side extend size factor for mid chunk (> 500bp), 2
@@ -102,10 +118,10 @@ using namespace std;
 #define CNS_EXT_CLIPREG_FACTOR_6K	4	// side extend size factor for large chunk (> 6kb)
 #define MIN_CONS_READ_LEN			100
 
-#define MAX_REF_DIST_IDENTITY		2000
+#define MAX_REF_DIST_SEQSIM			2000
 
-#define SIZE_PERCENTILE_EST			(0.95)	//0.95 (d-2024-03-23)
-#define NUM_PERCENTILE_EST			(0.99995)
+#define SIZE_PERCENTILE_EST			(0.95f)	//0.95 (d-2024-03-23)
+#define NUM_PERCENTILE_EST			(0.99995f)
 #define AUX_ARR_SIZE				1001
 
 #define MAX_REG_SUM_SIZE_EST		500000
@@ -138,12 +154,13 @@ using namespace std;
 #define MIN_MAPQ_THRES				20		// 0, 10
 #define MIN_HIGH_MAPQ_THRES			(MIN_MAPQ_THRES+10)
 
-#define CALL_MIN_IDENTITY_MERGE_THRES		(0.95)
-#define CALL_MIN_IDENTITY_MERGE_THRES2		(0.8) // 0.7
+#define CALL_MIN_SEQSIM_MERGE_THRES			(0.95f)
+#define CALL_MIN_SEQSIM_MERGE_THRES2		(0.8f)	// 0.7
 #define CALL_MIN_DISTANCE_MERGE_THRES		300
+#define CALL_MIN_DISTANCE_MERGE_THRES2		500
 
-#define CNS_MIN_IDENTITY_MERGE_THRES		(0.95f)
-#define CNS_MIN_IDENTITY_MERGE_THRES2		(0.6f) // 0.7
+//#define CNS_MIN_SEQSIM_MERGE_THRES		(0.95f)
+#define CNS_MIN_SEQSIM_MERGE_THRES2			(0.6f) // 0.7
 #define CNS_MIN_DIST_MERGE_THRES			1000
 #define MAX_DIST_MERGE_ARBITARY				100
 #define MIN_VALID_SIG_SIZE_RATIO_THRES		(0.1f)
@@ -188,8 +205,8 @@ class Paras
 		string out_dir_tra = out_dir_call + "/" + "tra";
 		string out_dir_result = "4_results";	// "4_results"
 		int32_t blockSize, slideSize, min_sv_size_usr, min_sv_size_usr_final, max_sv_size_usr, num_threads, large_indel_size_thres;
-		double max_seg_size_ratio_usr, min_identity_match, min_identity_merge, max_seg_nm_ratio_usr, min_sv_size_usr_factor;
-		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy, include_alt;
+		double max_seg_size_ratio_usr, min_seqsim_match, min_seqsim_merge, max_seg_nm_ratio_usr, min_sv_size_usr_factor, reads_num_supp_factor_low_cov, max_absig_density;
+		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy, include_alt, keep_temp_results_flag, phasing_flag, tumor_mode_flag;
 		size_t misAlnRegLenSum = 0;
 		int32_t minReadsNumSupportSV: 29, min_Nsupp_est_flag: 3; //, minClipReadsNumSupportSV; Nsupp_est_flag: 1 for estimated, 0 for user-specified
 		int32_t minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12;
@@ -207,6 +224,8 @@ class Paras
 		int32_t maxVarRegSize, minClipEndSize, cnsChunkSize, cnsSideExtSize, cnsSideExtSizeClip, minConReadLen;
 
 		int64_t mean_read_len, total_read_num_est;
+		double mean_error_rate; // added on 2025-07-10
+		int64_t total_error_num_est, total_mapped_read_len_est; // added on 2025-07-10
 		//int64_t chr_mean_depth, total_depth, chrome_num;
 		vector<int64_t> mean_depth_vec;
 		int32_t reg_sum_size_est, max_reg_sum_size_est;
@@ -254,7 +273,7 @@ class Paras
 
 		//genotyping parameters
 		int32_t gt_min_sig_size; // not used
-		double gt_min_identity_merge, gt_homo_ratio, gt_hete_ratio;
+		double gt_min_seqsim_merge, gt_homo_ratio, gt_hete_ratio;
 		double gt_size_ratio_match; // not used
 
 	public:

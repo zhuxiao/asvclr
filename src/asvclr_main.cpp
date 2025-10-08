@@ -53,6 +53,8 @@ int main(int argc, char **argv) {
 
 		cout << "[" << time.getTime() << "]: call variants finished." << endl;
 		time.printSubCmdElapsedTime();
+
+		if(paras.keep_temp_results_flag==false) genome.removeTempResults(); // keep temporary results
 	}
 
 	time.printOverallElapsedTime();

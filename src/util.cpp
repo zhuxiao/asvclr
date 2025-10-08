@@ -13,7 +13,7 @@
 extern pthread_mutex_t mutex_fai;
 
 // string split function
-vector<string> split(const string& s, const string& delim)
+inline vector<string> split(const string& s, const string& delim)
 {
 	vector<string> elems;
 	string tmp;
@@ -46,6 +46,28 @@ bool isExistStr(string &str, vector<string> &vec){
 			break;
 		}
 	return exist_flag;
+}
+
+// get the current maximum open files
+rlim_t getMaxOpenFileNum() {
+	struct rlimit limit;
+	if (getrlimit(RLIMIT_NOFILE, &limit) == -1) {
+		perror("getrlimit");
+		return -1;
+	}
+	return limit.rlim_cur;
+}
+
+// set the current maximum open files
+bool setMaxOpenFileNum(rlim_t newLimit) {
+	struct rlimit limit;
+	limit.rlim_cur = newLimit;  // set the soft limits
+	limit.rlim_max = newLimit;  // set the hard limits (if necessary)
+	if (setrlimit(RLIMIT_NOFILE, &limit) == -1) {
+		perror("setrlimit");
+		return false;
+	}
+	return true;
 }
 
 // copy single file
@@ -112,7 +134,6 @@ void reverseSeq(string &seq){
 // reverse complement the sequence
 void reverseComplement(string &seq){
 	reverseSeq(seq);
-
 	int32_t len = seq.size();
 	for(int32_t i=0; i<len; i++){
 		switch(seq[i]){
@@ -155,6 +176,52 @@ void reverseComplement(string &seq){
 				exit(1);
 		}
 	}
+}
+
+// determine whether the sequence is valid
+bool isValidBaseSeq(string &seq){
+	bool flag = true;
+	int32_t len = seq.size();
+	for(int32_t i=0; i<len; i++){
+		switch(seq[i]){
+			case 'a':
+			case 'c':
+			case 'g':
+			case 't':
+			case 'A':
+			case 'C':
+			case 'G':
+			case 'T':
+			case 'N':
+			case 'n':
+
+			// mixed bases
+			case 'M':
+			case 'm':
+			case 'R':
+			case 'r':
+			case 'S':
+			case 's':
+			case 'V':
+			case 'v':
+			case 'W':
+			case 'w':
+			case 'Y':
+			case 'y':
+			case 'H':
+			case 'h':
+			case 'K':
+			case 'k':
+			case 'D':
+			case 'd':
+			case 'B':
+			case 'b': break;
+			default:
+				flag = false;
+		}
+		if(flag==false) break;
+	}
+	return flag;
 }
 
 // upper the sequence
@@ -216,6 +283,7 @@ reg_t* dupVarReg(reg_t *reg){
 		reg_ret->aln_seg_end_flag = reg->aln_seg_end_flag;
 		reg_ret->query_pos_invalid_flag = reg->query_pos_invalid_flag;
 		reg_ret->large_indel_flag = reg->large_indel_flag;
+		reg_ret->merge_flag = reg->merge_flag;
 		reg_ret->gt_type = reg->gt_type;
 		reg_ret->gt_seq = reg->gt_seq;
 		reg_ret->refseq = reg->refseq;
@@ -373,6 +441,9 @@ bool isOverlappedRegExtSize(reg_t* reg1, reg_t* reg2, int32_t leftExtSize, int32
 // determine whether the given positions of two regions are overlapped
 bool isOverlappedPos(size_t startPos1, size_t endPos1, size_t startPos2, size_t endPos2){
 	bool flag = false;
+	size_t tmp;
+	if(startPos1>endPos1) { tmp = startPos1; startPos1 = endPos1; endPos1 = tmp; }
+	if(startPos2>endPos2) { tmp = startPos2; startPos2 = endPos2; endPos2 = tmp; }
 	if((endPos2>=startPos1 and endPos2<=endPos1) or (endPos1>=startPos2 and endPos1<=endPos2))
 		flag = true;
 	return flag;
@@ -380,9 +451,14 @@ bool isOverlappedPos(size_t startPos1, size_t endPos1, size_t startPos2, size_t 
 
 int32_t getOverlapSize(size_t startPos1, size_t endPos1, size_t startPos2, size_t endPos2){
 	int32_t overlap_size;
+	size_t tmp;
 
-	if(startPos1<=startPos2) overlap_size = endPos1 - startPos2 + 1;
-	else overlap_size = endPos2 - startPos1 + 1;
+	if(startPos1>endPos1) { tmp = startPos1; startPos1 = endPos1; endPos1 = tmp; }
+	if(startPos2>endPos2) { tmp = startPos2; startPos2 = endPos2; endPos2 = tmp; }
+
+	if(isOverlappedPos(startPos1, endPos1, startPos2, endPos2))
+		overlap_size = min(endPos1, endPos2) - max(startPos1, startPos2);
+	else overlap_size = 0;
 
 	return overlap_size;
 }
@@ -828,7 +904,8 @@ bool isIndelInSingleClipReg(reg_t *reg, mateClipReg_t *clip_reg){
 				}
 			}
 		}else if(clip_reg->large_indel_flag){ // large indel
-			reg_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->rightClipReg;
+			//reg_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg : clip_reg->rightClipReg; // deleted on 2025-09-17
+			reg_tmp = clip_reg->largeIndelClipReg;
 			chrname_tmp = reg_tmp->chrname;
 			start_pos = reg_tmp->startRefPos;
 			end_pos = reg_tmp->endRefPos;
@@ -1042,189 +1119,6 @@ void mergeAdjacentReg(vector<reg_t*> &regVec, size_t dist_thres){
 	}
 }
 
-// merge neighbouring indels
-//void mergeNeighbouringVars(vector<reg_t*> &regVector, int32_t max_ref_dist_thres, double min_merge_identity_thres, faidx_t *fai, string contigfilename, string reffilename){
-//	size_t i;
-//	int32_t query_id, seq_len, common_len, distance;
-//	int64_t start_querypos_comp, start_refpos_comp, end_refpos_comp;
-//	reg_t *reg_1, *reg_2;
-//	string comp_queryseq, comp_refseq, reg_str, new_queryseq;
-//    double iden_val, merge_identity_thres, merge_ref_dist_thres, sv_supp_diff;
-//	int32_t sv_supp_num2 = 0, sv_size = 0, total_sv_num = 0, sv_supp_num1 = 0;
-//	bool complex_reg_flag;
-//	char *seq;
-//
-//	distance = -1;
-//	//pre_refpos_comp = -1;
-//	common_len = 0;
-//
-//	merge_identity_thres = min_merge_identity_thres;
-//	merge_ref_dist_thres = max_ref_dist_thres;
-//
-//	complex_reg_flag = false;
-//	if(regVector.size()>=2) complex_reg_flag = ComplexRegionFlag(regVector, 10, 5, 800);
-//
-//	//start_refpos_merge = end_refpos_merge = start_querypos_merge = end_querypos_merge = -1;
-//	for(i=0; i<regVector.size(); i++){
-//		reg_1 = regVector.at(i);
-//		query_id = reg_1->query_id;
-//
-////		if(start_refpos_merge==-1){
-////			start_refpos_merge = reg_1->startRefPos;
-////			start_querypos_merge = reg_1->startQueryPos;
-////		}
-//
-//		if(i+1<regVector.size()){
-//			reg_2 = regVector.at(i+1);
-//
-//			if(query_id == reg_2->query_id and reg_1->var_type == reg_2->var_type){
-////				if(pre_refpos_comp<0) distance = reg_2->startRefPos - reg_1->endRefPos - 1;
-////				else distance = reg_2->startRefPos - pre_refpos_comp - 1;
-//
-//				distance = reg_2->startRefPos - reg_1->endRefPos - 1;
-//
-//				cout << "svtype:" << to_string(reg_1->var_type) << ", reg_1: sv_len=" << reg_1->sv_len << ", reg_2: sv_len=" << reg_2->sv_len << ", distance=" << distance << endl;
-//
-//				//update merge_distance_thres
-//				if(distance > merge_ref_dist_thres){
-//					sv_size = reg_2->sv_len;
-//					total_sv_num = regVector.size();
-//
-//					sv_supp_num1 = reg_1->supp_num;
-//					sv_supp_num2 = reg_2->supp_num;
-//					sv_supp_diff = 1 - (double)min(sv_supp_num1, sv_supp_num2)/max(sv_supp_num1, sv_supp_num2);
-//					// cout << sv_supp_diff << endl;
-//					merge_ref_dist_thres = calculate_merge_distance_threshold(complex_reg_flag, sv_supp_num2, sv_size, total_sv_num, sv_supp_diff);
-//					// cout << "distance:" << distance << ", dist_thres:" << merge_ref_dist_thres << endl;
-//				}
-//
-//				if(distance <= merge_ref_dist_thres and distance>=0){
-//					// min_identity_merge = 0.85? 0.9?
-//					// update merge_identity_thres
-//					if(distance >= reg_2->sv_len){
-////						if(pre_refpos_comp<0){
-//							common_len = distance - reg_2->sv_len;
-//							merge_identity_thres = calculate_merge_identity_threshold(common_len, distance, min_merge_identity_thres);
-////						}else{
-////							pos1_tmp = reg_1->endQueryPos + distance;
-////							pos2_tmp = reg_2->startQueryPos - (distance - reg_2->sv_len);
-////							if(pos1_tmp > pos2_tmp){
-////								common_len = pos1_tmp - pos2_tmp;
-////								merge_identity_thres = calculate_merge_identity_threshold(common_len, distance, min_merge_identity_thres);
-////								// merge_identity_thres = calculate_merge_identity_threshold2(common_len, distance, query_sv_type);
-////							}
-////						}
-//					}
-//
-//					start_querypos_comp = reg_2->endQueryPos - distance;
-//					FastaSeqLoader cns_fa_loader(contigfilename);
-//					comp_queryseq = cns_fa_loader.getFastaSeq(query_id).substr(start_querypos_comp, distance + 1);
-//
-//					start_refpos_comp = reg_2->endRefPos - distance;
-//					end_refpos_comp = reg_2->endRefPos;
-//
-//					reg_str = reg_2->chrname + ":" + to_string(start_refpos_comp) + "-" + to_string(end_refpos_comp);
-//					pthread_mutex_lock(&mutex_fai);
-//					seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
-//					pthread_mutex_unlock(&mutex_fai);
-//					comp_refseq = seq;
-//					free(seq);
-//
-//					iden_val = computeVarseqIdentity(comp_queryseq, comp_refseq);
-//
-//					if(reg_1->var_type==BAM_CDEL){ //DEL
-//						// get compared queryseq
-//						// start_querypos_comp = reg_1->endQueryPos; // deleted on 2025-01-07
-//						//start_querypos_comp = reg_2->startQueryPos - distance; // deleted on 2025-01-30
-////						start_querypos_comp = reg_2->endQueryPos - distance;
-////						FastaSeqLoader cns_fa_loader(contigfilename);
-////						comp_queryseq = cns_fa_loader.getFastaSeq(query_id).substr(start_querypos_comp, distance + 1);
-//						//cout << start_querypos_comp << "-" << end_querypos_comp << ", " << comp_queryseq << "," << comp_queryseq.size() << endl;
-//
-//						// start_refpos_comp = reg_1->endLocalRefPos + reg_2->sv_len; // deleted on 2025-01-07
-////						start_refpos_comp = reg_2->endLocalRefPos - distance;
-////						FastaSeqLoader ref_fa_loader(reffilename);
-////						comp_refseq = ref_fa_loader.getFastaSeq(0).substr(start_refpos_comp, distance);
-////						cout << "comp_refseq: " << comp_refseq << endl;
-//
-////						start_refpos_comp = reg_2->endRefPos - distance;
-////						end_refpos_comp = reg_2->endRefPos;
-////
-////						reg_str = reg_2->chrname + ":" + to_string(start_refpos_comp) + "-" + to_string(end_refpos_comp);
-////						pthread_mutex_lock(&mutex_fai);
-////						seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
-////						pthread_mutex_unlock(&mutex_fai);
-////						comp_refseq = seq;
-////						free(seq);
-//
-//						//iden_val = computeVarseqIdentity(comp_queryseq, comp_refseq);
-//						cout << "DEL:identity=" << iden_val << ", merge_identity_thres=" << merge_identity_thres << endl;
-//
-//						if(iden_val >= merge_identity_thres) {
-//							reg_1->endRefPos += reg_2->sv_len - 1;
-//							reg_1->endLocalRefPos += reg_2->sv_len - 1;
-//							reg_1->sv_len += reg_2->sv_len;
-//							reg_1->refseq += reg_2->refseq;
-//							//pre_refpos_comp = reg_2->endRefPos;
-//							delete reg_2;
-//							regVector.erase(regVector.begin()+i+1);
-//							i--;
-//						}
-//						//else pre_refpos_comp = -1;
-//					}else if(reg_1->var_type==BAM_CINS){ //INS
-//						// get query_comp seq
-//						// start_querypos_comp = reg_1->endQueryPos + reg_2->sv_len - 1; // deleted on 2025-01-07
-////						start_querypos_comp = reg_2->endQueryPos - distance;
-////						FastaSeqLoader cns_fa_loader(contigfilename);
-////						comp_queryseq = cns_fa_loader.getFastaSeq(query_id).substr(start_querypos_comp, distance + 1);
-//
-//						// get ref_comp seq
-//						// start_refpos_comp = reg_1->endLocalRefPos; // deleted on 2025-01-07
-////						start_refpos_comp = reg_2->startLocalRefPos - distance;
-////						FastaSeqLoader ref_fa_loader(reffilename);
-////						comp_refseq = ref_fa_loader.getFastaSeq(0).substr(start_refpos_comp , distance);
-//
-////						start_refpos_comp = reg_2->endRefPos - distance;
-////						end_refpos_comp = reg_2->endRefPos;
-////
-////						reg_str = reg_2->chrname + ":" + to_string(start_refpos_comp) + "-" + to_string(end_refpos_comp);
-////						pthread_mutex_lock(&mutex_fai);
-////						seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
-////						pthread_mutex_unlock(&mutex_fai);
-////						comp_refseq = seq;
-////						free(seq);
-//
-////						iden_val = computeVarseqIdentity(comp_queryseq, comp_refseq);
-//
-//						cout << "INS:identity=" << iden_val << ", merge_identity_thres=" << merge_identity_thres << endl;
-//						cout << "comp_queryseq.size=" << comp_queryseq.size() << ", comp_refseq.size=" << comp_refseq.size() << ", comp_queryseq=" << comp_queryseq << ", comp_refseq=" << comp_refseq << endl;
-//
-//						if(iden_val >= merge_identity_thres){
-//							new_queryseq = "";
-//							reg_1->sv_len += reg_2->sv_len;
-//							//pre_refpos_comp = reg_2->startRefPos;
-//
-//							start_querypos_comp = reg_1->endQueryPos;
-//							FastaSeqLoader cns_fa_loader(contigfilename);
-//							new_queryseq = cns_fa_loader.getFastaSeq(query_id).substr(start_querypos_comp, reg_2->sv_len - 1);
-//
-//							reg_1->altseq += new_queryseq;
-//							reg_1->endQueryPos = reg_1->endQueryPos + reg_2->sv_len;
-//							delete reg_2;
-//							regVector.erase(regVector.begin()+i+1);
-//							i--;
-//						}//else pre_refpos_comp = -1;
-//					}
-//				}//else pre_refpos_comp = -1;
-//			}//else pre_refpos_comp = -1;
-//		}
-//	}
-//	regVector.shrink_to_fit();
-//
-//	//extract seq from contig or reference
-//
-//}
-
 void printRegVec(vector<reg_t*> &regVec, string header){
 	reg_t *reg;
 	cout << header << " region size: " << regVec.size() << endl;
@@ -1235,7 +1129,7 @@ void printRegVec(vector<reg_t*> &regVec, string header){
 }
 
 void printMateClipReg(mateClipReg_t *mate_clip_reg){
-	string chrname_left, chrname_right;
+	string chrname_left, chrname_right, bnd_mate_reg_str;
 	size_t start_pos_left, end_pos_left, start_pos_right, end_pos_right;
 
 	// left part
@@ -1274,8 +1168,11 @@ void printMateClipReg(mateClipReg_t *mate_clip_reg){
 	}else
 		cout << "No region in right part" << endl;
 
+	bnd_mate_reg_str = mate_clip_reg->bnd_mate_reg_strs[0];
+	for(int32_t i=1; i<4; i++) bnd_mate_reg_str += ";" + mate_clip_reg->bnd_mate_reg_strs[i];
+
 	cout << chrname_left << ":" << start_pos_left << "-" << end_pos_left << ", " << chrname_right << ":" << start_pos_right << "-" << end_pos_right << " :" << endl;
-	cout << "\tvalid_flag=" << mate_clip_reg->valid_flag << ", call_success_flag=" << mate_clip_reg->call_success_flag << ", leftClipRegNum=" << mate_clip_reg->leftClipRegNum << ", rightClipRegNum=" << mate_clip_reg->rightClipRegNum << ", sv_type=" << mate_clip_reg->sv_type << ", dup_num=" << mate_clip_reg->dup_num << endl;
+	cout << "\tvalid_flag=" << mate_clip_reg->valid_flag << ", call_success_flag=" << mate_clip_reg->call_success_flag << ", leftClipRegNum=" << to_string(mate_clip_reg->leftClipRegNum) << ", rightClipRegNum=" << to_string(mate_clip_reg->rightClipRegNum) << ", sv_type=" << mate_clip_reg->sv_type << ", dup_num=" << mate_clip_reg->dup_num << ", bnd_mate_reg_str= " << bnd_mate_reg_str << endl;
 }
 
 vector<string> getLeftRightPartChrname(mateClipReg_t *mate_clip_reg){
@@ -1854,7 +1751,7 @@ string getCallFileHeaderBedpe(string &sample){
 }
 
 // extract queries from clip align data vector
-vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAlnData_t*> &clipAlnDataVector, const string &refseq_given, string &chrname, int64_t startRefPos, int64_t endRefPos, faidx_t *fai, int32_t minConReadLen, bool clip_reg_flag, pthread_mutex_t *p_mutex_fai){
+vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAlnData_t*> &clipAlnDataVector, const string &refseq_given, string &chrname, int64_t startRefPos, int64_t endRefPos, int64_t startRefPos_core, int64_t endRefPos_core, faidx_t *fai, int32_t minConReadLen, bool clip_reg_flag, pthread_mutex_t *p_mutex_fai){
 	vector<struct querySeqInfoNode*> query_seq_info_all;
 	size_t i, j;
 	string qname, seq, reg_str, refseq;
@@ -1896,12 +1793,12 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 				qname = clipAlnDataVector.at(i)->queryname;
 				query_aln_segs = getQueryClipAlnSegs(qname, clipAlnDataVector);  // get query clip align segments
 
-//				if(qname.compare("SRR11008518.1.3409301")==0){
+//				if(qname.compare("SRR8955953.6500851")==0){
 //					cout << "i=" << i << ", qname=" << qname << endl;
 //				}
 
 				if(clip_reg_flag==false){
-					noHardClipIdx = getNoHardClipAlnItem(query_aln_segs);
+					noHardClipIdx = getNoHardClipAlnItem(query_aln_segs, chrname, startRefPos_core, endRefPos_core);
 					if(noHardClipIdx!=-1){
 						query_seq_qual_vec = getQuerySeqWithSoftClipSeqs(query_aln_segs.at(noHardClipIdx), refseq, startRefPos, endRefPos, bam_type, clip_reg_flag);
 						query_aln_segs.at(noHardClipIdx)->query_checked_flag = true;
@@ -1929,7 +1826,7 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 									cerr << __func__ << ": unknown bam type, error!" << endl;
 									exit(1);
 							}// generate align segments
-							removeHeadTailAlnSegs(alnSegs);
+							removeHeadTailAlnSegs(alnSegs, false);
 							q_node->query_alnSegs = alnSegs;
 
 							query_seq_info_all.push_back(q_node);
@@ -1978,16 +1875,29 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 }
 
 // get the non hard-clip align item
-int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &query_aln_segs){
+int32_t getNoHardClipAlnItem(vector<clipAlnData_t*> &query_aln_segs, string &chrname, int64_t startRefPos_core, int64_t endRefPos_core){
 	int32_t idx;
+	size_t i;
 	clipAlnData_t *clip_aln;
 
+	// prefer the entire flanking
 	idx = -1;
-	for(size_t i=0; i<query_aln_segs.size(); i++){
+	for(i=0; i<query_aln_segs.size(); i++){
 		clip_aln = query_aln_segs.at(i);
-		if(clip_aln->leftHardClippedFlag==false and clip_aln->rightHardClippedFlag==false){
+		if(clip_aln->chrname.compare(chrname)==0 and clip_aln->startRefPos<startRefPos_core and clip_aln->endRefPos>endRefPos_core and clip_aln->leftHardClippedFlag==false and clip_aln->rightHardClippedFlag==false){
 			idx = i;
 			break;
+		}
+	}
+
+	// choose the first one
+	if(idx==-1){
+		for(i=0; i<query_aln_segs.size(); i++){
+			clip_aln = query_aln_segs.at(i);
+			if(clip_aln->leftHardClippedFlag==false and clip_aln->rightHardClippedFlag==false){
+				idx = i;
+				break;
+			}
 		}
 	}
 
@@ -2161,7 +2071,7 @@ vector<int32_t> computeQueryStartEndLocByRefPos(bam1_t *b, int64_t startRefPos, 
 }
 
 // remove head align segments
-void removeHeadTailAlnSegs(vector<struct alnSeg*> &alnSegs){
+void removeHeadTailAlnSegs(vector<struct alnSeg*> &alnSegs, bool remove_clip_end){
 	uint32_t op;
 	if(alnSegs.size()>0){
 		op = alnSegs.at(0)->opflag;
@@ -2178,8 +2088,10 @@ void removeHeadTailAlnSegs(vector<struct alnSeg*> &alnSegs){
 				break;
 			case BAM_CSOFT_CLIP:
 			case BAM_CHARD_CLIP:
-				delete *alnSegs.begin();
-				alnSegs.erase(alnSegs.begin());
+				if(remove_clip_end==true){
+					delete *alnSegs.begin();
+					alnSegs.erase(alnSegs.begin());
+				}
 				break;
 			case BAM_CEQUAL:
 			case BAM_CDIFF:
@@ -2312,7 +2224,7 @@ void* processSingleConsWork(void *arg){
 	for(i=0; i<cns_work_opt->limit_reg_array_size; i++) sub_limit_reg_vec.push_back(cns_work_opt->limit_reg_array[i]);
 
 //	cout << __func__ << ", line=" << __LINE__ << "minMapQ :  " << cns_work->minMapQ << endl;
-	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->clusterfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->min_identity_match, cns_work->sv_len_est, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->max_ultra_high_cov, cns_work->minMapQ, cns_work->minHighMapQ, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work->max_seg_nm_ratio, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
+	performLocalCons(cns_work_opt->readsfilename, cns_work_opt->contigfilename, cns_work_opt->refseqfilename, cns_work_opt->clusterfilename, cns_work_opt->tmpdir, cns_work->technology, cns_work->min_seqsim_match, cns_work->sv_len_est, cns_work->num_threads_per_cns_work, varVec, cns_work_opt->chrname, cns_work->inBamFile, cns_work->fai, cns_work->cnsSideExtSize, *(cns_work->var_cand_file), cns_work->expected_cov_cns, cns_work->min_input_cov_canu, cns_work->max_ultra_high_cov, cns_work->minMapQ, cns_work->minHighMapQ, cns_work->delete_reads_flag, cns_work->keep_failed_reads_flag, cns_work_opt->clip_reg_flag, cns_work->minClipEndSize, cns_work->maxVarRegSize, cns_work->minConReadLen, cns_work->min_sv_size, cns_work->min_supp_num, cns_work->max_seg_size_ratio, cns_work->max_seg_nm_ratio, cns_work->max_absig_density, cns_work_opt->limit_reg_process_flag, sub_limit_reg_vec);
 
 //	double run_seconds = time.getElapsedSeconds();
 //	if(run_seconds>60) {
@@ -2347,9 +2259,9 @@ void* processSingleConsWork(void *arg){
 }
 
 
-void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
+void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, double max_absig_density, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec){
 
-	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_identity_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, max_ultra_high_cov, minMapQ, minHighMapQ, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio, max_seg_nm_ratio);
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_seqsim_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, expected_cov_cns, min_input_cov_canu, max_ultra_high_cov, minMapQ, minHighMapQ, delete_reads_flag, keep_failed_reads_flag, clip_reg_flag, minClipEndSize, maxVarRegSize, minConReadLen, min_sv_size, min_supp_num, max_seg_size_ratio, max_seg_nm_ratio, max_absig_density);
 
 	local_cns.setLimitRegs(limit_reg_process_flag, limit_reg_vec);
 	if(local_cns.cns_success_preDone_flag==false){
@@ -3175,6 +3087,7 @@ void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchRe
 	else if(local_aln->cand_reg) chrname_tmp = local_aln->cand_reg->chrname;
 	else return;
 	chrlen_tmp = faidx_seq_len(fai, chrname_tmp.c_str()); // get the reference length
+	if(chrlen_tmp==-1) return;
 
 	start_ref_pos = misReg_vec.at(0)->startRefPos - 2 * EXT_SIZE_CHK_VAR_LOC;
 	end_ref_pos = misReg_vec.at(misReg_vec.size()-1)->endRefPos + 2* EXT_SIZE_CHK_VAR_LOC;
@@ -3416,6 +3329,64 @@ vector<clipAlnData_t*> getQueryClipAlnSegsAll(string &queryname, vector<clipAlnD
 	return query_aln_segs;
 }
 
+bool Filteredbychrname(vector<clipAlnData_t*> &query_aln_segs){
+	bool flag = true;
+	vector<string> chrnameV;
+	size_t i, j;
+
+	if(query_aln_segs.size()>=3){
+		for(i=0; i<query_aln_segs.size(); i++){
+//			if(chrnameV.size()==0){
+//				chrnameV.push_back(query_aln_segs.at(i)->chrname);
+//			}
+//			else{
+				for(j=0; j<chrnameV.size(); j++){
+					if(query_aln_segs.at(i)->chrname.compare(chrnameV.at(j))==0)
+						break;
+				}
+				if(j == chrnameV.size())
+					chrnameV.push_back(query_aln_segs.at(i)->chrname);
+//			}
+		}
+	}
+	if(chrnameV.size()>=3)
+		flag=false;
+	return flag;
+}
+
+void FilteredbyAlignmentSegment(vector<clipAlnData_t*> &query_aln_segs, string &chrname){
+	size_t j;
+	int32_t samechr_num;
+
+	if(query_aln_segs.size()>3){
+		samechr_num = 0;
+		for(j=0; j<query_aln_segs.size(); j++){
+			if(query_aln_segs.at(j)->chrname.compare(chrname)==0)
+				samechr_num++;
+		}
+		bool orient_flag = ischeckSameOrient(query_aln_segs);
+		if(samechr_num>=3 and orient_flag==false){		//Filter unreliable read
+			for(j=0; j<query_aln_segs.size(); j++){
+				if(query_aln_segs.at(j)->chrname.compare(chrname)!=0)
+					query_aln_segs.erase(query_aln_segs.begin()+j);
+			}
+			query_aln_segs.shrink_to_fit();
+		}
+	}
+}
+
+bool ischeckSameOrient(vector<clipAlnData_t*> &query_aln_segs){
+	bool flag = true;
+	int32_t Differentdirections_num = 0;
+	for(size_t i=1; i<query_aln_segs.size(); i++){
+		if(query_aln_segs.at(i)->aln_orient!=query_aln_segs.at(i-1)->aln_orient){
+			Differentdirections_num++;
+		}
+	}
+	if(Differentdirections_num >= 2) flag = false;
+	return flag;
+}
+
 bool isQuerySelfOverlap(vector<clipAlnData_t*> &query_aln_segs, int32_t maxVarRegSize){
 	bool flag;
 	clipAlnData_t *clip_aln1, *clip_aln2;
@@ -3427,6 +3398,15 @@ bool isQuerySelfOverlap(vector<clipAlnData_t*> &query_aln_segs, int32_t maxVarRe
 			clip_aln2 = query_aln_segs.at(j);
 			flag = isSegSelfOverlap(clip_aln1, clip_aln2, maxVarRegSize);
 			if(flag) break;
+			else if(clip_aln1->aln_orient==clip_aln2->aln_orient){ // un-overlapped DUP
+				if(clip_aln1->aln_orient==ALN_PLUS_ORIENT and clip_aln1->startQueryPos<clip_aln2->startQueryPos and clip_aln1->endRefPos>clip_aln2->startRefPos){ // plus orient
+					flag = true;
+					break;
+				}else if(clip_aln1->aln_orient==ALN_MINUS_ORIENT and clip_aln1->startQueryPos>clip_aln2->startQueryPos and clip_aln1->endRefPos>clip_aln2->startRefPos){ // minus orient
+					flag = true;
+					break;
+				}
+			}
 		}
 		if(flag) break;
 	}
@@ -3637,30 +3617,51 @@ clipAlnData_t* getAdjacentClipAlnSegPreferSameChr(clipAlnData_t *clip_aln, int32
 }
 
 // generate BND items
-vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec, faidx_t *fai){
+vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1_para, string &chrname2_para, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec, faidx_t *fai, double gt_homo_ratio_thres, double gt_hete_ratio_thres){
 	vector<BND_t*> bnd_vec;
 	vector<string> bnd_str_vec2, bnd_str_vec2_tmp, mate_str_vec, mate_str_vec2;
 	BND_t *bnd_item, *mate_bnd_item;
 	int64_t bnd_pos, mate_bnd_pos, mate_dist;
 	string bnd_id_str, mate_bnd_id_str, reg_str, mate_reg_str, mate_bnd_str, mate_bnd_str2, seq_str, seq2_str, support_num_str, cov_num_str;
-	string mate_reg_str2;
+	string mate_reg_str2, chrname1, chrname2;
 	char *seq, *seq2, mate_orient_ch, mate_orient_ch2;
 	int32_t mate_reg_id, mate_reg_id2, mate_clip_end, sub_vec_id, mate_sub_vec_id, seq_len, seq_len2, support_num, cov_num, support_num2, cov_num2;
-	string id, ref, alt, qual, filter, info, format, format_val_str, sv_type, line_vcf;
+	string id, ref, alt, qual, filter, info, format, format_val_str, sv_type, line_vcf, gt_str;
+	double AF;
 
 	if(reg_id<0 or reg_id>=4){
 		cerr << __func__ << ", line=" << __LINE__ << ": invalid region id: " << reg_id << ", which should be the intenger of [0,3], error." << endl;
 		exit(1);
 	}
 
+	if(reg_id<=1){
+		chrname1 = chrname1_para;
+		chrname2 = chrname2_para;
+	}else{
+		chrname1 = chrname2_para;
+		chrname2 = chrname1_para;
+	}
+
 	if(tra_pos_arr[reg_id]!=-1 or bnd_str_vec.at(reg_id).compare("-")!=0) {
 		sub_vec_id = (clip_end + 1) % 2;
 		if(checked_arr[reg_id][sub_vec_id]==0){ // unprocessed, then process it
-			if(clip_end==RIGHT_END) bnd_pos = tra_pos_arr[reg_id] - 1;   // POS
-			else bnd_pos = tra_pos_arr[reg_id];
+			bnd_pos = tra_pos_arr[reg_id];
 
-			if(bnd_pos<=0)
+			if(bnd_pos<=0){
 				cout << "line=" << __LINE__ << ", bnd_pos=" << bnd_pos << ", error." << endl;
+				bnd_pos = 1;
+				exit(1);
+			}
+
+			bnd_str_vec2 = split(bnd_str_vec.at(reg_id), ",");
+			mate_reg_str = bnd_str_vec2.at(sub_vec_id); // "2+|.|.|."
+			if(mate_reg_str.compare("-")!=0){
+				mate_str_vec = split(mate_reg_str, "|");
+				mate_reg_id = stoi(mate_str_vec.at(0).substr(0, 1));
+				if((reg_id<=1 and mate_reg_id<=1) or (reg_id>=2 and mate_reg_id>=2)){ // invalid same side, then skip
+					return bnd_vec;
+				}
+			}
 
 			reg_str = chrname1 + ":" + to_string(bnd_pos) + "-" + to_string(bnd_pos);
 			pthread_mutex_lock(&mutex_fai);
@@ -3781,8 +3782,8 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 					exit(1);
 				}
 
-				bnd_id_str = "BND." + chrname1 + ":" + to_string(bnd_pos) + "-" + chrname2 + ":" + to_string(mate_bnd_pos);
-				mate_bnd_id_str = "BND." + chrname2 + ":" + to_string(mate_bnd_pos) + "-" + chrname1 + ":" + to_string(bnd_pos);
+				bnd_id_str = "ASVCLR.BND." + chrname1 + ":" + to_string(bnd_pos) + "-" + chrname2 + ":" + to_string(mate_bnd_pos);
+				mate_bnd_id_str = "ASVCLR.BND." + chrname2 + ":" + to_string(mate_bnd_pos) + "-" + chrname1 + ":" + to_string(bnd_pos);
 				mate_dist = -1;
 				if(chrname1.compare(chrname2)==0){
 					mate_dist = mate_bnd_pos - bnd_pos;
@@ -3791,19 +3792,25 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 
 				// bnd item
 				id = bnd_id_str;			// ID
-				ref = seq_str;					// REF
+				ref = seq_str;				// REF
 				alt = mate_bnd_str;			// ALT
 				qual = ".";					// QUAL
 				filter = "PASS";			// FILTER
 
 				sv_type = VAR_BND_STR;
 				format = "GT:AD:DP";		// FORMAT and the values
-				format_val_str = "./.";
-				format_val_str += ":" + support_num_str + "," + to_string(cov_num-support_num);
-				format_val_str += ":" + cov_num_str;
+				gt_str = "./.";
+				AF = (double)support_num / cov_num;
+				if(AF>=gt_homo_ratio_thres) gt_str = GT_HOMOZYGOUS_STR;
+				else if(AF>=gt_hete_ratio_thres) gt_str = GT_HETEROZYGOUS_STR;
+				else gt_str = GT_NOZYGOUS_STR;
+				format_val_str = gt_str + ":" + to_string(cov_num-support_num) + "," + support_num_str + ":" + cov_num_str;
 
 				info = "SVTYPE=" + sv_type + ";" + "MATEID=" + mate_bnd_id_str;	// INFO: SVTYPE=sv_type;MATEID=mate_bnd_id
 				if(chrname1.compare(chrname2)==0) info += ";MATEDIST=" + to_string(mate_dist);  // INFO: MATEDIST=mate_dist
+				stringstream ss;
+				ss << setprecision(3) << AF;
+				info += ";DP=" + cov_num_str + ";AF=" + ss.str() + ";LDISCOV=READS";
 				line_vcf = chrname1 + "\t" + to_string(bnd_pos) + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val_str;
 
 				bnd_item->reg_id = reg_id;
@@ -3833,12 +3840,18 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 
 				sv_type = VAR_BND_STR;
 				format = "GT:AD:DP";		// FORMAT and the values
-				format_val_str = "./.";
-				format_val_str += ":" + to_string(support_num2) + "," + to_string(cov_num2-support_num2);
-				format_val_str += ":" + to_string(cov_num2);
+				gt_str = "./.";
+				AF = (double)support_num2 / cov_num2;
+				if(AF>=gt_homo_ratio_thres) gt_str = GT_HOMOZYGOUS_STR;
+				else if(AF>=gt_hete_ratio_thres) gt_str = GT_HETEROZYGOUS_STR;
+				else gt_str = GT_NOZYGOUS_STR;
+				format_val_str = gt_str + ":" + to_string(cov_num2-support_num2) + "," + to_string(support_num2) + ":" + to_string(cov_num2);
 
 				info = "SVTYPE=" + sv_type + ";" + "MATEID=" + bnd_id_str;	// INFO: SVTYPE=sv_type;MATEID=mate_bnd_id
 				if(chrname1.compare(chrname2)==0) info += ";MATEDIST=" + to_string(mate_dist);  // INFO: MATEDIST=mate_dist
+				ss.clear();
+				ss << setprecision(3) << (double)AF;
+				info += ";DP=" + to_string(cov_num2) + ";AF=" + ss.str() + ";LDISCOV=READS";
 				line_vcf = chrname2 + "\t" + to_string(mate_bnd_pos) + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val_str;
 
 				mate_bnd_item->reg_id = mate_reg_id;
@@ -3866,6 +3879,25 @@ vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checke
 	}
 
 	return bnd_vec;
+}
+
+// get clipPos from BND string
+int64_t getClipPosFromBNDStr(string &bnd_str){
+	size_t i;
+	vector<string> str_vec, str_vec2;
+	int64_t clip_pos;
+
+	clip_pos = -1;
+	str_vec = split(bnd_str, ",");
+	for(i=0; i<str_vec.size(); i++){
+		if(str_vec.at(i).compare("-")!=0){
+			str_vec2 = split(str_vec.at(i), "|");
+			clip_pos = stoi(str_vec2.at(1));
+			break;
+		}
+	}
+
+	return clip_pos;
 }
 
 // check BND String
@@ -4121,39 +4153,42 @@ int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faid
 	vector<bam1_t*> alnDataVector;
 	vector<bam1_t*>::iterator aln;
 
+	mean_cov_num = 0;
 	start_pos = startPos - CLIP_END_EXTEND_SIZE / 2;
 	end_pos = endPos + CLIP_END_EXTEND_SIZE / 2;
 
-	chr_len = faidx_seq_len(fai, chrname.c_str()); // get the reference length
-	if(start_pos<1) start_pos = 1;
-	if(end_pos>chr_len) end_pos = chr_len;
+	chr_len = faidx_seq_len64(fai, chrname.c_str()); // get the reference length
+	if(chr_len!=-1){
+		if(start_pos<1) start_pos = 1;
+		if(end_pos>chr_len) end_pos = chr_len;
 
-	covLoader cov_loader(chrname, start_pos, end_pos, fai, 0, 0);
-	baseArray = cov_loader.initBaseArray();
+		covLoader cov_loader(chrname, start_pos, end_pos, fai, 0, 0);
+		baseArray = cov_loader.initBaseArray();
 
-	alnDataLoader data_loader(chrname, start_pos, end_pos, inBamFile, minMapQ, minHighMapQ);
-	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
+		alnDataLoader data_loader(chrname, start_pos, end_pos, inBamFile, minMapQ, minHighMapQ);
+		data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
 
-	// generate the base coverage array
-	cov_loader.generateBaseCoverage(baseArray, alnDataVector);
+		// generate the base coverage array
+		cov_loader.generateBaseCoverage(baseArray, alnDataVector);
 
-	totalReadBeseNum = totalRefBaseNum = 0;
-	for(pos=start_pos; pos<=end_pos; pos++){
-		// compute the meanCov excluding the gap regions
-		if(baseArray[pos-start_pos].coverage.idx_RefBase!=4){ // excluding 'N'
-			//totalReadBeseNum += baseArray[pos-start_pos].coverage.num_bases[5]; // deleted on 2024-0718
-			totalReadBeseNum += baseArray[pos-start_pos].coverage.num_bases[5] + baseArray[pos-start_pos].del_num_from_del_vec;
-			totalRefBaseNum ++;
-//			num = baseArray[pos-start_pos].coverage.num_bases[5];
-//			sum += num;
+		totalReadBeseNum = totalRefBaseNum = 0;
+		for(pos=start_pos; pos<=end_pos; pos++){
+			// compute the meanCov excluding the gap regions
+			if(baseArray[pos-start_pos].coverage.idx_RefBase!=4){ // excluding 'N'
+				//totalReadBeseNum += baseArray[pos-start_pos].coverage.num_bases[5]; // deleted on 2024-0718
+				totalReadBeseNum += baseArray[pos-start_pos].coverage.num_bases[5] + baseArray[pos-start_pos].del_num_from_del_vec;
+				totalRefBaseNum ++;
+	//			num = baseArray[pos-start_pos].coverage.num_bases[5];
+	//			sum += num;
+			}
 		}
-	}
-	if(totalRefBaseNum) mean_cov_num = (double)totalReadBeseNum/totalRefBaseNum;
-	else mean_cov_num = 0;
+		if(totalRefBaseNum) mean_cov_num = (double)totalReadBeseNum/totalRefBaseNum;
+		else mean_cov_num = 0;
 
-	// release memory
-	if(baseArray) { delete[] baseArray; baseArray = NULL; }
-	if(!alnDataVector.empty()) destoryAlnData(alnDataVector);
+		// release memory
+		if(baseArray) { delete[] baseArray; baseArray = NULL; }
+		if(!alnDataVector.empty()) destoryAlnData(alnDataVector);
+	}
 
 	return round(mean_cov_num);
 }
@@ -4174,14 +4209,41 @@ bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_u
 }
 
 // determine whether the variant is size satisfied
+bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr){
+	int64_t dif;
+	bool size_satisfy;
+
+	dif = query_dist - ref_dist;
+	if(dif<0) dif = -dif;
+
+	size_satisfy = false;
+	if(dif>=min_sv_size_usr or ref_dist>=min_sv_size_usr or query_dist>=min_sv_size_usr)
+		size_satisfy = true;
+
+	return size_satisfy;
+}
+
+// determine whether the variant is size satisfied
 bool isSizeSatisfied2(int64_t sv_len, int64_t min_sv_size_usr, int64_t max_sv_size_usr){
 	int64_t size;
 	bool size_satisfy;
 
-	size = sv_len;
-
+	size = abs(sv_len);
 	size_satisfy = false;
 	if(size<=max_sv_size_usr and size>=min_sv_size_usr)
+		size_satisfy = true;
+
+	return size_satisfy;
+}
+
+// determine whether the variant is size satisfied
+bool isSizeSatisfied2(int64_t sv_len, int64_t min_sv_size_usr){
+	int64_t size;
+	bool size_satisfy;
+
+	size = abs(sv_len);
+	size_satisfy = false;
+	if(size>=min_sv_size_usr)
 		size_satisfy = true;
 
 	return size_satisfy;
@@ -4204,10 +4266,10 @@ bool isNotAlreadyExists(vector<reg_t*> &varVec, reg_t *reg){
 //	}
 
 	for(i=0;i<varVec.size();i++){
-		if(reg->sv_len<varVec[i]->sv_len){
-			dif_ratio = (double)reg->sv_len/varVec[i]->sv_len;
+		if(abs(reg->sv_len)<abs(varVec[i]->sv_len)){
+			dif_ratio = (double)abs(reg->sv_len)/abs(varVec[i]->sv_len);
 		}else{
-			dif_ratio = (double)varVec[i]->sv_len/reg->sv_len;
+			dif_ratio = (double)abs(varVec[i]->sv_len)/abs(reg->sv_len);
 		}
 		dis = abs(reg->startRefPos-varVec[i]->startRefPos);
 		//dif_len = abs(reg->sv_len-varVec[i]->sv_len);
@@ -4238,10 +4300,10 @@ bool isNotAlreadyExists(vector<reg_t*> &varVec, reg_t *reg, int32_t pos){
 	//
 
 	for(i=0; i<pos; i++){
-		if(reg->sv_len<varVec[i]->sv_len){
-			dif_ratio = (double)reg->sv_len/varVec[i]->sv_len;
+		if(abs(reg->sv_len)<abs(varVec[i]->sv_len)){
+			dif_ratio = (double)abs(reg->sv_len)/abs(varVec[i]->sv_len);
 		}else{
-			dif_ratio = (double)varVec[i]->sv_len/reg->sv_len;
+			dif_ratio = (double)abs(varVec[i]->sv_len)/abs(reg->sv_len);
 		}
 		dis = abs(reg->startRefPos-varVec[i]->startRefPos);
 		//dif_len = abs(reg->sv_len-varVec[i]->sv_len);
@@ -4307,14 +4369,14 @@ void *processSingleMateClipRegDetectWork(void *arg){
 	vector<Block*> *blockVector = mate_clip_reg_work_opt->blockVector;
 	//int32_t *p_mate_clip_reg_fail_num = mate_clip_reg_work_opt->p_mate_clip_reg_fail_num;
 	pthread_mutex_t *p_mutex_mate_clip_reg = mate_clip_reg_work_opt->p_mutex_mate_clip_reg;
-	Time time;
 
+//	Time time;
 //	cout << "\t[" << time.getTime() << "], [" << mate_clip_reg_work_opt->work_id << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 
 	clipReg clip_reg(reg->chrname, reg->startRefPos, reg->endRefPos, paras->inBamFile, fai, paras);
 	clip_reg.computeMateClipReg();
 
-	//cout << "\t[" << time.getTime() << "]: process clip regions " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
+//	cout << "\t[" << time.getTime() << "]: process clip regions " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 	//processClipRegs(work_id, *clip_processed_flag_vec, clip_reg.mate_clip_reg, reg, mateClipRegVector, clipRegVector, *var_cand_clipReg_vec, *blockVector, paras, p_mutex_mate_clip_reg, p_mate_clip_reg_fail_num);
 	processClipRegs(work_id, clip_reg.mate_clip_reg, reg, mateClipRegVector, clipRegVector, *var_cand_clipReg_vec, blockVector, paras, p_mutex_mate_clip_reg);
 
@@ -4405,6 +4467,7 @@ void processClipRegs(int32_t work_id, mateClipReg_t &mate_clip_reg, reg_t *clip_
 			reg->aln_seg_end_flag = false;
 			reg->query_pos_invalid_flag = false;
 			reg->large_indel_flag = clip_reg->large_indel_flag;
+			reg->merge_flag = clip_reg->merge_flag;
 			reg->gt_type = -1;
 			reg->gt_seq = "";
 			reg->AF = 0;
@@ -4743,6 +4806,10 @@ vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, in
 		end_ref_pos = getEndRefPosAlnSeg(startRpos, op, tmp_cigar_len);
 		overlap_flag = isOverlappedPos(startRpos, end_ref_pos, startRefPos_paras, endRefPos_paras);
 
+//		if(startRpos>=1248050){
+//			cout << "startRpos=" << startRpos << endl;
+//		}
+
 		switch(op){
 			case BAM_CMATCH:
 				common_len = -1;
@@ -4970,8 +5037,8 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, Base* BaseArr, int64_t s
 vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, Base* BaseArr, int64_t startRefPos_paras, int64_t endRefPos_paras){
 	vector<struct alnSeg*> alnSegs;
 	uint32_t *c, op, i = 0,startRpos, startQpos;
-	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx;
-	char queBase, ref;
+	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx, tmp_sig_size;
+	char queBase, refBase;
 	string ins_str, diff, del;
 	bool overlap_flag;
 	int64_t end_ref_pos;
@@ -4996,8 +5063,8 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, Base* BaseArr, int64_t 
 					for(k=0; k<tmp_cigar_len; k++){
 						if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras){
 							queBase = "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
-							ref = BaseArr[startRpos+k-startRefPos_paras].coverage.refBase;
-							if(isBaseMatch(queBase,ref)==false){
+							refBase = BaseArr[startRpos+k-startRefPos_paras].coverage.refBase;
+							if(isBaseMatch(queBase,refBase)==false){
 								if(startRpos+k>startRefPos_paras){
 									if(mis_idx==-1) {
 										//startmatch_idx = 0;
@@ -5059,8 +5126,21 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, Base* BaseArr, int64_t 
 				if(overlap_flag){
 					// add alnSeg item
 					del = "";
-					for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];//something wrong?
-					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
+					//for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos+k-1)];
+//					dist1 = dist2 = 0;
+//					if(startRpos<startRefPos_paras) dist1 = startRefPos_paras - startRpos;
+//					if(startRpos+tmp_cigar_len-1>endRefPos_paras) dist2 = startRpos + tmp_cigar_len - 1 - endRefPos_paras;
+					//del = refseq.substr(startRpos-startRefPos_paras+dist1, tmp_cigar_len-dist1-dist2);
+					tmp_sig_size = 0;
+					for(k=0; k<tmp_cigar_len; k++){
+						if(startRpos+k>=startRefPos_paras and startRpos+k<=endRefPos_paras){
+							refBase = BaseArr[startRpos+k-startRefPos_paras].coverage.refBase;
+							del += refBase;
+							tmp_sig_size ++;
+						}
+					}
+					//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
+					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_sig_size, BAM_CDEL, del));
 				}
 				startRpos += tmp_cigar_len;
 				op = bam_cigar_op(c[++i]);
@@ -5232,12 +5312,12 @@ vector<struct alnSeg*> generateAlnSegs_no_MD(bam1_t* b, string &refseq, int64_t 
 
 vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t startRefPos_paras, int64_t endRefPos_paras){
 	vector<struct alnSeg*> alnSegs;
-	uint32_t *c, op, i,startRpos, startQpos;
-	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx;
+	uint32_t *c, op, i;
+	int32_t k, tmp_cigar_len, mis_idx, startmatch_idx, endmatch_idx, dist1, dist2;
 	char queBase, ref;
 	string ins_str, diff, del;
 	bool overlap_flag;
-	int64_t end_ref_pos, leftHardClipSize;
+	int64_t startRpos, startQpos, end_ref_pos, leftHardClipSize;
 	uint8_t *seq_int;
 
 	startRpos = b->core.pos + 1;  // 1-based
@@ -5324,9 +5404,13 @@ vector<struct alnSeg*> generateAlnSegs_no_MD2(bam1_t* b, string &refseq, int64_t
 			case BAM_CDEL:
 				if(overlap_flag){
 					// add alnSeg item
-					del = "";
-					for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos-leftHardClipSize+k-1)];//something wrong?
-					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, BAM_CDEL, del));
+					//del = "";
+					//for(k=0; k<tmp_cigar_len; k++) del += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos-leftHardClipSize+k-1)];
+					dist1 = dist2 = 0;
+					if(startRpos<startRefPos_paras) dist1 = startRefPos_paras - startRpos;
+					if(startRpos+tmp_cigar_len-1>endRefPos_paras) dist2 = startRpos + tmp_cigar_len - 1 - endRefPos_paras;
+					del = refseq.substr(startRpos-startRefPos_paras+dist1, tmp_cigar_len-dist1-dist2);
+					alnSegs.push_back(allocateAlnSeg(startRpos+dist1, startQpos, tmp_cigar_len-dist1-dist2, BAM_CDEL, del));
 				}
 
 				startRpos += tmp_cigar_len;
@@ -5712,39 +5796,41 @@ int32_t getBamType(vector<clipAlnData_t*> &clipAlnDataVector){
 int32_t getBamTypeSingleItem(bam1_t *b){
 	uint32_t *c, op,i;
 	uint8_t *flag;
-	flag = bam_aux_get(b,"MD");
-	if ( flag ){
-		for(i=0; i<b->core.n_cigar; i++){
-			c = bam_get_cigar(b);  // CIGAR
-			op = bam_cigar_op(c[i]);
-			if(op == BAM_CMATCH){
-				//cout<<"there are MD flag and CMATCH in the bam file"<<endl;
-				return BAM_CIGAR_NO_DIFF_MD;
+	if(b){
+		flag = bam_aux_get(b,"MD");
+		if ( flag ){
+			for(i=0; i<b->core.n_cigar; i++){
+				c = bam_get_cigar(b);  // CIGAR
+				op = bam_cigar_op(c[i]);
+				if(op == BAM_CMATCH){
+					//cout<<"there are MD flag and CMATCH in the bam file"<<endl;
+					return BAM_CIGAR_NO_DIFF_MD;
+				}
 			}
-		}
-		for(i=0; i<b->core.n_cigar; i++){
-			c = bam_get_cigar(b);  // CIGAR
-			op = bam_cigar_op(c[i]);
-			if(op == BAM_CEQUAL || op == BAM_CDIFF){
-				//cout<<"there are MD flag and CDIFF in the bam file"<<endl;
-				return BAM_CIGAR_DIFF_MD;
+			for(i=0; i<b->core.n_cigar; i++){
+				c = bam_get_cigar(b);  // CIGAR
+				op = bam_cigar_op(c[i]);
+				if(op == BAM_CEQUAL || op == BAM_CDIFF){
+					//cout<<"there are MD flag and CDIFF in the bam file"<<endl;
+					return BAM_CIGAR_DIFF_MD;
+				}
 			}
-		}
-	}else {
-		for(i=0; i<b->core.n_cigar; i++){
-			c = bam_get_cigar(b);  // CIGAR
-			op = bam_cigar_op(c[i]);
-			if(op == BAM_CMATCH){
-				//cout<<"there is no MD flag but having CMATCH in the bam file"<<endl;
-				return BAM_CIGAR_NO_DIFF_NO_MD;
+		}else {
+			for(i=0; i<b->core.n_cigar; i++){
+				c = bam_get_cigar(b);  // CIGAR
+				op = bam_cigar_op(c[i]);
+				if(op == BAM_CMATCH){
+					//cout<<"there is no MD flag but having CMATCH in the bam file"<<endl;
+					return BAM_CIGAR_NO_DIFF_NO_MD;
+				}
 			}
-		}
-		for(i=0; i<b->core.n_cigar; i++){
-			c = bam_get_cigar(b);  // CIGAR
-			op = bam_cigar_op(c[i]);
-			if(op == BAM_CEQUAL || op == BAM_CDIFF){
-				//cout<<"there is no MD flag but having CDIFF in the bam file"<<endl;
-				return BAM_CIGAR_DIFF_NO_MD;
+			for(i=0; i<b->core.n_cigar; i++){
+				c = bam_get_cigar(b);  // CIGAR
+				op = bam_cigar_op(c[i]);
+				if(op == BAM_CEQUAL || op == BAM_CDIFF){
+					//cout<<"there is no MD flag but having CDIFF in the bam file"<<endl;
+					return BAM_CIGAR_DIFF_NO_MD;
+				}
 			}
 		}
 	}
@@ -5995,7 +6081,7 @@ int32_t getOriginalQueryLen(bam1_t *b){
 	op1 = bam_cigar_op(c[0]);
 	if(op1==BAM_CSOFT_CLIP or op1==BAM_CHARD_CLIP) left_clip_size = bam_cigar_oplen(c[0]);
 	else left_clip_size = 0;
-	// left clip
+	// right clip
 	op2 = bam_cigar_op(c[b->core.n_cigar-1]);
 	if(op2==BAM_CSOFT_CLIP or op2==BAM_CHARD_CLIP) right_clip_size = bam_cigar_oplen(c[b->core.n_cigar-1]);
 	else right_clip_size = 0;
@@ -6090,6 +6176,8 @@ int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len){
 			end_query_pos = startQpos;
 			break;
 		case BAM_CSOFT_CLIP:
+			end_query_pos = startQpos + op_len - 1; // update on 2025-07-31
+			break;
 		case BAM_CHARD_CLIP:
 			end_query_pos = startQpos;
 			break;
@@ -6111,13 +6199,13 @@ int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len){
 
 bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double consist_ratio_match_thres, faidx_t *fai){
 	bool match_flag = false;
-	double size_ratio, identity_val, min_val;
+	double size_ratio, seqsim_val, min_val;
 	int64_t ref_distance, end_ref_pos, end_ref_pos_seed;
 	vector<string> comp_seqs;
 
 	if(qc_sig and seed_qc_sig){
 		if(qc_sig->chrname.compare(seed_qc_sig->chrname)==0){
-		 // same cigar_op, ratio of signature size less than 0.7, and sequence identity >=0.8
+		 // same cigar_op, ratio of signature size less than 0.7, and sequence seqsim >=0.8
 			if(qc_sig->cigar_op==seed_qc_sig->cigar_op){
 				if(qc_sig->cigar_op_len>0 and seed_qc_sig->cigar_op_len>0) {
 					if(qc_sig->cigar_op_len <= seed_qc_sig->cigar_op_len) size_ratio = (double)qc_sig->cigar_op_len / seed_qc_sig->cigar_op_len;
@@ -6132,18 +6220,18 @@ bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_ma
 						}
 
 						if(qc_sig->cigar_op==BAM_CINS){
-							if(qc_sig->altseq.size()>0 and seed_qc_sig->altseq.size()>0 and ref_distance < MAX_REF_DIST_IDENTITY){
+							if(qc_sig->altseq.size()>0 and seed_qc_sig->altseq.size()>0 and ref_distance < MAX_REF_DIST_SEQSIM){
 								min_val = min(qc_sig->cigar_op_len, seed_qc_sig->cigar_op_len);
 								 if(ref_distance>0 and min_val/ref_distance > 1-consist_ratio_match_thres){
 									// get sequences
 									comp_seqs = extractQcSigCompSeqs(qc_sig, seed_qc_sig, fai);
-									identity_val = computeVarseqIdentity(comp_seqs.at(0), comp_seqs.at(1));
+									seqsim_val = computeVarseqSim(comp_seqs.at(0), comp_seqs.at(1));
 								}else
-									identity_val = computeVarseqIdentity(qc_sig->altseq, seed_qc_sig->altseq);
+									seqsim_val = computeVarseqSim(qc_sig->altseq, seed_qc_sig->altseq);
 #if POA_ALIGN_DEBUG
-								cout << "identity_val=" << identity_val << ", cigar_op_len1=" << qc_sig->cigar_op_len << ", cigar_op_len2=" << seed_qc_sig->cigar_op_len << ", qc_sig.altseq=" << qc_sig->altseq << ", seed_qc_sig.altseq=" << seed_qc_sig->altseq << endl;
+								cout << "seqsim_val=" << seqsim_val << ", cigar_op_len1=" << qc_sig->cigar_op_len << ", cigar_op_len2=" << seed_qc_sig->cigar_op_len << ", qc_sig.altseq=" << qc_sig->altseq << ", seed_qc_sig.altseq=" << seed_qc_sig->altseq << endl;
 #endif
-								if(ref_distance<max_ref_dist_match and identity_val>=consist_ratio_match_thres){
+								if(ref_distance<max_ref_dist_match and seqsim_val>=consist_ratio_match_thres){
 									match_flag = true;
 								}
 							}else{
@@ -6195,12 +6283,6 @@ vector<qcSig_t*> extractQcSigsFromAlnSegsSingleQuery(struct querySeqInfoNode *qu
 	qcSig_t *qc_sig;
 	vector<struct alnSeg*>::iterator seg;
 
-	//int64_t startSpanPos_extend, endSpanPos_extend;
-
-	//startSpanPos_extend = startSpanPos - 10;
-	//endSpanPos_extend = endSpanPos + 10;
-
-	//bool corrupt = false;
 	for(seg=query_seq_info_node->query_alnSegs.begin(); seg!=query_seq_info_node->query_alnSegs.end(); seg++){
 		switch((*seg)->opflag){
 			case BAM_CINS:  // insertion in query
@@ -6241,16 +6323,9 @@ vector<qcSig_t*> extractQcSigsFromAlnSegsSingleQuery(struct querySeqInfoNode *qu
 				break;
 			default:
 				cerr << __func__ << ", line=" << __LINE__ << ": invalid opflag " << (*seg)->opflag << endl;
-//				cerr <<"op_len:" << (*seg)->seglen << endl;
-//				cerr <<"startRpos:" << (*seg)->startRpos << endl;
-//				cerr <<"qname:"<<query_seq_info_node->qname<<endl;
-//				corrupt = true;
 				exit(1);
 				break;
 		}
-//		if(corrupt){
-//			break;
-//		}
 	}
 
 	return sig_vec;
@@ -6261,7 +6336,7 @@ qcSig_t *allocateQcSigNode(struct alnSeg *aln_seg){
 	qcSig_t *qc_sig = new qcSig_t();
 	qc_sig->cigar_op = aln_seg->opflag;
 	qc_sig->cigar_op_len = aln_seg->seglen;
-	qc_sig->reg_contain_flag = false;
+	qc_sig->reg_contain_flag = qc_sig->have_next_clip = qc_sig->merge_flag = false;
 	qc_sig->ref_pos = aln_seg->startRpos;
 	qc_sig->query_pos = aln_seg->startQpos;
 	qc_sig->sig_id = -1;
@@ -6373,7 +6448,7 @@ struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNod
 		seq = q_node->seq;
 		qname = q_node->qname;
 
-//		if(qname.compare("SRR8858470.1.31242")==0){
+//		if(qname.compare("SRR11292123.1383556")==0){
 //			cout << "i=" << i << ", qname=" << qname << endl;
 //		}
 
@@ -6387,16 +6462,14 @@ struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNod
 					query_startQpos += aln_seg->seglen;
 					break;
 				case BAM_CINS:
-					if(aln_seg->seglen<min_sv_size){
-						seq.erase(query_startQpos - 1, aln_seg->seglen);
-					}else{
-						query_startQpos += aln_seg->seglen;
-					}
+					if(aln_seg->seglen<min_sv_size) seq.erase(query_startQpos - 1, aln_seg->seglen);
+					else query_startQpos += aln_seg->seglen;
 					break;
 				case BAM_CDEL:
 					if(aln_seg->seglen<min_sv_size){
-						delete_seq = refseq.substr(aln_seg->startRpos - startRefPos_cns, aln_seg->seglen);
-						seq.insert(query_startQpos - 1, delete_seq);
+						//delete_seq = refseq.substr(aln_seg->startRpos - startRefPos_cns, aln_seg->seglen);
+						//seq.insert(query_startQpos - 1, delete_seq);
+						seq.insert(query_startQpos - 1, aln_seg->seg_MD);
 						query_startQpos += aln_seg->seglen;
 					}
 					break;
@@ -6426,6 +6499,634 @@ struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNod
 	}
 	return smmothed_seqs_info;
 }
+
+vector<vector<string>> getClusterInfo(string &clusterfilename){
+	vector<vector<string>> qnames_vec;
+	string line;
+	vector<string> str_vec, qname_vec;
+	ifstream infile(clusterfilename);
+
+	if(infile.is_open()==false){
+		cerr << "In " << __func__ << "(), cannot open file '" << clusterfilename << "', error!" << endl;
+		exit(1);
+	}
+
+	while(getline(infile, line)){
+		if(line.size()>0 and line.at(0)!='#'){
+			str_vec = split(line, "\t");
+			qname_vec = split(str_vec.at(2), ";");
+			qnames_vec.push_back(qname_vec);
+		}
+	}
+	infile.close();
+
+	return qnames_vec;
+}
+
+// void computeRefSpanForIter(bam1_t *b, int64_t &startpos, int64_t &endpos){
+// 	int64_t current_read_end_pos;	
+
+// 	startpos = -1;
+// 	endpos = -1;
+
+// 	// compute position
+// 	current_read_end_pos = bam_endpos(b);
+// 	if(startpos == -1 or b->core.pos < startpos) 
+// 		startpos = b->core.pos;
+// 	if(endpos == -1 || current_read_end_pos > endpos)
+// 		endpos = current_read_end_pos;
+
+// 	// cout << startpos << "-" << endpos << endl;
+// }
+
+double computeSigDensityFromAlnData(bam1_t *b, faidx_t *fai, bam_hdr_t *header, int64_t startRpos, int64_t endRpos){
+	string refseq, reg_str;
+	char *seq;
+	int64_t chrlen_tmp;
+	int32_t bam_type, seq_len;
+	double sig_density = 0;
+	vector<struct alnSeg*> alnSegs;
+	int32_t sig_num = 0;
+	int32_t ref_start, ref_end, ref_span;
+
+	char* chrname = header->target_name[b->core.tid];
+	chrlen_tmp = faidx_seq_len(fai, chrname); // get the reference length
+	if(chrlen_tmp!=-1){
+		if(startRpos<1) startRpos = 1;
+		if(endRpos>chrlen_tmp) endRpos = chrlen_tmp;
+
+		reg_str = string(chrname) + ":" + to_string(startRpos) + "-" + to_string(endRpos);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
+		refseq = seq;
+		free(seq);
+
+		bam_type = getBamTypeSingleItem(b);
+		if(bam_type==BAM_INVALID){
+			cerr << __func__ << ": unknown bam type, error!" << endl;
+			exit(1);
+		}
+		// cout << startRpos << "-" << endRpos << ":" << refseq.size() << endl;
+
+		if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+			switch(bam_type){
+				//MD_tag
+				case BAM_CIGAR_NO_DIFF_MD:
+					//alnSegs = generateAlnSegs(b);
+					alnSegs = generateAlnSegs2(b, startRpos, endRpos);
+					break;
+				case BAM_CIGAR_NO_DIFF_NO_MD:
+				case BAM_CIGAR_DIFF_MD:
+				case BAM_CIGAR_DIFF_NO_MD:
+					alnSegs = generateAlnSegs_no_MD2(b, refseq, startRpos, endRpos);
+					break;
+				default:
+					cerr << __func__ << ": unknown bam type, error!" << endl;
+					exit(1);
+			}// generate align segments
+			for(size_t i = 0; i<alnSegs.size(); i++){
+				switch(alnSegs[i]->opflag){
+					case BAM_CINS:
+					case BAM_CDEL:
+					case BAM_CDIFF:
+						sig_num ++;
+				}
+			}
+
+			// sig_density = (double)sig_num/b->core.n_cigar;
+			ref_start = b->core.pos; // left, 0-based
+			ref_end = bam_endpos(b); // right, 0-based
+			ref_span = ref_end - ref_start;
+			// sig_density = 1000*(double)sig_num/b->core.l_qseq;
+			sig_density = 1000*(double)sig_num/ref_span;
+
+			// string qname = bam_get_qname(b);
+			// cout << ref_start << "-" << ref_end << " " << qname << ":sig_num="<< sig_num << ", ref_span=" << ref_span << ", sig_density=" << sig_density << endl;
+
+			destroyAlnSegs(alnSegs);
+		}
+	}
+
+	return sig_density;
+}
+
+// remove neighboring false signatures
+void rmNeighborFalseSig(vector<qcSig_t*> &sig_vec, int64_t max_ref_dist, double min_size_ratio){
+	size_t i;
+	qcSig_t *sig1, *sig2;
+	double len_ratio;
+	int64_t dist;
+	bool flag;
+
+	for(i=1; i<sig_vec.size(); ){
+		sig1 = sig_vec.at(i-1);
+		sig2 = sig_vec.at(i);
+		flag = false;
+		dist = sig2->ref_pos - sig1->ref_pos;
+		if(dist<max_ref_dist and ((sig1->cigar_op==BAM_CINS and sig2->cigar_op==BAM_CDEL) or (sig1->cigar_op==BAM_CDEL and sig2->cigar_op==BAM_CINS))){
+			if(sig1->cigar_op_len<sig2->cigar_op_len) len_ratio = (double)sig1->cigar_op_len / sig2->cigar_op_len;
+			else len_ratio = (double)sig2->cigar_op_len / sig1->cigar_op_len;
+			if(len_ratio>=min_size_ratio){
+				sig_vec.erase(sig_vec.begin()+i);
+				sig_vec.erase(sig_vec.begin()+i-1);
+				flag = true;
+			}
+		}
+		if(flag==false) i++;
+	}
+}
+
+// merge neighbouring signatures for indels
+bool mergeNeighbouringSigsFlag(struct querySeqInfoNode* query_seq_info_node, vector<qcSig_t*> &sig_vec, int32_t min_ref_dist_thres, int32_t max_ref_dist_thres, double min_merge_seqsim_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai){
+	size_t i, j;
+	int32_t dist, query_opflag, seq_len;
+	int64_t l, query1_startRpos, query1_endRpos, query1_svlen, query1_startQpos, query1_endQpos, query2_startRpos, query2_svlen, query2_startQpos, query2_endQpos, start_querypos_comp, end_querypos_comp, start_refpos_comp, end_refpos_comp, start_querypos_merged, end_querypos_merged, query2_endRpos;
+	int64_t pre_distance;
+	uint8_t *seq_int;
+	string comp_refseq, comp_queryseq, reg_str, merging_seq;
+	double sim_val;
+	qcSig_t *sig1, *sig2;
+	char *seq;
+	bool flag;
+
+	dist = -1;
+	flag = false;
+	// if(query_seq_info_node->qname.compare("SRR11008518.1.11068758")==0)
+		// cout << "--------------qname=" << query_seq_info_node->qname << "--------------" << endl;
+	if(query_seq_info_node->clip_aln and query_seq_info_node->clip_aln->bam){
+		seq_int = bam_get_seq(query_seq_info_node->clip_aln->bam);
+		for(i=0; i<sig_vec.size(); i++){
+			sig1 = sig_vec.at(i);
+			// skip normal signature
+			if(sig1->cigar_op!=BAM_CINS and sig1->cigar_op!=BAM_CDEL) continue;
+
+			query_opflag = sig1->cigar_op;
+			// pre_refpos_comp = -1;
+			pre_distance = -1;
+
+			query1_startRpos = sig1->ref_pos;
+			query1_svlen = sig1->cigar_op_len;
+			query1_endRpos = getEndRefPosAlnSeg(query1_startRpos, query_opflag, query1_svlen);
+			query1_startQpos = sig1->query_pos;
+			query1_endQpos = getEndQueryPosAlnSeg(query1_startQpos, query_opflag, query1_svlen);
+
+			for(j=i+1; j<sig_vec.size(); j++){
+				sig2 = sig_vec.at(j);
+				// skip normal signature
+				if(sig2->cigar_op!=BAM_CINS and sig2->cigar_op!=BAM_CDEL) continue;
+				merging_seq = "";
+				// compute distance
+				query2_startRpos = sig2->ref_pos;
+				// if(pre_refpos_comp < 0) distance = query2_startRpos - query1_endRpos; // -1;
+				// else distance = query2_startRpos - pre_refpos_comp; // -1;
+				dist = query2_startRpos - query1_endRpos;
+
+				if(dist > max_ref_dist_thres) break;
+				if(query_opflag == sig2->cigar_op and dist <= max_ref_dist_thres){
+					query2_svlen = sig2->cigar_op_len;
+					query2_startQpos = sig2->query_pos;
+					query2_endQpos = getEndQueryPosAlnSeg(query2_startQpos, sig2->cigar_op, query2_svlen);
+					query2_endRpos = getEndRefPosAlnSeg(query2_startRpos, sig2->cigar_op, query2_svlen);
+					if(query_opflag==BAM_CDEL){ // DEL
+						// get compared query pos
+						// start_querypos_comp = query1_endQpos;	// deleted on 2025-01-03
+						// end_querypos_comp = query2_startQpos - 1;	// deleted on 2025-01-03
+						start_querypos_comp = query2_startQpos - dist;
+						end_querypos_comp = query2_startQpos - 1;
+						// get compared query seq
+						comp_queryseq = "";
+						for(l=start_querypos_comp-1; l<end_querypos_comp; l++) comp_queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];  // seq
+
+						// get compared ref pos
+						// start_refpos_comp = query1_endRpos + query2_svlen;	// deleted on 2025-01-03
+						// end_refpos_comp = start_refpos_comp + distance;	// deleted on 2025-01-03
+						start_refpos_comp = query2_endRpos - dist;
+						end_refpos_comp = query2_endRpos - 1;
+
+						// get compared ref seq
+						reg_str = query_seq_info_node->clip_aln->chrname + ":" + to_string(start_refpos_comp) + "-" + to_string(end_refpos_comp);
+						pthread_mutex_lock(&mutex_fai);
+						seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+						pthread_mutex_unlock(&mutex_fai);
+						comp_refseq = seq;
+						free(seq);
+
+						// cout << "sig1_op_len=" << sig1->cigar_op_len << "_" << sig1->cigar_op << ", sig2_op_len=" << sig2->cigar_op_len << "_" << sig2->cigar_op << ", distance=" << distance << endl;
+						// cout << "comp_queryseq=" << comp_queryseq << ", comp_refseq=" << comp_refseq << endl;
+						sim_val = computeVarseqSim(comp_queryseq, comp_refseq);
+						// cout << "sim_val=" << sim_val << endl;
+
+						if(pre_distance>0) min_ref_dist_thres += pre_distance;
+						// cout << "min_ref_dist_thres=" << min_ref_dist_thres << endl;
+
+						if(((double)dist/(sig1->cigar_op_len+sig2->cigar_op_len+dist)<min_valid_sig_size_ratio_thres and dist<min_ref_dist_thres) or sim_val>=min_merge_seqsim_thres){
+							flag = true;
+							sig1->cigar_op_len += query2_svlen;
+							sig1->merge_flag = true;
+
+							query1_startRpos = sig1->ref_pos;
+							query1_svlen = sig1->cigar_op_len;
+							query1_endRpos = getEndRefPosAlnSeg(query1_startRpos, query_opflag, query1_svlen);
+
+							sig1->altseq += sig2->altseq;
+							// pre_refpos_comp = query2_endRpos;
+							pre_distance = dist;
+							delete sig2;
+							sig_vec.erase(sig_vec.begin()+j);
+							j--;
+						}else
+							break;
+					}else if(query_opflag==BAM_CINS){ // INS
+						// get compared query pos
+						start_querypos_comp = query2_endQpos - dist;
+						end_querypos_comp = query2_endQpos;
+						// get compared query seq
+						comp_queryseq = "";
+						for(l=start_querypos_comp; l<end_querypos_comp; l++) comp_queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];  // seq
+
+						// get compared ref pos
+						start_refpos_comp = query2_startRpos - dist;
+						end_refpos_comp = query2_startRpos - 1;
+						// get compared ref seq
+						reg_str = query_seq_info_node->clip_aln->chrname + ":" + to_string(start_refpos_comp) + "-" + to_string(end_refpos_comp);
+						pthread_mutex_lock(&mutex_fai);
+						seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+						pthread_mutex_unlock(&mutex_fai);
+						comp_refseq = seq;
+						free(seq);
+
+						// cout << "sig1_op_len=" << sig1->cigar_op_len << "_" << sig1->cigar_op << ", sig2_op_len=" << sig2->cigar_op_len << "_" << sig2->cigar_op << ", distance=" << distance << endl;
+						// cout << "comp_queryseq=" << comp_queryseq << ", comp_refseq=" << comp_refseq << endl;
+						sim_val = computeVarseqSim(comp_queryseq, comp_refseq);
+						// cout << "sim_val=" << sim_val << endl;
+
+						if(pre_distance>0)	min_ref_dist_thres += pre_distance;
+						// cout << "min_ref_dist_thres=" << min_ref_dist_thres << endl;
+
+						if(((double)dist/(sig1->cigar_op_len+sig2->cigar_op_len+dist)<min_valid_sig_size_ratio_thres and dist < min_ref_dist_thres) or sim_val >= min_merge_seqsim_thres){
+
+							query1_startQpos = sig1->query_pos;
+							query1_endQpos = getEndQueryPosAlnSeg(query1_startQpos, query_opflag, query1_svlen);
+
+							// get altseq after merge
+							start_querypos_merged = query1_endQpos;
+							end_querypos_merged = query1_endQpos + query2_svlen;
+							for(l=start_querypos_merged-1; l<end_querypos_merged; l++) merging_seq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];
+							sig1->altseq += merging_seq;
+							sig1->merge_flag = true;
+
+							sig1->cigar_op_len += query2_svlen;
+							query1_svlen = sig1->cigar_op_len;
+
+							pre_distance = dist;
+							delete sig2;
+							sig_vec.erase(sig_vec.begin()+j);
+							j--;
+							flag = true;
+						}else
+							break;
+					}
+				}else
+					break;
+			}
+		}
+		// if(sig_vec.size()>0 and flag){
+		// 	cout << "~~~~~~~~~~~~" << endl;
+		// 	for (i=0; i<sig_vec.size(); i++){
+		// 		// get reads seq based on position
+		// 		start_querypos_comp = sig_vec.at(i)->query_pos;
+		// 		end_querypos_comp = getEndQueryPosAlnSeg(start_querypos_comp, sig_vec.at(i)->cigar_op, sig_vec.at(i)->cigar_op_len);
+		// 		// get compared query seq
+		// 		comp_queryseq = "";
+		// 		for(l=start_querypos_comp-1; l<end_querypos_comp; l++) comp_queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];  // seq
+		// 		sim_val = computeVarseqSim(comp_queryseq, sig_vec.at(i)->altseq);
+		// 		cout << "sim_val=" << sim_val << ", comp_queryseq=" << comp_queryseq << ", sig_vec.at("<< i << ")->altseq=" << sig_vec.at(i)->altseq << endl;
+		// 	}
+		// }
+		sig_vec.shrink_to_fit();
+	}
+	// if(flag)
+	// 	cout << "merge_flag=" << flag << " sig_vec.size()=" << sig_vec.size() << endl;
+	return flag;
+}
+
+// filter small signatures (l/max_size<0.2)
+void filterSmallSigs(vector<qcSig_t *> &qcSig_vec, double valid_size_ratio_thres){
+	size_t i;
+	int32_t max_size_ins, max_size_del;
+	qcSig_t *sig;
+	bool valid_flag;
+
+	max_size_ins = max_size_del = 0;
+	for(i=0; i<qcSig_vec.size(); i++){
+		sig = qcSig_vec.at(i);
+		if(sig->cigar_op==BAM_CINS and max_size_ins<sig->cigar_op_len) max_size_ins = sig->cigar_op_len;
+		else if(sig->cigar_op==BAM_CDEL and max_size_del<sig->cigar_op_len) max_size_del = sig->cigar_op_len;
+	}
+
+	if(max_size_ins>0 or max_size_del>0){
+		for(i=0; i<qcSig_vec.size(); ){
+			sig = qcSig_vec.at(i);
+			valid_flag = true;
+			if(sig->cigar_op==BAM_CINS and (double)sig->cigar_op_len/max_size_ins<valid_size_ratio_thres) valid_flag = false;
+			else if(sig->cigar_op==BAM_CDEL and (double)sig->cigar_op_len/max_size_del<valid_size_ratio_thres) valid_flag = false;
+			if(valid_flag==false){
+				delete sig;
+				qcSig_vec.erase(qcSig_vec.begin()+i);
+			}else i++;
+		}
+	}
+}
+
+// compute the sum of insertions and deletions in the
+void computeVarSums(struct querySeqInfoNode* &query_seq_info_node, int64_t start_var_pos, int64_t end_var_pos){
+	size_t i;
+	int64_t ins_sum, del_sum, end_ref_pos;
+	qcSig_t *sig;
+	bool flag;
+
+	ins_sum = del_sum = 0;
+	for(i=0; i<query_seq_info_node->qcSig_vec.size(); i++){
+		sig = query_seq_info_node->qcSig_vec.at(i);
+		end_ref_pos = getEndRefPosAlnSeg(sig->ref_pos, sig->cigar_op, sig->cigar_op_len);
+		flag = isOverlappedPos(sig->ref_pos, end_ref_pos, start_var_pos, end_var_pos);
+		if(flag){
+			if(sig->cigar_op==BAM_CINS) ins_sum += sig->cigar_op_len;
+			else if(sig->cigar_op==BAM_CDEL) del_sum += sig->cigar_op_len;
+		}
+	}
+	query_seq_info_node->ins_sum = ins_sum;
+	query_seq_info_node->del_sum = del_sum;
+}
+
+
+bool desc_cmp_size_vec(const pair<int32_t, vector<int32_t>> &a, const pair<int32_t, vector<int32_t>> &b){
+	bool flag;
+	if(a.second.size()>b.second.size()) flag = true;
+	else if(a.second.size()<b.second.size()) flag = false;
+	else{ // equal
+		if(abs(a.first)>abs(b.first)) flag = true;
+		else flag = false;
+	}
+	return flag;
+}
+
+// sort match vector descendingly
+void sortMRVec(vector<mrmin_match_t *> &match_vec){
+	bool flag;
+	size_t i, j;
+	mrmin_match_t *mrmin_match_node;
+
+	//sort descendingly
+	for(i=0; i<match_vec.size(); i++){
+		for(j=i+1; j<match_vec.size(); j++){
+			flag = false;
+			if(match_vec.at(i)->num<match_vec.at(j)->num) flag = true;
+			else if(match_vec.at(i)->num==match_vec.at(j)->num and match_vec.at(i)->MR<match_vec.at(j)->MR) flag = true;
+			if(flag){
+				mrmin_match_node = match_vec.at(i);
+				match_vec.at(i) = match_vec.at(j);
+				match_vec.at(j) = mrmin_match_node;
+			}
+		}
+	}
+}
+
+// sort match vector descendingly
+void printMRVec(vector<mrmin_match_t *> &match_vec){
+	size_t i, j;
+	mrmin_match_t *node;
+
+	cout << "match_vec.size=" << match_vec.size() << endl;
+	for(i=0; i<match_vec.size(); i++){
+		node = match_vec.at(i);
+		cout << "[" << i << "]: num=" << node->num << ", MR=" << node->MR << ", MR_re=" << node->MR_recluster << ", pos_id={" << node->pos_id.at(0);
+		for(j=1; j<(size_t)node->num; j++) cout << "," << node->pos_id.at(j);
+		cout << "}" << endl;
+	}
+}
+
+// sort query align segments according to queryPos
+void sortQueryAlnSegs(vector<clipAlnData_t*> &query_aln_segs){
+	size_t i, j, minIdx, minPos, query_pos1, query_pos2;
+	clipAlnData_t *clip_aln1, *clip_aln2,  *tmp;
+
+	for(i=0; i<query_aln_segs.size(); i++){
+		clip_aln1 = query_aln_segs.at(i);
+		if(clip_aln1->aln_orient==ALN_PLUS_ORIENT)
+//			query_pos1 = clip_aln1->startRefPos;
+			query_pos1 = clip_aln1->startQueryPos;
+		else
+//			query_pos1 = clip_aln1->endRefPos;
+			//query_pos1 = clip_aln1->querylen - clip_aln1->endQueryPos + 1;
+			query_pos1 = clip_aln1->endQueryPos;
+
+		minIdx = i;
+		minPos = query_pos1;
+		for(j=i+1; j<query_aln_segs.size(); j++){
+			clip_aln2 = query_aln_segs.at(j);
+			if(clip_aln2->aln_orient==ALN_PLUS_ORIENT)
+//				query_pos2 = clip_aln2->startRefPos;
+				query_pos2 = clip_aln2->startQueryPos;
+			else
+//				query_pos2 = clip_aln2->endRefPos;
+				//query_pos2 = clip_aln2->querylen - clip_aln2->endQueryPos + 1;
+				query_pos2 = clip_aln2->endQueryPos;
+
+			if(query_pos2<minPos){
+				minPos = query_pos2;
+				minIdx = j;
+			}
+		}
+		if(minIdx!=i){
+			tmp = query_aln_segs.at(i);
+			query_aln_segs.at(i) = query_aln_segs.at(minIdx);
+			query_aln_segs.at(minIdx) = tmp;
+		}
+	}
+}
+
+bool isSameChrome(vector<clipAlnData_t*> &query_aln_segs){
+	bool flag = true;
+	string chrname_tmp;
+	clipAlnData_t *clip_aln;
+
+	// same chrome
+	chrname_tmp = query_aln_segs.at(0)->chrname;
+	for(size_t i=1; i<query_aln_segs.size(); i++){
+		clip_aln = query_aln_segs.at(i);
+		if(clip_aln->chrname.compare(chrname_tmp)!=0){
+			flag = false;
+			break;
+		}
+	}
+
+	return flag;
+}
+
+bool isSameOrient(vector<clipAlnData_t*> &query_aln_segs){
+	bool flag = true;
+	for(size_t i=1; i<query_aln_segs.size(); i++){
+		if(query_aln_segs.at(i)->aln_orient!=query_aln_segs.at(i-1)->aln_orient){
+			flag = false;
+			break;
+		}
+	}
+	return flag;
+}
+
+bool isSameAlnReg(vector<clipAlnData_t*> &query_aln_segs, int64_t maxVarRegSize){
+	size_t i;
+	string chrname_tmp;
+	bool same_aln_reg_flag, same_chr_flag, adjacent_flag;
+
+	same_aln_reg_flag = true;
+	if(query_aln_segs.size()>=2){
+		// same chrome
+		same_chr_flag = isSameChrome(query_aln_segs);
+		if(same_chr_flag==false) same_aln_reg_flag = false;
+
+		// same region in the same chrome
+		if(same_aln_reg_flag){
+			//same_orient_flag = isSameOrient(query_aln_segs);
+
+			//if(same_orient_flag){ // same orient
+				for(i=1; i<query_aln_segs.size(); i++){
+					adjacent_flag = isAdjacentClipAlnSeg(query_aln_segs.at(i-1), query_aln_segs.at(i), maxVarRegSize);
+					if(adjacent_flag==false){
+						same_aln_reg_flag = false;
+						break;
+					}
+				}
+//			}else{ // different orient
+//				for(i=1; i<query_aln_segs.size(); i++){
+//					adjacent_flag = isAdjacentClipAlnSeg(query_aln_segs.at(i-1), query_aln_segs.at(i), paras->maxVarRegSize);
+//					if(adjacent_flag==false){
+//						same_aln_reg_flag = false;
+//						break;
+//					}
+//				}
+//			}
+		}
+	}
+
+	// check jump segments
+	if(same_aln_reg_flag and query_aln_segs.size()>=3){
+		for(i=1; i<query_aln_segs.size()-1; i++){
+			if(query_aln_segs.at(i)->endRefPos<query_aln_segs.at(i-1)->startRefPos or query_aln_segs.at(i)->startRefPos>query_aln_segs.at(i+1)->endRefPos){
+				same_aln_reg_flag = false;
+				break;
+			}
+		}
+	}
+
+	return same_aln_reg_flag;
+}
+
+int32_t getOccNumInVecs(vector<clipAlnData_t*> &query_aln_segs, vector<clipPos_t*> &leftClipPosVector, vector<clipPos_t*> &leftClipPosVector2, vector<clipPos_t*> &rightClipPosVector, vector<clipPos_t*> &rightClipPosVector2){
+	int32_t occ_num;
+	size_t i, j;
+	clipAlnData_t *clip_aln;
+	clipPos_t *clip_pos;
+
+	occ_num = 0;
+	for(i=0; i<query_aln_segs.size(); i++){
+		clip_aln = query_aln_segs.at(i);
+		// check leftVec1
+		for(j=0; j<leftClipPosVector.size(); j++){
+			clip_pos = leftClipPosVector.at(j);
+			if(clip_pos->clip_aln and clip_pos->clip_aln==clip_aln) {
+				occ_num ++;
+				break;
+			}
+		}
+		// check leftVec2
+		for(j=0; j<leftClipPosVector2.size(); j++){
+			clip_pos = leftClipPosVector2.at(j);
+			if(clip_pos->clip_aln and clip_pos->clip_aln==clip_aln) {
+				occ_num ++;
+				break;
+			}
+		}
+		// check rightVec1
+		for(j=0; j<rightClipPosVector.size(); j++){
+			clip_pos = rightClipPosVector.at(j);
+			if(clip_pos->clip_aln and clip_pos->clip_aln==clip_aln) {
+				occ_num ++;
+				break;
+			}
+		}
+		// check rightVec2
+		for(j=0; j<rightClipPosVector2.size(); j++){
+			clip_pos = rightClipPosVector2.at(j);
+			if(clip_pos->clip_aln and clip_pos->clip_aln==clip_aln) {
+				occ_num ++;
+				break;
+			}
+		}
+	}
+
+	return occ_num;
+}
+
+bool isAdjacentClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, size_t dist_thres){
+	bool flag = false;
+	if(clip_aln1->chrname.compare(clip_aln2->chrname)==0)
+		flag = isAdjacent(clip_aln1->startRefPos, clip_aln1->endRefPos, clip_aln2->startRefPos, clip_aln2->endRefPos, dist_thres);
+	return flag;
+}
+
+//================================= debug operation =================================
+// debug operation
+void printQcSigIndelCluster(vector<struct querySeqInfoVec*> &query_clu_vec){
+	vector<struct querySeqInfoNode*> query_seq_info_all;
+	size_t i;
+
+	for(i=0; i<query_clu_vec.size(); i++){
+		query_seq_info_all = query_clu_vec.at(i)->query_seq_info_all;
+		cout << "Information for cluster " << i << ", rescue_flag=" << query_clu_vec.at(i)->rescue_flag << endl;
+		printQcSigIndel(query_seq_info_all);
+	}
+}
+
+// debug operation
+void printQcSigIndel(vector<struct querySeqInfoNode*> &query_seq_info_all){
+	size_t i, aver_ins_sum, aver_del_sum, num_ins_sum, num_del_sum;
+	struct querySeqInfoNode *query_seq_info_node;
+
+	aver_ins_sum = aver_del_sum = num_ins_sum = num_del_sum = 0;
+	cout << "Query_size=" << query_seq_info_all.size() << ": " << endl;
+	for(i=0; i<query_seq_info_all.size(); i++){
+		query_seq_info_node = query_seq_info_all.at(i);
+		printQcSigIndelSingleQuery(query_seq_info_node, i);
+		if(query_seq_info_node->ins_sum>0) {
+			aver_ins_sum += query_seq_info_node->ins_sum;
+			num_ins_sum ++;
+		}
+		if(query_seq_info_node->del_sum>0){
+			aver_del_sum += query_seq_info_node->del_sum;
+			num_del_sum ++;
+		}
+	}
+	if(num_ins_sum>0) aver_ins_sum = (double)aver_ins_sum / num_ins_sum;
+	if(num_del_sum>0) aver_del_sum = (double)aver_del_sum / num_del_sum;
+	cout << "aver_ins_sum=" << aver_ins_sum << ", num_ins_sum=" << num_ins_sum << ", aver_del_sum=" << aver_del_sum << ", num_del_sum=" << num_del_sum << endl;
+}
+
+// debug operation
+void printQcSigIndelSingleQuery(struct querySeqInfoNode *query_seq_info_node, int32_t idx){
+	size_t i;
+	qcSig_t *sig;
+
+	cout << "[" << idx << "]: " << query_seq_info_node->qname << ", overlap_sig_num=" << query_seq_info_node->overlap_sig_num << ", entire_flanking=" << query_seq_info_node->entire_flanking_flag << ", ins_sum=" << query_seq_info_node->ins_sum << ", del_sum=" << query_seq_info_node->del_sum << ", aver_sig_size=" << query_seq_info_node->aver_sig_size << ": ";
+	for(i=0; i<query_seq_info_node->qcSig_vec.size(); i++){
+		sig = query_seq_info_node->qcSig_vec.at(i);
+		cout << "\t(" << sig->cigar_op << "," << sig->chrname << "," << sig->ref_pos << "," << sig->cigar_op_len << ")";
+	}
+	cout << endl;
+}
+
 
 
 Time::Time() {

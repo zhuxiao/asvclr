@@ -18,12 +18,14 @@
 #include "meminfo.h"
 #include "genotyping.h"
 #include "clipAlnDataLoader.h"
-#include "identity.h"
+#include "seqsim.h"
 #include "util.h"
 
 using namespace std;
 
 #define ALIGN_DEBUG							0
+#define READS_CALL_DEBUG					0
+#define GT_REFINE_DEBUG						0
 #define BLAT_ALN							1
 
 #define MIN_VALID_BLAT_SEG_SIZE				200  // the minimal valid blat align segment size
@@ -65,6 +67,12 @@ using namespace std;
 
 #define MIN_SPAN_SINGLE_QUERY				2000
 
+#define MIN_RATIO_ALLELE_CALL				(0.1f)
+
+#define ULTRA_SHORT_SV_SIZE_FACTOR			(0.6f)
+
+#define VALID_DUP_INV_SIZE_RATIO_CLIP_REG	(0.3f)
+
 
 class varCand {
 	public:
@@ -74,11 +82,11 @@ class varCand {
 		bool limit_reg_process_flag, limit_reg_delete_flag;
 
 		string refseqfilename, ctgfilename, readsfilename, alnfilename, clusterfilename;
-//		string rescue_refseqfilename, rescue_cnsfilename, rescue_readsfilename, rescue_alnfilename;
-		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, minConReadLen, minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12, min_distance_merge;
-		double max_ultra_high_cov, min_identity_match, min_identity_merge;
+		string rescue_refseqfilename, rescue_cnsfilename, rescue_readsfilename, rescue_alnfilename;
+		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, maxVarRegSize, minConReadLen, minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12, min_distance_merge;
+		double max_ultra_high_cov, min_seqsim_match, min_seqsim_merge, max_seg_size_ratio, max_seg_nm_ratio, max_absig_density;
 		vector<reg_t*> varVec, newVarVec;
-		bool cns_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
+		bool cns_success, align_success, call_success, rescue_flag, clip_reg_flag, killed_flag;  	// default: false
 		vector<blat_aln_t*> blat_aln_vec;               	// blat aligned segments
 		vector<minimap2_aln_t*> minimap2_aln_vec;           // minimap2 aligned segments
 		//vector<clipAlnData_t*> clipAlnDataVector;
@@ -122,7 +130,7 @@ class varCand {
 
 		//genotyping parameter
 		int32_t gt_min_sig_size, gt_min_sup_num_recover; // not used
-		double gt_min_identity_merge, gt_homo_ratio_thres, gt_hete_ratio_thres;
+		double gt_min_seqsim_merge, gt_homo_ratio_thres, gt_hete_ratio_thres;
 		double gt_size_ratio_match; // not used
 
 		//SV position correction
@@ -135,7 +143,7 @@ class varCand {
 		void callVariants02();
 		void setBlatVarcandFile(ofstream *blat_var_cand_file, vector<varCand*> *blat_aligned_info_vec);
 		void resetBlatVarcandFile();
-		void setGtParas(int32_t gt_min_sig_size, double gt_size_ratio_match, double gt_min_identity_merge, double gt_homo_ratio_thres, double gt_hete_ratio_thres, int32_t min_sup_num_recover);
+		void setGtParas(int32_t gt_min_sig_size, double gt_size_ratio_match, double gt_min_seqsim_merge, double gt_homo_ratio_thres, double gt_hete_ratio_thres, int32_t min_sup_num_recover);
 		vector<int32_t> computeDisagreeNumAndHighIndelBaseNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 		void adjustVarLocSlightly();
 		void fillVarseq();
@@ -180,8 +188,8 @@ class varCand {
 		vector<reg_t*> computeIndelFromSplitSegsSingleQuery(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, int32_t query_id_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
 
 		// merge neighbouring indels
-		void mergeNeighbouringVars(vector<reg_t*> &regVector, int32_t min_ref_dist_arbitary_thres, int32_t max_ref_dist_thres, double min_merge_identity_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai, string &contigfilename, string &reffilename);
-		double calculate_merge_identity_threshold(int32_t common_length, int32_t max_common_length, double min_merge_identity_thres);
+		void mergeNeighbouringVars(vector<reg_t*> &regVector, int32_t min_ref_dist_arbitary_thres, int32_t max_ref_dist_thres, double min_merge_seqsim_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai, string &contigfilename, string &reffilename);
+		double calculate_merge_seqsim_threshold(int32_t common_length, int32_t max_common_length, double min_merge_seqsim_thres);
 		int32_t calculate_merge_distance_threshold(int32_t max_ref_dist_thres, int32_t support_num, int32_t sv_len, int32_t comp_sv_size);
 		int32_t calculate_merge_distance_threshold(bool complex_region_flag, int32_t query_supp_num, int32_t query_sv_size, int32_t total_sv_num, double query_sv_support_different);
 		bool ComplexRegionFlag(vector<reg_t*> regVector, int32_t average_support_num_thres, int32_t sv_num_thres, int32_t sv_size_thres);
@@ -193,6 +201,7 @@ class varCand {
 		void svPosCorrection(reg_t* reg);
 		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, vector<clipAlnData_t*> &clipAlnDataVector, string &chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
 		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, int32_t opflag_para, int32_t oplen_para, string &chrname_para, int64_t start_var_pos_para, int64_t end_var_pos_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
+		void updateAlleleFreq(vector<reg_t*> &var_vec);
 		void computeGenotypeIndelReg(vector<reg_t*> &var_vec);
 		void destoryClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void destoryPosCorrectionVec();
@@ -235,13 +244,11 @@ class varCand {
 		vector<double> computeDisagreeNumAndHighIndelBaseNumAndClipNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 
 		// clippings
-		void computeClipRegVarLoc();
-		vector<reg_t*> computeClipRegVarLocOp(string &alnfilename, string &refseqfilename, string &cnsfilename, string &clusterfilename, vector<minimap2_aln_t*> &minimap2_aln_vec, bool rescue_flag);
+		vector<reg_t*> computeClipRegVarLoc(string &alnfilename, string &refseqfilename, string &cnsfilename, string &clusterfilename, vector<minimap2_aln_t*> &minimap2_aln_vec, bool rescue_flag);
 		int32_t computeSuppNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov, vector<string> &target_qname_vec);
-		void computeGenotypeClipReg(vector<reg_t*> &var_vec);
+		vector<reg_t*> computeGenotypeClipReg(vector<reg_t*> &var_vec);
 		vector<reg_t*> rescueDupInvClipReg();
 		vector<reg_t*> rescueLargeIndelClipReg();
-		vector<vector<string>> getClusterInfo(string &clusterfilename);
 		vector<int32_t> getMinimapItemIdVec(vector<string> &queryname_vec, vector<minimap2_aln_t*> &minimap2_aln_vec);
 		vector<int32_t> getLeftRightMinimapItemId(int64_t leftClipRefPos, int64_t rightClipRefPos, vector<int32_t> &minimap2_item_id_vec, vector<minimap2_aln_t*> &minimap2_aln_vec);
 		vector<int32_t> getLeftRightClipAlnId(int64_t leftClipRefPos, int64_t rightClipRefPos, vector<clipAlnData_t*> &query_aln_segs);
@@ -267,6 +274,11 @@ class varCand {
 		void addLocalAlnItemToVec(localAln_t *local_aln, vector<localAln_t*> &local_aln_vec);
 		void destroyLocalAlnVec(vector<localAln_t*> &local_aln_vec);
 		void destroyMinimap2AlnVec(vector<minimap2_aln_t*> &minimap2_aln_vec);
+
+		// call indel from reads
+		vector<reg_t*> callIndelFromReadsIndelReg();
+		vector<reg_t*> callIndelFromReadsClipReg();
+		bool isBothEndsOverlap(vector<clipAlnData_t*> &query_aln_segs, int64_t leftClipRefPos, int64_t rightClipRefPos);
 
 		// genotyping
 		void indelGenotyping();

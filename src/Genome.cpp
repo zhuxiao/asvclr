@@ -36,7 +36,10 @@ void Genome::init(){
 	Chrome *chr;
 	vector<Chrome*> chr_vec_tmp;
 	string chrname_tmp, result_prefix;
+	int64_t chrlen_tmp;
+	bool exist_flag;
 
+	ps_num = 0;
 	out_dir = paras->outDir;
 	if(out_dir.size()>0){
 		//mkdir(out_dir.c_str(), S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
@@ -99,6 +102,22 @@ void Genome::init(){
 	// load the sam/bam header
 	header = loadSamHeader(paras->inBamFile);
 
+	if(header->n_targets!=faidx_nseq(fai))
+		cout << "Warning: the number of sequences in reference is not the same with the number of sequences of BAM header, the same reference is highly recommended for best performance." << endl;
+
+	// confirm chrlen
+	for(int i=0; i<header->n_targets; i++){
+		chrname_tmp = header->target_name[i];
+		exist_flag = faidx_has_seq(fai, chrname_tmp.c_str());
+		if(exist_flag){
+			chrlen_tmp = faidx_seq_len64(fai, chrname_tmp.c_str());
+			if(chrlen_tmp!=header->target_len[i]){
+				cerr << "The sequence length of " << chrname_tmp << " is different between the reference FASTA file and the BAM file, please confirm whether the reference and BAM file are match before running the command." << endl;
+				exit(1);
+			}
+		}
+	}
+
 	// allocate each genome
 	for(int i=0; i<header->n_targets; i++){
 		chrname_tmp = header->target_name[i];
@@ -110,6 +129,21 @@ void Genome::init(){
 
 	// sort chromosomes
 	sortChromes(chromeVector, chr_vec_tmp);
+
+	genomeSetMaxOpenFileNum(chromeVector.size());
+}
+
+// set the current maximum open files if necessary
+void Genome::genomeSetMaxOpenFileNum(size_t chr_num){
+	rlim_t currentLimit = getMaxOpenFileNum();
+	//cout << ">>>>>>>>>>>>>> Current maximum open files: " << currentLimit << endl;
+	if(currentLimit<3*chr_num){
+		if(setMaxOpenFileNum(3*chr_num)==false){
+			cout << ">>>>>>>>>> Failed to set maximum open files" << endl;
+		}
+//		currentLimit = getMaxOpenFileNum();
+//		cout << ">>>>>>>>>>>>>> Current maximum open files: " << currentLimit << endl;
+	}
 }
 
 // save limit regions to file
@@ -292,12 +326,14 @@ void Genome::estimateSVSizeNum(){
 	//paras->total_depth = 0;
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->chrFillDataEst(SIZE_EST_OP);
-		if(paras->reg_sum_size_est>=paras->max_reg_sum_size_est) break;
-
+		if(chr->valid_flag){
+			chr->chrFillDataEst(SIZE_EST_OP);
+			if(paras->reg_sum_size_est>=paras->max_reg_sum_size_est) break;
+		}
 		//paras->total_depth += paras->chr_mean_depth;
 	}
 	//paras->chrome_num = chromeVector.size() - 1;
+
 	// size estimate
 	paras->estimate(SIZE_EST_OP);
 
@@ -305,8 +341,10 @@ void Genome::estimateSVSizeNum(){
 	paras->reg_sum_size_est = 0;
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->chrFillDataEst(NUM_EST_OP);
-		if(paras->reg_sum_size_est>=paras->max_reg_sum_size_est) break;
+		if(chr->valid_flag){
+			chr->chrFillDataEst(NUM_EST_OP);
+			if(paras->reg_sum_size_est>=paras->max_reg_sum_size_est) break;
+		}
 	}
 	// num estimate
 	paras->estimate(NUM_EST_OP);
@@ -315,10 +353,13 @@ void Genome::estimateSVSizeNum(){
 // detect variants for genome
 int Genome::genomeDetect(){
 	Chrome *chr;
+
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if((chr->decoy_flag==false or paras->include_decoy) and (chr->alt_flag==false or paras->include_alt))
+		if((chr->decoy_flag==false or paras->include_decoy) and (chr->alt_flag==false or paras->include_alt) and chr->valid_flag){
+			//cout << chr->chrname << endl;
 			chr->chrDetect();
+		}
 	}
 
 	Time time;
@@ -353,6 +394,7 @@ void Genome::removeRedundantTra(){
 	mateClipReg_t *clip_reg, *clip_reg_ret;
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
+		if(chr->valid_flag==false) continue;
 		for(j=0; j<chr->mateClipRegVector.size(); j++){
 			clip_reg = chr->mateClipRegVector.at(j);
 			if(clip_reg->valid_flag and clip_reg->reg_mated_flag and clip_reg->sv_type==VAR_TRA){
@@ -411,36 +453,40 @@ void Genome::removeInvalidMateClipItem(){
 
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		for(j=0; j<chr->mateClipRegVector.size(); ){
-			clip_reg = chr->mateClipRegVector.at(j);
-			if(clip_reg->valid_flag==false){
-				// cout << "\t";
-				// if(clip_reg->leftClipReg) { cout << ", leftClipReg=" << clip_reg->leftClipReg->chrname << ":" << clip_reg->leftClipReg->startRefPos << "-" << clip_reg->leftClipReg->endRefPos; }
-				// if(clip_reg->leftClipReg2) { cout << ", leftClipReg2=" << clip_reg->leftClipReg2->chrname << ":" << clip_reg->leftClipReg2->startRefPos << "-" << clip_reg->leftClipReg2->endRefPos; }
-				// if(clip_reg->rightClipReg) { cout << ", rightClipReg=" << clip_reg->rightClipReg->chrname << ":" << clip_reg->rightClipReg->startRefPos << "-" << clip_reg->rightClipReg->endRefPos; }
-				// if(clip_reg->rightClipReg2) { cout << ", rightClipReg2=" << clip_reg->rightClipReg2->chrname << ":" << clip_reg->rightClipReg2->startRefPos << "-" << clip_reg->rightClipReg2->endRefPos; }
-				// if(clip_reg->largeIndelClipReg) { cout << ", largeIndelClipReg=" << clip_reg->largeIndelClipReg->chrname << ":" << clip_reg->largeIndelClipReg->startRefPos << "-" << clip_reg->largeIndelClipReg->endRefPos << ", sv_len=" << clip_reg->largeIndelClipReg->sv_len << ", var_type=" << clip_reg->sv_type; }
-				// cout << endl;
+		if(chr->valid_flag){
+			for(j=0; j<chr->mateClipRegVector.size(); ){
+				clip_reg = chr->mateClipRegVector.at(j);
+				if(clip_reg->valid_flag==false){
+					// cout << "\t";
+					// if(clip_reg->leftClipReg) { cout << ", leftClipReg=" << clip_reg->leftClipReg->chrname << ":" << clip_reg->leftClipReg->startRefPos << "-" << clip_reg->leftClipReg->endRefPos; }
+					// if(clip_reg->leftClipReg2) { cout << ", leftClipReg2=" << clip_reg->leftClipReg2->chrname << ":" << clip_reg->leftClipReg2->startRefPos << "-" << clip_reg->leftClipReg2->endRefPos; }
+					// if(clip_reg->rightClipReg) { cout << ", rightClipReg=" << clip_reg->rightClipReg->chrname << ":" << clip_reg->rightClipReg->startRefPos << "-" << clip_reg->rightClipReg->endRefPos; }
+					// if(clip_reg->rightClipReg2) { cout << ", rightClipReg2=" << clip_reg->rightClipReg2->chrname << ":" << clip_reg->rightClipReg2->startRefPos << "-" << clip_reg->rightClipReg2->endRefPos; }
+					// if(clip_reg->largeIndelClipReg) { cout << ", largeIndelClipReg=" << clip_reg->largeIndelClipReg->chrname << ":" << clip_reg->largeIndelClipReg->startRefPos << "-" << clip_reg->largeIndelClipReg->endRefPos << ", sv_len=" << clip_reg->largeIndelClipReg->sv_len << ", var_type=" << clip_reg->sv_type; }
+					// cout << endl;
 
-				if(clip_reg->leftClipReg) { delete clip_reg->leftClipReg; clip_reg->leftClipReg = NULL; }
-				if(clip_reg->leftClipReg2) { delete clip_reg->leftClipReg2; clip_reg->leftClipReg2 = NULL; }
-				if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; }
-				if(clip_reg->rightClipReg2) { delete clip_reg->rightClipReg2; clip_reg->rightClipReg2 = NULL; }
-				if(clip_reg->largeIndelClipReg) { delete clip_reg->largeIndelClipReg; clip_reg->largeIndelClipReg = NULL; }
-				if(clip_reg->var_cand) { chr->removeVarCandNodeClipReg(clip_reg->var_cand); clip_reg->var_cand = NULL; } // free item
-				if(clip_reg->left_var_cand_tra) { chr->removeVarCandNodeClipReg(clip_reg->left_var_cand_tra); clip_reg->left_var_cand_tra = NULL; }  // free item
-				if(clip_reg->right_var_cand_tra) { chr->removeVarCandNodeClipReg(clip_reg->right_var_cand_tra); clip_reg->right_var_cand_tra = NULL; }  // free item
-				delete clip_reg;
-				chr->mateClipRegVector.erase(chr->mateClipRegVector.begin()+j);
-			}else j++;
+					if(clip_reg->leftClipReg) { delete clip_reg->leftClipReg; clip_reg->leftClipReg = NULL; }
+					if(clip_reg->leftClipReg2) { delete clip_reg->leftClipReg2; clip_reg->leftClipReg2 = NULL; }
+					if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; }
+					if(clip_reg->rightClipReg2) { delete clip_reg->rightClipReg2; clip_reg->rightClipReg2 = NULL; }
+					if(clip_reg->largeIndelClipReg) { delete clip_reg->largeIndelClipReg; clip_reg->largeIndelClipReg = NULL; }
+					if(clip_reg->var_cand) { chr->removeVarCandNodeClipReg(clip_reg->var_cand); clip_reg->var_cand = NULL; } // free item
+					if(clip_reg->left_var_cand_tra) { chr->removeVarCandNodeClipReg(clip_reg->left_var_cand_tra); clip_reg->left_var_cand_tra = NULL; }  // free item
+					if(clip_reg->right_var_cand_tra) { chr->removeVarCandNodeClipReg(clip_reg->right_var_cand_tra); clip_reg->right_var_cand_tra = NULL; }  // free item
+					delete clip_reg;
+					chr->mateClipRegVector.erase(chr->mateClipRegVector.begin()+j);
+				}else j++;
+			}
 		}
 	}
 }
 
 // remove redundant mate clipping regions
 void Genome::removeRedundantMateClipReg(){
-	for(size_t i=0; i<chromeVector.size(); i++)
-		genomeRemoveRedundantClipReg(chromeVector.at(i), chromeVector);
+	for(size_t i=0; i<chromeVector.size(); i++){
+		if(chromeVector.at(i)->valid_flag)
+			genomeRemoveRedundantClipReg(chromeVector.at(i), chromeVector);
+	}
 
 	// remove invalid elements
 	removeInvalidMateClipItem();
@@ -474,8 +520,10 @@ void Genome::genomeRemoveRedundantClipReg(Chrome *chr, vector<Chrome*> &chr_vec)
 }
 
 void Genome::removeOverlappedIndelFromMateClipReg(){
-	for(size_t i=0; i<chromeVector.size(); i++)
-		genomeRemoveFPIndelSnvInClipReg(chromeVector.at(i), chromeVector);
+	for(size_t i=0; i<chromeVector.size(); i++){
+		if(chromeVector.at(i)->valid_flag)
+			genomeRemoveFPIndelSnvInClipReg(chromeVector.at(i), chromeVector);
+	}
 }
 
 // remove FP Indels and SNVs in clipping regions
@@ -511,7 +559,7 @@ void Genome::genomeRemoveFPIndelSnvInClipReg(Chrome *chr, vector<Chrome*> &chr_v
 				}else{
 					for(k=0; k<chr_vec.size(); k++){
 						chr_tmp = chr_vec.at(k);
-						if(chr!=chr_tmp and chrname_arr[j].size()>0 and chr_tmp->chrname.compare(chrname_arr[j])==0){
+						if(chr!=chr_tmp and chrname_arr[j].size()>0 and chr_tmp->chrname.compare(chrname_arr[j])==0 and chr_tmp->valid_flag){
 							chr_arr[j] = chr_tmp;
 							break;
 						}
@@ -614,7 +662,8 @@ void Genome::saveDetectResultToFile(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->chrMergeDetectResultToFile();
+		if(chr->valid_flag)
+			chr->chrMergeDetectResultToFile();
 	}
 }
 
@@ -641,8 +690,7 @@ void Genome::mergeDetectResult(){
 
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr=chromeVector.at(i);
-		//if(chr->process_block_num)
-		{
+		if(chr->valid_flag){
 			copySingleFile(chr->out_filename_detect_indel, out_file_indel); // indel
 			copySingleFile(chr->out_filename_detect_snv, out_file_snv); // snv
 			copySingleFile(chr->out_filename_detect_clipReg, out_file_clipReg); // clip regions
@@ -685,7 +733,8 @@ int Genome::genomeLocalCons(){
 	// reset consensus data
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->chrResetConsData();
+		if(chr->valid_flag)
+			chr->chrResetConsData();
 	}
 	return 0;
 }
@@ -698,12 +747,12 @@ void Genome::genomeLoadDataCons(){
 	// load X, Y, hs37d5, alt
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if((chr->decoy_flag==false or paras->include_decoy==false) and (chr->alt_flag==false or paras->include_alt==false)){ // non-decoy, non-alt
+		if((chr->decoy_flag==false or paras->include_decoy==false) and (chr->alt_flag==false or paras->include_alt==false) and chr->valid_flag){ // non-decoy, non-alt
 			if(chr->chrname.compare(CHR_X_STR1)==0 or chr->chrname.compare(CHR_X_STR2)==0 or chr->chrname.compare(CHR_Y_STR1)==0 or chr->chrname.compare(CHR_Y_STR2)==0){
 				chr->chrLoadDataCons();  // load the variant data
 				chr->chrGenerateLocalConsWorkOpt();     // generate local consensus work
 			}
-		}else if((chr->decoy_flag and paras->include_decoy) or (chr->alt_flag and paras->include_alt)){ // decoy and alt
+		}else if(((chr->decoy_flag and paras->include_decoy) or (chr->alt_flag and paras->include_alt)) and chr->valid_flag){ // decoy and alt
 			chr->chrLoadDataCons();  // load the variant data
 			chr->chrGenerateLocalConsWorkOpt();     // generate local consensus work
 		}
@@ -712,7 +761,7 @@ void Genome::genomeLoadDataCons(){
 	// load other chrs
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->decoy_flag==false and chr->alt_flag==false)
+		if(chr->decoy_flag==false and chr->alt_flag==false and chr->valid_flag)
 		{
 			if(chr->chrname.compare(CHR_X_STR1)!=0 and chr->chrname.compare(CHR_X_STR2)!=0 and chr->chrname.compare(CHR_Y_STR1)!=0 and chr->chrname.compare(CHR_Y_STR2)!=0){
 				chr->chrLoadDataCons();  // load the variant data
@@ -724,7 +773,8 @@ void Genome::genomeLoadDataCons(){
 	// load previously consensus information
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->loadPrevConsInfo();
+		if(chr->valid_flag)
+			chr->loadPrevConsInfo();
 	}
 }
 
@@ -771,7 +821,8 @@ int Genome::processConsWork(){
 		// chr1_hg002_clr_20241218/2_cns/1/cns_1_19386711-19386935.fa
 		// chr1_hg002_clr_20241218/2_cns/1/cns_1_1074689-1076105.fa, cns_1_3097653-3098167.fa, cns_1_670807-676101.fa, cns_1_1223650-1224865.fa, cns_1_7174821-7175786.fa, cns_1_8391251-8391639.fa
 		// cns_1_844226-845192.fa, cns_1_46679031-46679316.fa, cns_1_48187816-48187819, cns_1_44605948-44606254.fa, cns_1_30243897-30244578.fa
-//		if(cns_work_opt->contigfilename.compare("debug_tmp_chr1_1-50m_20250413/2_cns/1/cns_1_9683995-2256585.fa")==0){
+		// clipReg_cns_chr1_114265459-114272005.fa
+//		if(cns_work_opt->contigfilename.compare("debug_tmp_chr1_20250808/2_cns/chr1/clipReg_cns_chr1_186868553-186879339.fa")==0){
 //			cout << "cnsfilename=" << cns_work_opt->contigfilename << endl;
 //		}else continue;
 
@@ -784,12 +835,13 @@ int Genome::processConsWork(){
 		cns_work->p_mtx_cns_reg_workDone_num = &(paras->mtx_cns_reg_workDone_num);
 		cns_work->num_threads_per_cns_work = paras->num_threads_per_cns_work;
 		cns_work->minClipEndSize = paras->minClipEndSize;
-		cns_work->min_identity_match = paras->min_identity_match;
+		cns_work->maxVarRegSize = paras->maxVarRegSize;
+		cns_work->min_seqsim_match = paras->min_seqsim_match;
 
 		sv_len_sum = 0;
 		min_pos = INT_MAX, max_pos = 0;
 		for(j=0; j<cns_work_opt->arr_size; j++) {
-			sv_len_sum += cns_work_opt->var_array[j]->sv_len;
+			sv_len_sum += abs(cns_work_opt->var_array[j]->sv_len);
 			if(min_pos>cns_work_opt->var_array[j]->startRefPos) min_pos = cns_work_opt->var_array[j]->startRefPos;
 			if(max_pos<cns_work_opt->var_array[j]->endRefPos) max_pos = cns_work_opt->var_array[j]->endRefPos;
 		}
@@ -825,6 +877,8 @@ int Genome::processConsWork(){
 		cns_work->min_supp_num = paras->minReadsNumSupportSV;
 		cns_work->sv_len_est = sv_len_sum;
 		cns_work->max_seg_size_ratio = paras->max_seg_size_ratio_usr;
+		cns_work->max_seg_nm_ratio = paras->max_seg_nm_ratio_usr;
+		cns_work->max_absig_density = paras->max_absig_density;
 		cns_work->inBamFile = paras->inBamFile;
 		cns_work->fai = fai;
 		cns_work->var_cand_file = var_cand_file;
@@ -913,12 +967,18 @@ int Genome::genomeCall(){
 
 	// call TRA according to mate clip regions
 	//genomeCallTra(); // 2023-12-25
+	//genomeCallTra2(); // 2025-09-12
 
 	// fill variant sequence
 	//cout << "4444444444444" << endl;
-	cout << "[" << time.getTime() << "]: fill variant sequences... " << endl;
-	genomeFillVarseq();
+//	cout << "[" << time.getTime() << "]: fill variant sequences... " << endl;
+//	genomeFillVarseq();
 
+	// phasing
+	if(paras->phasing_flag){
+		cout << "[" << time.getTime() << "]: local phasing ..." << endl;
+		genomePhasing();
+	}
 	// generate work process finish file
 	//generateFile(work_finish_filename);
 
@@ -933,12 +993,15 @@ int Genome::genomeCall(){
 	mergeCallResult();
 
 	// sort variant items in BED format
+	//cout << "[" << time.getTime() << "]: sortVarResults 1... " << endl;
 	sortVarResults(out_filename_result_vars, 0);
 
 	// save results in VCF file format
+	//cout << "[" << time.getTime() << "]: saveResultVCF... " << endl;
 	saveResultVCF();
 
 	// sort variant items in VCF format
+	//cout << "[" << time.getTime() << "]: sortVarResults 2... " << endl;
 	sortVarResults(out_filename_result_vars_vcf, 1);
 
 	// compute statistics for call command
@@ -1086,12 +1149,12 @@ void Genome::genomeCollectCallWork(){
 	// load X, Y, hs37d5, alt
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if((chr->decoy_flag==false or paras->include_decoy==false) and (chr->alt_flag==false or paras->include_alt==false)){ // non-decoy, non-alt
+		if((chr->decoy_flag==false or paras->include_decoy==false) and (chr->alt_flag==false or paras->include_alt==false) and chr->valid_flag){ // non-decoy, non-alt
 			if(chr->chrname.compare(CHR_X_STR1)==0 or chr->chrname.compare(CHR_X_STR2)==0 or chr->chrname.compare(CHR_Y_STR1)==0 or chr->chrname.compare(CHR_Y_STR2)==0){
 				chr->chrLoadDataCall();
 				chr->chrCollectCallWork();
 			}
-		}else if((chr->decoy_flag and paras->include_decoy) or (chr->alt_flag and paras->include_alt)){ // decoy or alt
+		}else if(((chr->decoy_flag and paras->include_decoy) or (chr->alt_flag and paras->include_alt)) and chr->valid_flag){ // decoy or alt
 			chr->chrLoadDataCall();
 			chr->chrCollectCallWork();
 		}
@@ -1100,7 +1163,7 @@ void Genome::genomeCollectCallWork(){
 	// load other chrs
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		if(chr->decoy_flag==false and chr->alt_flag==false){ // non-decoy and no alt
+		if(chr->decoy_flag==false and chr->alt_flag==false and chr->valid_flag){ // non-decoy and no alt
 			if(chr->chrname.compare(CHR_X_STR1)!=0 and chr->chrname.compare(CHR_X_STR2)!=0 and chr->chrname.compare(CHR_Y_STR1)!=0 and chr->chrname.compare(CHR_Y_STR2)!=0){
 				chr->chrLoadDataCall();
 				chr->chrCollectCallWork();
@@ -1114,7 +1177,8 @@ void Genome::genomeFinishCallWork(){
 
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->resetBlatVarcandFiles();
+		if(chr->valid_flag)
+			chr->resetBlatVarcandFiles();
 	}
 	vector<varCand*>().swap(paras->call_work_vec);
 }
@@ -1158,9 +1222,9 @@ int Genome::processAlnWork(){
 		hts_tpool_dispatch(p, q, processSingleMinimap2AlnWork, call_work_opt);
 	}
 
-    hts_tpool_process_flush(q);
-    hts_tpool_process_destroy(q);
-    hts_tpool_destroy(p);
+	hts_tpool_process_flush(q);
+	hts_tpool_process_destroy(q);
+	hts_tpool_destroy(p);
 
 	return 0;
 }
@@ -1203,9 +1267,9 @@ int Genome::processBlatAlnWork(){
 		hts_tpool_dispatch(p, q, processSingleBlatAlnWork, call_work_opt);
 	}
 
-    hts_tpool_process_flush(q);
-    hts_tpool_process_destroy(q);
-    hts_tpool_destroy(p);
+	hts_tpool_process_flush(q);
+	hts_tpool_process_destroy(q);
+	hts_tpool_destroy(p);
 
 	return 0;
 }
@@ -1242,9 +1306,9 @@ int Genome::processCallWork(){
 		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf, minimap2_chr1_143246329-143247038.paf, minimap2_1_649705-650290.paf
 		// minimap2_1_2765904-2766241.paf, minimap2_1_5447230-5447236.paf, minimap2_1_3097653-3098167.paf, minimap2_1_2618216-2619007.paf, minimap2_1_1184268-1184983.paf, minimap2_1_5446916-5447358
 		// minimap2_1_3560147-3560992.paf, minimap2_1_801940-802476.paf, minimap2_1_3560147-3560992.paf, minimap2_1_3561166-3562123.paf
-//		 if(var_cand->alnfilename.compare("debug_tmp_chr1_1-50m_20250413/3_call/1/minimap2_1_2256290-2256585.paf")==0){
-//		 	cout << var_cand->alnfilename << endl;
-//		 }else continue;
+//		if(var_cand->alnfilename.compare("debug_minimap2_cmrg_phasing_20250930/3_call/chr16/minimap2_cns_chr16_34574559-34594151.paf")==0){
+//			cout << var_cand->alnfilename << endl;
+//		}else continue;
 
 		call_work_opt = new callWork_opt();
 		call_work_opt->var_cand = var_cand;
@@ -1257,9 +1321,9 @@ int Genome::processCallWork(){
 		hts_tpool_dispatch(p, q, processSingleCallWork, call_work_opt);
 	}
 
-    hts_tpool_process_flush(q);
-    hts_tpool_process_destroy(q);
-    hts_tpool_destroy(p);
+	hts_tpool_process_flush(q);
+	hts_tpool_process_destroy(q);
+	hts_tpool_destroy(p);
 
 	return 0;
 }
@@ -1269,7 +1333,8 @@ void Genome::genomeLoadMateClipRegData(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		chr->chrLoadMateClipRegData();
+		if(chr->valid_flag)
+			chr->chrLoadMateClipRegData();
 	}
 }
 
@@ -1291,145 +1356,148 @@ void Genome::recallIndelsFromTRA(){
 	for(i=0; i<chromeVector.size(); i++){
 		success_num = 0;
 		chr = chromeVector.at(i);
-		mate_clipReg_vec = chr->mateClipRegVector;
-		for(j=0; j<mate_clipReg_vec.size(); j++){
-			//if(i>=0 and j>=247)
-			//	cout << "line=" << __LINE__ << ", i=" << i << ", j=" << j << ", " << chr->chrname << endl;
+		if(chr->valid_flag){
+			mate_clipReg_vec = chr->mateClipRegVector;
+			for(j=0; j<mate_clipReg_vec.size(); j++){
+				//if(i>=0 and j>=247)
+				//	cout << "line=" << __LINE__ << ", i=" << i << ", j=" << j << ", " << chr->chrname << endl;
 
-			total ++;
-			clip_reg = chr->mateClipRegVector.at(j);
-			reg1 = reg2 = reg3 = NULL;
-			if(clip_reg->valid_flag and (clip_reg->call_success_flag==false and clip_reg->tra_rescue_success_flag==false) and clip_reg->sv_type==VAR_TRA){ // valid TRA
-				for(round_num=0; round_num<3; round_num++){
-					if(round_num==0){
-						var_cand = clip_reg->left_var_cand_tra;
-						chrname_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg->chrname : clip_reg->leftClipReg2->chrname;
-					}else if(round_num==1){
-						var_cand = clip_reg->right_var_cand_tra;
-						chrname_tmp = clip_reg->rightClipReg ? clip_reg->rightClipReg->chrname : clip_reg->rightClipReg2->chrname;
-					}else{
-						var_cand = clip_reg->var_cand;
-						if(var_cand) chrname_tmp = var_cand->chrname;
-						else chrname_tmp = "";
-					}
+				total ++;
+				clip_reg = chr->mateClipRegVector.at(j);
+				reg1 = reg2 = reg3 = NULL;
+				if(clip_reg->valid_flag and (clip_reg->call_success_flag==false and clip_reg->tra_rescue_success_flag==false) and clip_reg->sv_type==VAR_TRA){ // valid TRA
+					for(round_num=0; round_num<3; round_num++){
+						if(round_num==0){
+							var_cand = clip_reg->left_var_cand_tra;
+							chrname_tmp = clip_reg->leftClipReg ? clip_reg->leftClipReg->chrname : clip_reg->leftClipReg2->chrname;
+						}else if(round_num==1){
+							var_cand = clip_reg->right_var_cand_tra;
+							chrname_tmp = clip_reg->rightClipReg ? clip_reg->rightClipReg->chrname : clip_reg->rightClipReg2->chrname;
+						}else{
+							var_cand = clip_reg->var_cand;
+							if(var_cand) chrname_tmp = var_cand->chrname;
+							else chrname_tmp = "";
+						}
 
-					if(var_cand){
-						var_cand->loadBlatAlnData();
+						if(var_cand){
+							var_cand->loadBlatAlnData();
 
-						segIdx_start = segIdx_end = -1;
-						for(k=0; k<var_cand->blat_aln_vec.size(); k++){
-							blat_aln = var_cand->blat_aln_vec.at(k);
-							if(blat_aln->valid_aln){
-								for(m=1; m<blat_aln->aln_segs.size(); m++){
-									seg1 = blat_aln->aln_segs.at(m-1);
-									seg2 = blat_aln->aln_segs.at(m);
-									if((seg1->ref_end>=var_cand->leftClipRefPos-CLIP_END_EXTEND_SIZE and seg1->ref_end<=var_cand->rightClipRefPos+CLIP_END_EXTEND_SIZE) and (seg2->ref_start>=var_cand->leftClipRefPos-CLIP_END_EXTEND_SIZE and seg2->ref_start<=var_cand->rightClipRefPos+CLIP_END_EXTEND_SIZE)){
-										segIdx_start = m - 1;
+							segIdx_start = segIdx_end = -1;
+							for(k=0; k<var_cand->blat_aln_vec.size(); k++){
+								blat_aln = var_cand->blat_aln_vec.at(k);
+								if(blat_aln->valid_aln){
+									for(m=1; m<blat_aln->aln_segs.size(); m++){
+										seg1 = blat_aln->aln_segs.at(m-1);
+										seg2 = blat_aln->aln_segs.at(m);
+										if((seg1->ref_end>=var_cand->leftClipRefPos-CLIP_END_EXTEND_SIZE and seg1->ref_end<=var_cand->rightClipRefPos+CLIP_END_EXTEND_SIZE) and (seg2->ref_start>=var_cand->leftClipRefPos-CLIP_END_EXTEND_SIZE and seg2->ref_start<=var_cand->rightClipRefPos+CLIP_END_EXTEND_SIZE)){
+											segIdx_start = m - 1;
 
-										// compute segIdx_end
-										segIdx_end = -1;
-										for(n=segIdx_start+1; n<blat_aln->aln_segs.size(); n++){
-											seg2 = blat_aln->aln_segs.at(n);
-											if(seg2->ref_end-seg2->ref_start+1>=MIN_VALID_BLAT_SEG_SIZE){ // ignore short align segments
-												segIdx_end = n;
-												break;
+											// compute segIdx_end
+											segIdx_end = -1;
+											for(n=segIdx_start+1; n<blat_aln->aln_segs.size(); n++){
+												seg2 = blat_aln->aln_segs.at(n);
+												if(seg2->ref_end-seg2->ref_start+1>=MIN_VALID_BLAT_SEG_SIZE){ // ignore short align segments
+													segIdx_end = n;
+													break;
+												}
 											}
+											if(segIdx_end!=-1) break;
 										}
-										if(segIdx_end!=-1) break;
 									}
-								}
 
-								if(segIdx_start!=-1 and segIdx_end!=-1){
-									seg1 = blat_aln->aln_segs.at(segIdx_start);
-									seg2 = blat_aln->aln_segs.at(segIdx_end);
-									//overlap_flag = isOverlappedPos(var_cand->leftClipRefPos, var_cand->rightClipRefPos, seg1->ref_end, seg2->ref_start);
-									overlap_flag = isOverlappedPos(var_cand->leftClipRefPos-CLIP_END_EXTEND_SIZE, var_cand->rightClipRefPos+CLIP_END_EXTEND_SIZE, seg1->ref_end-CLIP_END_EXTEND_SIZE, seg2->ref_start+CLIP_END_EXTEND_SIZE);
-									exist_flag = isExistSuccessClipReg(var_cand, clip_reg);
-									if(overlap_flag and exist_flag==false){ // indel
-										var_cand->call_success = true;
-										var_cand->clip_reg_flag = false;
+									if(segIdx_start!=-1 and segIdx_end!=-1){
+										seg1 = blat_aln->aln_segs.at(segIdx_start);
+										seg2 = blat_aln->aln_segs.at(segIdx_end);
+										//overlap_flag = isOverlappedPos(var_cand->leftClipRefPos, var_cand->rightClipRefPos, seg1->ref_end, seg2->ref_start);
+										overlap_flag = isOverlappedPos(var_cand->leftClipRefPos-CLIP_END_EXTEND_SIZE, var_cand->rightClipRefPos+CLIP_END_EXTEND_SIZE, seg1->ref_end-CLIP_END_EXTEND_SIZE, seg2->ref_start+CLIP_END_EXTEND_SIZE);
+										exist_flag = isExistSuccessClipReg(var_cand, clip_reg);
+										if(overlap_flag and exist_flag==false){ // indel
+											var_cand->call_success = true;
+											var_cand->clip_reg_flag = false;
 
-										reg = new reg_t();
-										reg->chrname = chrname_tmp;
-										reg->startRefPos =  seg1->ref_end;
-										reg->endRefPos =  seg2->ref_start;
-										reg->startLocalRefPos =  seg1->subject_end;
-										reg->endLocalRefPos =  seg2->subject_start;
-										reg->startQueryPos =  seg1->query_end;
-										reg->endQueryPos =  seg2->query_start;
-										reg->aln_orient = blat_aln->aln_orient;
-										reg->query_id = blat_aln->query_id;
-										//reg->blat_aln_id = i;
-										reg->blat_aln_id = k;
-										reg->minimap2_aln_id = -1;
-										reg->call_success_status = true;
-										reg->short_sv_flag = false;
-										reg->zero_cov_flag = false;
-										reg->aln_seg_end_flag = false;
-										reg->query_pos_invalid_flag = false;
-										reg->large_indel_flag = false;
-										reg->gt_type = -1;
-										reg->gt_seq = "";
-										reg->AF = 0;
-										reg->supp_num = reg->DP = 0;
-										reg->discover_level = VAR_DISCOV_L_UNUSED;
+											reg = new reg_t();
+											reg->chrname = chrname_tmp;
+											reg->startRefPos =  seg1->ref_end;
+											reg->endRefPos =  seg2->ref_start;
+											reg->startLocalRefPos =  seg1->subject_end;
+											reg->endLocalRefPos =  seg2->subject_start;
+											reg->startQueryPos =  seg1->query_end;
+											reg->endQueryPos =  seg2->query_start;
+											reg->aln_orient = blat_aln->aln_orient;
+											reg->query_id = blat_aln->query_id;
+											//reg->blat_aln_id = i;
+											reg->blat_aln_id = k;
+											reg->minimap2_aln_id = -1;
+											reg->call_success_status = true;
+											reg->short_sv_flag = false;
+											reg->zero_cov_flag = false;
+											reg->aln_seg_end_flag = false;
+											reg->query_pos_invalid_flag = false;
+											reg->large_indel_flag = false;
+											reg->merge_flag = false;
+											reg->gt_type = -1;
+											reg->gt_seq = "";
+											reg->AF = 0;
+											reg->supp_num = reg->DP = 0;
+											reg->discover_level = VAR_DISCOV_L_UNUSED;
 
-										ref_dist = reg->endLocalRefPos - reg->startLocalRefPos + 1;
-										query_dist = reg->endQueryPos - reg->startQueryPos + 1;
-										reg->sv_len = query_dist - ref_dist + 1;
-										if(reg->sv_len>0) reg->var_type = VAR_INS;
-										else reg->var_type = VAR_DEL;
+											ref_dist = reg->endLocalRefPos - reg->startLocalRefPos + 1;
+											query_dist = reg->endQueryPos - reg->startQueryPos + 1;
+											reg->sv_len = query_dist - ref_dist + 1;
+											if(reg->sv_len>0) reg->var_type = VAR_INS;
+											else reg->var_type = VAR_DEL;
 
-										if(round_num==0) reg1 = reg;
-										else if(round_num==1) reg2 = reg;
-										else reg3 = reg;
+											if(round_num==0) reg1 = reg;
+											else if(round_num==1) reg2 = reg;
+											else reg3 = reg;
 
-										break;
-									}else
-										segIdx_start = segIdx_end = -1;
+											break;
+										}else
+											segIdx_start = segIdx_end = -1;
+									}
 								}
 							}
 						}
 					}
-				}
 
-				if(reg1){ // left part
-					clip_reg->left_var_cand_tra->varVec.push_back(reg1);
+					if(reg1){ // left part
+						clip_reg->left_var_cand_tra->varVec.push_back(reg1);
 
-					if(clip_reg->leftClipReg) { delete clip_reg->leftClipReg; clip_reg->leftClipReg = NULL; clip_reg->leftMeanClipPos = 0; clip_reg->leftClipPosNum = 0; }
-					if(clip_reg->leftClipReg2) { delete clip_reg->leftClipReg2; clip_reg->leftClipReg2 = NULL; clip_reg->leftMeanClipPos2 = 0; clip_reg->leftClipPosNum2 = 0; }
-					clip_reg->leftClipRegNum = 0;
-					clip_reg->left_var_cand_tra = NULL;
-				}
-				if(reg2){ // right part
-					clip_reg->right_var_cand_tra->varVec.push_back(reg2);
+						if(clip_reg->leftClipReg) { delete clip_reg->leftClipReg; clip_reg->leftClipReg = NULL; clip_reg->leftMeanClipPos = 0; clip_reg->leftClipPosNum = 0; }
+						if(clip_reg->leftClipReg2) { delete clip_reg->leftClipReg2; clip_reg->leftClipReg2 = NULL; clip_reg->leftMeanClipPos2 = 0; clip_reg->leftClipPosNum2 = 0; }
+						clip_reg->leftClipRegNum = 0;
+						clip_reg->left_var_cand_tra = NULL;
+					}
+					if(reg2){ // right part
+						clip_reg->right_var_cand_tra->varVec.push_back(reg2);
 
-					if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; clip_reg->rightMeanClipPos = 0; clip_reg->rightClipPosNum = 0; }
-					if(clip_reg->rightClipReg2) { delete clip_reg->rightClipReg2; clip_reg->rightClipReg2 = NULL; clip_reg->rightMeanClipPos2 = 0; clip_reg->rightClipPosNum2 = 0; }
-					clip_reg->rightClipRegNum = 0;
-					clip_reg->right_var_cand_tra = NULL;
-				}
-				if(reg3){ // one region
-					clip_reg->var_cand->varVec.push_back(reg3);
+						if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; clip_reg->rightMeanClipPos = 0; clip_reg->rightClipPosNum = 0; }
+						if(clip_reg->rightClipReg2) { delete clip_reg->rightClipReg2; clip_reg->rightClipReg2 = NULL; clip_reg->rightMeanClipPos2 = 0; clip_reg->rightClipPosNum2 = 0; }
+						clip_reg->rightClipRegNum = 0;
+						clip_reg->right_var_cand_tra = NULL;
+					}
+					if(reg3){ // one region
+						clip_reg->var_cand->varVec.push_back(reg3);
 
-					if(clip_reg->leftClipReg) { delete clip_reg->leftClipReg; clip_reg->leftClipReg = NULL; clip_reg->leftMeanClipPos = 0; clip_reg->leftClipPosNum = 0; }
-					if(clip_reg->leftClipReg2) { delete clip_reg->leftClipReg2; clip_reg->leftClipReg2 = NULL; clip_reg->leftMeanClipPos2 = 0; clip_reg->leftClipPosNum2 = 0; }
-					if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; clip_reg->rightMeanClipPos = 0; clip_reg->rightClipPosNum = 0; }
-					if(clip_reg->rightClipReg2) { delete clip_reg->rightClipReg2; clip_reg->rightClipReg2 = NULL; clip_reg->rightMeanClipPos2 = 0; clip_reg->rightClipPosNum2 = 0; }
-					clip_reg->leftClipRegNum = 0;
-					clip_reg->rightClipRegNum = 0;
-					clip_reg->left_var_cand_tra = NULL;
-					clip_reg->right_var_cand_tra = NULL;
-					clip_reg->var_cand = NULL;
-				}
+						if(clip_reg->leftClipReg) { delete clip_reg->leftClipReg; clip_reg->leftClipReg = NULL; clip_reg->leftMeanClipPos = 0; clip_reg->leftClipPosNum = 0; }
+						if(clip_reg->leftClipReg2) { delete clip_reg->leftClipReg2; clip_reg->leftClipReg2 = NULL; clip_reg->leftMeanClipPos2 = 0; clip_reg->leftClipPosNum2 = 0; }
+						if(clip_reg->rightClipReg) { delete clip_reg->rightClipReg; clip_reg->rightClipReg = NULL; clip_reg->rightMeanClipPos = 0; clip_reg->rightClipPosNum = 0; }
+						if(clip_reg->rightClipReg2) { delete clip_reg->rightClipReg2; clip_reg->rightClipReg2 = NULL; clip_reg->rightMeanClipPos2 = 0; clip_reg->rightClipPosNum2 = 0; }
+						clip_reg->leftClipRegNum = 0;
+						clip_reg->rightClipRegNum = 0;
+						clip_reg->left_var_cand_tra = NULL;
+						clip_reg->right_var_cand_tra = NULL;
+						clip_reg->var_cand = NULL;
+					}
 
-				if(reg1 or reg2 or reg3){
-					success_num ++;
-					total_success ++;
-					clip_reg->valid_flag = false;
-				}else{
-					//cout << "chr " << i << ", j=" << j << ", recall Indel failed" << endl;
-					//printMateClipReg(clip_reg);
+					if(reg1 or reg2 or reg3){
+						success_num ++;
+						total_success ++;
+						clip_reg->valid_flag = false;
+					}else{
+						//cout << "chr " << i << ", j=" << j << ", recall Indel failed" << endl;
+						//printMateClipReg(clip_reg);
+					}
 				}
 			}
 		}
@@ -1451,68 +1519,70 @@ bool Genome::isExistSuccessClipReg(varCand *var_cand, mateClipReg_t *clip_reg_ex
 	success_flag = false;
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		mate_clipReg_vec = chr->mateClipRegVector;
-		for(j=0; j<mate_clipReg_vec.size(); j++){
-			clip_reg = chr->mateClipRegVector.at(j);
-			if(clip_reg!=clip_reg_exclude and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA){
-				// check left part
-				if(clip_reg->leftClipRegNum==1){
-					if(clip_reg->leftClipReg){
+		if(chr->valid_flag){
+			mate_clipReg_vec = chr->mateClipRegVector;
+			for(j=0; j<mate_clipReg_vec.size(); j++){
+				clip_reg = chr->mateClipRegVector.at(j);
+				if(clip_reg!=clip_reg_exclude and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA){
+					// check left part
+					if(clip_reg->leftClipRegNum==1){
+						if(clip_reg->leftClipReg){
+							chrname_tmp = clip_reg->leftClipReg->chrname;
+							start_pos = clip_reg->leftClipReg->startRefPos;
+							end_pos = clip_reg->leftClipReg->endRefPos;
+						}else{
+							chrname_tmp = clip_reg->leftClipReg2->chrname;
+							start_pos = clip_reg->leftClipReg2->startRefPos;
+							end_pos = clip_reg->leftClipReg2->endRefPos;
+						}
+					}else if(clip_reg->leftClipRegNum==2){
 						chrname_tmp = clip_reg->leftClipReg->chrname;
 						start_pos = clip_reg->leftClipReg->startRefPos;
-						end_pos = clip_reg->leftClipReg->endRefPos;
-					}else{
-						chrname_tmp = clip_reg->leftClipReg2->chrname;
-						start_pos = clip_reg->leftClipReg2->startRefPos;
 						end_pos = clip_reg->leftClipReg2->endRefPos;
+					}else{
+						cerr << __func__ << ", line=" << __LINE__ << ": invalid left region count: " << clip_reg->leftClipRegNum << ", error!" << endl;
+						exit(1);
 					}
-				}else if(clip_reg->leftClipRegNum==2){
-					chrname_tmp = clip_reg->leftClipReg->chrname;
-					start_pos = clip_reg->leftClipReg->startRefPos;
-					end_pos = clip_reg->leftClipReg2->endRefPos;
-				}else{
-					cerr << __func__ << ", line=" << __LINE__ << ": invalid left region count: " << clip_reg->leftClipRegNum << ", error!" << endl;
-					exit(1);
-				}
 
-				if(var_cand->chrname.compare(chrname_tmp)==0){
-					overlap_flag = isOverlappedPos(var_cand->leftClipRefPos, var_cand->rightClipRefPos, start_pos, end_pos);
-					if(overlap_flag){
-						success_flag = true;
-						break;
+					if(var_cand->chrname.compare(chrname_tmp)==0){
+						overlap_flag = isOverlappedPos(var_cand->leftClipRefPos, var_cand->rightClipRefPos, start_pos, end_pos);
+						if(overlap_flag){
+							success_flag = true;
+							break;
+						}
 					}
-				}
 
-				// check right part
-				if(clip_reg->rightClipRegNum==1){
-					if(clip_reg->rightClipReg){
+					// check right part
+					if(clip_reg->rightClipRegNum==1){
+						if(clip_reg->rightClipReg){
+							chrname_tmp = clip_reg->rightClipReg->chrname;
+							start_pos = clip_reg->rightClipReg->startRefPos;
+							end_pos = clip_reg->rightClipReg->endRefPos;
+						}else{
+							chrname_tmp = clip_reg->rightClipReg2->chrname;
+							start_pos = clip_reg->rightClipReg2->startRefPos;
+							end_pos = clip_reg->rightClipReg2->endRefPos;
+						}
+					}else if(clip_reg->rightClipRegNum==2){
 						chrname_tmp = clip_reg->rightClipReg->chrname;
 						start_pos = clip_reg->rightClipReg->startRefPos;
-						end_pos = clip_reg->rightClipReg->endRefPos;
-					}else{
-						chrname_tmp = clip_reg->rightClipReg2->chrname;
-						start_pos = clip_reg->rightClipReg2->startRefPos;
 						end_pos = clip_reg->rightClipReg2->endRefPos;
+					}else{
+						cerr << __func__ << ", line=" << __LINE__ << ": invalid right region count: " << clip_reg->rightClipRegNum << ", error!" << endl;
+						exit(1);
 					}
-				}else if(clip_reg->rightClipRegNum==2){
-					chrname_tmp = clip_reg->rightClipReg->chrname;
-					start_pos = clip_reg->rightClipReg->startRefPos;
-					end_pos = clip_reg->rightClipReg2->endRefPos;
-				}else{
-					cerr << __func__ << ", line=" << __LINE__ << ": invalid right region count: " << clip_reg->rightClipRegNum << ", error!" << endl;
-					exit(1);
-				}
 
-				if(var_cand->chrname.compare(chrname_tmp)==0){
-					overlap_flag = isOverlappedPos(var_cand->leftClipRefPos, var_cand->rightClipRefPos, start_pos, end_pos);
-					if(overlap_flag){
-						success_flag = true;
-						break;
+					if(var_cand->chrname.compare(chrname_tmp)==0){
+						overlap_flag = isOverlappedPos(var_cand->leftClipRefPos, var_cand->rightClipRefPos, start_pos, end_pos);
+						if(overlap_flag){
+							success_flag = true;
+							break;
+						}
 					}
 				}
 			}
+			if(success_flag) break;
 		}
-		if(success_flag) break;
 	}
 
 	return success_flag;
@@ -1570,7 +1640,7 @@ void Genome::generateBlatAlnFilenameTra(){
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		//if(chr->decoy_flag==false and paras->include_decoy){
-		if(chr->decoy_flag==false){
+		if(chr->decoy_flag==false and chr->valid_flag){
 			mate_clipReg_vec = chr->mateClipRegVector;
 			for(j=0; j<mate_clipReg_vec.size(); j++){
 				clip_reg = chr->mateClipRegVector.at(j);
@@ -1627,67 +1697,69 @@ void Genome::genomeCallTraOp(){
 		fail_reason_id1 = fail_reason_id2 = 0;
 		success_num = 0;
 		chr = chromeVector.at(i);
-		mate_clipReg_vec = chr->mateClipRegVector;
-		for(j=0; j<mate_clipReg_vec.size(); j++){
-			clip_reg = chr->mateClipRegVector.at(j);
+		if(chr->valid_flag){
+			mate_clipReg_vec = chr->mateClipRegVector;
+			for(j=0; j<mate_clipReg_vec.size(); j++){
+				clip_reg = chr->mateClipRegVector.at(j);
 
-//			if(i>=5 and j>=30)
-//				cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << ", " << chr->chrname << endl;
-//			else continue;
+	//			if(i>=5 and j>=30)
+	//				cout << "gggggggggggggggggggg, i=" << i << ", j=" << j << ", " << chr->chrname << endl;
+	//			else continue;
 
-			clip_reg->call_success_flag = false;
-			if(clip_reg->valid_flag and clip_reg->sv_type==VAR_TRA){ // valid TRA
-				for(round_num=0; round_num<2; round_num++){
-					// construct var_cand
-					if(round_num==0){
-						var_cand = clip_reg->left_var_cand_tra;
-						var_cand_tmp = constructNewVarCand(clip_reg->left_var_cand_tra, clip_reg->right_var_cand_tra);
-					}else if(round_num==1){
-						var_cand = clip_reg->right_var_cand_tra;
-						var_cand_tmp = constructNewVarCand(clip_reg->right_var_cand_tra, clip_reg->left_var_cand_tra);
-					}
+				clip_reg->call_success_flag = false;
+				if(clip_reg->valid_flag and clip_reg->sv_type==VAR_TRA){ // valid TRA
+					for(round_num=0; round_num<2; round_num++){
+						// construct var_cand
+						if(round_num==0){
+							var_cand = clip_reg->left_var_cand_tra;
+							var_cand_tmp = constructNewVarCand(clip_reg->left_var_cand_tra, clip_reg->right_var_cand_tra);
+						}else if(round_num==1){
+							var_cand = clip_reg->right_var_cand_tra;
+							var_cand_tmp = constructNewVarCand(clip_reg->right_var_cand_tra, clip_reg->left_var_cand_tra);
+						}
 
-					if(var_cand and var_cand_tmp){
-						// load align data
-						var_cand->loadBlatAlnData();
-						var_cand_tmp->loadBlatAlnData();
+						if(var_cand and var_cand_tmp){
+							// load align data
+							var_cand->loadBlatAlnData();
+							var_cand_tmp->loadBlatAlnData();
 
-						// compute TRA locations
-						tra_loc_vec = computeTraLoc(var_cand, var_cand_tmp, clip_reg, round_num);
+							// compute TRA locations
+							tra_loc_vec = computeTraLoc(var_cand, var_cand_tmp, clip_reg, round_num);
 
-						if(tra_loc_vec.size()>0){
-							saveTraLoc2ClipReg(clip_reg, tra_loc_vec, var_cand, var_cand_tmp, round_num); // save TRA location to clip region
-							clip_reg->call_success_flag = true;
-						}else{ // set fail reason
-							if(var_cand->align_success==false or var_cand_tmp->align_success==false){
-								if(round_num==0) fail_reason_id1 = 1;
-								else fail_reason_id2  = 1;
+							if(tra_loc_vec.size()>0){
+								saveTraLoc2ClipReg(clip_reg, tra_loc_vec, var_cand, var_cand_tmp, round_num); // save TRA location to clip region
+								clip_reg->call_success_flag = true;
+							}else{ // set fail reason
+								if(var_cand->align_success==false or var_cand_tmp->align_success==false){
+									if(round_num==0) fail_reason_id1 = 1;
+									else fail_reason_id2  = 1;
+								}
 							}
-						}
 
-						// release memory
-						for(k=0; k<var_cand_tmp->blat_aln_vec.size(); k++){ // free blat_aln_vec
-							item_blat = var_cand_tmp->blat_aln_vec.at(k);
-							for(t=0; t<item_blat->aln_segs.size(); t++) // free aln_segs
-								delete item_blat->aln_segs.at(t);
-							delete item_blat;
-						}
-						delete var_cand_tmp;
+							// release memory
+							for(k=0; k<var_cand_tmp->blat_aln_vec.size(); k++){ // free blat_aln_vec
+								item_blat = var_cand_tmp->blat_aln_vec.at(k);
+								for(t=0; t<item_blat->aln_segs.size(); t++) // free aln_segs
+									delete item_blat->aln_segs.at(t);
+								delete item_blat;
+							}
+							delete var_cand_tmp;
 
-						if(clip_reg->call_success_flag) break;
-					}else{
-						//cout << "hhhhhhhhhhhh" << endl;
+							if(clip_reg->call_success_flag) break;
+						}else{
+							//cout << "hhhhhhhhhhhh" << endl;
+						}
 					}
 				}
-			}
-			if(clip_reg->call_success_flag){
-				//cout << "chr " << i << ", j=" << j << ", TRA success" << endl;
-				success_num ++;
-				total ++;
-			}else{
-				if(fail_reason_id1==1 or fail_reason_id2==1){
-					//cout << clip_reg->leftClipPosNum << ", " << clip_reg->leftClipPosNum2 << ", " << clip_reg->rightClipPosNum << ", " << clip_reg->rightClipPosNum2 << endl;
-					saveTraLoc2ClipRegForAlnFailure(clip_reg);
+				if(clip_reg->call_success_flag){
+					//cout << "chr " << i << ", j=" << j << ", TRA success" << endl;
+					success_num ++;
+					total ++;
+				}else{
+					if(fail_reason_id1==1 or fail_reason_id2==1){
+						//cout << clip_reg->leftClipPosNum << ", " << clip_reg->leftClipPosNum2 << ", " << clip_reg->rightClipPosNum << ", " << clip_reg->rightClipPosNum2 << endl;
+						saveTraLoc2ClipRegForAlnFailure(clip_reg);
+					}
 				}
 			}
 		}
@@ -1810,13 +1882,17 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->min_sv_size = paras->min_sv_size_usr;
 		var_cand_new->minReadsNumSupportSV = paras->minReadsNumSupportSV;
 		var_cand_new->minClipEndSize = paras->minClipEndSize;
+		var_cand_new->maxVarRegSize = paras->maxVarRegSize;
 		var_cand_new->minConReadLen = paras->minConReadLen;
-		var_cand_new->min_identity_match = paras->min_identity_match;
-		var_cand_new->min_identity_merge = paras->min_identity_merge;
+		var_cand_new->min_seqsim_match = paras->min_seqsim_match;
+		var_cand_new->min_seqsim_merge = paras->min_seqsim_merge;
 		var_cand_new->min_distance_merge = paras->min_distance_merge;
 		var_cand_new->max_seg_num_per_read = paras->max_seg_num_per_read;
 		var_cand_new->minMapQ = paras->minMapQ;
 		var_cand_new->minHighMapQ = paras->minHighMapQ;
+		var_cand_new->max_seg_size_ratio = paras->max_seg_size_ratio_usr;
+		var_cand_new->max_seg_nm_ratio = paras->max_seg_nm_ratio_usr;
+		var_cand_new->max_absig_density = paras->max_absig_density;
 
 		var_cand_new->cns_success = var_cand->cns_success;
 		var_cand_new->ctg_num = var_cand->ctg_num;
@@ -1835,7 +1911,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->dup_num = var_cand_tmp->dup_num;
 
 		//set genotyping parameters
-		var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_identity_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
+		var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_seqsim_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 		// process monitor killed blat work
 		var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
@@ -2623,60 +2699,62 @@ void Genome::mergeCloseRangeTra(){
 
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		for(j=0; j<chr->mateClipRegVector.size(); j++){
-			clip_reg = chr->mateClipRegVector.at(j);
-			if(clip_reg->valid_flag and clip_reg->sv_type==VAR_TRA and clip_reg->leftClipRegNum==1 and clip_reg->rightClipRegNum==1){
-				// get close range
-				clip_reg_ret = getNearDistedClipReg(clip_reg, chromeVector);
+		if(chr->valid_flag){
+			for(j=0; j<chr->mateClipRegVector.size(); j++){
+				clip_reg = chr->mateClipRegVector.at(j);
+				if(clip_reg->valid_flag and clip_reg->sv_type==VAR_TRA and clip_reg->leftClipRegNum==1 and clip_reg->rightClipRegNum==1){
+					// get close range
+					clip_reg_ret = getNearDistedClipReg(clip_reg, chromeVector);
 
-				// merge near distance TRA
-				if(clip_reg_ret){
+					// merge near distance TRA
+					if(clip_reg_ret){
 
-					dist_vec = computeDistsTra(clip_reg, clip_reg_ret);
+						dist_vec = computeDistsTra(clip_reg, clip_reg_ret);
 
-					if(dist_vec.at(0)<dist_vec.at(1)){
-						if(clip_reg_ret->leftClipPosTra1!=-1) { chrname1 = clip_reg_ret->chrname_leftTra1; pos1 = clip_reg_ret->leftClipPosTra1; }
-						else { chrname1 = clip_reg_ret->chrname_rightTra1; pos1 = clip_reg_ret->rightClipPosTra1; }
-					}else{
-						if(clip_reg_ret->leftClipPosTra2!=-1) { chrname1 = clip_reg_ret->chrname_leftTra2; pos1 = clip_reg_ret->leftClipPosTra2; }
-						else { chrname1 = clip_reg_ret->chrname_rightTra2; pos1 = clip_reg_ret->rightClipPosTra2; }
-					}
-					if(clip_reg->leftClipPosTra1==-1){
-						clip_reg->chrname_leftTra1 = chrname1;
-						clip_reg->leftClipPosTra1 = pos1;
-					}else{
-						clip_reg->chrname_rightTra1 = chrname1;
-						clip_reg->rightClipPosTra1 = pos1;
-					}
-					clip_reg->leftClipRegNum ++;
+						if(dist_vec.at(0)<dist_vec.at(1)){
+							if(clip_reg_ret->leftClipPosTra1!=-1) { chrname1 = clip_reg_ret->chrname_leftTra1; pos1 = clip_reg_ret->leftClipPosTra1; }
+							else { chrname1 = clip_reg_ret->chrname_rightTra1; pos1 = clip_reg_ret->rightClipPosTra1; }
+						}else{
+							if(clip_reg_ret->leftClipPosTra2!=-1) { chrname1 = clip_reg_ret->chrname_leftTra2; pos1 = clip_reg_ret->leftClipPosTra2; }
+							else { chrname1 = clip_reg_ret->chrname_rightTra2; pos1 = clip_reg_ret->rightClipPosTra2; }
+						}
+						if(clip_reg->leftClipPosTra1==-1){
+							clip_reg->chrname_leftTra1 = chrname1;
+							clip_reg->leftClipPosTra1 = pos1;
+						}else{
+							clip_reg->chrname_rightTra1 = chrname1;
+							clip_reg->rightClipPosTra1 = pos1;
+						}
+						clip_reg->leftClipRegNum ++;
 
-					if(dist_vec.at(2)>dist_vec.at(3)){
-						if(clip_reg_ret->leftClipPosTra2!=-1) { chrname2 = clip_reg_ret->chrname_leftTra2; pos2 = clip_reg_ret->leftClipPosTra2; }
-						else { chrname2 = clip_reg_ret->chrname_rightTra2; pos2 = clip_reg_ret->rightClipPosTra2; }
-					}else{
-						if(clip_reg_ret->leftClipPosTra1!=-1) { chrname2 = clip_reg_ret->chrname_leftTra1; pos2 = clip_reg_ret->leftClipPosTra1; }
-						else { chrname2 = clip_reg_ret->chrname_rightTra1; pos2 = clip_reg_ret->rightClipPosTra1; }
-					}
-					if(clip_reg->leftClipPosTra2==-1){
-						clip_reg->chrname_leftTra2 = chrname2;
-						clip_reg->leftClipPosTra2 = pos2;
-					}else{
-						clip_reg->chrname_rightTra2 = chrname2;
-						clip_reg->rightClipPosTra2 = pos2;
-					}
-					clip_reg->rightClipRegNum ++;
-					clip_reg_ret->valid_flag = false;
+						if(dist_vec.at(2)>dist_vec.at(3)){
+							if(clip_reg_ret->leftClipPosTra2!=-1) { chrname2 = clip_reg_ret->chrname_leftTra2; pos2 = clip_reg_ret->leftClipPosTra2; }
+							else { chrname2 = clip_reg_ret->chrname_rightTra2; pos2 = clip_reg_ret->rightClipPosTra2; }
+						}else{
+							if(clip_reg_ret->leftClipPosTra1!=-1) { chrname2 = clip_reg_ret->chrname_leftTra1; pos2 = clip_reg_ret->leftClipPosTra1; }
+							else { chrname2 = clip_reg_ret->chrname_rightTra1; pos2 = clip_reg_ret->rightClipPosTra1; }
+						}
+						if(clip_reg->leftClipPosTra2==-1){
+							clip_reg->chrname_leftTra2 = chrname2;
+							clip_reg->leftClipPosTra2 = pos2;
+						}else{
+							clip_reg->chrname_rightTra2 = chrname2;
+							clip_reg->rightClipPosTra2 = pos2;
+						}
+						clip_reg->rightClipRegNum ++;
+						clip_reg_ret->valid_flag = false;
 
-					// exchange
-					if(clip_reg->leftClipPosTra1>clip_reg->rightClipPosTra1){
-						pos1 = clip_reg->leftClipPosTra1;
-						clip_reg->leftClipPosTra1 = clip_reg->rightClipPosTra1;
-						clip_reg->rightClipPosTra1 = pos1;
-					}
-					if(clip_reg->leftClipPosTra2>clip_reg->rightClipPosTra2){
-						pos2 = clip_reg->leftClipPosTra2;
-						clip_reg->leftClipPosTra2 = clip_reg->rightClipPosTra2;
-						clip_reg->rightClipPosTra2 = pos2;
+						// exchange
+						if(clip_reg->leftClipPosTra1>clip_reg->rightClipPosTra1){
+							pos1 = clip_reg->leftClipPosTra1;
+							clip_reg->leftClipPosTra1 = clip_reg->rightClipPosTra1;
+							clip_reg->rightClipPosTra1 = pos1;
+						}
+						if(clip_reg->leftClipPosTra2>clip_reg->rightClipPosTra2){
+							pos2 = clip_reg->leftClipPosTra2;
+							clip_reg->leftClipPosTra2 = clip_reg->rightClipPosTra2;
+							clip_reg->rightClipPosTra2 = pos2;
+						}
 					}
 				}
 			}
@@ -2697,34 +2775,36 @@ mateClipReg_t* Genome::getNearDistedClipReg(mateClipReg_t *clip_reg_given, vecto
 
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		for(j=0; j<chr->mateClipRegVector.size(); j++){
-			clip_reg = chr->mateClipRegVector.at(j);
+		if(chr->valid_flag){
+			for(j=0; j<chr->mateClipRegVector.size(); j++){
+				clip_reg = chr->mateClipRegVector.at(j);
 
-			if(clip_reg!=clip_reg_given and clip_reg->valid_flag and clip_reg->reg_mated_flag and clip_reg->sv_type==clip_reg_given->sv_type and clip_reg->leftClipRegNum==1 and clip_reg->rightClipRegNum==1){
+				if(clip_reg!=clip_reg_given and clip_reg->valid_flag and clip_reg->reg_mated_flag and clip_reg->sv_type==clip_reg_given->sv_type and clip_reg->leftClipRegNum==1 and clip_reg->rightClipRegNum==1){
 
-				dist_vec = computeDistsTra(clip_reg_given, clip_reg);
-				dist1 = dist_vec.at(0);
-				dist2 = dist_vec.at(1);
-				dist3 = dist_vec.at(2);
-				dist4 = dist_vec.at(3);
+					dist_vec = computeDistsTra(clip_reg_given, clip_reg);
+					dist1 = dist_vec.at(0);
+					dist2 = dist_vec.at(1);
+					dist3 = dist_vec.at(2);
+					dist4 = dist_vec.at(3);
 
-				// chose the minimum
-				if(dist1<dist2) min_dist1 = dist1;
-				else min_dist1 = dist2;
+					// chose the minimum
+					if(dist1<dist2) min_dist1 = dist1;
+					else min_dist1 = dist2;
 
-				if(dist3<dist4) min_dist2 = dist3;
-				else min_dist2 = dist4;
+					if(dist3<dist4) min_dist2 = dist3;
+					else min_dist2 = dist4;
 
-				if(min_dist1<paras->maxVarRegSize and min_dist2<paras->maxVarRegSize){
-					len_ratio = (double)min_dist1 / min_dist2;
-					if(len_ratio>1-CLIP_DIFF_LEN_RATIO_SV and len_ratio<1+CLIP_DIFF_LEN_RATIO_SV){
-						clip_reg_ret = clip_reg;
-						break;
+					if(min_dist1<paras->maxVarRegSize and min_dist2<paras->maxVarRegSize){
+						len_ratio = (double)min_dist1 / min_dist2;
+						if(len_ratio>1-CLIP_DIFF_LEN_RATIO_SV and len_ratio<1+CLIP_DIFF_LEN_RATIO_SV){
+							clip_reg_ret = clip_reg;
+							break;
+						}
 					}
 				}
 			}
+			if(clip_reg_ret) break;
 		}
-		if(clip_reg_ret) break;
 	}
 
 	return clip_reg_ret;
@@ -2777,6 +2857,16 @@ vector<int32_t> Genome::computeDistsTra(mateClipReg_t *clip_reg1, mateClipReg_t 
 	return dist_vec;
 }
 
+// phasing
+void Genome::genomePhasing(){
+	Chrome *chr;
+	for(size_t i=0; i<chromeVector.size(); i++){
+		chr = chromeVector.at(i);
+		if(chr->process_block_num and chr->valid_flag)
+			chr->chrPhasing();
+	}
+}
+
 // fill variant sequences
 void Genome::genomeFillVarseq(){
 //	Chrome *chr;
@@ -2806,10 +2896,12 @@ void Genome::genomeFillVarseqTra(){
 
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		for(j=0; j<chr->mateClipRegVector.size(); j++){
-			clip_reg = chr->mateClipRegVector.at(j);
-			if(clip_reg->valid_flag and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA)
-				fillVarseqSingleMateClipReg(clip_reg, cns_info_file);
+		if(chr->valid_flag){
+			for(j=0; j<chr->mateClipRegVector.size(); j++){
+				clip_reg = chr->mateClipRegVector.at(j);
+				if(clip_reg->valid_flag and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA)
+					fillVarseqSingleMateClipReg(clip_reg, cns_info_file);
+			}
 		}
 	}
 	cns_info_file.close();
@@ -2851,13 +2943,17 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
 				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
+				var_cand_tmp->maxVarRegSize = paras->maxVarRegSize;
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
-				var_cand_tmp->min_identity_match = paras->min_identity_match;
-				var_cand_tmp->min_identity_merge = paras->min_identity_merge;
+				var_cand_tmp->min_seqsim_match = paras->min_seqsim_match;
+				var_cand_tmp->min_seqsim_merge = paras->min_seqsim_merge;
 				var_cand_tmp->min_distance_merge = paras->min_distance_merge;
 				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
 				var_cand_tmp->minMapQ = paras->minMapQ;
 				var_cand_tmp->minHighMapQ = paras->minHighMapQ;
+				var_cand_tmp->max_seg_size_ratio = paras->max_seg_size_ratio_usr;
+				var_cand_tmp->max_seg_nm_ratio = paras->max_seg_nm_ratio_usr;
+				var_cand_tmp->max_absig_density = paras->max_absig_density;
 
 				var_cand_tmp->leftClipRefPos = clip_reg->leftClipPosTra1;
 				//var_cand_tmp->rightClipRefPos = clip_reg->rightClipPosTra1;
@@ -2875,6 +2971,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				reg->aln_seg_end_flag = false;
 				reg->query_pos_invalid_flag = false;
 				reg->large_indel_flag = false;
+				reg->merge_flag = false;
 				reg->gt_type = -1;
 				reg->gt_seq = "";
 				reg->AF = 0;
@@ -2891,7 +2988,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				tmpdir = out_dir_tra + "/" + "tmp_tra_" + reg->chrname + "_" + to_string(reg->startRefPos) + "-" + to_string(reg->endRefPos);
 
 				//set genotyping parameters
-				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_identity_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_seqsim_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 				// process monitor killed blat work
 				var_cand_tmp->max_proc_running_minutes = paras->max_proc_running_minutes_call;
@@ -2908,7 +3005,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				for(i=0; i<3; i++){
 					cns_extend_size = paras->cnsSideExtSizeClip * i;
 					// local consensus
-					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->min_identity_match, reg->endRefPos-reg->startRefPos+1, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
+					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->min_seqsim_match, reg->endRefPos-reg->startRefPos+1, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -2981,13 +3078,17 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->min_sv_size = paras->min_sv_size_usr;
 				var_cand_tmp->minReadsNumSupportSV = paras->minReadsNumSupportSV;
 				var_cand_tmp->minClipEndSize = paras->minClipEndSize;
+				var_cand_tmp->maxVarRegSize = paras->maxVarRegSize;
 				var_cand_tmp->minConReadLen = paras->minConReadLen;
-				var_cand_tmp->min_identity_match = paras->min_identity_match;
-				var_cand_tmp->min_identity_merge = paras->min_identity_merge;
+				var_cand_tmp->min_seqsim_match = paras->min_seqsim_match;
+				var_cand_tmp->min_seqsim_merge = paras->min_seqsim_merge;
 				var_cand_tmp->min_distance_merge = paras->min_distance_merge;
 				var_cand_tmp->max_seg_num_per_read = paras->max_seg_num_per_read;
 				var_cand_tmp->minMapQ = paras->minMapQ;
 				var_cand_tmp->minHighMapQ = paras->minHighMapQ;
+				var_cand_tmp->max_seg_size_ratio = paras->max_seg_size_ratio_usr;
+				var_cand_tmp->max_seg_nm_ratio = paras->max_seg_nm_ratio_usr;
+				var_cand_tmp->max_absig_density = paras->max_absig_density;
 
 				reg = new reg_t();
 				//reg->chrname = clip_reg->chrname_leftTra2;
@@ -3002,6 +3103,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				reg->aln_seg_end_flag = false;
 				reg->query_pos_invalid_flag = false;
 				reg->large_indel_flag = false;
+				reg->merge_flag = false;
 				reg->gt_type = -1;
 				reg->gt_seq = "";
 				reg->AF = 0;
@@ -3030,12 +3132,12 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->mtx_killed_minimap2_work = &paras->mtx_killed_minimap2_work;
 
 				//set genotyping parameters
-				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_identity_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
+				var_cand_tmp->setGtParas(paras->gt_min_sig_size, paras->gt_size_ratio_match, paras->gt_min_seqsim_merge, paras->gt_homo_ratio, paras->gt_hete_ratio, paras->minReadsNumSupportSV);
 
 				for(i=0; i<3; i++){
 					cns_extend_size = paras->cnsSideExtSizeClip * i;
 					// local consensus
-					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->min_identity_match, reg->endRefPos-reg->startRefPos+1, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
+					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->min_seqsim_match, reg->endRefPos-reg->startRefPos+1, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -3083,9 +3185,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 }
 
 // perform local consensus
-void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_identity_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
+void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
 
-	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_identity_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->max_ultra_high_cov, paras->minMapQ, paras->minHighMapQ, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr, paras->max_seg_nm_ratio_usr);
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_seqsim_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->max_ultra_high_cov, paras->minMapQ, paras->minHighMapQ, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->maxVarRegSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr, paras->max_seg_nm_ratio_usr, paras->max_absig_density);
 
 	// extract the corresponding refseq from reference
 	local_cns.extractRefseq();
@@ -3280,7 +3382,7 @@ void Genome::genomeSaveCallSV2File(){
 	Chrome *chr;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		//if(chr->process_block_num)
+		if(chr->valid_flag)
 			//chr->saveCallSV2File();
 			chr->saveCallSV2File02();
 	}
@@ -3291,14 +3393,18 @@ void Genome::genomeSaveCallSV2File(){
 
 // save TRA
 void Genome::saveTraCall2File(){
-	size_t i, j, k;
+	size_t i, j, k, m;
 	Chrome *chr;
 	ofstream outfile_tra;
 	vector<mateClipReg_t*> mate_clipReg_vec;
-	mateClipReg_t *clip_reg;
-	string line, chrname_tmp, header_line_bedpe, mate_reg_str;
-	vector<string> chrname_vec;
-	int32_t sv_len, sv_len2;
+	mateClipReg_t *mate_clip_reg;
+	string line, chrname_tmp, header_line_bedpe, mate_reg_str, id_str, sv_type_str, sv_type_str2;
+	string gt_seq, gt_header, gt_str, ad_str1, ad_str2, dp_str, id_str_mate, id_vec_mate_str;
+	int32_t reg_id, num_bnd, num_tra, DP, AD, id_vec_mate, clip_end, clip_end2, supp_num, DP_num, supp_num_mate;
+	reg_t *reg1, *reg2;
+	int64_t left_clip_pos, right_clip_pos;
+	double AF;
+	vector<string> str_vec, str_vec2;
 
 	outfile_tra.open(out_filename_result_tra);
 	if(!outfile_tra.is_open()){
@@ -3309,63 +3415,198 @@ void Genome::saveTraCall2File(){
 	header_line_bedpe = getCallFileHeaderBedpe(paras->sample);
 	outfile_tra << header_line_bedpe << endl;
 
+	num_bnd = num_tra = 1;
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		mate_clipReg_vec = chr->mateClipRegVector;
-		for(j=0; j<mate_clipReg_vec.size(); j++){
-			clip_reg = mate_clipReg_vec.at(j);
-			if(clip_reg->valid_flag and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA and (clip_reg->leftClipPosTra1>0 or clip_reg->leftClipPosTra2>0) and (clip_reg->rightClipPosTra1>0 or clip_reg->rightClipPosTra2>0)){
-//				if(clip_reg->left_var_cand_tra==NULL or clip_reg->right_var_cand_tra==NULL){
-//					cout << "i=" << i << ", j=" << j << endl;
-//				}
-				//line = clip_reg->left_var_cand_tra->chrname;
-				//line = clip_reg->chrname_leftTra1.size()>0 ? clip_reg->chrname_leftTra1 : "-";
-				chrname_vec = getLeftRightPartChrname(clip_reg);
-				line = chrname_vec.at(0).size()>0 ? chrname_vec.at(0) : "-";
-				if(clip_reg->leftClipPosTra1>0) line += "\t" + to_string(clip_reg->leftClipPosTra1);
-				else line += "\t-";
-				if(clip_reg->leftClipPosTra2>0) line += "\t" + to_string(clip_reg->leftClipPosTra2);
-				else line += "\t-";
-				chrname_tmp = chrname_vec.at(1).size()>0 ? chrname_vec.at(1) : "-";
-				line += "\t" + chrname_tmp;
-				if(clip_reg->rightClipPosTra1>0) line += "\t" + to_string(clip_reg->rightClipPosTra1);
-				else line += "\t-";
-				if(clip_reg->rightClipPosTra2>0) line += "\t" + to_string(clip_reg->rightClipPosTra2);
-				else line += "\t-";
-				line += "\tTRA";
+		if(chr->valid_flag){
+			mate_clipReg_vec = chr->mateClipRegVector;
+			for(j=0; j<mate_clipReg_vec.size(); j++){
+				mate_clip_reg = mate_clipReg_vec.at(j);
 
-				sv_len = sv_len2 = -1;
-				if(clip_reg->leftClipPosTra1>0 and clip_reg->leftClipPosTra2>0){
-					sv_len = clip_reg->leftClipPosTra2 - clip_reg->leftClipPosTra1 + 1;
-					line += "\t" + to_string(sv_len);
-				}else line += "\t-";
-				if(clip_reg->rightClipPosTra1>0 and clip_reg->rightClipPosTra2>0){
-					sv_len2 = clip_reg->rightClipPosTra2 - clip_reg->rightClipPosTra1 + 1;
-					line += "\t" + to_string(sv_len2);
-				}else line += "\t-";
+				if(mate_clip_reg->valid_flag and (mate_clip_reg->sv_type==VAR_TRA or mate_clip_reg->sv_type==VAR_BND)){ // valid TRA
+	//				if(mate_clip_reg->leftClipRegNum!=1 or mate_clip_reg->rightClipRegNum!=1){
+	//					cout << "leftClipRegNum=" << to_string(mate_clip_reg->leftClipRegNum) << ", rightClipRegNum=" << to_string(mate_clip_reg->rightClipRegNum) << endl;
+	//					printMateClipReg(mate_clip_reg);
+	//				}else continue;
 
-				// BND mate regions
-				mate_reg_str = clip_reg->bnd_mate_reg_strs[0];
-				for(k=1; k<4; k++) mate_reg_str += ";" + clip_reg->bnd_mate_reg_strs[k];
-				line += "\t" + mate_reg_str;
+					// only process half part
+					for(reg_id=0; reg_id<2; reg_id++){
+						str_vec = split(mate_clip_reg->bnd_mate_reg_strs[reg_id], ",");
+						for(m=0; m<str_vec.size(); m++){
+							if(str_vec.at(m).compare("-")!=0){
+								reg1 = reg2 = NULL;
+								left_clip_pos = right_clip_pos = -1;
+								supp_num = supp_num_mate = 0;
 
-				if(clip_reg->refseq_tra.size()>0) line += "\t" + clip_reg->refseq_tra;
-				else line += "\t-";
-				if(clip_reg->altseq_tra.size()>0) line += "\t" + clip_reg->altseq_tra;
-				else line += "\t-";
-				if(clip_reg->refseq_tra2.size()>0) line += "\t" + clip_reg->refseq_tra2;
-				else line += "\t-";
-				if(clip_reg->altseq_tra2.size()>0) line += "\t" + clip_reg->altseq_tra2;
-				else line += "\t-";
+								// main part
+								str_vec2 = split(str_vec.at(m), "|");
+								id_str_mate = str_vec2.at(0);
+								id_vec_mate_str = id_str_mate.at(0);
+								id_vec_mate = stoi(id_vec_mate_str);
+								if(m==0){
+									clip_end = LEFT_END;
+									if(id_str_mate.at(1)=='+') clip_end2 = RIGHT_END;
+									else clip_end2 = LEFT_END;
+								}else{
+									clip_end = RIGHT_END;
+									if(id_str_mate.at(1)=='+') clip_end2 = LEFT_END;
+									else clip_end2 = RIGHT_END;
+								}
+								left_clip_pos = stoi(str_vec2.at(1));
+								supp_num = stoi(str_vec2.at(2));
+								DP_num = stoi(str_vec2.at(3));
 
-//				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
-//				line += "\t" + reg->gt_seq;
+								if(clip_end==LEFT_END){
+									if(mate_clip_reg->leftClipReg) reg1 = mate_clip_reg->leftClipReg;
+								}else{
+									if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
+								}
 
-				// size select
-				//if((sv_len==-1 and sv_len2==-1) or (sv_len!=-1 and sv_len>=paras->min_sv_size_usr and sv_len<=paras->max_sv_size_usr) or (sv_len2!=-1 and sv_len2>=paras->min_sv_size_usr and sv_len2<=paras->max_sv_size_usr)) // deleted on 2025-03-20
-				if((sv_len==-1 and sv_len2==-1) or (sv_len!=-1 and sv_len>=paras->min_sv_size_usr_final and sv_len<=paras->max_sv_size_usr) or (sv_len2!=-1 and sv_len2>=paras->min_sv_size_usr_final and sv_len2<=paras->max_sv_size_usr))
-					outfile_tra << line << endl;
-					//cout << line << endl;
+								// mate part
+								if(id_vec_mate==2 or id_vec_mate==3){
+									str_vec = split(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate], ",");
+									if(clip_end2==LEFT_END){ // mate at left end
+										if(str_vec.at(0).compare("-")!=0){
+											str_vec2 = split(str_vec.at(0), "|");
+											right_clip_pos = stoi(str_vec2.at(1));
+											supp_num_mate = stoi(str_vec2.at(2));
+											//DP_num_mate = stoi(str_vec2.at(3));
+										}
+									}else{ // mate at right end
+										if(str_vec.at(1).compare("-")!=0){
+											str_vec2 = split(str_vec.at(1), "|");
+											right_clip_pos = stoi(str_vec2.at(1));
+											supp_num_mate = stoi(str_vec2.at(2));
+											//DP_num_mate = stoi(str_vec2.at(3));
+										}
+									}
+
+									if(id_vec_mate==2){
+										if(mate_clip_reg->rightClipReg) reg2 = mate_clip_reg->rightClipReg;
+									}else{
+										if(mate_clip_reg->rightClipReg2) reg2 = mate_clip_reg->rightClipReg2;
+									}
+								}
+
+								if(reg1 and reg2 and left_clip_pos!=-1 and right_clip_pos!=-1 and supp_num>=paras->minReadsNumSupportSV and supp_num_mate>=paras->minReadsNumSupportSV){
+									//cout << "sv_type=" << mate_clip_reg->sv_type << ": " << reg1->chrname << ":" << left_clip_pos << " <--> " << reg2->chrname << ":" << right_clip_pos << endl;
+
+									if(mate_clip_reg->sv_type==VAR_TRA){
+										sv_type_str = VAR_TRA_STR;
+										id_str = "ASVCLR." + sv_type_str + "." + to_string(num_tra);
+										num_tra ++;
+									}else{
+										sv_type_str = VAR_BND_STR;
+										id_str = "ASVCLR." + sv_type_str + "." + to_string(num_bnd);
+										num_bnd ++;
+									}
+									sv_type_str2 = "<" + sv_type_str + ">";
+
+									line = reg1->chrname + "\t" + to_string(left_clip_pos) + "\t" + to_string(left_clip_pos) + "\t" + reg2->chrname + "\t" + to_string(right_clip_pos) + "\t" + to_string(right_clip_pos); // chr1, start1, end1, chr2, start2, end2
+									line +=  + "\t" + id_str + "\t" + sv_type_str2 + "\t-\t-"; // ID, sv_type, SVLEN1, SVLEN2
+
+									// BND mate regions
+									mate_reg_str = mate_clip_reg->bnd_mate_reg_strs[0];
+									for(k=1; k<4; k++) mate_reg_str += ";" + mate_clip_reg->bnd_mate_reg_strs[k];
+									line += "\t" + mate_reg_str;
+
+									line += "\t-\t-\t-\t-"; // Ref1, Alt1, Ref2, Alt2
+
+									// extra information, split with ";": DP, AF, LDISCOV
+									AD = supp_num;
+									DP = DP_num;
+									AF = (double)AD / DP;
+									if(AF<0){
+										cout << "\t---------- AF=" << AF << ", sv_type=" << mate_clip_reg->sv_type << ": " << reg1->chrname << ":" << left_clip_pos << " <--> " << reg2->chrname << ":" << right_clip_pos << ", error!" << endl;
+										exit(1);
+									}
+									stringstream ss;
+									ss << setprecision(3) << AF;
+									line += "\tDP=" + to_string(DP) + ";AF=" + ss.str() + ";LDISCOV=READS";
+
+									gt_header = "GT:AD:DP";
+									gt_str = "./.";
+									ad_str1 = ".";
+									ad_str2 = ".";
+									dp_str = ".";
+
+									if(AF!=-1){
+										if(AF>=paras->gt_homo_ratio){
+											gt_str = GT_HOMOZYGOUS_STR;
+										}else if(AF>=paras->gt_hete_ratio){
+											gt_str = GT_HETEROZYGOUS_STR;
+										}else{
+											gt_str = GT_NOZYGOUS_STR;
+										}
+										ad_str1 = to_string(DP-AD);
+										ad_str2 = to_string(AD);
+										dp_str = to_string(DP);
+									}
+									gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
+									line += "\t" + gt_seq;
+
+									outfile_tra << line << endl;
+								}
+							}
+						}
+					}
+				}
+
+	/*
+				if(clip_reg->valid_flag and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA and (clip_reg->leftClipPosTra1>0 or clip_reg->leftClipPosTra2>0) and (clip_reg->rightClipPosTra1>0 or clip_reg->rightClipPosTra2>0)){
+	//				if(clip_reg->left_var_cand_tra==NULL or clip_reg->right_var_cand_tra==NULL){
+	//					cout << "i=" << i << ", j=" << j << endl;
+	//				}
+					//line = clip_reg->left_var_cand_tra->chrname;
+					//line = clip_reg->chrname_leftTra1.size()>0 ? clip_reg->chrname_leftTra1 : "-";
+					chrname_vec = getLeftRightPartChrname(clip_reg);
+					line = chrname_vec.at(0).size()>0 ? chrname_vec.at(0) : "-";
+					if(clip_reg->leftClipPosTra1>0) line += "\t" + to_string(clip_reg->leftClipPosTra1);
+					else line += "\t-";
+					if(clip_reg->leftClipPosTra2>0) line += "\t" + to_string(clip_reg->leftClipPosTra2);
+					else line += "\t-";
+					chrname_tmp = chrname_vec.at(1).size()>0 ? chrname_vec.at(1) : "-";
+					line += "\t" + chrname_tmp;
+					if(clip_reg->rightClipPosTra1>0) line += "\t" + to_string(clip_reg->rightClipPosTra1);
+					else line += "\t-";
+					if(clip_reg->rightClipPosTra2>0) line += "\t" + to_string(clip_reg->rightClipPosTra2);
+					else line += "\t-";
+					line += "\tTRA";
+
+					sv_len = sv_len2 = -1;
+					if(clip_reg->leftClipPosTra1>0 and clip_reg->leftClipPosTra2>0){
+						sv_len = clip_reg->leftClipPosTra2 - clip_reg->leftClipPosTra1 + 1;
+						line += "\t" + to_string(sv_len);
+					}else line += "\t-";
+					if(clip_reg->rightClipPosTra1>0 and clip_reg->rightClipPosTra2>0){
+						sv_len2 = clip_reg->rightClipPosTra2 - clip_reg->rightClipPosTra1 + 1;
+						line += "\t" + to_string(sv_len2);
+					}else line += "\t-";
+
+					// BND mate regions
+					mate_reg_str = clip_reg->bnd_mate_reg_strs[0];
+					for(k=1; k<4; k++) mate_reg_str += ";" + clip_reg->bnd_mate_reg_strs[k];
+					line += "\t" + mate_reg_str;
+
+					if(clip_reg->refseq_tra.size()>0) line += "\t" + clip_reg->refseq_tra;
+					else line += "\t-";
+					if(clip_reg->altseq_tra.size()>0) line += "\t" + clip_reg->altseq_tra;
+					else line += "\t-";
+					if(clip_reg->refseq_tra2.size()>0) line += "\t" + clip_reg->refseq_tra2;
+					else line += "\t-";
+					if(clip_reg->altseq_tra2.size()>0) line += "\t" + clip_reg->altseq_tra2;
+					else line += "\t-";
+
+	//				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
+	//				line += "\t" + reg->gt_seq;
+
+					// size select
+					//if((sv_len==-1 and sv_len2==-1) or (sv_len!=-1 and sv_len>=paras->min_sv_size_usr and sv_len<=paras->max_sv_size_usr) or (sv_len2!=-1 and sv_len2>=paras->min_sv_size_usr and sv_len2<=paras->max_sv_size_usr)) // deleted on 2025-03-20
+					if((sv_len==-1 and sv_len2==-1) or (sv_len!=-1 and sv_len>=paras->min_sv_size_usr_final and sv_len<=paras->max_sv_size_usr) or (sv_len2!=-1 and sv_len2>=paras->min_sv_size_usr_final and sv_len2<=paras->max_sv_size_usr))
+						outfile_tra << line << endl;
+						//cout << line << endl;
+				}
+	*/
 			}
 		}
 	}
@@ -3402,8 +3643,10 @@ void Genome::mergeCallResult(){
 
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
-		copySingleFile(chr->out_filename_call_indel, out_file_indel); // indel
-		copySingleFile(chr->out_filename_call_clipReg, out_file_clipReg); // clip_reg
+		if(chr->valid_flag){
+			copySingleFile(chr->out_filename_call_indel, out_file_indel); // indel
+			copySingleFile(chr->out_filename_call_clipReg, out_file_clipReg); // clip_reg
+		}
 	}
 	out_file_indel.close();
 	out_file_clipReg.close();
@@ -3448,7 +3691,7 @@ void Genome::saveResultVCF(){
 // save indel in VCF file format for detect command
 void Genome::saveResultToVCF(string &in, string &out_vcf){
 	string line, line_vcf, chr, start_pos, id, ref, alt, qual, filter, info, format, format_val, sample, reg;
-	string end_pos, sv_type, sv_len, dup_num, blat_inner, extra_info;
+	string end_pos, sv_type, sv_type_tmp, sv_len, dup_num, blat_inner, extra_info;
 	ifstream infile;
 	ofstream outfile;
 	vector<string> str_vec;
@@ -3458,6 +3701,7 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 	int64_t tra_pos_arr[4];
 	int32_t i, j, checked_arr[4][2]; //, ins_id, del_id, dup_id, inv_id, tra_id;
 	vector<BND_t*> bnd_vec, sub_bnd_vec;
+	BND_t *bnd_item;
 	string format_name_bnd;
 
 	// open files
@@ -3500,7 +3744,11 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 				if(alt.compare("-")==0) alt = ".";
 
 				end_pos = str_vec.at(2);
-				sv_type = str_vec.at(4);
+				sv_type_tmp = str_vec.at(4);
+				if(sv_type_tmp.at(0)=='<') {
+					sv_type = sv_type_tmp.substr(1, sv_type_tmp.size()-2);
+					alt = sv_type_tmp;
+				}else sv_type = sv_type_tmp;
 				sv_len = str_vec.at(5);
 				if(sv_type.compare(VAR_UNC_STR)==0 or sv_type.compare(VAR_UNC_STR1)==0 or sv_type.compare(VAR_UNC_STR2)==0) id = ref = alt = "."; // UNC
 				info = "SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len + ";END=" + end_pos;	// INFO: SVTYPE=sv_type;SVLEN=sv_len;END=end
@@ -3514,29 +3762,6 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 					info += ";" + blat_inner;
 				}
 
-//				format = "GT";		// FORMAT and the values
-//				format_val = "./.";
-
-				// id = "";
-				// if(sv_type.compare(VAR_INS_STR)==0){
-				// 	ins_id++;
-				// 	id = sv_type + "." + to_string(ins_id);
-				// }else if(sv_type.compare(VAR_DEL_STR)==0){
-				// 	del_id++;
-				// 	id = sv_type + "." + to_string(del_id);
-				// }else if(sv_type.compare(VAR_DUP_STR)==0){
-				// 	dup_id++;
-				// 	id = sv_type + "." + to_string(dup_id);
-				// }else if(sv_type.compare(VAR_INV_STR)==0){
-				// 	inv_id++;
-				// 	id = sv_type + "." + to_string(inv_id);
-				// }else if(sv_type.compare(VAR_TRA_STR)==0){
-				// 	tra_id++;
-				// 	id = sv_type + "." + to_string(tra_id);
-				// }
-
-//				line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
-
 				format = str_vec.at(10);			// FORMAT
 				format_val = str_vec.at(11);		// gt_value
 
@@ -3544,7 +3769,14 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 				outfile << line_vcf << endl;
 
 			}else{	// TRA, MIX
-				if(str_vec.at(7).compare(VAR_TRA_STR)==0){ // TRA, then convert to BND
+				sv_type_tmp = str_vec.at(7);
+				if(sv_type_tmp.at(0)=='<') {
+					sv_type = sv_type_tmp.substr(1, sv_type_tmp.size()-2);
+					alt = sv_type_tmp;
+				}else sv_type = sv_type_tmp;
+
+				//if(str_vec.at(7).compare(VAR_TRA_STR)==0){ // TRA, then convert to BND, deleted on 2025-09-19
+				if(sv_type.compare(VAR_TRA_STR)==0){ // TRA, then convert to BND
 
 					for(i=0; i<4; i++) { checked_arr[i][0] = checked_arr[i][1] = 0; } // initialize
 
@@ -3567,48 +3799,32 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 						if(bnd_str_vec.at(i).compare("-")!=0){
 						//if(bnd_str_vec.at(i).compare("-")!=0 and tra_pos_arr[i]>0){
 							// right end
-							sub_bnd_vec = generateBNDItems(i, RIGHT_END, checked_arr, chrname1, chrname2, tra_pos_arr, bnd_str_vec, fai);
+							sub_bnd_vec = generateBNDItems(i, RIGHT_END, checked_arr, chrname1, chrname2, tra_pos_arr, bnd_str_vec, fai, paras->gt_homo_ratio, paras->gt_hete_ratio);
 							for(j=0; j<(int32_t)sub_bnd_vec.size(); j++) {
-								outfile << sub_bnd_vec.at(j)->vcf_line << endl;
-								//cout << sub_bnd_vec.at(j)->vcf_line << endl;
-								bnd_vec.push_back(sub_bnd_vec.at(j));
+								bnd_item = sub_bnd_vec.at(j);
+								//cout << "i=" << i << ", end=" << RIGHT_END << ", reg_id=" << to_string(bnd_item->reg_id) << ", mate_reg_id=" << to_string(bnd_item->mate_reg_id) << endl;
+								if(bnd_item->support_num>=paras->minReadsNumSupportSV and ((bnd_item->reg_id<=1 and bnd_item->mate_reg_id>=2) or (bnd_item->reg_id>=2 and bnd_item->mate_reg_id<=1))){
+									outfile << bnd_item->vcf_line << endl;
+									//cout << bnd_item->vcf_line << endl;
+									bnd_vec.push_back(bnd_item);
+								}
 							}
 
 							// left end
-							sub_bnd_vec = generateBNDItems(i, LEFT_END, checked_arr, chrname1, chrname2, tra_pos_arr, bnd_str_vec, fai);
+							sub_bnd_vec = generateBNDItems(i, LEFT_END, checked_arr, chrname1, chrname2, tra_pos_arr, bnd_str_vec, fai, paras->gt_homo_ratio, paras->gt_hete_ratio);
 							for(j=0; j<(int32_t)sub_bnd_vec.size(); j++) {
-								outfile << sub_bnd_vec.at(j)->vcf_line << endl;
-								//cout << sub_bnd_vec.at(j)->vcf_line << endl;
-								bnd_vec.push_back(sub_bnd_vec.at(j));
+								bnd_item = sub_bnd_vec.at(j);
+								//cout << "i=" << i << ", end=" << LEFT_END << ", reg_id=" << to_string(bnd_item->reg_id) << ", mate_reg_id=" << to_string(bnd_item->mate_reg_id) << endl;
+								if(bnd_item->support_num>=paras->minReadsNumSupportSV and ((bnd_item->reg_id<=1 and bnd_item->mate_reg_id>=2) or (bnd_item->reg_id>=2 and bnd_item->mate_reg_id<=1))){
+									outfile << bnd_item->vcf_line << endl;
+									//cout << bnd_item->vcf_line << endl;
+									bnd_vec.push_back(bnd_item);
+								}
 							}
 						}
 					}
 				}else{ // MIX
-
 					cout << __func__ << ": unexpected variant item: " << line << ", skipped." << endl;
-
-//					chr = str_vec.at(0);		// CHROM
-//					if(str_vec.at(1).compare("-")==0) start_pos = str_vec.at(2); // POS
-//					else start_pos = str_vec.at(1);
-//					id = ".";					// ID
-//					ref = ".";					// REF
-//					alt = ".";					// ALT
-//
-//					qual = ".";					// QUAL
-//					filter = "PASS";			// FILTER
-//
-//					//chr2 = str_vec.at(3);
-//					if(str_vec.at(4).compare("-")==0) end_pos = str_vec.at(5);
-//					else end_pos = str_vec.at(4);
-//					sv_type = str_vec.at(6);
-//					sv_len = "False";
-//					info = "CHR2=" + chr2 + ";END=" + end_pos + ";SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len;	// INFO: CHR2=chr2;END=end;SVTYPE=sv_type;SVLEN=sv_len
-//
-//					format = "GT";		// FORMAT and the values
-//					format_val = "./.";
-//
-//					line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + info + "\t" + format + "\t" + format_val;
-//					outfile << line_vcf << endl;
 				}
 			}
 
@@ -3687,7 +3903,9 @@ void Genome::saveVCFHeader(ofstream &fp, string &sample_str){
 
 	saveVCFContigHeader(fp);	// contigs information
 
-	fp << "##phasing=None" << endl;
+	//fp << "##phasing=None" << endl;
+	if(paras->phasing_flag) fp << "##phasing=Local phased" << endl;
+	else fp << "##phasing=None" << endl;
 //	fp << "##ALT=<ID=INS,Description=\"Insertion\">" << endl;
 //	fp << "##ALT=<ID=DEL,Description=\"Deletion\">" << endl;
 //	fp << "##ALT=<ID=DUP,Description=\"Duplication\">" << endl;
@@ -3708,6 +3926,7 @@ void Genome::saveVCFHeader(ofstream &fp, string &sample_str){
 	//fp << "##INFO=<ID=BLATINNER,Number=1,Type=Flag,Description=\"variants called from inner parts of BLAT align segment\">" << endl;
 //	fp << "##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of Samples With Data\">" << endl;
 //	fp << "##FILTER=<ID=q10,Description=\"Quality below 10\">" << endl;
+	if(paras->phasing_flag) fp << "##FORMAT=<ID=PS,Number=.,Type=String,Description=\"Phase set\">" << endl;
 	fp << "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">" << endl;
 	fp << "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Read depth per allele\">" << endl;
 	fp << "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read depth at this position for this sample\">" << endl;
@@ -3748,22 +3967,23 @@ void Genome::computeVarNumStatCons(){
 	total_indel = total_clipReg = total_succ_indel = total_fail_indel = total_succ_clipReg = total_fail_clipReg = 0;
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
+		if(chr->valid_flag){
+			filename = chr->getVarcandIndelFilename();
+			num_vec = getSuccFailNumCns(filename);
+			succ_tmp = num_vec.at(0);
+			fail_tmp = num_vec.at(1);
+			total_succ_indel += succ_tmp;
+			total_fail_indel += fail_tmp;
+			total_indel += succ_tmp + fail_tmp;
 
-		filename = chr->getVarcandIndelFilename();
-		num_vec = getSuccFailNumCns(filename);
-		succ_tmp = num_vec.at(0);
-		fail_tmp = num_vec.at(1);
-		total_succ_indel += succ_tmp;
-		total_fail_indel += fail_tmp;
-		total_indel += succ_tmp + fail_tmp;
-
-		filename = chr->getVarcandClipregFilename();
-		num_vec = getSuccFailNumCns(filename);
-		succ_tmp = num_vec.at(0);
-		fail_tmp = num_vec.at(1);
-		total_succ_clipReg += succ_tmp;
-		total_fail_clipReg += fail_tmp;
-		total_clipReg += succ_tmp + fail_tmp;
+			filename = chr->getVarcandClipregFilename();
+			num_vec = getSuccFailNumCns(filename);
+			succ_tmp = num_vec.at(0);
+			fail_tmp = num_vec.at(1);
+			total_succ_clipReg += succ_tmp;
+			total_fail_clipReg += fail_tmp;
+			total_clipReg += succ_tmp + fail_tmp;
+		}
 	}
 	total = total_indel + total_clipReg;
 
@@ -3840,6 +4060,7 @@ void Genome::computeVarNumStatCall(){
 			}
 		}
 	}
+	infile.close();
 
 	total = num_unc + num_ins + num_del + num_inv + num_dup + num_tra;
 
@@ -3852,16 +4073,21 @@ void Genome::computeVarNumStatCall(){
 	cout << "\t" << "translocations: " << num_tra << endl;
 	cout << "\t" << "uncertain: " << num_unc << endl;
 
-	infile.close();
+	if(paras->phasing_flag){
+		cout << "Number of phased sets : " << ps_num << endl;
+		cout << "number of phased items: " << phased_var_num << endl;
+	}
 }
 
 size_t Genome::getSVTypeSingleLine(string &line){
 	size_t sv_type = VAR_UNC;
 	vector<string> str_vec;
-	string str_tmp;
+	string str_tmp, str_tmp2;
 
 	str_vec = split(line, "\t");
-	str_tmp = str_vec.at(4);
+	str_tmp2 = str_vec.at(4);
+	if(str_tmp2.at(0)=='<') str_tmp = str_tmp2.substr(1, str_tmp2.size()-2);
+	else str_tmp = str_tmp2;
 	if(str_tmp.compare(VAR_UNC_STR)==0 or str_tmp.compare(VAR_UNC_STR1)==0 or str_tmp.compare(VAR_UNC_STR2)==0){
 		sv_type = VAR_UNC;
 	}else if(str_tmp.compare(VAR_INS_STR)==0 or str_tmp.compare(VAR_INS_STR1)==0 or str_tmp.compare(VAR_INS_STR2)==0){
@@ -3873,8 +4099,11 @@ size_t Genome::getSVTypeSingleLine(string &line){
 	}else if(str_tmp.compare(VAR_INV_STR)==0 or str_tmp.compare(VAR_INV_STR1)==0 or str_tmp.compare(VAR_INV_STR2)==0){
 		sv_type = VAR_INV;
 	}else{
-		if(str_vec.size()>MAX_BED_COLS_NUM and (str_vec.at(7).compare(VAR_TRA_STR)==0 or str_vec.at(7).compare(VAR_TRA_STR1)==0 or str_vec.at(7).compare(VAR_BND_STR)==0)){
-			if(str_vec.at(7).compare(VAR_TRA_STR)==0 or str_vec.at(7).compare(VAR_TRA_STR1)==0) sv_type = VAR_TRA;
+		str_tmp2 = str_vec.at(7);
+		if(str_tmp2.at(0)=='<') str_tmp = str_tmp2.substr(1, str_tmp2.size()-2);
+		else str_tmp = str_tmp2;
+		if(str_vec.size()>MAX_BED_COLS_NUM and (str_tmp.compare(VAR_TRA_STR)==0 or str_tmp.compare(VAR_TRA_STR1)==0 or str_tmp.compare(VAR_BND_STR)==0)){
+			if(str_tmp.compare(VAR_TRA_STR)==0 or str_tmp.compare(VAR_TRA_STR1)==0) sv_type = VAR_TRA;
 			else sv_type = VAR_BND;
 		}else{
 			sv_type = VAR_MIX;
@@ -3898,16 +4127,80 @@ void Genome::sortVarResults(string &infilename, int32_t filetype){
 		exit(1);
 	}
 
-	subsets = constructSubsetByChr(sv_vec);
+	subsets = constructSubsetByChr(sv_vec, fai);
 	sortSVitem(subsets);
-	//rmDupSVitem(subsets, paras->gt_size_ratio_match, paras->gt_min_identity_merge); // remove identical items, deleted on 2025-03-28
-	rmDupSVitem(subsets, MIN_SIZE_RATIO_REDUNDANT_FILTER, MIN_IDENTITY_REDUNDANT_FILTER); // remove identical items
+	rmRedundantSVitem(subsets, MIN_SIZE_RATIO_REDUNDANT_FILTER, MIN_SEQSIM_REDUNDANT_FILTER, fai); // remove redundant items
+	if(filetype==1 and paras->phasing_flag) computePhaseSetNum(subsets);
 	outputResult(outfilename, subsets, filetype);
 
 	remove(infilename.c_str());
 	rename(outfilename.c_str(), infilename.c_str());
 
 	destroyData(sv_vec);
+}
+
+void Genome::computePhaseSetNum(vector<vector<SV_item*>> &subsets){
+	ps_num = phased_var_num = 0;
+	vector<int32_t> num_vec;
+
+	for(size_t i=0; i<subsets.size(); i++){
+		num_vec = computePhaseSetNumSubset(subsets.at(i));
+		ps_num += num_vec.at(0);
+		phased_var_num += num_vec.at(1);
+		//cout << "subset [" << i << "]: ps_num_tmp=" << num_vec.at(0) << ", phased_item_num_tmp=" << num_vec.at(1) << endl;
+	}
+	//cout << "ps_num=" << ps_num << ", phased_var_num=" << phased_var_num << endl;
+}
+
+vector<int32_t> Genome::computePhaseSetNumSubset(vector<SV_item*> &subset){
+	SV_item *item;
+	vector<int32_t> ret_num_vec;
+	int32_t ps_num, item_num;
+	map<string, int32_t> ps_id_map;
+	string ps_str;
+	vector<string> ps_vec;
+
+	item_num = 0;
+	for(size_t i=0; i<subset.size(); i++){
+		item = subset.at(i);
+		if(item->valid_flag){
+			ps_str = extractPSFromVCFLine(item->info);
+			if(ps_str.size()>0){
+				item_num ++;
+				ps_vec = split(ps_str, ",");
+				for(size_t j=0; j<ps_vec.size(); j++){
+					ps_id_map[ps_vec.at(j)] ++;
+				}
+			}
+		}
+	}
+
+	ps_num = 0;
+	for(const auto &ps : ps_id_map) if(ps.second>=2) ps_num ++;
+
+	ret_num_vec.push_back(ps_num);
+	ret_num_vec.push_back(item_num);
+
+	return ret_num_vec;
+}
+
+string Genome::extractPSFromVCFLine(string &line){
+	string ps_str, str;
+	vector<string> str_vec, info_vec;
+	uint64_t idx;
+
+	str_vec = split(line, "\t");
+	info_vec = split(str_vec.at(7), ";");
+	for(size_t i=0; i<info_vec.size(); i++){
+		str = info_vec.at(i);
+		idx = str.find("PS=");
+		if(idx!=string::npos){ // found
+			ps_str = str.substr(idx+3);
+			break;
+		}
+	}
+
+	return ps_str;
 }
 
 void Genome::outputResult(string &outfilename, vector<vector<SV_item*>> &subsets, int32_t filetype){
@@ -3940,4 +4233,13 @@ void Genome::outputResult(string &outfilename, vector<vector<SV_item*>> &subsets
 		for(size_t j=0; j<sv_vec.size(); j++) if(sv_vec.at(j)->valid_flag) outfile << sv_vec.at(j)->info << endl;
 	}
 	outfile.close();
+}
+
+// remove temporary results
+void Genome::removeTempResults(){
+	string cmd = "rm -rf " + out_dir_detect + " " + out_dir_cns + " " + out_dir_call;
+	cout << "Cleaning temporary results:" << endl;
+	cout << "\t" << out_dir_detect << endl << "\t" << out_dir_cns << endl << "\t" << out_dir_call << endl;
+	cout << "If you want to keep the temporary results, please specify the `--no-clean` option." << endl;
+	system(cmd.c_str());
 }

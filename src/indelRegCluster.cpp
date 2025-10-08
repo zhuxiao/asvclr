@@ -1,9 +1,9 @@
 #include "indelRegCluster.h"
 #include <numeric>
 
-extern pthread_mutex_t mutex_fai;
+//extern pthread_mutex_t mutex_fai;
 
-indelRegCluster::indelRegCluster(string &chrname, int64_t var_startRefPos, int64_t var_endRefPos, int32_t sv_len_est, int64_t startRefPos_cns, int64_t endRefPos_cns, int32_t min_sv_size, int32_t min_supp_num, double min_identity_match, faidx_t *fai) {
+indelRegCluster::indelRegCluster(string &chrname, int64_t var_startRefPos, int64_t var_endRefPos, int32_t sv_len_est, int64_t startRefPos_cns, int64_t endRefPos_cns, int32_t min_sv_size, int32_t min_supp_num, double min_seqsim_match, faidx_t *fai) {
 	this->chrname = chrname;
 	this->var_startRefPos = var_startRefPos;
 	this->var_endRefPos = var_endRefPos;
@@ -12,9 +12,9 @@ indelRegCluster::indelRegCluster(string &chrname, int64_t var_startRefPos, int64
 	this->endRefPos_cns = endRefPos_cns;
 	this->min_sv_size = min_sv_size;
 	this->min_supp_num = min_supp_num;
-	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get reference size
+	this->chrlen = faidx_seq_len64(fai, chrname.c_str()); // get reference size
 	this->fai = fai;
-	this->min_identity_match = min_identity_match;
+	this->min_seqsim_match = min_seqsim_match;
 
 	max_merge_span = CNS_MIN_DIST_MERGE_THRES;
 	if(sv_len_est>CNS_MIN_DIST_MERGE_THRES) max_merge_span = 1.5 * CNS_MIN_DIST_MERGE_THRES;
@@ -75,230 +75,10 @@ void indelRegCluster::extractQcSigsFromAlnSegs(struct querySeqInfoNode* &query_s
 	endSpanPos_extend = end_var_pos;
 
 	query_seq_info_node->qcSig_vec = extractQcSigsFromAlnSegsSingleQuery(query_seq_info_node, query_seq_info_node->clip_aln->chrname, startSpanPos_extend, endSpanPos_extend, min_sv_size);
-	query_seq_info_node->qcSig_merge_flag = mergeNeighbouringSigsFlag(query_seq_info_node, query_seq_info_node->qcSig_vec, MAX_DIST_MERGE_ARBITARY, max_merge_span, CNS_MIN_IDENTITY_MERGE_THRES2, MIN_VALID_SIG_SIZE_RATIO_THRES, fai);
+	rmNeighborFalseSig(query_seq_info_node->qcSig_vec, MIN_AVER_SIZE_ALN_SEG, MIN_SIZE_RATIO_MATCH_CLIP_POS);
+	query_seq_info_node->qcSig_merge_flag = mergeNeighbouringSigsFlag(query_seq_info_node, query_seq_info_node->qcSig_vec, MAX_DIST_MERGE_ARBITARY, max_merge_span, CNS_MIN_SEQSIM_MERGE_THRES2, MIN_VALID_SIG_SIZE_RATIO_THRES, fai);
 	filterSmallSigs(query_seq_info_node->qcSig_vec, MIN_SIG_SIZE_RATIO_FILTER_THRES);
 	computeVarSums(query_seq_info_node, start_var_pos, end_var_pos);
-}
-
-// merge neighbouring signatures for indels
-bool indelRegCluster::mergeNeighbouringSigsFlag(struct querySeqInfoNode* query_seq_info_node, vector<qcSig_t*> &sig_vec, int32_t min_ref_dist_thres, int32_t max_ref_dist_thres, double min_merge_identity_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai){
-	size_t i, j;
-	int32_t dist, query_opflag, seq_len;
-	int64_t l, query1_startRpos, query1_endRpos, query1_svlen, query1_startQpos, query1_endQpos, query2_startRpos, query2_svlen, query2_startQpos, query2_endQpos, start_querypos_comp, end_querypos_comp, start_refpos_comp, end_refpos_comp, start_querypos_merged, end_querypos_merged, query2_endRpos;
-	int64_t pre_distance;
-	uint8_t *seq_int;
-	string comp_refseq, comp_queryseq, reg_str, merging_seq;
-	double iden_val;
-	qcSig_t *sig1, *sig2;
-	char *seq;
-	bool flag;
-
-	dist = -1;
-	flag = false;
-	// if(query_seq_info_node->qname.compare("SRR11008518.1.11068758")==0)
-		// cout << "--------------qname=" << query_seq_info_node->qname << "--------------" << endl;
-	if(query_seq_info_node->clip_aln and query_seq_info_node->clip_aln->bam){
-		seq_int = bam_get_seq(query_seq_info_node->clip_aln->bam);
-		for(i=0; i<sig_vec.size(); i++){
-			sig1 = sig_vec.at(i);
-			// skip normal signature
-			if(sig1->cigar_op!=BAM_CINS and sig1->cigar_op!=BAM_CDEL) continue;
-
-			query_opflag = sig1->cigar_op;
-			// pre_refpos_comp = -1;
-			pre_distance = -1;
-
-			query1_startRpos = sig1->ref_pos;
-			query1_svlen = sig1->cigar_op_len;
-			query1_endRpos = getEndRefPosAlnSeg(query1_startRpos, query_opflag, query1_svlen);
-			query1_startQpos = sig1->query_pos;
-			query1_endQpos = getEndQueryPosAlnSeg(query1_startQpos, query_opflag, query1_svlen);
-
-			for(j=i+1; j<sig_vec.size(); j++){
-				sig2 = sig_vec.at(j);
-				// skip normal signature
-				if(sig2->cigar_op!=BAM_CINS and sig2->cigar_op!=BAM_CDEL) continue;
-				merging_seq = "";
-				// compute distance
-				query2_startRpos = sig2->ref_pos;
-				// if(pre_refpos_comp < 0) distance = query2_startRpos - query1_endRpos; // -1;
-				// else distance = query2_startRpos - pre_refpos_comp; // -1;
-				dist = query2_startRpos - query1_endRpos;
-
-				if(dist > max_ref_dist_thres) break;
-				if(query_opflag == sig2->cigar_op and dist <= max_ref_dist_thres){
-					query2_svlen = sig2->cigar_op_len;
-					query2_startQpos = sig2->query_pos;
-					query2_endQpos = getEndQueryPosAlnSeg(query2_startQpos, sig2->cigar_op, query2_svlen);
-					query2_endRpos = getEndRefPosAlnSeg(query2_startRpos, sig2->cigar_op, query2_svlen);
-					if(query_opflag==BAM_CDEL){ // DEL
-						// get compared query pos
-						// start_querypos_comp = query1_endQpos;	// deleted on 2025-01-03
-						// end_querypos_comp = query2_startQpos - 1;	// deleted on 2025-01-03
-						start_querypos_comp = query2_startQpos - dist;
-						end_querypos_comp = query2_startQpos - 1;
-						// get compared query seq
-						comp_queryseq = "";
-						for(l=start_querypos_comp-1; l<end_querypos_comp; l++) comp_queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];  // seq
-
-						// get compared ref pos
-						// start_refpos_comp = query1_endRpos + query2_svlen;	// deleted on 2025-01-03
-						// end_refpos_comp = start_refpos_comp + distance;	// deleted on 2025-01-03
-						start_refpos_comp = query2_endRpos - dist;
-						end_refpos_comp = query2_endRpos - 1;
-
-						// get compared ref seq
-						reg_str = query_seq_info_node->clip_aln->chrname + ":" + to_string(start_refpos_comp) + "-" + to_string(end_refpos_comp);
-						pthread_mutex_lock(&mutex_fai);
-						seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
-						pthread_mutex_unlock(&mutex_fai);
-						comp_refseq = seq;
-						free(seq);
-
-						// cout << "sig1_op_len=" << sig1->cigar_op_len << "_" << sig1->cigar_op << ", sig2_op_len=" << sig2->cigar_op_len << "_" << sig2->cigar_op << ", distance=" << distance << endl;
-						// cout << "comp_queryseq=" << comp_queryseq << ", comp_refseq=" << comp_refseq << endl;
-						iden_val = computeVarseqIdentity(comp_queryseq, comp_refseq);
-						// cout << "iden_val=" << iden_val << endl;
-
-						if(pre_distance>0) min_ref_dist_thres += pre_distance;
-						// cout << "min_ref_dist_thres=" << min_ref_dist_thres << endl;
-
-						if(((double)dist/(sig1->cigar_op_len+sig2->cigar_op_len+dist)<min_valid_sig_size_ratio_thres and dist<min_ref_dist_thres) or iden_val>=min_merge_identity_thres){
-							flag = true;
-							sig1->cigar_op_len += query2_svlen;
-
-							query1_startRpos = sig1->ref_pos;
-							query1_svlen = sig1->cigar_op_len;
-							query1_endRpos = getEndRefPosAlnSeg(query1_startRpos, query_opflag, query1_svlen);
-
-							sig1->altseq += sig2->altseq;
-							// pre_refpos_comp = query2_endRpos;
-							pre_distance = dist;
-							delete sig2;
-							sig_vec.erase(sig_vec.begin()+j);
-							j--;
-						}else
-							break;
-					}else if(query_opflag==BAM_CINS){ // INS
-						// get compared query pos
-						start_querypos_comp = query2_endQpos - dist;
-						end_querypos_comp = query2_endQpos;
-						// get compared query seq
-						comp_queryseq = "";
-						for(l=start_querypos_comp; l<end_querypos_comp; l++) comp_queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];  // seq
-
-						// get compared ref pos
-						start_refpos_comp = query2_startRpos - dist;
-						end_refpos_comp = query2_startRpos - 1;
-						// get compared ref seq
-						reg_str = query_seq_info_node->clip_aln->chrname + ":" + to_string(start_refpos_comp) + "-" + to_string(end_refpos_comp);
-						pthread_mutex_lock(&mutex_fai);
-						seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
-						pthread_mutex_unlock(&mutex_fai);
-						comp_refseq = seq;
-						free(seq);
-
-						// cout << "sig1_op_len=" << sig1->cigar_op_len << "_" << sig1->cigar_op << ", sig2_op_len=" << sig2->cigar_op_len << "_" << sig2->cigar_op << ", distance=" << distance << endl;
-						// cout << "comp_queryseq=" << comp_queryseq << ", comp_refseq=" << comp_refseq << endl;
-						iden_val = computeVarseqIdentity(comp_queryseq, comp_refseq);
-						// cout << "iden_val=" << iden_val << endl;
-
-						if(pre_distance>0)	min_ref_dist_thres += pre_distance;
-						// cout << "min_ref_dist_thres=" << min_ref_dist_thres << endl;
-
-						if(((double)dist/(sig1->cigar_op_len+sig2->cigar_op_len+dist)<min_valid_sig_size_ratio_thres and dist < min_ref_dist_thres) or iden_val >= min_merge_identity_thres){
-
-							query1_startQpos = sig1->query_pos;
-							query1_endQpos = getEndQueryPosAlnSeg(query1_startQpos, query_opflag, query1_svlen);
-
-							// get altseq after merge
-							start_querypos_merged = query1_endQpos;
-							end_querypos_merged = query1_endQpos + query2_svlen;
-							for(l=start_querypos_merged-1; l<end_querypos_merged; l++) merging_seq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];
-							sig1->altseq += merging_seq;
-
-							sig1->cigar_op_len += query2_svlen;
-							query1_svlen = sig1->cigar_op_len;
-
-							pre_distance = dist;
-							delete sig2;
-							sig_vec.erase(sig_vec.begin()+j);
-							j--;
-							flag = true;
-						}else
-							break;
-					}
-				}else
-					break;
-			}
-		}
-		// if(sig_vec.size()>0 and flag){
-		// 	cout << "~~~~~~~~~~~~" << endl;
-		// 	for (i=0; i<sig_vec.size(); i++){
-		// 		// get reads seq based on position
-		// 		start_querypos_comp = sig_vec.at(i)->query_pos;
-		// 		end_querypos_comp = getEndQueryPosAlnSeg(start_querypos_comp, sig_vec.at(i)->cigar_op, sig_vec.at(i)->cigar_op_len);
-		// 		// get compared query seq
-		// 		comp_queryseq = "";
-		// 		for(l=start_querypos_comp-1; l<end_querypos_comp; l++) comp_queryseq += "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, l)];  // seq
-		// 		iden_val = computeVarseqIdentity(comp_queryseq, sig_vec.at(i)->altseq);
-		// 		cout << "iden=" << iden_val << ", comp_queryseq=" << comp_queryseq << ", sig_vec.at("<< i << ")->altseq=" << sig_vec.at(i)->altseq << endl;
-		// 	}
-		// }
-		sig_vec.shrink_to_fit();
-	}
-	// if(flag)
-	// 	cout << "merge_flag=" << flag << " sig_vec.size()=" << sig_vec.size() << endl;
-	return flag;
-}
-
-// filter small signatures (l/max_size<0.2)
-void indelRegCluster::filterSmallSigs(vector<qcSig_t *> &qcSig_vec, double valid_size_ratio_thres){
-	size_t i;
-	int32_t max_size_ins, max_size_del;
-	qcSig_t *sig;
-	bool valid_flag;
-
-	max_size_ins = max_size_del = 0;
-	for(i=0; i<qcSig_vec.size(); i++){
-		sig = qcSig_vec.at(i);
-		if(sig->cigar_op==BAM_CINS and max_size_ins<sig->cigar_op_len) max_size_ins = sig->cigar_op_len;
-		else if(sig->cigar_op==BAM_CDEL and max_size_del<sig->cigar_op_len) max_size_del = sig->cigar_op_len;
-	}
-
-	if(max_size_ins>0 or max_size_del>0){
-		for(i=0; i<qcSig_vec.size(); ){
-			sig = qcSig_vec.at(i);
-			valid_flag = true;
-			if(sig->cigar_op==BAM_CINS and (double)sig->cigar_op_len/max_size_ins<valid_size_ratio_thres) valid_flag = false;
-			else if(sig->cigar_op==BAM_CDEL and (double)sig->cigar_op_len/max_size_del<valid_size_ratio_thres) valid_flag = false;
-			if(valid_flag==false){
-				delete sig;
-				qcSig_vec.erase(qcSig_vec.begin()+i);
-			}else i++;
-		}
-	}
-}
-
-// compute the sum of insertions and deletions in the
-void indelRegCluster::computeVarSums(struct querySeqInfoNode* &query_seq_info_node, int64_t start_var_pos, int64_t end_var_pos){
-	size_t i;
-	int64_t ins_sum, del_sum, end_ref_pos;
-	qcSig_t *sig;
-	bool flag;
-
-	ins_sum = del_sum = 0;
-	for(i=0; i<query_seq_info_node->qcSig_vec.size(); i++){
-		sig = query_seq_info_node->qcSig_vec.at(i);
-		end_ref_pos = getEndRefPosAlnSeg(sig->ref_pos, sig->cigar_op, sig->cigar_op_len);
-		flag = isOverlappedPos(sig->ref_pos, end_ref_pos, start_var_pos, end_var_pos);
-		if(flag){
-			if(sig->cigar_op==BAM_CINS) ins_sum += sig->cigar_op_len;
-			else if(sig->cigar_op==BAM_CDEL) del_sum += sig->cigar_op_len;
-		}
-	}
-	query_seq_info_node->ins_sum = ins_sum;
-	query_seq_info_node->del_sum = del_sum;
 }
 
 // prepare query information for cluster
@@ -799,7 +579,7 @@ vector<struct querySeqInfoVec*> indelRegCluster::queryClusterDoubleGroup(vector<
 				seed_info_a = chooseSeedClusterQuery(query_seq_info_all.at(i), q_cluster_a);
 				if(seed_info_a->span_intersection>0){
 					if(i!=k){
-						match_ratio_a = computeMatchRatio(query_seq_info_all.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size, min_identity_match);
+						match_ratio_a = computeMatchRatio(query_seq_info_all.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size, min_seqsim_match);
 						match_ratio_vec.push_back(match_ratio_a);
 					}else{
 						match_ratio_a = 1;
@@ -894,7 +674,7 @@ vector<struct querySeqInfoVec*> indelRegCluster::queryClusterDoubleGroup(vector<
 					qseq_id_a = seed_info_a->id;
 					qseq_id_b = seed_info_b->id;
 
-					match_ratio_a = computeMatchRatio(query_seq_info_all.at(qseq_id_a), query_seq_info_all.at(qseq_id_b), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size, CNS_MIN_IDENTITY_CLUSTER_THRES);
+					match_ratio_a = computeMatchRatio(query_seq_info_all.at(qseq_id_a), query_seq_info_all.at(qseq_id_b), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size, CNS_MIN_SEQSIM_CLUSTER_THRES);
 
 					//cout << "match_ratio_a=" << match_ratio_a << endl;
 
@@ -1020,9 +800,9 @@ vector<struct querySeqInfoVec*> indelRegCluster::queryClusterDoubleGroup(vector<
 				seed_info_a = chooseSeedClusterQuery(query_seq_info_all.at(i), q_cluster_a);
 				seed_info_b = chooseSeedClusterQuery(query_seq_info_all.at(i), q_cluster_b);
 				if(seed_info_a->span_intersection>0){
-					match_ratio_a = computeMatchRatio(query_seq_info_all.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size, min_identity_match);
+					match_ratio_a = computeMatchRatio(query_seq_info_all.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size, min_seqsim_match);
 					if(seed_info_b->span_intersection>0){
-						match_ratio_b = computeMatchRatio(query_seq_info_all.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size, min_identity_match);
+						match_ratio_b = computeMatchRatio(query_seq_info_all.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size, min_seqsim_match);
 						if(match_ratio_a>match_ratio_b){
 							query_seq_info_all.at(i)->cluster_finished_flag = true;
 							q_cluster_a.push_back(query_seq_info_all.at(i));
@@ -1046,7 +826,7 @@ vector<struct querySeqInfoVec*> indelRegCluster::queryClusterDoubleGroup(vector<
 					}
 				}else{
 					if(seed_info_b->span_intersection>0){
-						match_ratio_b = computeMatchRatio(query_seq_info_all.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size, min_identity_match);
+						match_ratio_b = computeMatchRatio(query_seq_info_all.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size, min_seqsim_match);
 						if(match_ratio_b<1){
 							query_seq_info_all.at(i)->cluster_finished_flag = true;
 							q_cluster_a.push_back(query_seq_info_all.at(i));
@@ -1066,8 +846,8 @@ vector<struct querySeqInfoVec*> indelRegCluster::queryClusterDoubleGroup(vector<
 		for(i=0; i<q_cluster_rescue.size(); ){
 			seed_info_a = chooseSeedClusterQuery(q_cluster_rescue.at(i),q_cluster_a);
 			seed_info_b = chooseSeedClusterQuery(q_cluster_rescue.at(i), q_cluster_b);
-			match_ratio_a = computeMatchRatio(q_cluster_rescue.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size, min_identity_match);
-			match_ratio_b = computeMatchRatio(q_cluster_rescue.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size, min_identity_match);
+			match_ratio_a = computeMatchRatio(q_cluster_rescue.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos, min_sv_size, min_seqsim_match);
+			match_ratio_b = computeMatchRatio(q_cluster_rescue.at(i), q_cluster_b.at(seed_info_b->id), seed_info_b->startSpanPos, seed_info_b->endSpanPos, min_sv_size, min_seqsim_match);
 			if(match_ratio_a>match_ratio_b){
 				q_cluster_a.push_back(q_cluster_rescue.at(i));
 				q_cluster_rescue.erase(q_cluster_rescue.begin()+i);
@@ -1661,7 +1441,7 @@ vector<struct querySeqInfoNode*> indelRegCluster::getInitClusterItemsMR0(vector<
 
 	for(i=0; i<qseq_id_vec.size(); i++){
 		qnode2 = qseq_info_all.at(qseq_id_vec.at(i));
-		match_ratio = computeMatchRatio(qnode1, qnode2, seed_info->startSpanPos, seed_info->endSpanPos, min_sv_size, CNS_MIN_IDENTITY_CLUSTER_THRES);
+		match_ratio = computeMatchRatio(qnode1, qnode2, seed_info->startSpanPos, seed_info->endSpanPos, min_sv_size, CNS_MIN_SEQSIM_CLUSTER_THRES);
 		if(match_ratio>0){
 			if(target_op==BAM_CINS){ // INS
 				if(var_size<qnode2->ins_sum) size_ratio = (double)var_size / qnode2->ins_sum;
@@ -1691,7 +1471,7 @@ vector<struct querySeqInfoNode*> indelRegCluster::getInitClusterItemsMR0(vector<
 }
 
 
-double indelRegCluster::computeMatchRatio(struct querySeqInfoNode* query_seq_info_node, struct querySeqInfoNode* q_cluster_node, int64_t startSpanPos, int64_t endSpanPos, int32_t min_sv_size, double min_identity_match){
+double indelRegCluster::computeMatchRatio(struct querySeqInfoNode* query_seq_info_node, struct querySeqInfoNode* q_cluster_node, int64_t startSpanPos, int64_t endSpanPos, int32_t min_sv_size, double min_seqsim_match){
 	double score_ratio;
 	int32_t score_sum;
 	size_t i;
@@ -1721,7 +1501,7 @@ double indelRegCluster::computeMatchRatio(struct querySeqInfoNode* query_seq_inf
 
 	//matching
 	// queryCluSig->match_profile_vec = computeQcMatchProfileSingleQuery(queryCluSig, seed_qcQuery);
-	queryCluSig.match_profile_vec = computeQcMatchProfileSingleQuery(&queryCluSig, &seed_qcQuery, mergeFlag, min_identity_match);
+	queryCluSig.match_profile_vec = computeQcMatchProfileSingleQuery(&queryCluSig, &seed_qcQuery, mergeFlag, min_seqsim_match);
 	if(queryCluSig.match_profile_vec.size()==0){
 		//score_ratio = 2;//have no varsig
 		score_ratio = 0; //0.99
@@ -1740,7 +1520,7 @@ double indelRegCluster::computeMatchRatio(struct querySeqInfoNode* query_seq_inf
 	return score_ratio;
 }
 
-vector<int8_t> indelRegCluster::computeQcMatchProfileSingleQuery(queryCluSig_t *queryCluSig, queryCluSig_t *seed_qcQuery, bool mergeFlag, double min_identity_match){
+vector<int8_t> indelRegCluster::computeQcMatchProfileSingleQuery(queryCluSig_t *queryCluSig, queryCluSig_t *seed_qcQuery, bool mergeFlag, double min_seqsim_match){
 	vector<int8_t> match_profile_vec;
 	int32_t rowsNum, colsNum, matchScore, mismatchScore, gapScore, gapOpenScore;
 	int32_t scoreIJ, tmp_gapScore1, tmp_gapScore2, maxValue, path_val, maxValue_ul, maxValue_l, maxValue_u;
@@ -1774,10 +1554,10 @@ vector<int8_t> indelRegCluster::computeQcMatchProfileSingleQuery(queryCluSig_t *
 		for(i=1; i<rowsNum; i++){
 			for(j=1; j<colsNum; j++){
 				if(mergeFlag)
-					matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL_MERGE, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_identity_match, fai);
+					matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL_MERGE, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_seqsim_match, fai);
 				else
-					// matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_IDENTITY_RATIO_MATCH_THRES, fai);
-					matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_identity_match, fai);
+					// matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_SEQSIM_RATIO_MATCH_THRES, fai);
+					matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_seqsim_match, fai);
 				if(matchFlag) scoreIJ = matchScore;
 				else scoreIJ = mismatchScore;
 
@@ -2008,7 +1788,7 @@ vector<mrmin_match_t *> indelRegCluster::reClusterByMR(vector<struct querySeqInf
 				seed_info_recluster = chooseSeedClusterQuery(query_seq_info_all.at(p_min_id_vec->at(i)), q_recluster_a);
 				if(seed_info_recluster->span_intersection>0){
 					if(i!=k) {
-						mr_recluster_a = computeMatchRatio(query_seq_info_all.at(p_min_id_vec->at(i)), q_recluster_a.at(seed_info_recluster->id), seed_info_recluster->startSpanPos, seed_info_recluster->endSpanPos, min_sv_size, min_identity_match);
+						mr_recluster_a = computeMatchRatio(query_seq_info_all.at(p_min_id_vec->at(i)), q_recluster_a.at(seed_info_recluster->id), seed_info_recluster->startSpanPos, seed_info_recluster->endSpanPos, min_sv_size, min_seqsim_match);
 						mr_vec_recluster.push_back(mr_recluster_a);
 					}else{
 						mr_recluster_a = 1;
@@ -2159,41 +1939,6 @@ vector<mrmin_match_t *> indelRegCluster::reClusterByMR(vector<struct querySeqInf
 	return mrmin_match_vec;
 }
 
-// sort match vector descendingly
-void indelRegCluster::sortMRVec(vector<mrmin_match_t *> &match_vec){
-	bool flag;
-	size_t i, j;
-	mrmin_match_t *mrmin_match_node;
-
-	//sort descendingly
-	for(i=0; i<match_vec.size(); i++){
-		for(j=i+1; j<match_vec.size(); j++){
-			flag = false;
-			if(match_vec.at(i)->num<match_vec.at(j)->num) flag = true;
-			else if(match_vec.at(i)->num==match_vec.at(j)->num and match_vec.at(i)->MR<match_vec.at(j)->MR) flag = true;
-			if(flag){
-				mrmin_match_node = match_vec.at(i);
-				match_vec.at(i) = match_vec.at(j);
-				match_vec.at(j) = mrmin_match_node;
-			}
-		}
-	}
-}
-
-// sort match vector descendingly
-void indelRegCluster::printMRVec(vector<mrmin_match_t *> &match_vec){
-	size_t i, j;
-	mrmin_match_t *node;
-
-	cout << "match_vec.size=" << match_vec.size() << endl;
-	for(i=0; i<match_vec.size(); i++){
-		node = match_vec.at(i);
-		cout << "[" << i << "]: num=" << node->num << ", MR=" << node->MR << ", MR_re=" << node->MR_recluster << ", pos_id={" << node->pos_id.at(0);
-		for(j=1; j<(size_t)node->num; j++) cout << "," << node->pos_id.at(j);
-		cout << "}" << endl;
-	}
-}
-
 bool indelRegCluster::matchVecValidFlag(vector<mrmin_match_t *> &match_vec_tmp, bool match_vec_begin_flag){
 	bool flag;
 	int32_t equally_reads_num;
@@ -2219,52 +1964,3 @@ bool indelRegCluster::matchVecValidFlag(vector<mrmin_match_t *> &match_vec_tmp, 
 	return flag;
 }
 
-//================================= debug operation =================================
-// debug operation
-void indelRegCluster::printQcSigIndelCluster(vector<struct querySeqInfoVec*> &query_clu_vec){
-	vector<struct querySeqInfoNode*> query_seq_info_all;
-	size_t i;
-
-	for(i=0; i<query_clu_vec.size(); i++){
-		query_seq_info_all = query_clu_vec.at(i)->query_seq_info_all;
-		cout << "Information for cluster " << i << ", rescue_flag=" << query_clu_vec.at(i)->rescue_flag << endl;
-		printQcSigIndel(query_seq_info_all);
-	}
-}
-
-// debug operation
-void indelRegCluster::printQcSigIndel(vector<struct querySeqInfoNode*> &query_seq_info_all){
-	size_t i, aver_ins_sum, aver_del_sum, num_ins_sum, num_del_sum;
-	struct querySeqInfoNode *query_seq_info_node;
-
-	aver_ins_sum = aver_del_sum = num_ins_sum = num_del_sum = 0;
-	cout << "Query_size=" << query_seq_info_all.size() << ": " << endl;
-	for(i=0; i<query_seq_info_all.size(); i++){
-		query_seq_info_node = query_seq_info_all.at(i);
-		printQcSigIndelSingleQuery(query_seq_info_node, i);
-		if(query_seq_info_node->ins_sum>0) {
-			aver_ins_sum += query_seq_info_node->ins_sum;
-			num_ins_sum ++;
-		}
-		if(query_seq_info_node->del_sum>0){
-			aver_del_sum += query_seq_info_node->del_sum;
-			num_del_sum ++;
-		}
-	}
-	if(num_ins_sum>0) aver_ins_sum = (double)aver_ins_sum / num_ins_sum;
-	if(num_del_sum>0) aver_del_sum = (double)aver_del_sum / num_del_sum;
-	cout << "aver_ins_sum=" << aver_ins_sum << ", num_ins_sum=" << num_ins_sum << ", aver_del_sum=" << aver_del_sum << ", num_del_sum=" << num_del_sum << endl;
-}
-
-// debug operation
-void indelRegCluster::printQcSigIndelSingleQuery(struct querySeqInfoNode *query_seq_info_node, int32_t idx){
-	size_t i;
-	qcSig_t *sig;
-
-	cout << "[" << idx << "]: " << query_seq_info_node->qname << ", overlap_sig_num=" << query_seq_info_node->overlap_sig_num << ", entire_flanking=" << query_seq_info_node->entire_flanking_flag << ", ins_sum=" << query_seq_info_node->ins_sum << ", del_sum=" << query_seq_info_node->del_sum << ", aver_sig_size=" << query_seq_info_node->aver_sig_size << ": ";
-	for(i=0; i<query_seq_info_node->qcSig_vec.size(); i++){
-		sig = query_seq_info_node->qcSig_vec.at(i);
-		cout << "\t(" << sig->cigar_op << "," << sig->chrname << "," << sig->ref_pos << "," << sig->cigar_op_len << ")";
-	}
-	cout << endl;
-}

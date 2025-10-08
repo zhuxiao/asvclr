@@ -161,7 +161,8 @@ bool Base::isDisagreeBase(){
 // determine whether the base is a zero coverage base
 bool Base::isZeroCovBase(){
 	bool flag = false;
-	if(coverage.num_bases[5]<3) flag = true; // zero coverage
+	//if(coverage.num_bases[5]<3) flag = true; // zero coverage, deleted on 2025-05-16
+	if(coverage.num_bases[5]==0) flag = true;
 	return flag;
 }
 
@@ -267,11 +268,13 @@ size_t Base::getRegLargeIndelNum(size_t thres){
 
 size_t Base::getTotalIndelNum(){
 	//return insVector.size() + delVector.size() + num_shortIns + num_shortdel;
-	return insVector.size() + del_num_from_del_vec + num_shortIns + num_shortdel;
+//	return insVector.size() + del_num_from_del_vec + num_shortIns + num_shortdel; // deleted on 2025-06-02
+	return insVector.size() + del_num_from_del_vec;
 }
 
 size_t Base::getTotalClipNum(){
-	return clipVector.size() + num_shortClip;
+//	return clipVector.size() + num_shortClip; // deleted on 2025-06-02
+	return clipVector.size();
 }
 
 size_t Base::getTotalCovNum(){

@@ -27,13 +27,13 @@ using namespace std;
 #define GT_HETEROZYGOUS_STR					"0/1"	// heterozygous
 
 #define GT_SIG_SIZE_THRES					3
-#define GT_SIZE_RATIO_MATCH_THRES			0.7
-#define GT_MIN_ALLE_RATIO_THRES				0.3
-#define GT_MAX_ALLE_RATIO_THRES				0.7
+#define GT_SIZE_RATIO_MATCH_THRES			(0.7f)
+#define GT_MIN_ALLE_RATIO_THRES				(0.3f)
+#define GT_MAX_ALLE_RATIO_THRES				(0.7f)
 
-#define GT_MIN_IDENTITY_MERGE_THRES			(0.95f)
+#define GT_MIN_SEQSIM_MERGE_THRES			(0.9f)	// 0.95
 #define GT_MIN_SIZE_MERGE_THRES				(0.95f)
-#define GT_HOMO_RATIO_THRES					(0.75f)
+#define GT_HOMO_RATIO_THRES					(0.7f)	//0.75
 #define GT_HETE_RATIO_THRES					(0.2f)
 
 #define GT_STR_DEFAULT						"GT:AD:DP\t./.:.,.:."

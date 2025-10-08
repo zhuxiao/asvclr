@@ -34,10 +34,10 @@ typedef struct{
 	int8_t var_type, aln_orient, discover_level;
 	int8_t query_id, blat_aln_id, minimap2_aln_id;
 	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
-	string refseq, altseq, gt_seq;
+	string refseq, altseq, gt_seq, PS;
 	int32_t supp_num, DP; // supp_num, total depth
 	double AF; // allele frequency
-	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag, query_pos_invalid_flag, large_indel_flag;
+	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag, query_pos_invalid_flag, large_indel_flag, merge_flag;
 }reg_t;
 
 // from clipReg.h
@@ -117,8 +117,8 @@ typedef struct {
 	int32_t work_id, num_work, num_work_percent;  // 'work_id' starts from 1
 	int32_t *p_cns_reg_workDone_num;   // pointer to the global variable which was declared in Paras.h
 	pthread_mutex_t *p_mtx_cns_reg_workDone_num; // pointer to the global variable which was declared in Paras.h
-	int32_t num_threads_per_cns_work, minClipEndSize, cnsSideExtSize, minConReadLen, min_sv_size, min_supp_num, minMapQ: 16, minHighMapQ: 16, sv_len_est;
-	double max_seg_size_ratio, min_identity_match, max_seg_nm_ratio;
+	int32_t num_threads_per_cns_work, minClipEndSize, maxVarRegSize, cnsSideExtSize, minConReadLen, min_sv_size, min_supp_num, minMapQ: 16, minHighMapQ: 16, sv_len_est;
+	double max_seg_size_ratio, min_seqsim_match, max_seg_nm_ratio, max_absig_density;
 
 	string inBamFile, technology; //, canu_version;
 	faidx_t *fai;
@@ -136,7 +136,7 @@ struct fqSeqNode{
 // single signature for cluster
 typedef struct qcSigNode{
 	int32_t sig_id: 24, cigar_op: 8, cigar_op_len: 28, aln_orient: 4; // align_orient not used
-	bool reg_contain_flag, have_next_clip;
+	bool reg_contain_flag, have_next_clip, merge_flag;
 	int64_t ref_pos, query_pos, dist_next_clip;
 	string chrname, chrname_next_clip;
 	//int64_t start_ref_pos, end_ref_pos; // ------- not used
@@ -160,6 +160,7 @@ typedef struct qcSigListNode{
 	vector<struct querySeqInfoNode*> query_seqs_vec;
 	vector<qcSig_t*> qcSig_vec;
 	vector<int8_t> match_profile_vec;
+	int32_t ins_sum, del_sum;
 	bool cluster_finished_flag, entire_flanking_flag;
 }qcSigList_t;
 
@@ -204,7 +205,7 @@ typedef struct queryCluSigNode{
 // from varCand.h
 typedef struct{
 	int64_t query_start, query_end, subject_start, subject_end;
-	float ident_percent;
+	float sim_percent;
 	int32_t aln_orient;
 	int64_t ref_start, ref_end;  // reference positions
 }aln_seg_t;
@@ -340,5 +341,19 @@ typedef struct profile_pat_node {
 	int32_t num;
 	vector<int8_t> match_profile_vec;
 }profile_pat_t;
+
+
+typedef struct phasing_reg_node{
+	reg_t *reg;
+	int64_t inner_group_id: 5, next_group_num: 5, next_group_id: 5, next_group_id2: 5, ps_id: 44;
+	bool chain_link_flag, redundant_flag;
+	vector<string> read_name_vec;
+}phasing_reg_t;
+
+//typedef struct hapNode{
+//	int64_t item_num: 16, ps_id: 48;
+//
+//	vector<phasing_reg_t*> phase_reg_vec;
+//}hap_t;
 
 #endif /* SRC_STRUCTURES_H_ */

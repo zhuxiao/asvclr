@@ -7,8 +7,8 @@ OBJS = asvclr_main.o Paras.o Chrome.o Genome.o Block.o Base.o \
        events.o Region.o misAlnReg.o localCns.o alnDataLoader.o \
        RefSeqLoader.o FastaSeqLoader.o clipAlnDataLoader.o \
        varCand.o covLoader.o clipReg.o blatAlnTra.o Thread.o \
-       util.o meminfo.o sv_sort.o genotyping.o identity.o \
-       clipRegCluster.o indelRegCluster.o
+       util.o meminfo.o sv_sort.o genotyping.o seqsim.o \
+       clipRegCluster.o indelRegCluster.o Phasing.o
 
 # LIBS +=-L$(ABPOA_PREFIX)/lib -lhts -lpthread -labpoa -lz
 LIBS += -lhts -lpthread

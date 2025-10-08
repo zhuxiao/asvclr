@@ -4,12 +4,13 @@
 
 //pthread_mutex_t mutex_down_sample = PTHREAD_MUTEX_INITIALIZER;
 
-clipAlnDataLoader::clipAlnDataLoader(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, int32_t minClipEndSize, int32_t minMapQ, int32_t minHighMapQ) {
+clipAlnDataLoader::clipAlnDataLoader(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minMapQ, int32_t minHighMapQ) {
 	this->chrname = chrname;
 	this->startRefPos = startRefPos;
 	this->endRefPos = endRefPos;
 	this->inBamFile = inBamFile;
 	this->minClipEndSize = minClipEndSize;
+	this->maxVarRegSize = maxVarRegSize;
 	this->minMapQ = minMapQ;
 	this->minHighMapQ = minHighMapQ;
 }
@@ -31,6 +32,37 @@ void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVecto
 	// load the align data
 	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile, minMapQ, minHighMapQ);
 	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
+
+//	if(max_ultra_high_cov>0){
+//		samplingAlnData(alnDataVector, data_loader.mean_read_len, max_ultra_high_cov);
+//	}
+
+	// load the sam/bam header
+	header = loadSamHeader(inBamFile);
+
+	// compute the aligned region
+	for(i=0; i<alnDataVector.size(); i++){
+		clip_aln = generateClipAlnData(alnDataVector.at(i), header);
+		if(clip_aln){
+			clipAlnDataVector.push_back(clip_aln);
+		}else{
+			cerr << __func__ << ", line=" << __LINE__ << ": cannot generate clip align item, error!" << endl;
+			exit(1);
+		}
+	}
+
+	bam_hdr_destroy(header);
+}
+
+void clipAlnDataLoader::loadClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, faidx_t *fai, double max_absig_density, double primary_seg_size_ratio){
+	size_t i;
+	vector<bam1_t*> alnDataVector;
+	clipAlnData_t *clip_aln;
+	bam_hdr_t *header;
+
+	// load the align data
+	alnDataLoader data_loader(chrname, startRefPos, endRefPos, inBamFile, minMapQ, minHighMapQ);
+	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov, fai, max_absig_density, primary_seg_size_ratio);
 
 //	if(max_ultra_high_cov>0){
 //		samplingAlnData(alnDataVector, data_loader.mean_read_len, max_ultra_high_cov);
@@ -126,8 +158,21 @@ void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAln
 	addAdjacentInfo(clipAlnDataVector); // order clipping segments
 }
 
+void clipAlnDataLoader::loadClipAlnDataWithSATag(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, faidx_t *fai, double max_absig_density, double primary_seg_size_ratio){
+	// loadClipAlnData(clipAlnDataVector, max_ultra_high_cov);
+	loadClipAlnData(clipAlnDataVector, max_ultra_high_cov, fai, max_absig_density, primary_seg_size_ratio);
+	fillClipAlnDataBySATag(clipAlnDataVector);
+	addAdjacentInfo(clipAlnDataVector); // order clipping segments
+}
+
 void clipAlnDataLoader::loadClipAlnDataWithSATagWithSegSize(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, double primary_seg_size_ratio, double primary_seg_nm_ratio){
 	loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
+	removeClipAlnDataWithLowPrimarySegSizeRatio(clipAlnDataVector, primary_seg_size_ratio, primary_seg_nm_ratio);
+}
+
+void clipAlnDataLoader::loadClipAlnDataWithSATagWithSegSize(vector<clipAlnData_t*> &clipAlnDataVector, double max_ultra_high_cov, double primary_seg_size_ratio, double primary_seg_nm_ratio, faidx_t *fai, double max_absig_density){
+	// loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov);
+	loadClipAlnDataWithSATag(clipAlnDataVector, max_ultra_high_cov, fai, max_absig_density, primary_seg_size_ratio);
 	removeClipAlnDataWithLowPrimarySegSizeRatio(clipAlnDataVector, primary_seg_size_ratio, primary_seg_nm_ratio);
 }
 
@@ -542,7 +587,7 @@ void clipAlnDataLoader::orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &quer
 
 			if(valid_query_end_flag){
 				// deal with the mate clip end
-				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize, MAX_VAR_REG_SIZE);
+				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize, maxVarRegSize);
 				mate_arr_idx = adjClipAlnSegInfo.at(0);
 				mate_clip_end_flag = adjClipAlnSegInfo.at(1);
 				if(mate_arr_idx!=-1){ // mated
@@ -574,7 +619,7 @@ void clipAlnDataLoader::orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &quer
 
 			if(valid_query_end_flag){
 				// deal with the mate clip end
-				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize, MAX_VAR_REG_SIZE);
+				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize, maxVarRegSize);
 				mate_arr_idx = adjClipAlnSegInfo.at(0);
 				mate_clip_end_flag = adjClipAlnSegInfo.at(1);
 				if(mate_arr_idx!=-1){ // mated

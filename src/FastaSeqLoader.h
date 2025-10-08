@@ -16,6 +16,7 @@ class FastaSeqLoader {
 		vector<string> fastaSeqVec;
 
 	public:
+		FastaSeqLoader();
 		FastaSeqLoader(string &fastafilename);
 		virtual ~FastaSeqLoader();
 		string getFastaSeq(size_t fa_id);
@@ -25,6 +26,11 @@ class FastaSeqLoader {
 		size_t getFastaSeqCount();
 		vector<string> getFastaSeqNames();
 		string getFastaSeqNameByID(int32_t fa_id);
+		bool isValidSeq(string &fastafilename);
+		bool isValidSeq();
+		vector< vector<string> > getReadNamesFromCnsHeaders();
+		vector< vector<string> > getReadNamesFromCnsHeaders(vector<string> &cns_header_vec);
+		vector<string> getReadNamesFromSingleCnsHeader(string &cns_header);
 
 	private:
 		void initFastaSeq();

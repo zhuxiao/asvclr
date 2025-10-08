@@ -176,57 +176,58 @@ vector<queryGtSig_t*> genotyping::extractGtSigVec(){
 	char *seq;
 
 	if(alnDataVector.size()>0){
-		chrlen_tmp = faidx_seq_len(fai, reg->chrname.c_str()); // get the reference length
+		chrlen_tmp = faidx_seq_len64(fai, reg->chrname.c_str()); // get the reference length
+		if(chrlen_tmp!=-1){
+//			startPos = reg->startRefPos - VAR_ALN_EXTEND_SIZE;
+//			endPos = reg->endRefPos + VAR_ALN_EXTEND_SIZE;
+			startPos = reg->startRefPos - clip_extend_match_thres;
+			endPos = reg->endRefPos + clip_extend_match_thres;
+			if(startPos<1) startPos = 1;
+			if(endPos>chrlen_tmp) endPos = chrlen_tmp;
 
-	//	startPos = reg->startRefPos - VAR_ALN_EXTEND_SIZE;
-	//	endPos = reg->endRefPos + VAR_ALN_EXTEND_SIZE;
-		startPos = reg->startRefPos - clip_extend_match_thres;
-		endPos = reg->endRefPos + clip_extend_match_thres;
-		if(startPos<1) startPos = 1;
-		if(endPos>chrlen_tmp) endPos = chrlen_tmp;
+			reg_str = reg->chrname + ":" + to_string(startPos) + "-" + to_string(endPos);
+			pthread_mutex_lock(&mutex_fai);
+			seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+			pthread_mutex_unlock(&mutex_fai);
+			refseq = seq;
+			free(seq);
 
-		reg_str = reg->chrname + ":" + to_string(startPos) + "-" + to_string(endPos);
-		pthread_mutex_lock(&mutex_fai);
-		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
-		pthread_mutex_unlock(&mutex_fai);
-		refseq = seq;
-		free(seq);
+			bam_type = getBamType(alnDataVector);
+			if(bam_type==BAM_INVALID){
+				cerr << __func__ << ": unknown bam type, error!" << endl;
+				exit(1);
+			}
 
-		bam_type = getBamType(alnDataVector);
-		if(bam_type==BAM_INVALID){
-			cerr << __func__ << ": unknown bam type, error!" << endl;
-			exit(1);
-		}
+			for(size_t i=0; i<alnDataVector.size(); i++){
+				b = alnDataVector.at(i);
 
-		for(size_t i=0; i<alnDataVector.size(); i++){
-			b = alnDataVector.at(i);
+				if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+					switch(bam_type){
+						case BAM_CIGAR_NO_DIFF_MD:
+							//alnSegs = generateAlnSegs(b);
+							alnSegs = generateAlnSegs2(b, startPos, endPos);
+							break;
+						case BAM_CIGAR_NO_DIFF_NO_MD:
+						case BAM_CIGAR_DIFF_MD:
+						case BAM_CIGAR_DIFF_NO_MD:
+							//alnSegs = generateAlnSegs_no_MD(b, refseq, startPos, endPos);
+							alnSegs = generateAlnSegs_no_MD2(b, refseq, startPos, endPos);
+							break;
+						default:
+							cerr << __func__ << ": unknown bam type, error!" << endl;
+							exit(1);
+					}// generate align segments
 
-			if(!(b->core.flag & BAM_FUNMAP)){ // aligned
-				switch(bam_type){
-					case BAM_CIGAR_NO_DIFF_MD:
-						//alnSegs = generateAlnSegs(b);
-						alnSegs = generateAlnSegs2(b, startPos, endPos);
-						break;
-					case BAM_CIGAR_NO_DIFF_NO_MD:
-					case BAM_CIGAR_DIFF_MD:
-					case BAM_CIGAR_DIFF_NO_MD:
-						//alnSegs = generateAlnSegs_no_MD(b, refseq, startPos, endPos);
-						alnSegs = generateAlnSegs_no_MD2(b, refseq, startPos, endPos);
-						break;
-					default:
-						cerr << __func__ << ": unknown bam type, error!" << endl;
-						exit(1);
-				}// generate align segments
+					queryGtSig = new queryGtSig_t();
+					queryGtSig->group_id = -1;
+					//queryGtSig->score = -1;
+					queryGtSig->seed_flag = false;
+					queryGtSig->queryname = bam_get_qname(b);
+					queryGtSig->gtSig_vec = extractGtSigsFromAlnSegsSingleQuery(alnSegs, startPos, endPos, refseq, sig_size_thres, clip_size_thres);
+					queryGtSig_vec.push_back(queryGtSig);
 
-				queryGtSig = new queryGtSig_t();
-				queryGtSig->group_id = -1;
-				//queryGtSig->score = -1;
-				queryGtSig->seed_flag = false;
-				queryGtSig->queryname = bam_get_qname(b);
-				queryGtSig->gtSig_vec = extractGtSigsFromAlnSegsSingleQuery(alnSegs, startPos, endPos, refseq, sig_size_thres, clip_size_thres);
-				queryGtSig_vec.push_back(queryGtSig);
-
-				destroyAlnSegs(alnSegs);
+					destroyAlnSegs(alnSegs);
+				}
 			}
 		}
 	}

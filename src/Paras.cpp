@@ -47,11 +47,14 @@ void Paras::init(){
 	technology = SEQUENCING_TECH_DEFAULT;
 	include_decoy = false;
 	include_alt = false;
+	phasing_flag = false;
+	tumor_mode_flag = false;
 
-	//min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES; // deleted on 2024-09-04
-	min_identity_match = -1;
-	min_identity_merge = -1;
+	//min_seqsim_match = QC_SEQSIM_RATIO_MATCH_THRES; // deleted on 2024-09-04
+	min_seqsim_match = -1;
+	min_seqsim_merge = -1;
 	max_seg_nm_ratio_usr = -1;
+	max_absig_density = -1;
 	max_seg_num_per_read = MAX_ALN_SEG_NUM_PER_READ_CCS;
 
 	min_ins_size_filt = 0;
@@ -63,6 +66,8 @@ void Paras::init(){
 
 	mean_read_len = total_read_num_est = 0;
 	min_Nsupp_est_flag = 0;
+	mean_error_rate = 0;
+	total_error_num_est = total_mapped_read_len_est = 0;
 
 	minHighMapQ = MIN_HIGH_MAPQ_THRES;
 	reg_sum_size_est = 0;
@@ -148,13 +153,19 @@ void Paras::initPreset(){
 	min_sv_size_usr = round(min_sv_size_usr_final * min_sv_size_usr_factor);
 
 	if(technology.compare(PACBIO_CCS_TECH_STR)==0){  // CCS
-		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES;
-		if(min_identity_merge==-1) min_identity_merge = CALL_MIN_IDENTITY_MERGE_THRES;
+		if(min_seqsim_match==-1) min_seqsim_match = QC_SEQSIM_RATIO_MATCH_THRES;
+		if(min_seqsim_merge==-1) min_seqsim_merge = CALL_MIN_SEQSIM_MERGE_THRES;
 		if(max_seg_nm_ratio_usr==-1) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_1;
+		if(max_absig_density==-1) max_absig_density = MAX_ABSIG_DENSITY_CCS;
 	}else{// CLR, ONT
-		if(min_identity_match==-1) min_identity_match = QC_IDENTITY_RATIO_MATCH_THRES2;
-		if(min_identity_merge==-1) min_identity_merge = CALL_MIN_IDENTITY_MERGE_THRES2;
+		if(min_seqsim_match==-1) min_seqsim_match = QC_SEQSIM_RATIO_MATCH_THRES2;
+		if(min_seqsim_merge==-1) min_seqsim_merge = CALL_MIN_SEQSIM_MERGE_THRES2;
 		if(max_seg_nm_ratio_usr==-1) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_2;
+		if(max_absig_density==-1) max_absig_density = MAX_ABSIG_DENSITY_OTHER;
+	}
+	if(tumor_mode_flag) { // update for tumor mode
+		min_seqsim_match = min_seqsim_match * QC_SEQSIM_RATIO_THRES_FACTOR;
+		max_absig_density = max_absig_density * MAX_ABSIG_DENSITY_TUMOR_FACTOR;
 	}
 }
 
@@ -284,12 +295,13 @@ int Paras::parseDetectParas(int argc, char **argv){
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	//minReadsNumSupportSV = -1;
-	//maxVarRegSize = MAX_VAR_REG_SIZE;
+	maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
 	minMapQ = MIN_MAPQ_THRES;
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
+	max_absig_density = -1;
 	simpleReg_t *simple_reg;
 	string simple_reg_str, opt_name_str;
 
@@ -299,16 +311,18 @@ int Paras::parseDetectParas(int argc, char **argv){
 //		{ "out", required_argument, NULL, 'o' },
 //		{ "log", required_argument, NULL, 'l' },
 		{ "min-cons-read-size", required_argument, NULL, 0 },
+		{ "max-absig-density", required_argument, NULL, 0 },
 		{ "sample", required_argument, NULL, 0 },
 		//{ "mask-noisy-region", no_argument, NULL, 0 },
 		{ "include-alt", no_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
+		{ "tumor", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:F:n:x:N:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:F:n:x:N:A:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
@@ -320,6 +334,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 					break;
 			case 'x': technology = optarg; break;
 			case 'N': max_seg_nm_ratio_usr = stod(optarg); break;
+			case 'A': max_absig_density = stof(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
@@ -357,7 +372,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 	load_from_file_flag = true;
 	if(threadNum_tmp==0) num_threads = sysconf(_SC_NPROCESSORS_ONLN);
 	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
-	maxVarRegSize = max_sv_size_usr;
+	if(maxVarRegSize<max_sv_size_usr) maxVarRegSize = max_sv_size_usr;
 
 	// check technology
 	lower_str.resize(technology.size());
@@ -410,6 +425,7 @@ int Paras::parseCnsParas(int argc, char **argv){
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
+	max_absig_density = -1;
 	maxVarRegSize = MAX_VAR_REG_SIZE;
 	cnsChunkSize = CNS_CHUNK_SIZE_INDEL;
 	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
@@ -428,6 +444,7 @@ int Paras::parseCnsParas(int argc, char **argv){
 		{ "cns-side-ext-size", required_argument, NULL, 0 },
 		{ "cns-side-ext-size-clip", required_argument, NULL, 0 },
 		{ "min-cons-read-size", required_argument, NULL, 0 },
+		{ "max-absig-density", required_argument, NULL, 0 },
 		{ "keep-cns-reads", no_argument, NULL, 0 },
 		{ "keep-failed-reads", no_argument, NULL, 0 },
 		{ "re-cns-failed-work", no_argument, NULL, 0 },
@@ -437,12 +454,13 @@ int Paras::parseCnsParas(int argc, char **argv){
 		//{ "technology", required_argument, NULL, 0 },
 		{ "include-alt", no_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
+		{ "tumor", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:F:n:x:i:r:N:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:F:n:x:i:r:N:A:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr_final = stoi(optarg); break;
@@ -452,9 +470,10 @@ int Paras::parseCnsParas(int argc, char **argv){
 					min_Nsupp_est_flag = 0;
 					break;
 			case 'x': technology = optarg; break;
-			case 'i': min_identity_match = stod(optarg); break;
+			case 'i': min_seqsim_match = stod(optarg); break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'N': max_seg_nm_ratio_usr = stod(optarg); break;
+			case 'A': max_absig_density = stof(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'c': expected_cov_cns = stod(optarg); break;
@@ -493,7 +512,7 @@ int Paras::parseCnsParas(int argc, char **argv){
 	load_from_file_flag = true;
 	if(threadNum_tmp==0) num_threads = sysconf(_SC_NPROCESSORS_ONLN);
 	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
-	maxVarRegSize = max_sv_size_usr;
+	if(maxVarRegSize<max_sv_size_usr) maxVarRegSize = max_sv_size_usr;
 
 //	if(num_threads*num_threads_per_cns_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
 //		cout << "Warning: the user-specified total number of concurrent consensus work is " << num_threads << ", and the user-specified number of threads for each consensus work is " << num_threads_per_cns_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
@@ -538,6 +557,7 @@ int Paras::parseCallParas(int argc, char **argv){
 	minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_EST;
 	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
+	max_absig_density = -1;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
 	minMapQ = MIN_MAPQ_THRES;
@@ -547,9 +567,11 @@ int Paras::parseCallParas(int argc, char **argv){
 	
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
-	gt_min_identity_merge = GT_MIN_IDENTITY_MERGE_THRES;
+	gt_min_seqsim_merge = GT_MIN_SEQSIM_MERGE_THRES;
 	gt_homo_ratio = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio = GT_HETE_RATIO_THRES;
+	keep_temp_results_flag = false;
+	phasing_flag = false;
 
 	static struct option lopts[] = {
 //		{ "daemon", no_argument, NULL, 'D' },
@@ -563,15 +585,19 @@ int Paras::parseCallParas(int argc, char **argv){
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "gt-min-sig-size", required_argument, NULL, 0 },
 		{ "gt-size-ratio-match", required_argument, NULL, 0 },
-		{ "gt-min-consist-merge", required_argument, NULL, 0 },
+		{ "gt-min-seqsim-merge", required_argument, NULL, 0 },
+		{ "max-absig-density", required_argument, NULL, 0 },
 		{ "gt-homo-ratio", required_argument, NULL, 0 },
 		{ "gt-hete-ratio", required_argument, NULL, 0 },
+		{ "no-clean", no_argument, NULL, 0 },
+		{ "phasing", no_argument, NULL, 0 },
+		{ "tumor", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:m:M:F:n:x:i:I:d:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:m:M:F:n:x:i:I:d:A:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 'm': min_sv_size_usr_final = stoi(optarg); break;
@@ -581,9 +607,10 @@ int Paras::parseCallParas(int argc, char **argv){
 					min_Nsupp_est_flag = 0;
 					break;
 			case 'x': technology = optarg; break;
-			case 'i': min_identity_match = stod(optarg); break;
-			case 'I': min_identity_merge = stod(optarg); break;
+			case 'i': min_seqsim_match = stod(optarg); break;
+			case 'I': min_seqsim_merge = stod(optarg); break;
 			case 'd': min_distance_merge = stoi(optarg); break;
+			case 'A': max_absig_density = stof(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
@@ -621,7 +648,7 @@ int Paras::parseCallParas(int argc, char **argv){
 	load_from_file_flag = true;
 	if(threadNum_tmp==0) num_threads = sysconf(_SC_NPROCESSORS_ONLN);
 	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
-	maxVarRegSize = max_sv_size_usr;
+	if(maxVarRegSize<max_sv_size_usr) maxVarRegSize = max_sv_size_usr;
 
 	// check technology
 	lower_str.resize(technology.size());
@@ -664,6 +691,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	minMapQ = MIN_MAPQ_THRES;
 	min_Nsupp_est_flag = 1;
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
+	max_absig_density = -1;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	cnsChunkSize = CNS_CHUNK_SIZE_INDEL;
 	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
@@ -675,13 +703,16 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
-	gt_min_identity_merge = GT_MIN_IDENTITY_MERGE_THRES;
+	gt_min_seqsim_merge = GT_MIN_SEQSIM_MERGE_THRES;
 	gt_homo_ratio = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio = GT_HETE_RATIO_THRES;
+	keep_temp_results_flag = false;
+	phasing_flag = false;
 
 	static struct option lopts[] = {
 		{ "sample", required_argument, NULL, 0 },
 		{ "min-cons-read-size", required_argument, NULL, 0 },
+		{ "max-absig-density", required_argument, NULL, 0 },
 		//{ "threads-per-cns-work", required_argument, NULL, 0 },
 		{ "cns-chunk-size", required_argument, NULL, 0 },
 		{ "keep-cns-reads", no_argument, NULL, 0 },
@@ -699,15 +730,18 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		{ "include-decoy", no_argument, NULL, 0 },
 		{ "gt-min-sig-size", required_argument, NULL, 0 },
 		{ "gt-size-ratio-match", required_argument, NULL, 0 },
-		{ "gt-min-consist-merge", required_argument, NULL, 0 },
+		{ "gt-min-seqsim-merge", required_argument, NULL, 0 },
 		{ "gt-homo-ratio", required_argument, NULL, 0 },
 		{ "gt-hete-ratio", required_argument, NULL, 0 },
+		{ "no-clean", no_argument, NULL, 0 },
+		{ "phasing", no_argument, NULL, 0 },
+		{ "tumor", no_argument, NULL, 0 },
 		{ "version", no_argument, NULL, 'v' },
 		{ "help", no_argument, NULL, 'h' },
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:F:n:x:i:I:d:r:N:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:F:n:x:i:I:d:r:N:A:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
@@ -718,11 +752,12 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 					min_Nsupp_est_flag = 0;
 					break;
 			case 'x': technology = optarg; break;
-			case 'i': min_identity_match = stod(optarg); break;
-			case 'I': min_identity_merge = stod(optarg); break;
+			case 'i': min_seqsim_match = stod(optarg); break;
+			case 'I': min_seqsim_merge = stod(optarg); break;
 			case 'd': min_distance_merge = stoi(optarg); break;
 			case 'r': max_seg_size_ratio_usr = stod(optarg); break;
 			case 'N': max_seg_nm_ratio_usr = stod(optarg); break;
+			case 'A': max_absig_density = stof(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'c': expected_cov_cns = stod(optarg); break;
@@ -762,7 +797,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	load_from_file_flag = false;
 	if(threadNum_tmp==0) num_threads = sysconf(_SC_NPROCESSORS_ONLN);
 	else num_threads = (threadNum_tmp>=sysconf(_SC_NPROCESSORS_ONLN)) ? sysconf(_SC_NPROCESSORS_ONLN) : threadNum_tmp;
-	maxVarRegSize = max_sv_size_usr;
+	if(maxVarRegSize<max_sv_size_usr) maxVarRegSize = max_sv_size_usr;
 
 //	if(num_threads*num_threads_per_cns_work>sysconf(_SC_NPROCESSORS_ONLN)){ // warning
 //		cout << "Warning: the user-specified total number of concurrent consensus work is " << num_threads << ", and the user-specified number of threads for each consensus work is " << num_threads_per_cns_work << ", which exceeds the total number of available processors on the machine (" << sysconf(_SC_NPROCESSORS_ONLN) << ")." << endl;
@@ -840,10 +875,13 @@ void Paras::showUsage(){
 
 	cout << "Example:" << endl;
 	cout << "   # run the pipeline on the whole genome for PacBio CCS sequencing" << endl;
-	cout << "   $ asvclr all -t 32 -n 3 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr all -x ccs -t 32 -m 20 -n 3 -o output ref.fa genome_sorted.bam" << endl << endl;
+
+	cout << "   # run the pipeline in tumor mode" << endl;
+	cout << "   $ asvclr all -x ccs -t 32 -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl << endl;
 
 	cout << "   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000" << endl;
-	cout << "   $ asvclr all -t 32 -n 3 -m 20 -x ccs -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr all -x ccs -t 32 -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for detect command
@@ -881,21 +919,28 @@ void Paras::showDetectUsage(){
 	cout << "                 of threads in machine" << endl;
 	cout << "   --min-cons-read-size INT" << endl;
 	cout << "                 minimal segment size for consensus " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
+	cout << "   -A, --max-absig-density FLOAT" << endl;
+	cout << "                 maximal abnormal signature density " << "[null]." << endl;
+	cout << "                 Only alignment segments of density less than FLOAT will be used for variant calling." << endl;
 	cout << "   --include-alt" << endl;
 	cout << "                 include alt chromosomal items in result [False]" << endl;
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
+	cout << "   --tumor       Perform the variant calling in tumor mode [False]" << endl;
 
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl << endl;
 
 	cout << "Example:" << endl;
 	cout << "   # run 'det' command on the whole genome" << endl;
-	cout << "   $ asvclr det -t 32 -n 3 -m 20 -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr det -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam" << endl << endl;
+
+	cout << "   # run 'det' command in tumor mode" << endl;
+	cout << "   $ asvclr det -t 32 -x ccs -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl << endl;
 
 	cout << "   # run 'det' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
-	cout << "   $ asvclr det -t 32 -n 3 -m 20 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr det -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for 'cns' command
@@ -916,9 +961,9 @@ void Paras::showCnsUsage(){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9 -N 0.1" << endl;
-	cout << "                   sq/rs/ont: -i 0.75 -N 0.2" << endl;
-	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
+	cout << "                         ccs: -i 0.9 -N 0.1 -A " << MAX_ABSIG_DENSITY_CCS << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -N 0.2 -A " << MAX_ABSIG_DENSITY_OTHER << endl;
+	cout << "   -i FLOAT      minimal sequence similarity for variant match. [" << QC_SEQSIM_RATIO_MATCH_THRES << "]" << endl;
 	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
 	cout << "   -N FLOAT      maximal NM ratio threshold of the largest split-alignment segment" << endl;
@@ -949,6 +994,9 @@ void Paras::showCnsUsage(){
 	cout << "                 [" << CNS_CHUNK_SIZE_EXT_CLIP << "] bp." << endl;
 	cout << "   --min-cons-read-size INT" << endl;
 	cout << "                 minimal segment size for consensus " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
+	cout << "   -A, --max-absig-density FLOAT" << endl;
+	cout << "                 maximal abnormal signature density " << "[null]." << endl;
+	cout << "                 Only alignment segments of density less than FLOAT will be used for variant calling." << endl;
 	cout << "   --keep-cns-reads" << endl;
 	cout << "                 Keep temporary reads from being deleted during local consensus." << endl;
 	cout << "                 This may take some additional disk space" << endl;
@@ -975,12 +1023,15 @@ void Paras::showCnsUsage(){
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
+	cout << "   --tumor       Perform the variant calling in tumor mode [False]" << endl;
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl << endl;
 
 	cout << "Example:" << endl;
-	cout << "   # run 'cns' command on the whole genome or the user-specified regions according to previous 'det' command." << endl;
-	cout << "   $ asvclr cns -t 32 -n 3 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl;
+	cout << "   # run 'cns' command on the whole genome or the user-specified regions according to previous 'det' command" << endl;
+	cout << "   $ asvclr cns -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   # run 'cns' command in tumor mode" << endl;
+	cout << "   $ asvclr cns -t 32 -x ccs -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl;
 }
 
 // show the usage for call command
@@ -1001,12 +1052,12 @@ void Paras::showCallUsage(){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1" << endl;
-	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2" << endl;
-	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
-	cout << "   -I FLOAT      minimal sequence identity for merge [" << CALL_MIN_IDENTITY_MERGE_THRES << "]" << endl;
+	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1 -A " << MAX_ABSIG_DENSITY_CCS << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2 -A " << MAX_ABSIG_DENSITY_OTHER << endl;
+	cout << "   -i FLOAT      minimal sequence similarity for variant match. [" << QC_SEQSIM_RATIO_MATCH_THRES << "]" << endl;
+	cout << "   -I FLOAT      minimal sequence similarity for merge [" << CALL_MIN_SEQSIM_MERGE_THRES << "]" << endl;
 	cout << "   -d INT        minimal reference distance for merge [" << CALL_MIN_DISTANCE_MERGE_THRES << "]" << endl;
-	cout << "                 Neighboring SVs with distance smaller than INT and sequence identity" << endl;
+	cout << "                 Neighboring SVs with distance smaller than INT and sequence similarity" << endl;
 	cout << "                 larger than FLOAT will be merged" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
@@ -1030,6 +1081,7 @@ void Paras::showCallUsage(){
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
+	cout << "   --tumor       Perform the variant calling in tumor mode [False]" << endl;
 
 //	cout << "   --gt-min-sig-size INT" << endl;
 //	cout << "                 minimal signature size threshold for genotyping [" << GT_SIG_SIZE_THRES << "]." << endl;
@@ -1037,22 +1089,32 @@ void Paras::showCallUsage(){
 //	cout << "   --gt-size-ratio-match FLOAT" << endl;
 //	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
 //	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
-	cout << "   --gt-min-consist-merge FLOAT" << endl;
-	cout << "                 minimal sequence identity for allele merge [" << GT_MIN_IDENTITY_MERGE_THRES << "]." << endl;
-	cout << "                 Allelic variants will be merged if their sequence identity are larger than FLOAT. " << endl;
+	cout << "   --gt-min-seqsim-merge FLOAT" << endl;
+	cout << "                 minimal sequence similarity for allele merge [" << GT_MIN_SEQSIM_MERGE_THRES << "]." << endl;
+	cout << "                 Allelic variants will be merged if their sequence similarity are larger than FLOAT. " << endl;
+	cout << "   -A, --max-absig-density FLOAT" << endl;
+	cout << "                 maximal abnormal signature density " << "[null]." << endl;
+	cout << "                 Only alignment segments of density less than FLOAT will be used for variant calling." << endl;
 	cout << "   --gt-homo-ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is homozygous if the ratio of allele count is larger than FLOAT." << endl;
 	cout << "   --gt_hete_ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
+	cout << "   --no-clean" << endl;
+	cout << "                 do not clean temporary results [False]. Temporary results in following output" << endl;
+	cout << "                 directories: 1_candidates, 2_cns and 3_call, will be retained using this option." << endl;
+	cout << "   --phasing" << endl;
+	cout << "                 enable genotype local phasing" << endl;
 
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl << endl;
 
 	cout << "Example:" << endl;
-	cout << "   # run 'call' command on the whole genome or the user-specified regions according to previous 'det' command." << endl;
-	cout << "   $ asvclr call -t 32 -n 3 -m 20 -o output ref.fa genome_sorted.bam" << endl;
+	cout << "   # run 'call' command on the whole genome or the user-specified regions according to previous 'det' command" << endl;
+	cout << "   $ asvclr call -t 32 -m 20 -n 3 -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   # run 'call' command in tumor mode" << endl;
+	cout << "   $ asvclr call -t 32 -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl;
 }
 
 // show the usage for all command
@@ -1078,12 +1140,12 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1" << endl;
-	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2" << endl;
-	cout << "   -i FLOAT      minimal sequence identity for variant match. [" << QC_IDENTITY_RATIO_MATCH_THRES << "]" << endl;
-	cout << "   -I FLOAT      minimal sequence identity for merge [" << CALL_MIN_IDENTITY_MERGE_THRES << "]" << endl;
+	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1 -A " << MAX_ABSIG_DENSITY_CCS << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2 -A " << MAX_ABSIG_DENSITY_OTHER << endl;
+	cout << "   -i FLOAT      minimal sequence similarity for variant match. [" << QC_SEQSIM_RATIO_MATCH_THRES << "]" << endl;
+	cout << "   -I FLOAT      minimal sequence similarity for merge [" << CALL_MIN_SEQSIM_MERGE_THRES << "]" << endl;
 	cout << "   -d INT        minimal reference distance for merge [" << CALL_MIN_DISTANCE_MERGE_THRES << "]" << endl;
-	cout << "                 Neighboring SVs with distance smaller than INT and sequence identity" << endl;
+	cout << "                 Neighboring SVs with distance smaller than INT and sequence similarity" << endl;
 	cout << "                 larger than FLOAT will be merged" << endl;
 	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
@@ -1115,6 +1177,9 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 [" << CNS_CHUNK_SIZE_EXT_CLIP << "] bp." << endl;
 	cout << "   --min-cons-read-size INT" << endl;
 	cout << "                 minimal segment size for consensus " << "[" << MIN_CONS_READ_LEN << "] bp." << endl;
+	cout << "   -A, --max-absig-density FLOAT" << endl;
+	cout << "                 maximal abnormal signature density " << "[null]." << endl;
+	cout << "                 Only alignment segments of density less than FLOAT will be used for variant calling." << endl;
 	cout << "   --keep-cns-reads" << endl;
 	cout << "                 Keep temporary reads from being deleted during local consensus." << endl;
 	cout << "                 This may take some additional disk space" << endl;
@@ -1158,6 +1223,7 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
+	cout << "   --tumor       Perform the variant calling in tumor mode [False]" << endl;
 
 if(cmd_str.compare(CMD_CALL_STR)==0 or cmd_str.compare(CMD_ALL_STR)==0){
 //	cout << "   --gt-min-sig-size INT" << endl;
@@ -1166,15 +1232,20 @@ if(cmd_str.compare(CMD_CALL_STR)==0 or cmd_str.compare(CMD_ALL_STR)==0){
 //	cout << "   --gt-size-ratio-match FLOAT" << endl;
 //	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
 //	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
-	cout << "   --gt-min-consist-merge FLOAT" << endl;
-	cout << "                 minimal sequence identity for allele merge [" << GT_MIN_IDENTITY_MERGE_THRES << "]." << endl;
-	cout << "                 Allelic Variants will be merged if their sequence identity are larger than FLOAT. " << endl;
+	cout << "   --gt-min-seqsim-merge FLOAT" << endl;
+	cout << "                 minimal sequence similarity for allele merge [" << GT_MIN_SEQSIM_MERGE_THRES << "]." << endl;
+	cout << "                 Allelic Variants will be merged if their sequence similarity are larger than FLOAT. " << endl;
 	cout << "   --gt-homo-ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is homozygous if the ratio of allele count is larger than FLOAT." << endl;
 	cout << "   --gt_hete_ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio for heterozygous alleles [" << GT_HETE_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is heterozygous if the ratio of allele count is larger than FLOAT." << endl;
+	cout << "   --no-clean" << endl;
+	cout << "                 do not clean temporary results [False]. Temporary results in following output" << endl;
+	cout << "                 directories: 1_candidates, 2_cns and 3_call, will be retained using this option." << endl;
+	cout << "   --phasing" << endl;
+	cout << "                 enable genotype local phasing" << endl;
 }
 
 	cout << "   -v,--version  show version information" << endl;
@@ -1186,14 +1257,21 @@ if(cmd_str.compare(CMD_ALL_STR)==0){
 }else{
 	cout << "   # run the '" << cmd_str << "' command on the whole genome for PacBio CCS sequencing" << endl;
 }
-	cout << "   $ asvclr all -t 32 -n 3 -m 20 -x ccs -o output ref.fa genome_sorted.bam" << endl << endl;
+	cout << "   $ asvclr " << cmd_str << " -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam" << endl << endl;
+
+if(cmd_str.compare(CMD_ALL_STR)==0){
+	cout << "   # run the pipeline on the whole genome for PacBio CCS sequencing in tumor mode" << endl;
+}else{
+	cout << "   # run the '" << cmd_str << "' command in tumor mode" << endl;
+}
+	cout << "   $ asvclr " << cmd_str << " -t 32 -x ccs -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl << endl;
 
 if(cmd_str.compare(CMD_ALL_STR)==0){
 	cout << "   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
 }else{
 	cout << "   # run the '" << cmd_str << "' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
 }
-	cout << "   $ asvclr all -t 32 -n 3 -m 20 -x ccs -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr " << cmd_str << " -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
 }
 
 // show the usage for det-cns command
@@ -1218,6 +1296,7 @@ void Paras::outputParas(){
 		exit(1);
 	}
 
+	cout << "Command: " << pg_cmd_str << endl;
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
 	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
 
@@ -1234,7 +1313,7 @@ void Paras::outputParas(){
 	cout << "Slide size: " << slideSize << " bp" << endl;
 	cout << "Minimal SV size to report: " << min_sv_size_usr_final << " bp" << endl;
 	cout << "Maximal SV size to report: " << max_sv_size_usr << " bp" << endl;
-	//cout << "======== min_sv_size_usr: " << min_sv_size_usr << " bp" << endl;
+	// cout << "======== min_sv_size_usr: " << min_sv_size_usr << " bp" << endl;
 	if(command.compare(CMD_DET_STR)!=0)
 		cout << "Minimal ratio of max-segment for indel calling: " << max_seg_size_ratio_usr << endl; // not det
 	cout << "Minimal clipping end size: " << minClipEndSize << " bp" << endl;
@@ -1249,7 +1328,7 @@ void Paras::outputParas(){
 //		cout << "Local consensus chunk extend size for clippings: " << cnsSideExtSizeClip << " bp" << endl;
 //	}
 	if(command.compare(CMD_CALL_STR)!=0){
-		cout << "minimal segment size for consensus: " << minConReadLen << " bp" << endl;
+		cout << "Minimal segment size for consensus: " << minConReadLen << " bp" << endl;
 	}
 	cout << "Number of threads: " << num_threads << endl;
 	//cout << "Limited number of threads for each consensus work: " << num_threads_per_cns_work << endl;
@@ -1267,17 +1346,23 @@ void Paras::outputParas(){
 //	if(command.compare("call")==0 or command.compare("all")==0)
 //		cout << "Maximum monitored process running minutes for call: " << max_proc_running_minutes_call << endl;
 
-	cout << "Maximal number of align segments per read: " << max_seg_num_per_read << endl;
-	cout << "Minimal sequence identity for SV match: " << min_identity_match << endl;
+	cout << "Maximal number of align segments per read : " << max_seg_num_per_read << endl;
+	cout << "Minimal sequence similarity for SV match  : " << min_seqsim_match << endl;
 	cout << "Maximal NM ratio for largest align segment: " << max_seg_nm_ratio_usr << endl;
+	cout << "Maximal abnormal signature density per kbp: " << max_absig_density << endl;
 	if(command.compare(CMD_CALL_STR)==0 or command.compare(CMD_ALL_STR)==0){
-		cout << "Minimal sequence identity for allele merge: " << gt_min_identity_merge << endl;
+		cout << "Minimal sequence similarity for allele merge: " << gt_min_seqsim_merge << endl;
 		cout << "Minimal allele ratio for homozygous alleles: " << gt_homo_ratio << endl;
 		cout << "Minimal allele ratio for heterozygous alleles: " << gt_hete_ratio << endl;
 	}
 
 	if(include_alt) cout << "Include reference alt items: yes" << endl;
 	if(include_decoy) cout << "Include decoy items: yes" << endl;
+	if(keep_temp_results_flag) cout << "Clean temporary results: no" << endl;
+	else cout << "Clean temporary results: yes" << endl;
+	if(phasing_flag) cout << "Local phasing: yes" << endl;
+	else cout << "Local phasing: no" << endl;
+	if(tumor_mode_flag) cout << "Tumor mode: yes" << endl;
 	cout << "Sequencing technology: " << technology << endl;
 	cout << "abPOA version: " << abpoa_version << endl;
 	cout << "minimap2 version: " << minimap2_version << endl;
@@ -1349,6 +1434,10 @@ void Paras::estimate(size_t op_est){
 				if(minReadsNumSupportSV<MIN_SUPPORT_READS_NUM_CLR) minReadsNumSupportSV = MIN_SUPPORT_READS_NUM_CLR;
 			}
 		}
+
+		if(total_mapped_read_len_est>0) mean_error_rate = (double)total_error_num_est/total_mapped_read_len_est; // added on 2025-07-11
+		else mean_error_rate = 0;
+		cout << "Estimated error rate: " << mean_error_rate << endl;
 
 
 	}else if(op_est==NUM_EST_OP){
@@ -1490,6 +1579,8 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 		cnsSideExtSizeClip = stoi(optarg);
 	}else if(opt_name_str.compare("min-cons-read-size")==0){ // min-cons-read-size
 		minConReadLen = stoi(optarg);
+	}else if(opt_name_str.compare("max-absig-density")==0){ // max-absig-density
+		max_absig_density = stof(optarg);
 	}
 //	else if(opt_name_str.compare("monitor-proc-names-cns")==0){ // monitor-proc-names-cns
 //		monitoring_proc_names_cns = optarg;
@@ -1541,22 +1632,28 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 //	}
 	else if(opt_name_str.compare("include-decoy")==0){ // include-alt
 		include_alt = true;
-	}
-	else if(opt_name_str.compare("include-decoy")==0){ // include-decoy
+	}else if(opt_name_str.compare("include-decoy")==0){ // include-decoy
 		include_decoy = true;
+	}else if(opt_name_str.compare("tumor")==0){ // tumor
+		tumor_mode_flag = true;
 	}
 //	else if(opt_name_str.compare("gt-min-sig-size")==0){ // "gt-min-sig-size"
 //		gt_min_sig_size = stoi(optarg);
 //	}else if(opt_name_str.compare("gt-size-ratio-match")==0){ // "gt-size-ratio-match"
 //		gt_size_ratio_match = stof(optarg);
 //	}
-	else if(opt_name_str.compare("gt-min-consist-merge")==0){ // "gt-min-consist-merge"
-		gt_min_identity_merge = stof(optarg);
+	else if(opt_name_str.compare("gt-min-seqsim-merge")==0){ // "gt-min-seqsim-merge"
+		gt_min_seqsim_merge = stof(optarg);
 	}else if(opt_name_str.compare("gt-homo-ratio")==0){ // "gt-homo-ratio"
 		gt_homo_ratio = stof(optarg);
 	}else if(opt_name_str.compare("gt-hete-ratio")==0){ // "gt-hete-ratio"
 		gt_hete_ratio = stof(optarg);
+	}else if(opt_name_str.compare("no-clean")==0){ // "no-clean"
+		keep_temp_results_flag = true;
+	}else if(opt_name_str.compare("phasing")==0){ // "phasing"
+		phasing_flag = true;
 	}
+
 
 	return ret;
 }

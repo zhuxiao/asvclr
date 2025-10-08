@@ -14,6 +14,7 @@
 #include "Block.h"
 #include "varCand.h"
 #include "clipReg.h"
+#include "Phasing.h"
 
 using namespace std;
 
@@ -22,7 +23,7 @@ using namespace std;
 #define MIN_CHR_SIZE_EST	((DIST_CHR_END*2+BLOCK_SIZE_EST)*2)
 
 #define MIN_SIZE_RATIO_REDUNDANT_FILTER		(0.98f)
-#define MIN_IDENTITY_REDUNDANT_FILTER		(0.95f)
+#define MIN_SEQSIM_REDUNDANT_FILTER			(0.93f)		// (0.92f), updated on 2025-06-02
 
 #define REFSEQ_PATTERN		"refseq"
 #define CLIPREG_PATTERN		"clipReg_refseq"
@@ -35,7 +36,7 @@ class Chrome{
 		string chrname;
 		int64_t chrlen;
 		//bool process_flag;
-		bool print_flag, decoy_flag, alt_flag;
+		bool print_flag, decoy_flag, alt_flag, valid_flag;
 
 		// output directory
 		string out_dir_detect, out_dir_cns, out_dir_call;
@@ -97,6 +98,7 @@ class Chrome{
 		void removeVarCandNodeIndel(varCand *var_cand);
 		void removeVarCandNodeClipReg(varCand *var_cand);
 		void mergeIdenticalVarClipReg();
+		void chrPhasing();
 		void chrFillVarseq();
 		void saveCallSV2File();
 		void saveCallSV2File02();

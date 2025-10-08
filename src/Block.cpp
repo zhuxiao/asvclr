@@ -10,13 +10,14 @@
 //pthread_mutex_t mutex_print = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_write_misAln = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_cns_work = PTHREAD_MUTEX_INITIALIZER;
+extern pthread_mutex_t mutex_fai;
 
 // Constructor with parameters
 Block::Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai,  Paras *paras){
 	string chrname_tmp;
 	this->paras =  paras;
 	this->chrname = chrname;
-	this->chrlen = faidx_seq_len(fai, chrname.c_str()); // get the reference length
+	this->chrlen = faidx_seq_len64(fai, chrname.c_str()); // get the reference length
 	this->startPos = startPos;
 	this->endPos = endPos;
 	this->fai = fai;
@@ -138,6 +139,9 @@ void Block::blockFillDataEst(size_t op_est){
 
 	// compute the block base information, including coverage, insertions, deletions and clippings
 	computeBlockBaseInfo();
+
+	 if(op_est==SIZE_EST_OP)
+	 	computeBlockMismatchesEst();
 
 	// fill the data for estimation
 	fillDataEst(op_est);
@@ -311,6 +315,7 @@ int Block::computeBlockBaseInfo(){
 
 	// update the coverage information for each base
 	computeBlockMeanCov();
+
 	return 0;
 }
 
@@ -495,6 +500,95 @@ void Block::computeBlockMeanCov(){
 	else meanCov = 0;
 }
 
+void Block::computeBlockMismatchesEst(){
+	vector<struct alnSeg*> alnSegs;
+	bam1_t *b;
+	string qname, refseq, reg_str;
+	char *seq;
+	int32_t bam_type, seq_len;
+	int64_t startRpos, endRpos, current_end_pos;
+	int64_t num = 0, len = 0;
+
+	b = bam_init1();
+	startRpos = LONG_MAX;
+	endRpos = LONG_MIN;
+
+	if(!alnDataVector.empty()){
+		for(size_t i=0; i<alnDataVector.size(); i++){
+			b = alnDataVector.at(i);
+			if(b->core.l_qseq>0 and (b->core.qual>=paras->minMapQ and b->core.qual!=255)){
+				// compute position
+				current_end_pos = bam_endpos(b);
+				if(b->core.pos < startRpos) startRpos = b->core.pos;
+				if(current_end_pos > endRpos) endRpos = current_end_pos;
+			}
+		}
+	
+		reg_str = chrname + ":" + to_string(startRpos) + "-" + to_string(endRpos);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
+		refseq = seq;
+		free(seq);
+
+		// cout << "startRpos=" << startRpos << " endRpos=" << endRpos << endl;
+		// get sig_num
+		for(size_t i=0; i<alnDataVector.size(); i++){
+			qname = bam_get_qname(b);	
+			bam_type = getBamTypeSingleItem(b);
+			if(bam_type==BAM_INVALID){
+				cerr << __func__ << ": unknown bam type, error!" << endl;
+				exit(1);
+			}
+			if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+				switch(bam_type){
+					//MD_tag
+					case BAM_CIGAR_NO_DIFF_MD:
+						//alnSegs = generateAlnSegs(b);
+						alnSegs = generateAlnSegs2(b, startRpos, endRpos);
+						// alnSegs = generateAlnSegs2(b, startPos, endPos);
+						break;
+					case BAM_CIGAR_NO_DIFF_NO_MD:
+					case BAM_CIGAR_DIFF_MD:
+					case BAM_CIGAR_DIFF_NO_MD:
+						alnSegs = generateAlnSegs_no_MD2(b, refseq, startRpos, endRpos);
+						// alnSegs = generateAlnSegs_no_MD2(b, baseArr, startPos, endPos);
+						break;
+					default:
+						cerr << __func__ << ": unknown bam type, error!" << endl;
+						exit(1);
+				}// generate align segments
+				for(size_t i = 0; i<alnSegs.size(); i++){
+					switch(alnSegs.at(i)->opflag){
+						case BAM_CINS:
+						case BAM_CDEL:
+						case BAM_CDIFF:
+							num += alnSegs.at(i)->seglen;
+							len += alnSegs.at(i)->seglen;
+							break;
+						// case BAM_CDEL:
+						// 	num += alnSegs.at(i)->seglen;
+						// 	len += alnSegs.at(i)->seglen;
+						// 	break;
+						case BAM_CEQUAL:
+							len += alnSegs.at(i)->seglen;
+							break;
+						// case BAM_CDIFF:
+						// 	num += alnSegs.at(i)->seglen;
+						// 	len += alnSegs.at(i)->seglen;
+						// 	break;
+					}
+				}
+
+				destroyAlnSegs(alnSegs);
+			}
+			paras->total_error_num_est += num;
+			paras->total_mapped_read_len_est += len;
+			
+		}
+	}
+}
+
 // extract abnormal signatures
 int Block::computeAbSigs(){
 	int64_t startPosWin, endPosWin, pos, tmp_endPos;
@@ -565,7 +659,7 @@ int Block::processSingleRegion(int64_t startRpos, int64_t endRPos, int64_t regFl
 		tmp_reg.setMeanBlockCov(meanCov);  // set the mean coverage
 
 		// compute the abnormal signatures in a region
-		if(tmp_reg.wholeRefGapFlag==false and isMisAlnReg(tmp_reg)==false){
+		if(tmp_reg.wholeRefGapFlag==false and isMisAlnReg(tmp_reg)==false and tmp_reg.isUltraHighCovReg()==false){
 			tmp_reg.computeRegAbSigs();
 
 			// detect clip regions
@@ -659,6 +753,7 @@ void Block::computeZeroCovReg(Region &reg){
 			reg_tmp->aln_seg_end_flag = false;
 			reg_tmp->query_pos_invalid_flag = false;
 			reg_tmp->large_indel_flag = false;
+			reg_tmp->merge_flag = false;
 			reg_tmp->gt_type = -1;
 			reg_tmp->gt_seq = "";
 			reg_tmp->AF = 0;

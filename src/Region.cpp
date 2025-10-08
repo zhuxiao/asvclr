@@ -246,6 +246,7 @@ reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosR
 	reg->aln_seg_end_flag = false;
 	reg->query_pos_invalid_flag = false;
 	reg->large_indel_flag = false;
+	reg->merge_flag = false;
 	reg->gt_type = -1;
 	reg->gt_seq = "";
 	reg->AF = 0;
@@ -477,7 +478,7 @@ void Region::detectIndelReg(){
 	if(i<minRPos) i = minRPos;
 	while(i<endMidPartPos){
 
-//		if(i>236260000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>, 9786000, 12876474
+//		if(i>109418000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>, 9786000, 12876474
 //			cout << i << endl;  // breakpoints
 
 		reg = getIndelReg(i);
@@ -517,6 +518,9 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 				reg_size1 = 0;
 				continue;
 			}
+
+//			if(i>=1288085)
+//				cout << i << endl;
 
 			if(haveNoAbSigs(regBaseArr+i-startRPos, i)){
 				if(startPos1==-1) startPos1 = i;
@@ -634,7 +638,9 @@ reg_t* Region::getIndelReg(int64_t startCheckPos){
 				//if(num1>0 or num2>=DISAGREE_NUM_THRES_REG or num3>0) {
 				//if(num1>0 or num4>0 or high_indel_clip_ratio>=0.1f) {
 				//if(num1>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) { // deleted 2024-02-05
-				if(valid_sig_num>=paras->minReadsNumSupportSV or num1>0 or num3>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
+				if(valid_sig_num>=paras->minReadsNumSupportSV or (localRegCov<COV_DEPTH_LEVEL_1 and valid_sig_num>=MIN_SUPPORT_READS_NUM_LEVEL_1) or
+						(localRegCov<COV_DEPTH_LEVEL_2 and valid_sig_num>=MIN_SUPPORT_READS_NUM_LEVEL_2) or
+						num1>0 or num3>0 or num4>0 or high_indel_clip_ratio>=HIGH_INDEL_CLIP_BASE_RATIO_THRES) {
 					sv_len = computeEstSVLen(startPos_indel, endPos_indel);
 					//reg = allocateReg(chrname, startPos_indel, endPos_indel); // delete on 2024-04-06
 					reg = allocateReg(chrname, startPos_indel, endPos_indel, sv_len);
@@ -797,7 +803,7 @@ int32_t Region::computeEstSVLen(int64_t startPos, int64_t endPos){
 	else mean_sv_len_del = 0;
 
 	if(mean_sv_len_ins>mean_sv_len_del) return mean_sv_len_ins;
-	else return mean_sv_len_del;
+	else return -mean_sv_len_del;
 }
 
 // determine the dif type for indel candidate
@@ -826,12 +832,18 @@ vector<int64_t> Region::getZeroCovPosVector(){
 	return zeroCovPosVector;
 }
 
+bool Region::isUltraHighCovReg(){
+	bool flag = false;
+	if(localRegCov>MAX_ULTRA_ULTRA_HIGH_COV or refinedLocalRegCov>MAX_ULTRA_ULTRA_HIGH_COV) flag = true;
+	return flag;
+}
+
 //
 void Region::detectHighClipReg(){
 	int64_t i = startMidPartPos - SUB_CLIP_REG_SIZE;
 	if(i<1) i = 1;
 	while(i<endMidPartPos){
-//		if(i>869400)
+//		if(i>178283000) //178232000
 //			cout << i << endl;
 
 		reg_t *reg = getClipReg(i);
@@ -856,12 +868,13 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 	clip_reg_flag = false;
 
 	startPos_clip = endPos_clip = -1;
-	checkPos = startCheckPos;
+	checkPos = startCheckPos - subclipreg_size;
+	if(checkPos<startRPos) checkPos = startRPos;
 	while(checkPos<=endMidPartPos){
 		startPos_tmp = checkPos;
 		endPos_tmp = checkPos + subclipreg_size - 1;
 		if(endPos_tmp>endMidPartPos) endPos_tmp = endMidPartPos;
-		normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp, HIGH_CLIP_RATIO_THRES);
+		normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp, HIGH_CLIP_RATIO_THRES, paras->minReadsNumSupportSV);
 		if(normal_reg_flag==false){ // clip region
 			if(clip_reg_flag==false){ // first clip region
 				clip_reg_flag = true;
@@ -1045,27 +1058,36 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 }
 
 
-bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_thres){
+bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_thres, int32_t min_supp_num){
 	bool flag = true;
-	int64_t i;
-	size_t j, clip_num;
+	int64_t i, clip_num, tmp_num;
+	size_t j;
 	vector<clipEvent_t*> clip_vec;
 	double ratio;
 
+	//cout << "========" << endl;
 	clip_num = 0;
 	for(i=startPos; i<=endPos; i++){
 		clip_vec = regBaseArr[i-startRPos].clipVector;
+		tmp_num = 0;
 		for(j=0; j<clip_vec.size(); j++){
-			if(stoi(clip_vec.at(j)->seq)>=paras->minClipEndSize)
+			if(stoi(clip_vec.at(j)->seq)>=paras->minClipEndSize){
 				clip_num ++;
+				tmp_num ++;
+			}
 		}
+		//if(tmp_num>0) cout << "\tclip: " << i << ", num=" << tmp_num << endl;
 	}
 
-	//if(localRegCov>0){ // deleted on 2023-12-18
-	if(refinedLocalRegCov>=paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR){
-		//ratio = clip_num / localRegCov; // deleted on 2023-12-18
-		ratio = clip_num / refinedLocalRegCov;
-		if(ratio>=clip_ratio_thres) flag = false;
+	if(clip_num>0){
+		//if(localRegCov>0){ // deleted on 2023-12-18
+		if(refinedLocalRegCov>=min_supp_num*READS_NUM_SUPPORT_FACTOR){
+			//ratio = clip_num / localRegCov; // deleted on 2023-12-18
+			ratio = clip_num / refinedLocalRegCov;
+			//if(ratio>=clip_ratio_thres or clip_num>=min_supp_num*READS_NUM_SUPPORT_FACTOR){ // deleted on 2025-08-21
+			if((ratio>=clip_ratio_thres and clip_num>=min_supp_num*READS_NUM_SUPPORT_FACTOR) or (clip_num>=min_supp_num and ratio>=clip_ratio_thres*READS_NUM_SUPPORT_FACTOR)) flag = false;
+			//cout << startPos << "-" << endPos << ": clip_num=" << clip_num << ", ratio=" << ratio << ", refinedLocalRegCov=" << refinedLocalRegCov << ", flag=" << flag << endl;
+		}
 	}
 
 	if(flag){

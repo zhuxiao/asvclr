@@ -23,7 +23,7 @@ using namespace std;
 #define REG_DIF_UNCERTAIN	4
 
 #define SUB_REG_SIZE			10
-#define SUB_CLIP_REG_SIZE		100
+#define SUB_CLIP_REG_SIZE		200		// 100, updated on 2025-08-15
 
 #define MIN_REG_SIZE_EXTRACT_SIG			30 // added on 2025-03-06
 
@@ -32,6 +32,8 @@ using namespace std;
 #define SECOND_INDEL_CLIP_RATIO_THRES		(0.3f)
 #define HIGH_INDEL_CLIP_BASE_RATIO_THRES	(0.1f)
 #define MIN_VALID_SIG_COV_RATIO				(0.05f)
+
+#define MAX_ULTRA_ULTRA_HIGH_COV			5000 // added on 2025-07-07
 
 
 class Region {
@@ -85,6 +87,7 @@ class Region {
 		vector<reg_t*> getIndelVector();
 		vector<reg_t*> getClipRegVector();
 		vector<int64_t> getZeroCovPosVector();
+		bool isUltraHighCovReg();
 
 	private:
 		bool IsWholeRefGap();
@@ -117,7 +120,7 @@ class Region {
 
 		// duplication and inversion
 		reg_t* getClipReg(int64_t startCheckPos);
-		bool haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_thres);
+		bool haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_thres, int32_t min_supp_num);
 };
 
 #endif /* SRC_REGION_H_ */

@@ -1,6 +1,7 @@
 #include "sv_sort.h"
 #include "util.h"
 
+extern pthread_mutex_t mutex_fai;
 
 SV_item *constructSVItem(string &line){
 	SV_item *item = NULL;
@@ -361,6 +362,9 @@ vector<SV_item*> loadDataVcf(string &filename){
 				// get sv type
 				if(sv_type_str.size()==0){
 					sv_type_vec = getSVType(str_vec);
+					if(sv_type_vec.size()==0){
+						cout << line << endl;
+					}
 					if(sv_type_vec.size()==1){
 						sv_type_str = sv_type_vec.at(0);
 					}else{
@@ -419,15 +423,25 @@ void destroyData(vector<SV_item*> &sv_vec){
 }
 
 //get chrnames
-set<string> getChrnames(vector<SV_item*> &dataset){
+set<string> getChrnames(vector<SV_item*> &dataset, faidx_t *fai){
 	set<string> chrname_set;
 	size_t i;
 	SV_item *item;
 	set<string>::iterator iter;
+	int32_t has_flag;
 
 	for(i=0;i<dataset.size();i++){
 		item = dataset.at(i);
 		if(chrname_set.find(item->chrname)==chrname_set.end()) chrname_set.insert(item->chrname);
+	}
+
+	// remove invalid items
+	for(iter=chrname_set.begin(); iter!=chrname_set.end(); ){
+		has_flag = faidx_has_seq(fai, (*iter).c_str());
+		if(has_flag==0){ // not present, then remove it
+			//cout << "\thas_flag=" << has_flag << ", chrname=" << (*iter) << endl;
+			iter = chrname_set.erase(iter);
+		}else iter++;
 	}
 
 	return chrname_set;
@@ -542,12 +556,12 @@ vector<vector<SV_item*>> constructSubsetByChrOp(vector<SV_item*> &sv_vec, vector
 }
 
 //generate datasets
-vector<vector<SV_item*>> constructSubsetByChr(vector<SV_item*> &sv_vec){
+vector<vector<SV_item*>> constructSubsetByChr(vector<SV_item*> &sv_vec, faidx_t *fai){
 	vector< vector<SV_item*> > result;
 	set<string> chrname_set;
 	vector<string> chrname_vec_sorted;
 
-	chrname_set = getChrnames(sv_vec);
+	chrname_set = getChrnames(sv_vec, fai);
 	chrname_vec_sorted = sortChrnames(chrname_set); // sort chromosome names
 	result = constructSubsetByChrOp(sv_vec, chrname_vec_sorted);
 
@@ -598,17 +612,19 @@ void sortSVitem(vector<vector<SV_item*>> &subsets){
 	}
 }
 
-// remove duplicated items
-void rmDupSVitem(vector<vector<SV_item*>> &subsets, double size_ratio_thres, double identity_thres){
-	cout << "remove duplicated items ..." << endl;
+// remove redundant items
+void rmRedundantSVitem(vector<vector<SV_item*>> &subsets, double size_ratio_thres, double seqsim_thres, faidx_t *fai){
+	//cout << "remove redundant items ..." << endl;
 	for(size_t i=0;i<subsets.size();i++)
-		rmDupSVitemSubset(subsets.at(i), size_ratio_thres, identity_thres);
+		rmRedundantSVitemSubset(subsets.at(i), size_ratio_thres, seqsim_thres, fai);
 }
 
-void rmDupSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, double identity_thres){
+void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, double seqsim_thres, faidx_t *fai){
 	SV_item *item1, *item2;
-	double val, max_len, secmax_len, size_ratio;
+	double val, max_len, secmax_len, size_ratio, min_len;
 	bool overlap_flag;
+	string compseq1, compseq2;
+	vector<string> compseq_vec;
 
 	for(size_t i=1;i<sv_vec.size(); i++){
 		item1 = sv_vec.at(i-1);
@@ -618,25 +634,81 @@ void rmDupSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, double
 			if(item1->startPos==item2->startPos and item1->endPos==item2->endPos) overlap_flag = true;
 			else overlap_flag = isOverlappedPos(item1->startPos-SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item1->endPos+SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item2->startPos-SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item2->endPos+SHORT_VAR_ALN_CHECK_EXTEND_SIZE);
 
+			if(overlap_flag==false and abs(item1->sv_len)>=EXT_SIZE_CHK_VAR_LOC and abs(item2->sv_len)>=EXT_SIZE_CHK_VAR_LOC) // check for larger variants
+				overlap_flag = isOverlappedPos(item1->startPos-EXT_SIZE_CHK_VAR_LOC, item1->endPos+EXT_SIZE_CHK_VAR_LOC, item2->startPos-EXT_SIZE_CHK_VAR_LOC, item2->endPos+EXT_SIZE_CHK_VAR_LOC); // 500 bp around
+
 			if(overlap_flag){
-				if(item1->sv_len==item2->sv_len) size_ratio = 1;
+				if(abs(item1->sv_len)==abs(item2->sv_len)) size_ratio = 1;
 				else{
-					if(item1->sv_len>item2->sv_len){ max_len = item1->sv_len; secmax_len = item2->sv_len; }
-					else{ max_len = item2->sv_len; secmax_len = item1->sv_len; }
+					if(abs(item1->sv_len)>abs(item2->sv_len)) { max_len = abs(item1->sv_len); secmax_len = abs(item2->sv_len); }
+					else{ max_len = abs(item2->sv_len); secmax_len = abs(item1->sv_len); }
 					// max_len = item1->sv_len>item2->sv_len ? (max_len=item1->sv_len, secmax_len=item2->sv_len) : (max_len=item2->sv_len, secmax_len=item1->sv_len);
 					size_ratio = secmax_len / max_len;
 				}
 
 				if(size_ratio>=size_ratio_thres){
 					if(item1->sv_type!=VAR_DEL){
-						val = computeVarseqIdentity(item1->altseq, item2->altseq);
-						if(val>=identity_thres) item2->valid_flag = false;
+						compseq_vec = getCompSeqs(item1, item2, fai);
+						compseq1 = compseq_vec.at(0);
+						compseq2 = compseq_vec.at(1);
+
+						//val = computeVarseqSim(item1->altseq, item2->altseq);
+						val = computeVarseqSim(compseq1, compseq2);
+						//cout << "seqsim=" << val << endl << item1->altseq << endl << item2->altseq << endl;
+						min_len = min(abs(item1->sv_len), abs(item2->sv_len));
+						if(val>=seqsim_thres or (val>=QC_SEQSIM_RATIO_THRES_FACTOR*seqsim_thres and min_len<MAX_DIST_MERGE_ARBITARY)) item2->valid_flag = false;
 					}else{
 						item2->valid_flag = false;
 					}
 				}
 			}
+			//if(item2->valid_flag==false) cout << "====== " << item2->chrname << ":" << item2->startPos << "-" << item2->endPos << ", vartype=" << to_string(item2->sv_type) << ", svlen=" << item2->sv_len << ", valid=" << item2->valid_flag << endl;
 		}
 	}
 }
 
+
+vector<string> getCompSeqs(SV_item *item1, SV_item *item2, faidx_t *fai){
+	vector<string> compseq_vec;
+	string compseq1, compseq2, reg_str;
+	char *seq;
+	int32_t seq_len;
+
+	compseq1 = item1->altseq;
+	compseq2 = item2->altseq;
+	if(item1->startPos<item2->startPos) {
+		reg_str = item1->chrname + ":" + to_string(item1->startPos) + "-" + to_string(item2->startPos-1);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
+		compseq2 = seq + compseq2;
+		free(seq);
+	}else if(item1->startPos>item2->startPos){
+		reg_str = item1->chrname + ":" + to_string(item2->startPos) + "-" + to_string(item1->startPos-1);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
+		compseq1 = seq + compseq1;
+		free(seq);
+	}
+	if(item1->endPos<item2->endPos){
+		reg_str = item1->chrname + ":" + to_string(item1->endPos+1) + "-" + to_string(item2->endPos);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
+		compseq1 = compseq1 + seq;
+		free(seq);
+	}else if(item1->endPos>item2->endPos){
+		reg_str = item1->chrname + ":" + to_string(item2->endPos+1) + "-" + to_string(item1->endPos);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
+		compseq2 = compseq2 + seq;
+		free(seq);
+	}
+
+	compseq_vec.push_back(compseq1);
+	compseq_vec.push_back(compseq2);
+
+	return compseq_vec;
+}
