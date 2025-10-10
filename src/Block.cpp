@@ -531,15 +531,16 @@ void Block::computeBlockMismatchesEst(){
 		refseq = seq;
 		free(seq);
 
+		bam_type = getBamType(alnDataVector);
+		if(bam_type==BAM_INVALID){
+			cerr << __func__ << ": unknown bam type, error!" << endl;
+			exit(1);
+		}
+
 		// cout << "startRpos=" << startRpos << " endRpos=" << endRpos << endl;
 		// get sig_num
 		for(size_t i=0; i<alnDataVector.size(); i++){
-			qname = bam_get_qname(b);	
-			bam_type = getBamTypeSingleItem(b);
-			if(bam_type==BAM_INVALID){
-				cerr << __func__ << ": unknown bam type, error!" << endl;
-				exit(1);
-			}
+			qname = bam_get_qname(b);
 			if(!(b->core.flag & BAM_FUNMAP)){ // aligned
 				switch(bam_type){
 					//MD_tag
@@ -584,7 +585,6 @@ void Block::computeBlockMismatchesEst(){
 			}
 			paras->total_error_num_est += num;
 			paras->total_mapped_read_len_est += len;
-			
 		}
 	}
 }

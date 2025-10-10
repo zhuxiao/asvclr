@@ -134,6 +134,7 @@ class clipReg {
 		void checkLocOrder(mateClipReg_t &mate_clip_reg);
 		void computeVarTypeClipReg(mateClipReg_t &mate_clip_reg);
 		void computeLargeIndelTypeClipReg(mateClipReg_t &mate_clip_reg);
+		int32_t computeSuppNumIntraAlnSeg(string &chrname, size_t startRefPos, size_t endRefPos, int32_t var_type, int32_t sv_len, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov, faidx_t *fai, double size_match_ratio_thres);
 		void resetClipCheckFlag(vector<clipAlnData_t*> &clipAlnDataVector);
 		bool containCompleteDup(vector<clipAlnData_t*> &query_aln_segs, mateClipReg_t &mate_clip_reg);
 		size_t extractVarType(mateClipReg_t &mate_clip_reg, size_t dup_type_num, size_t inv_type_num, size_t tra_type_num, size_t min_reads_thres);

@@ -6895,7 +6895,7 @@ vector<reg_t*> varCand::computeClipRegVarLoc(string &alnfilename, string &cnsfil
 									sv_len = (end_var_query_pos - start_var_query_pos) - (end_var_ref_pos - start_var_ref_pos) + 1; // INS
 								else{
 									sv_len = (end_var_query_pos - start_var_query_pos) - (end_var_ref_pos - start_var_ref_pos) - 1; // DEL
-									if(sv_type==VAR_DUP or sv_type==VAR_INS) new_sv_type = VAR_DEL;
+									//if(sv_type==VAR_DUP or sv_type==VAR_INS) new_sv_type = VAR_DEL;
 								}
 
 								//if(sv_type==VAR_DUP){ // added on 2025-08-20
@@ -6940,7 +6940,7 @@ vector<reg_t*> varCand::computeClipRegVarLoc(string &alnfilename, string &cnsfil
 										clip_reg_tmp->altseq = query_seq.substr(clip_reg_tmp->startQueryPos-1, clip_reg_tmp->endQueryPos-clip_reg_tmp->startQueryPos+1);
 
 										if(new_sv_type==-1){
-											switch(new_sv_type){
+											switch(sv_type){
 												case VAR_DUP: // DUP
 													clip_reg_tmp->dup_num = dup_num;
 													clip_reg_tmp->large_indel_flag = false;
@@ -7116,7 +7116,7 @@ vector<reg_t*> varCand::computeClipRegVarLoc(string &alnfilename, string &cnsfil
 											clip_reg_tmp->query_id = minimap2_aln_left->query_id;
 											clip_reg_tmp->sv_len = sv_len;
 											//if(sv_len<0) clip_reg_tmp->sv_len = -sv_len;
-											clip_reg_tmp->dup_num = dup_num; //--------------
+											clip_reg_tmp->dup_num = dup_num;
 											//reg->blat_aln_id = i;
 											clip_reg_tmp->minimap2_aln_id = -1;
 											clip_reg_tmp->call_success_status = true;

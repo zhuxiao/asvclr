@@ -1306,7 +1306,7 @@ int Genome::processCallWork(){
 		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf, minimap2_chr1_143246329-143247038.paf, minimap2_1_649705-650290.paf
 		// minimap2_1_2765904-2766241.paf, minimap2_1_5447230-5447236.paf, minimap2_1_3097653-3098167.paf, minimap2_1_2618216-2619007.paf, minimap2_1_1184268-1184983.paf, minimap2_1_5446916-5447358
 		// minimap2_1_3560147-3560992.paf, minimap2_1_801940-802476.paf, minimap2_1_3560147-3560992.paf, minimap2_1_3561166-3562123.paf
-//		if(var_cand->alnfilename.compare("debug_minimap2_cmrg_phasing_20250930/3_call/chr16/minimap2_cns_chr16_34574559-34594151.paf")==0){
+//		if(var_cand->alnfilename.compare("debug_tmp/3_call/chr1/minimap2_cns_chr1_11522531-11522999.paf")==0){
 //			cout << var_cand->alnfilename << endl;
 //		}else continue;
 

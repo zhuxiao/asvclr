@@ -2839,34 +2839,36 @@ void clipReg::determineLargeIndelReg(){
 				else end_pos_tmp = reg1->endRefPos;
 
 				// add the DEL region into indel vector
-				largeIndelClipReg = new reg_t();
-				largeIndelClipReg->chrname = chrname_tmp;
-				largeIndelClipReg->startRefPos = start_pos_tmp;
-				largeIndelClipReg->endRefPos = end_pos_tmp;
-				largeIndelClipReg->startLocalRefPos = largeIndelClipReg->endLocalRefPos = 0;
-				largeIndelClipReg->startQueryPos = largeIndelClipReg->endQueryPos = 0;
-				largeIndelClipReg->var_type = VAR_UNC;
-				largeIndelClipReg->sv_len = 0;
-				largeIndelClipReg->query_id = -1;
-				largeIndelClipReg->blat_aln_id = -1;
-				largeIndelClipReg->minimap2_aln_id = -1;
-				largeIndelClipReg->call_success_status = false;
-				largeIndelClipReg->short_sv_flag = false;
-				largeIndelClipReg->zero_cov_flag = false;
-				largeIndelClipReg->aln_seg_end_flag = false;
-				largeIndelClipReg->query_pos_invalid_flag = false;
-				largeIndelClipReg->large_indel_flag = true;
-				largeIndelClipReg->merge_flag = false;
-				largeIndelClipReg->gt_type = -1;
-				largeIndelClipReg->gt_seq = "";
-				largeIndelClipReg->AF = 0;
-				largeIndelClipReg->supp_num = largeIndelClipReg->DP = 0;
-				largeIndelClipReg->discover_level = VAR_DISCOV_L_UNUSED;
+				if(end_pos_tmp-start_pos_tmp<=maxVarRegSize){
+					largeIndelClipReg = new reg_t();
+					largeIndelClipReg->chrname = chrname_tmp;
+					largeIndelClipReg->startRefPos = start_pos_tmp;
+					largeIndelClipReg->endRefPos = end_pos_tmp;
+					largeIndelClipReg->startLocalRefPos = largeIndelClipReg->endLocalRefPos = 0;
+					largeIndelClipReg->startQueryPos = largeIndelClipReg->endQueryPos = 0;
+					largeIndelClipReg->var_type = VAR_UNC;
+					largeIndelClipReg->sv_len = 0;
+					largeIndelClipReg->query_id = -1;
+					largeIndelClipReg->blat_aln_id = -1;
+					largeIndelClipReg->minimap2_aln_id = -1;
+					largeIndelClipReg->call_success_status = false;
+					largeIndelClipReg->short_sv_flag = false;
+					largeIndelClipReg->zero_cov_flag = false;
+					largeIndelClipReg->aln_seg_end_flag = false;
+					largeIndelClipReg->query_pos_invalid_flag = false;
+					largeIndelClipReg->large_indel_flag = true;
+					largeIndelClipReg->merge_flag = false;
+					largeIndelClipReg->gt_type = -1;
+					largeIndelClipReg->gt_seq = "";
+					largeIndelClipReg->AF = 0;
+					largeIndelClipReg->supp_num = largeIndelClipReg->DP = 0;
+					largeIndelClipReg->discover_level = VAR_DISCOV_L_UNUSED;
 
-				large_indel_flag = true;
-				mate_clip_reg.large_indel_flag = true;
-				mate_clip_reg.largeIndelClipReg = dupVarReg(largeIndelClipReg);
-				mate_clip_reg.supp_num_largeIndel = supp_num_largeIndel;
+					large_indel_flag = true;
+					mate_clip_reg.large_indel_flag = true;
+					mate_clip_reg.largeIndelClipReg = dupVarReg(largeIndelClipReg);
+					mate_clip_reg.supp_num_largeIndel = supp_num_largeIndel;
+				}
 			}
 		}
 	}
@@ -3378,7 +3380,7 @@ void clipReg::computeLargeIndelTypeClipReg(mateClipReg_t &mate_clip_reg){
 	bool self_overlap_flag; // four features
 	bool valid_query_flag;
 	vector<clipPos_t*> query_pos_vec;
-	int32_t ins_num, del_num, dist, orient_factor;
+	int32_t ins_num, del_num, dist, orient_factor, supp_num_intra;
 	int64_t sum_ins, sum_del, mean_size_ins, mean_size_del;
 
 	if(largeIndelClipReg==NULL) return;
@@ -3458,9 +3460,15 @@ void clipReg::computeLargeIndelTypeClipReg(mateClipReg_t &mate_clip_reg){
 		if(ins_num>=del_num) { mate_clip_reg.sv_type = largeIndelClipReg->var_type = VAR_INS; mate_clip_reg.largeIndelClipReg->sv_len = largeIndelClipReg->sv_len = mean_size_ins; mate_clip_reg.supp_num_largeIndel = supp_num_largeIndel = ins_num; }
 		else { mate_clip_reg.sv_type = largeIndelClipReg->var_type = VAR_DEL; mate_clip_reg.largeIndelClipReg->sv_len = largeIndelClipReg->sv_len = mean_size_del; mate_clip_reg.supp_num_largeIndel = supp_num_largeIndel = del_num; }
 
+		supp_num_intra = computeSuppNumIntraAlnSeg(largeIndelClipReg->chrname, largeIndelClipReg->startRefPos, largeIndelClipReg->endRefPos, largeIndelClipReg->var_type, largeIndelClipReg->sv_len, inBamFile, paras->minMapQ, paras->minHighMapQ, paras->max_ultra_high_cov, fai, QC_SIZE_RATIO_MATCH_THRES_INDEL);
+		mate_clip_reg.supp_num_largeIndel += supp_num_intra;
+		supp_num_largeIndel += supp_num_intra;
+
 		// compute depth for large indel region
 		mate_clip_reg.depth_largeIndel = computeCovNumReg(largeIndelClipReg->chrname, largeIndelClipReg->startRefPos, largeIndelClipReg->endRefPos, fai, inBamFile, paras->minMapQ, paras->minHighMapQ, paras->max_ultra_high_cov);
 		if(mate_clip_reg.depth_largeIndel<mate_clip_reg.supp_num_largeIndel) mate_clip_reg.depth_largeIndel = mate_clip_reg.supp_num_largeIndel; // tolerate DEL region
+		largeIndelClipReg->supp_num = mate_clip_reg.supp_num_largeIndel;
+		largeIndelClipReg->DP = mate_clip_reg.depth_largeIndel;
 		mate_clip_reg.supp_num_valid_flag = true;
 
 		for(i=0; i<4; i++) mate_clip_reg.bnd_mate_reg_strs[i] = "-";
@@ -3480,6 +3488,89 @@ void clipReg::computeLargeIndelTypeClipReg(mateClipReg_t &mate_clip_reg){
 	}
 
 	resetClipCheckFlag(clipAlnDataVector); // reset clipping check flag
+}
+
+// compute the support number
+int32_t clipReg::computeSuppNumIntraAlnSeg(string &chrname, size_t startRefPos, size_t endRefPos, int32_t var_type, int32_t sv_len, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov, faidx_t *fai, double size_match_ratio_thres){
+	int32_t supp_num, bam_type, seq_len;
+	size_t i, j;
+	vector<bam1_t*> alnDataVector;
+	bam1_t *b;
+	string qname, refseq, reg_str;
+	int64_t start_pos, end_pos, chr_len, end_pos_tmp;
+	vector<struct alnSeg*> alnSegs;
+	struct alnSeg *seg;
+	char *seq;
+	double val, size_sum;
+
+	supp_num = 0;
+	start_pos = startRefPos - CLIP_END_EXTEND_SIZE;
+	end_pos = endRefPos + CLIP_END_EXTEND_SIZE;
+
+	chr_len = faidx_seq_len64(fai, chrname.c_str()); // get the reference length
+	if(chr_len!=-1){
+		if(start_pos<1) start_pos = 1;
+		if(end_pos>chr_len) end_pos = chr_len;
+
+		reg_str = chrname + ":" + to_string(start_pos) + "-" + to_string(end_pos);
+		pthread_mutex_lock(&mutex_fai);
+		seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+		pthread_mutex_unlock(&mutex_fai);
+		refseq = seq;
+		free(seq);
+
+		alnDataLoader data_loader(chrname, start_pos, end_pos, inBamFile, minMapQ, minHighMapQ);
+		data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
+
+		bam_type = getBamType(alnDataVector);
+		if(bam_type==BAM_INVALID){
+			cerr << __func__ << ": unknown bam type, error!" << endl;
+			exit(1);
+		}
+		for(i=0; i<alnDataVector.size(); i++){
+			b = alnDataVector.at(i);
+			if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+				switch(bam_type){
+					case BAM_CIGAR_NO_DIFF_MD:
+						alnSegs = generateAlnSegs2(b, start_pos, end_pos);
+						break;
+					case BAM_CIGAR_NO_DIFF_NO_MD:
+					case BAM_CIGAR_DIFF_MD:
+					case BAM_CIGAR_DIFF_NO_MD:
+						alnSegs = generateAlnSegs_no_MD2(b, refseq, start_pos, end_pos);
+						break;
+					default:
+						cerr << __func__ << ": unknown bam type, error!" << endl;
+						exit(1);
+				}// generate align segments
+
+				size_sum = 0;
+				for(j=0; j<alnSegs.size(); j++){
+					seg = alnSegs.at(j);
+					if((seg->opflag==BAM_CINS and var_type==VAR_INS) or (seg->opflag==BAM_CDEL and var_type==VAR_DEL)){ // 1. type match
+						end_pos_tmp = getEndRefPosAlnSeg(seg->startRpos, seg->opflag, seg->seglen);
+						if(isOverlappedPos(seg->startRpos, end_pos_tmp, startRefPos, endRefPos)) // 2. overlap
+							size_sum += seg->seglen;
+					}
+				}
+
+				if(size_sum>0){
+					if(size_sum<abs(sv_len)) val = size_sum / abs(sv_len);
+					else val = abs(sv_len) / size_sum;
+					if(val>size_match_ratio_thres){
+						//cout << "val=" << val << ", supp_num=" << supp_num << endl;
+						supp_num ++;
+					}
+				}
+				//updateBaseInfo(baseArr, alnSegs); // update base information
+				destroyAlnSegs(alnSegs);
+			}
+		}
+		//cout << "**********: supp_num=" << supp_num << endl;
+		if(!alnDataVector.empty()) destoryAlnData(alnDataVector);
+	}
+
+	return supp_num;
 }
 
 void clipReg::resetClipCheckFlag(vector<clipAlnData_t*> &clipAlnDataVector){

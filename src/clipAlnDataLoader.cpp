@@ -453,7 +453,7 @@ void clipAlnDataLoader::parseSingleAlnStrSA(clipAlnData_t &clip_aln_ret, string 
 	for(i=0; i<cigar_str.size(); i++){
 		ch = cigar_str.at(i);
 		str_tmp += ch;
-		if(ch>='A' and ch<='Z') {
+		if((ch>='A' and ch<='Z') or ch=='=') {
 			op_len = stoi(str_tmp.substr(0, str_tmp.size()-1));
 			op_ch = str_tmp.at(str_tmp.size()-1);
 

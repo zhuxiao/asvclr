@@ -492,7 +492,7 @@ void Chrome::processMateClipRegDetectWork(){
 		//if(clip_processed_flag_vec.at(i)==false){
 			reg = clipRegVector.at(i);
 
-//			 if(i>=94 and i<=94) // 36, 60
+//			 if(i>=2 and i<=2) // 36, 60
 //			 	cout << "[" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 //			 else continue;
 
