@@ -3522,48 +3522,50 @@ int32_t clipReg::computeSuppNumIntraAlnSeg(string &chrname, size_t startRefPos, 
 		alnDataLoader data_loader(chrname, start_pos, end_pos, inBamFile, minMapQ, minHighMapQ);
 		data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
 
-		bam_type = getBamType(alnDataVector);
-		if(bam_type==BAM_INVALID){
-			cerr << __func__ << ": unknown bam type, error!" << endl;
-			exit(1);
-		}
-		for(i=0; i<alnDataVector.size(); i++){
-			b = alnDataVector.at(i);
-			if(!(b->core.flag & BAM_FUNMAP)){ // aligned
-				switch(bam_type){
-					case BAM_CIGAR_NO_DIFF_MD:
-						alnSegs = generateAlnSegs2(b, start_pos, end_pos);
-						break;
-					case BAM_CIGAR_NO_DIFF_NO_MD:
-					case BAM_CIGAR_DIFF_MD:
-					case BAM_CIGAR_DIFF_NO_MD:
-						alnSegs = generateAlnSegs_no_MD2(b, refseq, start_pos, end_pos);
-						break;
-					default:
-						cerr << __func__ << ": unknown bam type, error!" << endl;
-						exit(1);
-				}// generate align segments
+		if(!alnDataVector.empty()){
+			bam_type = getBamType(alnDataVector);
+			if(bam_type==BAM_INVALID){
+				cerr << __func__ << ": unknown bam type, error!" << endl;
+				exit(1);
+			}
+			for(i=0; i<alnDataVector.size(); i++){
+				b = alnDataVector.at(i);
+				if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+					switch(bam_type){
+						case BAM_CIGAR_NO_DIFF_MD:
+							alnSegs = generateAlnSegs2(b, start_pos, end_pos);
+							break;
+						case BAM_CIGAR_NO_DIFF_NO_MD:
+						case BAM_CIGAR_DIFF_MD:
+						case BAM_CIGAR_DIFF_NO_MD:
+							alnSegs = generateAlnSegs_no_MD2(b, refseq, start_pos, end_pos);
+							break;
+						default:
+							cerr << __func__ << ": unknown bam type, error!" << endl;
+							exit(1);
+					}// generate align segments
 
-				size_sum = 0;
-				for(j=0; j<alnSegs.size(); j++){
-					seg = alnSegs.at(j);
-					if((seg->opflag==BAM_CINS and var_type==VAR_INS) or (seg->opflag==BAM_CDEL and var_type==VAR_DEL)){ // 1. type match
-						end_pos_tmp = getEndRefPosAlnSeg(seg->startRpos, seg->opflag, seg->seglen);
-						if(isOverlappedPos(seg->startRpos, end_pos_tmp, startRefPos, endRefPos)) // 2. overlap
-							size_sum += seg->seglen;
+					size_sum = 0;
+					for(j=0; j<alnSegs.size(); j++){
+						seg = alnSegs.at(j);
+						if((seg->opflag==BAM_CINS and var_type==VAR_INS) or (seg->opflag==BAM_CDEL and var_type==VAR_DEL)){ // 1. type match
+							end_pos_tmp = getEndRefPosAlnSeg(seg->startRpos, seg->opflag, seg->seglen);
+							if(isOverlappedPos(seg->startRpos, end_pos_tmp, startRefPos, endRefPos)) // 2. overlap
+								size_sum += seg->seglen;
+						}
 					}
-				}
 
-				if(size_sum>0){
-					if(size_sum<abs(sv_len)) val = size_sum / abs(sv_len);
-					else val = abs(sv_len) / size_sum;
-					if(val>size_match_ratio_thres){
-						//cout << "val=" << val << ", supp_num=" << supp_num << endl;
-						supp_num ++;
+					if(size_sum>0){
+						if(size_sum<abs(sv_len)) val = size_sum / abs(sv_len);
+						else val = abs(sv_len) / size_sum;
+						if(val>size_match_ratio_thres){
+							//cout << "val=" << val << ", supp_num=" << supp_num << endl;
+							supp_num ++;
+						}
 					}
+					//updateBaseInfo(baseArr, alnSegs); // update base information
+					destroyAlnSegs(alnSegs);
 				}
-				//updateBaseInfo(baseArr, alnSegs); // update base information
-				destroyAlnSegs(alnSegs);
 			}
 		}
 		//cout << "**********: supp_num=" << supp_num << endl;
