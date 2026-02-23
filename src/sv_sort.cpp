@@ -629,7 +629,7 @@ void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, 
 	for(size_t i=1;i<sv_vec.size(); i++){
 		item1 = sv_vec.at(i-1);
 		item2 = sv_vec.at(i);
-		if(item1->sv_type==item2->sv_type and item1->chrname.compare(item2->chrname)==0){
+		if (item1->sv_type == item2->sv_type and item1->chrname.compare(item2->chrname) == 0){
 			overlap_flag = false;
 			if(item1->startPos==item2->startPos and item1->endPos==item2->endPos) overlap_flag = true;
 			else overlap_flag = isOverlappedPos(item1->startPos-SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item1->endPos+SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item2->startPos-SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item2->endPos+SHORT_VAR_ALN_CHECK_EXTEND_SIZE);
@@ -666,7 +666,6 @@ void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, 
 		}
 	}
 }
-
 
 vector<string> getCompSeqs(SV_item *item1, SV_item *item2, faidx_t *fai){
 	vector<string> compseq_vec;

@@ -754,6 +754,7 @@ void Block::computeZeroCovReg(Region &reg){
 			reg_tmp->query_pos_invalid_flag = false;
 			reg_tmp->large_indel_flag = false;
 			reg_tmp->merge_flag = false;
+			reg_tmp->rescue_flag = false;
 			reg_tmp->gt_type = -1;
 			reg_tmp->gt_seq = "";
 			reg_tmp->AF = 0;
@@ -1057,7 +1058,7 @@ void Block::blockGenerateLocalConsWorkOpt_ClipReg(){
 	for(i=0; i<(int32_t)mateClipRegVector.size(); i++){
 		clip_reg = mateClipRegVector.at(i);
 		//if(clip_reg->valid_flag){
-		if(clip_reg->valid_flag and (clip_reg->sv_type!=VAR_TRA and clip_reg->sv_type!=VAR_BND and clip_reg->sv_type!=VAR_INV_TRA)){ // excludes TRAs
+		if(clip_reg->valid_flag and clip_reg->ultra_large_dist_flag==false and (clip_reg->sv_type!=VAR_TRA and clip_reg->sv_type!=VAR_BND and clip_reg->sv_type!=VAR_INV_TRA)){ // excludes TRAs
 
 			if(clip_reg->large_indel_flag==false){ // clip region
 				reg1 = clip_reg->leftClipReg;

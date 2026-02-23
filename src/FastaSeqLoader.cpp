@@ -184,9 +184,7 @@ vector< vector<string> > FastaSeqLoader::getReadNamesFromCnsHeaders(vector<strin
 // get read names from single consensus header
 vector<string> FastaSeqLoader::getReadNamesFromSingleCnsHeader(string &cns_header){
 	vector<string> qname_vec, str_vec;
-
-	str_vec = split(cns_header, "-");
-	for(size_t i=1; i<str_vec.size(); i++) qname_vec.push_back(str_vec.at(i));
-
+	str_vec = split(cns_header, "___");
+	qname_vec = split(str_vec.at(1), ";");
 	return qname_vec;
 }

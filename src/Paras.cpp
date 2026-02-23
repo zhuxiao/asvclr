@@ -97,10 +97,10 @@ void Paras::init(){
 		exit(1);
 	}
 
-	//monitoring_proc_names_cns = DEFAULT_MONITOR_PROC_NAMES_CNS;
-	//max_proc_running_minutes_cns = MAX_PROC_RUNNING_MINUTES_CNS;
-	//monitoring_proc_names_call = DEFAULT_MONITOR_PROC_NAMES_CALL;
-	//max_proc_running_minutes_call = MAX_PROC_RUNNING_MINUTES_CALL;
+	monitoring_proc_names_cns = DEFAULT_MONITOR_PROC_NAMES_CNS;
+	max_proc_running_minutes_cns = MAX_PROC_RUNNING_MINUTES_CNS;
+	monitoring_proc_names_call = DEFAULT_MONITOR_PROC_NAMES_CALL;
+	max_proc_running_minutes_call = MAX_PROC_RUNNING_MINUTES_CALL;
 
 	mem_total = getMemInfo("MemTotal", 2);
 	swap_total = getMemInfo("SwapTotal", 2);
@@ -109,6 +109,8 @@ void Paras::init(){
 		exit(1);
 	}
 	extend_total = mem_total<swap_total ? mem_total : swap_total;
+
+	pg_runid_str = generatePgRunidStr();
 
 	call_work_num = 0;
 
@@ -145,6 +147,19 @@ bool Paras::isRecommendCanuVersion(string &canu_version, const string &recommend
 	if(result<0) flag = false;
 
 	return flag;
+}
+
+string Paras::generatePgRunidStr(){
+	string pg_runid_str;
+
+	random_device rd;
+	mt19937 gen(rd());
+	uniform_int_distribution<> dis(10000, 99999);
+
+	int randomVal = dis(gen);
+	pg_runid_str = to_string(randomVal);
+
+	return pg_runid_str;
 }
 
 // initialize preset parameters
@@ -297,6 +312,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 	//minReadsNumSupportSV = -1;
 	maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
+	clip_ratio_thres = HIGH_CLIP_RATIO_THRES;
 	minMapQ = MIN_MAPQ_THRES;
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
@@ -322,7 +338,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:F:n:x:N:A:e:q:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:F:n:x:N:A:e:H:q:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
@@ -336,6 +352,7 @@ int Paras::parseDetectParas(int argc, char **argv){
 			case 'N': max_seg_nm_ratio_usr = stod(optarg); break;
 			case 'A': max_absig_density = stof(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
+			case 'H': clip_ratio_thres = stod(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'o': outDir = optarg; break;
 			case 'p': outFilePrefix = optarg; break;
@@ -431,6 +448,7 @@ int Paras::parseCnsParas(int argc, char **argv){
 	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
 	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	minClipEndSize = MIN_CLIP_END_SIZE;
+	clip_ratio_thres = HIGH_CLIP_RATIO_THRES;
 	minMapQ = MIN_MAPQ_THRES;
 	expected_cov_cns = EXPECTED_COV_CNS;
 	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
@@ -449,8 +467,8 @@ int Paras::parseCnsParas(int argc, char **argv){
 		{ "keep-failed-reads", no_argument, NULL, 0 },
 		{ "re-cns-failed-work", no_argument, NULL, 0 },
 		//{ "min-cov-cns", required_argument, NULL, 0 },
-		//{ "monitor-proc-names-cns", required_argument, NULL, 0 },
-		//{ "max_proc_running_minutes_cns", required_argument, NULL, 0 },
+		{ "monitor-proc-names-cns", required_argument, NULL, 0 },
+		{ "max_proc_running_minutes_cns", required_argument, NULL, 0 },
 		//{ "technology", required_argument, NULL, 0 },
 		{ "include-alt", no_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
@@ -560,6 +578,7 @@ int Paras::parseCallParas(int argc, char **argv){
 	max_absig_density = -1;
 	//maxVarRegSize = MAX_VAR_REG_SIZE;
 	minClipEndSize = MIN_CLIP_END_SIZE;
+	clip_ratio_thres = HIGH_CLIP_RATIO_THRES;
 	minMapQ = MIN_MAPQ_THRES;
 	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
 	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
@@ -578,8 +597,8 @@ int Paras::parseCallParas(int argc, char **argv){
 //		{ "dir", required_argument, NULL, 'd' },
 //		{ "out", required_argument, NULL, 'o' },
 //		{ "log", required_argument, NULL, 'l' },
-		//{ "monitor-proc-names-call", required_argument, NULL, 0 },
-		//{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
+		{ "monitor-proc-names-call", required_argument, NULL, 0 },
+		{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
 		{ "sample", required_argument, NULL, 0 },
 		{ "include-alt", no_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
@@ -697,6 +716,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
 	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
 	minClipEndSize = MIN_CLIP_END_SIZE;
+	clip_ratio_thres = HIGH_CLIP_RATIO_THRES;
 	expected_cov_cns = EXPECTED_COV_CNS;
 	min_distance_merge = CALL_MIN_DISTANCE_MERGE_THRES;
 
@@ -721,10 +741,10 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		{ "keep-failed-reads", no_argument, NULL, 0 },
 		{ "re-cns-failed-work", no_argument, NULL, 0 },
 		//{ "mask-noisy-region", required_argument, NULL, 0 },
-		//{ "monitor-proc-names-cns", required_argument, NULL, 0 },
-		//{ "monitor_proc_names_call", required_argument, NULL, 0 },
-		//{ "max_proc_running_minutes_cns", required_argument, NULL, 0 },
-		//{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
+		{ "monitor-proc-names-cns", required_argument, NULL, 0 },
+		{ "monitor_proc_names_call", required_argument, NULL, 0 },
+		{ "max_proc_running_minutes_cns", required_argument, NULL, 0 },
+		{ "max_proc_running_minutes_call", required_argument, NULL, 0 },
 		//{ "technology", required_argument, NULL, 0 },
 		{ "include-alt", no_argument, NULL, 0 },
 		{ "include-decoy", no_argument, NULL, 0 },
@@ -741,7 +761,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		{ NULL, 0, NULL, 0 }
 	};
 
-	while( (opt = getopt_long(argc, argv, ":b:s:m:M:F:n:x:i:I:d:r:N:A:e:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
+	while( (opt = getopt_long(argc, argv, ":b:s:m:M:F:n:x:i:I:d:r:N:A:e:H:q:c:o:p:t:vh", lopts, &option_index)) != -1 ){
 		switch(opt){
 			case 'b': blockSize = stoi(optarg); break;
 			case 's': slideSize = stoi(optarg); break;
@@ -759,6 +779,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 			case 'N': max_seg_nm_ratio_usr = stod(optarg); break;
 			case 'A': max_absig_density = stof(optarg); break;
 			case 'e': minClipEndSize = stoi(optarg); break;
+			case 'H': clip_ratio_thres = stod(optarg); break;
 			case 'q': minMapQ = stoi(optarg); break;
 			case 'c': expected_cov_cns = stod(optarg); break;
 			case 'o': outDir = optarg; break;
@@ -856,7 +877,8 @@ int Paras::parseDetectCnsParas(int argc, char **argv){
 // show the usage
 void Paras::showUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
-	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl;
+	cout << "Compile: " << __DATE__ << ", " << __TIME__ << endl << endl;
 	cout << "Usage:  asvclr <command> [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
@@ -887,7 +909,8 @@ void Paras::showUsage(){
 // show the usage for detect command
 void Paras::showDetectUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
-	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl;
+	cout << "Compile: " << __DATE__ << ", " << __TIME__ << endl << endl;
 	cout << "Usage: asvclr det [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
@@ -910,6 +933,10 @@ void Paras::showDetectUsage(){
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_NM_RATIO_1 << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
+	cout << "   -H FLOAT      minimal clipping ratio for clipping regions [" << HIGH_CLIP_RATIO_THRES << "]." << endl;
+	cout << "                 Regions (200 bp) with the number of clipping events larger than the minimal number of" << endl;
+	cout << "                 supporting reads or the proportion of clipping events larger than the threshold FLOAT" << endl;
+	cout << "                 are considered as clipping regions" << endl;
 	cout << "   -q INT        minimal mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
 	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
 	//cout << "   -r FILE       limit reference regions to process [null]: CHR|CHR:START-END" << endl;
@@ -946,7 +973,8 @@ void Paras::showDetectUsage(){
 // show the usage for 'cns' command
 void Paras::showCnsUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
-	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl;
+	cout << "Compile: " << __DATE__ << ", " << __TIME__ << endl << endl;
 	cout << "Usage: asvclr cns [options] <REF_FILE> <BAM_FILE>" << endl << endl;
 
 	cout << "Description:" << endl;
@@ -1004,15 +1032,15 @@ void Paras::showCnsUsage(){
 	cout << "                 Reperform previously failed local consensus work." << endl;
 //	cout << "   --min-cov-cns FLOAT" << endl;
 //	cout << "                 Minimum input coverage for local consensus [" << MIN_INPUT_COV_CANU << "]" << endl;
-//	cout << "   --monitor-proc-names-cns STR" << endl;
-//	cout << "                 Process names to be monitored during Canu consensus. These processes may" << endl;
-//	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
-//	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
-//	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
-//	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CNS << "\"]" << endl;
-//	cout << "   --max_proc_running_minutes_cns INT" << endl;
-//	cout << "                 Monitored processes for consensus will be terminated if their CPU running" << endl;
-//	cout << "                 time exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CNS << "]" << endl;
+	cout << "   --monitor-proc-names-cns STR" << endl;
+	cout << "                 Process names to be monitored during Canu consensus. These processes may" << endl;
+	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
+	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
+	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
+	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CNS << "\"]" << endl;
+	cout << "   --max_proc_running_minutes_cns INT" << endl;
+	cout << "                 Monitored processes for consensus will be terminated if their CPU running" << endl;
+	cout << "                 time exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CNS << "]" << endl;
 //	cout << "   --technology STR" << endl;
 //	cout << "                 Sequencing technology [pacbio]:" << endl;
 //	cout << "                   pacbio     : the PacBio CLR sequencing technology;" << endl;
@@ -1037,7 +1065,8 @@ void Paras::showCnsUsage(){
 // show the usage for call command
 void Paras::showCallUsage(){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
-	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl;
+	cout << "Compile: " << __DATE__ << ", " << __TIME__ << endl << endl;
 	cout << "Usage: asvclr call [options] <REF_FILE> <BAM_FILE>" << endl << endl;
 
 	cout << "Description:" << endl;
@@ -1067,15 +1096,15 @@ void Paras::showCallUsage(){
 	cout << "   -p STR        prefix of output result files [null]" << endl;
 	cout << "   -t INT        number of threads [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
-//	cout << "   --monitor_proc_names_call STR" << endl;
-//	cout << "                 Process names to be monitored during BLAT alignment. These processes may" << endl;
-//	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
-//	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
-//	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
-//	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CALL << "\"]" << endl;
-//	cout << "   --max_proc_running_minutes_call INT" << endl;
-//	cout << "                 Monitored processes for call will be terminated if their CPU running time" << endl;
-//	cout << "                 exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CALL << "]" << endl;
+	cout << "   --monitor_proc_names_call STR" << endl;
+	cout << "                 Process names to be monitored during BLAT alignment. These processes may" << endl;
+	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
+	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
+	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
+	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CALL << "\"]" << endl;
+	cout << "   --max_proc_running_minutes_call INT" << endl;
+	cout << "                 Monitored processes for call will be terminated if their CPU running time" << endl;
+	cout << "                 exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CALL << "]" << endl;
 	cout << "   --include-alt" << endl;
 	cout << "                 include alt chromosomal items in result [False]" << endl;
 	cout << "   --include-decoy" << endl;
@@ -1120,7 +1149,8 @@ void Paras::showCallUsage(){
 // show the usage for all command
 void Paras::showAllUsage(const string &cmd_str){
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
-	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl;
+	cout << "Compile: " << __DATE__ << ", " << __TIME__ << endl << endl;
 	cout << "Usage: asvclr " << cmd_str << " [options] <REF_FILE> <BAM_FILE> [Region ...]" << endl << endl;
 
 	cout << "Description:" << endl;
@@ -1153,6 +1183,10 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_NM_RATIO_1 << "]" << endl;
 	cout << "   -e INT        minimal clipping end size [" << MIN_CLIP_END_SIZE << "]. Clipping events" << endl;
 	cout << "                 with size smaller than threshold will be ignored" << endl;
+	cout << "   -H FLOAT      minimal clipping ratio for clipping regions [" << HIGH_CLIP_RATIO_THRES << "]." << endl;
+	cout << "                 Regions (200 bp) with the number of clipping events larger than the minimal number of" << endl;
+	cout << "                 supporting reads or the proportion of clipping events larger than the threshold FLOAT" << endl;
+	cout << "                 are considered as clipping regions" << endl;
 	cout << "   -q INT        minimal mapping quality [" << MIN_MAPQ_THRES << "]" << endl;
 	cout << "                 Reads with mapping quality smaller than threshold will be ignored" << endl;
 	cout << "   -c FLOAT      expected sampling coverage for local consensus [" << EXPECTED_COV_CNS << "], " << endl;
@@ -1187,31 +1221,31 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 Reperform previously failed local consensus work." << endl;
 //	cout << "   --min-cov-cns FLOAT" << endl;
 //	cout << "                 Minimum input coverage for local consensus [" << MIN_INPUT_COV_CANU << "]" << endl;
-//	cout << "   --monitor-proc-names-cns STR" << endl;
-//	cout << "                 Process names to be monitored during Canu consensus. These processes may" << endl;
-//	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
-//	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
-//	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
-//	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CNS << "\"]" << endl;
+	cout << "   --monitor-proc-names-cns STR" << endl;
+	cout << "                 Process names to be monitored during Canu consensus. These processes may" << endl;
+	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
+	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
+	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
+	cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CNS << "\"]" << endl;
 
-//	if(cmd_str.compare(CMD_ALL_STR)==0){
-//		cout << "   --monitor_proc_names_call STR" << endl;
-//		cout << "                 Process names to be monitored during BLAT alignment. These processes may" << endl;
-//		cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
-//		cout << "                 should be terminated in advance if they are computation intensive works." << endl;
-//		cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
-//		cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CALL << "\"]" << endl;
-//	}
+	if(cmd_str.compare(CMD_ALL_STR)==0){
+		cout << "   --monitor_proc_names_call STR" << endl;
+		cout << "                 Process names to be monitored during BLAT alignment. These processes may" << endl;
+		cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
+		cout << "                 should be terminated in advance if they are computation intensive works." << endl;
+		cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
+		cout << "                 [\"" << DEFAULT_MONITOR_PROC_NAMES_CALL << "\"]" << endl;
+	}
 
-//	cout << "   --max_proc_running_minutes_cns INT" << endl;
-//	cout << "                 Monitored processes for consensus will be terminated if their CPU running" << endl;
-//	cout << "                 time exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CNS << "]" << endl;
-//
-//	if(cmd_str.compare(CMD_ALL_STR)==0){
-//		cout << "   --max_proc_running_minutes_call INT" << endl;
-//		cout << "                 Monitored processes for call will be terminated if their CPU running time" << endl;
-//		cout << "                 exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CALL << "]" << endl;
-//	}
+	cout << "   --max_proc_running_minutes_cns INT" << endl;
+	cout << "                 Monitored processes for consensus will be terminated if their CPU running" << endl;
+	cout << "                 time exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CNS << "]" << endl;
+
+	if(cmd_str.compare(CMD_ALL_STR)==0){
+		cout << "   --max_proc_running_minutes_call INT" << endl;
+		cout << "                 Monitored processes for call will be terminated if their CPU running time" << endl;
+		cout << "                 exceed INT minutes: [" << MAX_PROC_RUNNING_MINUTES_CALL << "]" << endl;
+	}
 
 //	cout << "   --technology STR" << endl;
 //	cout << "                 Sequencing technology [pacbio]:" << endl;
@@ -1298,7 +1332,8 @@ void Paras::outputParas(){
 
 	cout << "Command: " << pg_cmd_str << endl;
 	cout << "Program: " << PROG_NAME << " (" << PROG_DESC << ")" << endl;
-	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl << endl;
+	cout << "Version: " << PROG_VERSION << " (using htslib " << hts_version() << ")" << endl;
+	cout << "Compile: " << __DATE__ << ", " << __TIME__ << endl << endl;
 
 	if(refFile.size()) cout << "Reference file: " << refFile << endl;
 	if(inBamFile.size()) cout << "Alignment file: " << inBamFile << endl;
@@ -1317,6 +1352,9 @@ void Paras::outputParas(){
 	if(command.compare(CMD_DET_STR)!=0)
 		cout << "Minimal ratio of max-segment for indel calling: " << max_seg_size_ratio_usr << endl; // not det
 	cout << "Minimal clipping end size: " << minClipEndSize << " bp" << endl;
+	if(command.compare(CMD_DET_STR)==0 or command.compare(CMD_ALL_STR)==0 or command.compare(CMD_DET_CNS_STR)==0){ // det, all, det-cns
+		cout << "Minimal clipping ratio: " << clip_ratio_thres << endl;
+	}
 	cout << "Minimal mapping quality: " << minMapQ << endl;
 	//cout << "Minimal high read mapping quality threshold: " << minHighMapQ << endl;
 	if(command.compare(CMD_CNS_STR)==0 or command.compare(CMD_ALL_STR)==0 or command.compare(CMD_DET_CNS_STR)==0){ // cns, all, det-cns
@@ -1337,14 +1375,14 @@ void Paras::outputParas(){
 	if(keep_failed_reads_flag) cout << "Retain failed local temporary reads: yes" << endl;
 	if(recns_failed_work_flag) cout << "Reperform previously failed local consensus work: yes" << endl;
 	//cout << "Minimum input coverage for local consensus: " << min_input_cov_canu << endl;
-//	if(command.compare("cns")==0 or command.compare("all")==0 or command.compare("det-cns")==0)
-//		cout << "Monitored process names for consensus: " << monitoring_proc_names_cns << endl;
-//	if(command.compare("call")==0 or command.compare("all")==0)
-//		cout << "Monitored process names for call: " << monitoring_proc_names_call << endl;
-//	if(command.compare("cns")==0 or command.compare("all")==0 or command.compare("det-cns")==0)
-//		cout << "Maximum monitored process running minutes for consensus: " << max_proc_running_minutes_cns << endl;
-//	if(command.compare("call")==0 or command.compare("all")==0)
-//		cout << "Maximum monitored process running minutes for call: " << max_proc_running_minutes_call << endl;
+	if(command.compare("cns")==0 or command.compare("all")==0 or command.compare("det-cns")==0)
+		cout << "Monitored process names for consensus: " << monitoring_proc_names_cns << endl;
+	if(command.compare("call")==0 or command.compare("all")==0)
+		cout << "Monitored process names for call: " << monitoring_proc_names_call << endl;
+	if(command.compare("cns")==0 or command.compare("all")==0 or command.compare("det-cns")==0)
+		cout << "Maximum monitored process running minutes for consensus: " << max_proc_running_minutes_cns << endl;
+	if(command.compare("call")==0 or command.compare("all")==0)
+		cout << "Maximum monitored process running minutes for call: " << max_proc_running_minutes_call << endl;
 
 	cout << "Maximal number of align segments per read : " << max_seg_num_per_read << endl;
 	cout << "Minimal sequence similarity for SV match  : " << min_seqsim_match << endl;
@@ -1545,7 +1583,7 @@ int64_t Paras::estimateMinReadsNumSupportSV(vector<int64_t> &mean_depth_vec){
 // parse long options
 int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct option *lopts){
 	int ret = 0;
-	//size_t find_pos;
+	size_t find_pos;
 	//string lower_str;
 
 	string opt_name_str = lopts[option_index].name;
@@ -1582,43 +1620,43 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 	}else if(opt_name_str.compare("max-absig-density")==0){ // max-absig-density
 		max_absig_density = stof(optarg);
 	}
-//	else if(opt_name_str.compare("monitor-proc-names-cns")==0){ // monitor-proc-names-cns
-//		monitoring_proc_names_cns = optarg;
-//		if(monitoring_proc_names_cns.size()>0){
-//			find_pos = monitoring_proc_names_cns.find(" ");
-//			if(find_pos!=string::npos){
-//				cout << "Error: Monitored process names for 'cns' step should not include blank characters." << endl << endl;
-//				ret = 1;
-//			}
-//		}else{
-//			cout << "Error: Please specify the correct monitored process names using '--monitor-proc-names-cns' option." << endl << endl;
-//			ret = 1;
-//		}
-//	}else if(opt_name_str.compare("monitor_proc_names_call")==0){ // monitor_proc_names_call
-//		monitoring_proc_names_call = optarg;
-//		if(monitoring_proc_names_call.size()>0){
-//			find_pos = monitoring_proc_names_call.find(" ");
-//			if(find_pos!=string::npos){
-//				cout << "Error: Monitored process names for 'call' step should not include blank characters." << endl << endl;
-//				ret = 1;
-//			}
-//		}else{
-//			cout << "Error: Please specify the correct monitored process names using '--monitor-proc-names-call' option." << endl << endl;
-//			ret = 1;
-//		}
-//	}else if(opt_name_str.compare("max_proc_running_minutes_cns")==0){ // max_proc_running_minutes_cns
-//		max_proc_running_minutes_cns = stoi(optarg);
-//		if(max_proc_running_minutes_cns<ULTRA_LOW_PROC_RUNNING_MINUTES){
-//			cout << "Error: The specified maximum process running minutes is too small '" << max_proc_running_minutes_cns << "', please specify a larger one at least " << ULTRA_LOW_PROC_RUNNING_MINUTES << "." << endl << endl;
-//			ret = 1;
-//		}
-//	}else if(opt_name_str.compare("max_proc_running_minutes_call")==0){ // max_proc_running_minutes_call
-//		max_proc_running_minutes_call = stoi(optarg);
-//		if(max_proc_running_minutes_call<ULTRA_LOW_PROC_RUNNING_MINUTES){
-//			cout << "Error: The specified maximum process running minutes is too small '" << max_proc_running_minutes_call << "', please specify a larger one at least " << ULTRA_LOW_PROC_RUNNING_MINUTES << "." << endl << endl;
-//			ret = 1;
-//		}
-//	}
+	else if(opt_name_str.compare("monitor-proc-names-cns")==0){ // monitor-proc-names-cns
+		monitoring_proc_names_cns = optarg;
+		if(monitoring_proc_names_cns.size()>0){
+			find_pos = monitoring_proc_names_cns.find(" ");
+			if(find_pos!=string::npos){
+				cout << "Error: Monitored process names for 'cns' step should not include blank characters." << endl << endl;
+				ret = 1;
+			}
+		}else{
+			cout << "Error: Please specify the correct monitored process names using '--monitor-proc-names-cns' option." << endl << endl;
+			ret = 1;
+		}
+	}else if(opt_name_str.compare("monitor_proc_names_call")==0){ // monitor_proc_names_call
+		monitoring_proc_names_call = optarg;
+		if(monitoring_proc_names_call.size()>0){
+			find_pos = monitoring_proc_names_call.find(" ");
+			if(find_pos!=string::npos){
+				cout << "Error: Monitored process names for 'call' step should not include blank characters." << endl << endl;
+				ret = 1;
+			}
+		}else{
+			cout << "Error: Please specify the correct monitored process names using '--monitor-proc-names-call' option." << endl << endl;
+			ret = 1;
+		}
+	}else if(opt_name_str.compare("max_proc_running_minutes_cns")==0){ // max_proc_running_minutes_cns
+		max_proc_running_minutes_cns = stoi(optarg);
+		if(max_proc_running_minutes_cns<ULTRA_LOW_PROC_RUNNING_MINUTES){
+			cout << "Error: The specified maximum process running minutes is too small '" << max_proc_running_minutes_cns << "', please specify a larger one at least " << ULTRA_LOW_PROC_RUNNING_MINUTES << "." << endl << endl;
+			ret = 1;
+		}
+	}else if(opt_name_str.compare("max_proc_running_minutes_call")==0){ // max_proc_running_minutes_call
+		max_proc_running_minutes_call = stoi(optarg);
+		if(max_proc_running_minutes_call<ULTRA_LOW_PROC_RUNNING_MINUTES){
+			cout << "Error: The specified maximum process running minutes is too small '" << max_proc_running_minutes_call << "', please specify a larger one at least " << ULTRA_LOW_PROC_RUNNING_MINUTES << "." << endl << endl;
+			ret = 1;
+		}
+	}
 //	else if(opt_name_str.compare("technology")==0){ // technology
 //		technology = optarg;
 //		lower_str.resize(technology.size());

@@ -32,7 +32,7 @@ class Genome{
 
 		string out_filename_detect_snv, out_filename_detect_indel, out_filename_detect_clipReg;
 		string out_filename_result_snv, out_filename_result_indel, out_filename_result_clipReg, out_filename_result_tra, out_filename_result_vars, out_filename_result_vars_vcf;
-		string work_finish_filename;
+		string work_finish_filename_cns, work_finish_filename_call;
 		string limit_reg_filename;
 
 		//vector<varCand*> var_cand_vec;
@@ -112,7 +112,7 @@ class Genome{
 		void genomeFillVarseq();
 		void genomeFillVarseqTra();
 		void fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_info_file);
-		void performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file);
+		void performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &pg_runid_str, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file);
 		vector<int32_t> getRefShiftSize(string &refseqfilename);
 		vector<size_t> computeQueryLocTra(varCand *var_cand, mateClipReg_t *clip_reg, size_t end_flag);
 		void genomeSaveCallSV2File();
@@ -136,6 +136,7 @@ class Genome{
 		vector<int32_t> computePhaseSetNumSubset(vector<SV_item*> &subset);
 		string extractPSFromVCFLine(string &line);
 		void outputResult(string &outfilename, vector<vector<SV_item*>> &subsets, int32_t filetype);
+		void removeTempMonitorFiles();
 };
 
 

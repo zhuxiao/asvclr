@@ -6,7 +6,7 @@ pthread_mutex_t mutex_write = PTHREAD_MUTEX_INITIALIZER;
 //extern pthread_mutex_t mutex_down_sample;
 extern pthread_mutex_t mutex_fai;
 
-localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, double max_absig_density){
+localCns::localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &pg_runid_str, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, double max_absig_density){
 
 	this->chrname = chrname;
 	this->chrlen = faidx_seq_len64(fai, chrname.c_str()); // get reference size
@@ -33,6 +33,7 @@ localCns::localCns(string &readsfilename, string &contigfilename, string &refseq
 	this->varVec = varVec;
 	this->fai = fai;
 	this->inBamFile = inBamFile;
+	this->pg_runid_str = pg_runid_str;
 	//this->cns_extend_size = CNS_SIDE_EXT_SIZE + cns_extend_size;
 	this->cns_extend_size = cns_extend_size;
 	startRefPos_cns = endRefPos_cns = 0;
@@ -238,7 +239,7 @@ void localCns::extractReadsDataFromBAM(){
 		if(clip_reg_flag){ // clipping region
 			if(query_seq_info_all.size()>0){
 				insufficient_flag = false;
-				clipRegCluster clip_reg_cluster(varVec[0]->chrname, varVec[0]->startRefPos, varVec[varVec.size()-1]->endRefPos, minClipEndSize, maxVarRegSize, min_sv_size, min_supp_num, min_seqsim_match, technology, fai);
+				clipRegCluster clip_reg_cluster(varVec[0]->chrname, varVec[0]->startRefPos, varVec[varVec.size()-1]->endRefPos, minClipEndSize, maxVarRegSize, min_sv_size, min_supp_num, minMapQ, min_seqsim_match, technology, fai);
 				if(query_seq_info_all.size()>=(size_t)min_supp_num){ // 2024-01-28
 					query_clu_vec_clipReg = clip_reg_cluster.queryCluster(query_seq_info_all);
 
@@ -997,9 +998,9 @@ bool localCns::cnsByPoa(){
 						cons_header = ">abpoa_cns_";
 						cons_header += to_string(serial_number) + "_"; //serial number
 						cons_header += to_string(fa_loader.getFastaSeqLen(i)) + "_"; //consensus sequence length
-						cons_header += to_string(seqs_vec.at(k)->seqs.size()) + "-";  // reads count
+						cons_header += to_string(seqs_vec.at(k)->seqs.size()) + "___";  // reads count
 
-						for(j=0; j<seqs_vec.at(k)->qname.size()-1; j++) cons_header += seqs_vec.at(k)->qname.at(j) + "-";
+						for(j=0; j<seqs_vec.at(k)->qname.size()-1; j++) cons_header += seqs_vec.at(k)->qname.at(j) + ";";
 						cons_header += seqs_vec.at(k)->qname.at(seqs_vec.at(k)->qname.size()-1);
 
 						pthread_mutex_lock(&mutex_write);
@@ -1072,7 +1073,8 @@ bool localCns::localCnsWtdbg2(){
 			for (i = 0; i < n_seqs; ++i) reads_file << ">" << seqs_vec.at(k)->qname[i] << endl << seqs_vec.at(k)->seqs[i] << endl;
 			reads_file.close();
 
-			output_prefix = "tmp_wtdbg2_" + tmp_reg_str;
+			//output_prefix =  "tmp_wtdbg2_" + tmp_reg_str; // deleted on 2026-01-22
+			output_prefix =  pg_runid_str + "_tmp_wtdbg2_" + tmp_reg_str;
 			tmp_cns_filename = output_prefix + ".cns.fa";
 
 			if(n_seqs==1){ // only one read, added on 2025-05-21
@@ -1132,9 +1134,9 @@ bool localCns::localCnsWtdbg2(){
 						cons_header = ">wtdbg2_cns_";
 						cons_header += to_string(serial_number) + "_"; //serial number
 						cons_header += to_string(fa_loader.getFastaSeqLen(i)) + "_"; //consensus sequence length
-						cons_header += to_string(seqs_vec.at(k)->seqs.size()) + "-";  //read count
+						cons_header += to_string(seqs_vec.at(k)->seqs.size()) + "___";  //read count
 
-						for(j=0; j<seqs_vec.at(k)->qname.size()-1; j++) cons_header += seqs_vec.at(k)->qname.at(j) + "-";
+						for(j=0; j<seqs_vec.at(k)->qname.size()-1; j++) cons_header += seqs_vec.at(k)->qname.at(j) + ";";
 						cons_header += seqs_vec.at(k)->qname.at(seqs_vec.at(k)->qname.size()-1);
 
 						pthread_mutex_lock(&mutex_write);

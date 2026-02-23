@@ -26,7 +26,7 @@ using namespace std;
 #define ALIGN_DEBUG							0
 #define READS_CALL_DEBUG					0
 #define GT_REFINE_DEBUG						0
-#define BLAT_ALN							1
+#define BLAT_ALN							0
 
 #define MIN_VALID_BLAT_SEG_SIZE				200  // the minimal valid blat align segment size
 #define MIN_VALID_BLAT_SEG_FRATCION			0.6  //0.6 the minimal valid blat align segment fraction
@@ -76,7 +76,7 @@ using namespace std;
 
 class varCand {
 	public:
-		string var_cand_filename, out_dir_call, out_dir_cns, chrname, inBamFile, misAln_filename, technology;
+		string var_cand_filename, out_dir_call, out_dir_cns, chrname, inBamFile, misAln_filename, technology, pg_runid_str;
 		faidx_t *fai;
 		vector<simpleReg_t*> sub_limit_reg_vec;
 		bool limit_reg_process_flag, limit_reg_delete_flag;
@@ -86,7 +86,7 @@ class varCand {
 		int32_t ref_left_shift_size, ref_right_shift_size, ctg_num, min_sv_size, minReadsNumSupportSV, minClipEndSize, maxVarRegSize, minConReadLen, minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12, min_distance_merge;
 		double max_ultra_high_cov, min_seqsim_match, min_seqsim_merge, max_seg_size_ratio, max_seg_nm_ratio, max_absig_density;
 		vector<reg_t*> varVec, newVarVec;
-		bool cns_success, align_success, call_success, rescue_flag, clip_reg_flag, killed_flag;  	// default: false
+		bool cns_success, align_success, call_success, clip_reg_flag, killed_flag;  	// default: false
 		vector<blat_aln_t*> blat_aln_vec;               	// blat aligned segments
 		vector<minimap2_aln_t*> minimap2_aln_vec;           // minimap2 aligned segments
 		//vector<clipAlnData_t*> clipAlnDataVector;
@@ -182,8 +182,8 @@ class varCand {
 		float computeRepeatCovRatio(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void determineIndelType();
-		vector<reg_t*> computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, string &refseqfilename_para);
-		void computeIntraMisPafAlnSeg(vector<reg_t*> &var_vec, vector<reg_t*> &varVec, vector<int32_t> &cand_mm2_aln_idx_vec, vector<struct pafalnSeg*> &cand_paf_alnseg_vec);
+		vector<reg_t*> computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, string &refseqfilename_para, bool rescue_flag);
+		void computeIntraMisPafAlnSeg(vector<reg_t*> &var_vec, vector<reg_t*> &varVec, vector<int32_t> &cand_mm2_aln_idx_vec, vector<struct pafalnSeg*> &cand_paf_alnseg_vec, vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para);
 		void computeIndelFromSplitSegs(vector<reg_t*> &var_vec, vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
 		vector<reg_t*> computeIndelFromSplitSegsSingleQuery(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, int32_t query_id_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
 
@@ -244,11 +244,12 @@ class varCand {
 		vector<double> computeDisagreeNumAndHighIndelBaseNumAndClipNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, faidx_t *fai);
 
 		// clippings
-		vector<reg_t*> computeClipRegVarLoc(string &alnfilename, string &refseqfilename, string &cnsfilename, string &clusterfilename, vector<minimap2_aln_t*> &minimap2_aln_vec, bool rescue_flag);
+		vector<reg_t*> computeClipRegVarLoc(string &alnfilename, string &refseqfilename, string &cnsfilename, string &clusterfilename, vector<minimap2_aln_t*> &minimap2_aln_vec, vector<int32_t> *clusterId_incomplete, bool rescue_flag);
+		vector<int32_t> getClusterIdCalledIncomplete(vector<reg_t*> &var_vec, string &clusterfilename, vector<minimap2_aln_t*> &minimap2_aln_vec);
 		int32_t computeSuppNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov, vector<string> &target_qname_vec);
 		vector<reg_t*> computeGenotypeClipReg(vector<reg_t*> &var_vec);
-		vector<reg_t*> rescueDupInvClipReg();
-		vector<reg_t*> rescueLargeIndelClipReg();
+		vector<reg_t*> rescueDupInvClipReg(vector<int32_t> &clusterId_incomplete);
+		vector<reg_t*> rescueLargeIndelClipReg(vector<int32_t> &clusterId_incomplete);
 		vector<int32_t> getMinimapItemIdVec(vector<string> &queryname_vec, vector<minimap2_aln_t*> &minimap2_aln_vec);
 		vector<int32_t> getLeftRightMinimapItemId(int64_t leftClipRefPos, int64_t rightClipRefPos, vector<int32_t> &minimap2_item_id_vec, vector<minimap2_aln_t*> &minimap2_aln_vec);
 		vector<int32_t> getLeftRightClipAlnId(int64_t leftClipRefPos, int64_t rightClipRefPos, vector<clipAlnData_t*> &query_aln_segs);
@@ -277,8 +278,9 @@ class varCand {
 
 		// call indel from reads
 		vector<reg_t*> callIndelFromReadsIndelReg();
-		vector<reg_t*> callIndelFromReadsClipReg();
+		vector<reg_t*> callVarFromReadsClipReg(vector<int32_t> &clusterId_incomplete);
 		bool isBothEndsOverlap(vector<clipAlnData_t*> &query_aln_segs, int64_t leftClipRefPos, int64_t rightClipRefPos);
+		void updateClusterIdIncomplete(vector<reg_t*> &var_vec, vector<reg_t*> &var_vec_rescue, vector<int32_t> &clusterId_incomplete);
 
 		// genotyping
 		void indelGenotyping();

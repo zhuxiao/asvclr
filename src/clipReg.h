@@ -21,7 +21,9 @@ using namespace std;
 #define CLIP_END_EXTEND_SIZE				50 // 100  300
 #define MIN_CLIP_END_SIZE					200	// 50
 #define MIN_ALN_SIZE_SAME_ORIENT			200
-#define MIN_ALN_SIZE_DIFF_ORIENT			50
+#define MIN_ALN_SIZE_DIFF_ORIENT			100	// 50
+
+#define MIN_ALN_SEG_SIZE_CLIPREG			200 // added on 2026-01-27
 
 #define MIN_CLIP_DIST_THRES					1000
 #define GROUP_DIST_THRES					1000

@@ -18,7 +18,7 @@ typedef struct clipAlnData_node{
 	bam1_t *bam;
 	string queryname, chrname;
 	int64_t startRefPos, endRefPos:60, aln_orient:4;
-	int32_t querylen, startQueryPos, endQueryPos, leftClipSize, rightClipSize, NM;
+	int32_t querylen, startQueryPos, endQueryPos, leftClipSize, rightClipSize, MapQ:10, NM:22;
 	int32_t ref_dist, query_dist;
 	bool leftHardClippedFlag, rightHardClippedFlag, leftmost_flag, rightmost_flag;
 	bool left_clip_checked_flag, right_clip_checked_flag, query_checked_flag, SA_tag_flag;
@@ -37,7 +37,7 @@ typedef struct{
 	string refseq, altseq, gt_seq, PS;
 	int32_t supp_num, DP; // supp_num, total depth
 	double AF; // allele frequency
-	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag, query_pos_invalid_flag, large_indel_flag, merge_flag;
+	bool call_success_status, short_sv_flag, zero_cov_flag, aln_seg_end_flag, query_pos_invalid_flag, large_indel_flag, merge_flag, rescue_flag;
 }reg_t;
 
 // from clipReg.h
@@ -57,8 +57,8 @@ typedef struct{
 	int64_t leftMeanClipPos, leftMeanClipPos2, rightMeanClipPos, rightMeanClipPos2;
 	int8_t leftClipRegNum, rightClipRegNum;
 
-	int32_t sv_type:8, dup_num:24;
-	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag, supp_num_valid_flag, large_indel_flag;
+	int32_t sv_type:8, dup_num:24, supp_num_clip, dist_breakpoint;
+	bool reg_mated_flag, valid_flag, call_success_flag, tra_rescue_success_flag, supp_num_valid_flag, large_indel_flag, ultra_large_dist_flag;
 	varCand *var_cand, *left_var_cand_tra, *right_var_cand_tra;  // TRA
 	string chrname_leftTra1, chrname_leftTra2, chrname_rightTra1, chrname_rightTra2;
 	int32_t leftClipPosTra1, leftClipPosTra2, rightClipPosTra1, rightClipPosTra2;
@@ -120,7 +120,7 @@ typedef struct {
 	int32_t num_threads_per_cns_work, minClipEndSize, maxVarRegSize, cnsSideExtSize, minConReadLen, min_sv_size, min_supp_num, minMapQ: 16, minHighMapQ: 16, sv_len_est;
 	double max_seg_size_ratio, min_seqsim_match, max_seg_nm_ratio, max_absig_density;
 
-	string inBamFile, technology; //, canu_version;
+	string inBamFile, technology, pg_runid_str; //, canu_version;
 	faidx_t *fai;
 	ofstream *var_cand_file;
 	double expected_cov_cns, min_input_cov_canu, max_ultra_high_cov;
@@ -161,7 +161,7 @@ typedef struct qcSigListNode{
 	vector<qcSig_t*> qcSig_vec;
 	vector<int8_t> match_profile_vec;
 	int32_t ins_sum, del_sum;
-	bool cluster_finished_flag, entire_flanking_flag;
+	bool cluster_finished_flag, entire_flanking_flag, single_aln_seg_flag;
 }qcSigList_t;
 
 typedef struct qcSigListVecNode{

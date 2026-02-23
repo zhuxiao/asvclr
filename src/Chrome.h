@@ -28,6 +28,8 @@ using namespace std;
 #define REFSEQ_PATTERN		"refseq"
 #define CLIPREG_PATTERN		"clipReg_refseq"
 
+#define ULTRA_LARGE_STATUS	"ULarge"
+#define NORMAL_STATUS       "Normal"
 
 class Chrome{
 	public:

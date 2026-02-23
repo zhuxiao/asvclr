@@ -30,7 +30,7 @@ using namespace std;
 
 class localCns {
 	public:
-		string chrname, readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, inBamFile, technology, canu_version;
+		string chrname, readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, inBamFile, technology, canu_version, pg_runid_str;
 		string readsfilename_prefix, readsfilename_suffix;
 		vector<string> readsfilename_vec;
 		int64_t chrlen, cns_extend_size, startRefPos_cns, endRefPos_cns;
@@ -61,7 +61,7 @@ class localCns {
 		vector<clipAlnData_t*> clipAlnDataVector;
 
 	public:
-		localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, double max_absig_density);
+		localCns(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &pg_runid_str, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, double expected_cov, double min_input_cov, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, double max_absig_density);
 		virtual ~localCns();
 		void extractRefseq();
 		void extractReadsDataFromBAM();

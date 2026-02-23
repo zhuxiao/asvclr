@@ -15,7 +15,7 @@ class RefSeqLoader {
 		string reg;
 		faidx_t *fai;
 		char *refseq;
-		int refseq_len;
+		int64_t refseq_len;
 
 	public:
 		RefSeqLoader(string &reg, faidx_t *fai);

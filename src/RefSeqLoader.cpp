@@ -16,7 +16,7 @@ RefSeqLoader::~RefSeqLoader() {
 
 void RefSeqLoader::getRefSeq(){
 	pthread_mutex_lock(&mutex_fai);
-	refseq = fai_fetch(fai, reg.c_str(), &refseq_len);
+	refseq = fai_fetch64(fai, reg.c_str(), &refseq_len);
 	pthread_mutex_unlock(&mutex_fai);
 	if ( refseq_len < 0 ) {
 		cerr << __func__ << ": failed to fetch sequence in " << reg << endl;

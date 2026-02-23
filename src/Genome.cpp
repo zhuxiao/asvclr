@@ -9,6 +9,7 @@
 #include "Thread.h"
 
 using namespace std;
+extern pthread_mutex_t mutex_fai;
 
 //class MultiThread;
 
@@ -81,7 +82,8 @@ void Genome::init(){
 	}
 	blat_aln_info_filename_tra  = out_dir_tra + "/" + "blat_aln_info_tra";
 
-	work_finish_filename = out_dir + "/" + "work_finished";
+	work_finish_filename_cns = out_dir + "/" + "cns_work_finished";
+	work_finish_filename_call = out_dir + "/" + "call_work_finished";
 
 	limit_reg_filename = out_dir_detect + "/" + paras->limit_reg_filename;
 
@@ -103,7 +105,7 @@ void Genome::init(){
 	header = loadSamHeader(paras->inBamFile);
 
 	if(header->n_targets!=faidx_nseq(fai))
-		cout << "Warning: the number of sequences in reference is not the same with the number of sequences of BAM header, the same reference is highly recommended for best performance." << endl;
+		cout << "Warn: the number of sequences in reference is not the same with the number of sequences of BAM header, the same reference is recommended for better performance." << endl;
 
 	// confirm chrlen
 	for(int i=0; i<header->n_targets; i++){
@@ -714,15 +716,14 @@ int Genome::genomeLocalCons(){
 	cout << "Number of regions to be processed: " << paras->cns_reg_work_total << endl;
 
 	// invoke the monitor of conseneus work process
-	//startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_cns, paras->max_proc_running_minutes_cns);
+	startWorkProcessMonitor(work_finish_filename_cns, paras->monitoring_proc_names_cns, paras->max_proc_running_minutes_cns);
 
 	// begin consensus
 	if(!paras->cns_work_vec.empty()) cout << "[" << time.getTime() << "]: start local consensus ..." << endl;
 	processConsWork();
 
-//	for(size_t i=0; i<1001; i++){
-//		cout << i << "\t" << sig_num_arr[i] << endl;
-//	}
+	// generate work process finish file
+	generateFile(work_finish_filename_cns);
 
 	cout << "[" << time.getTime() << "]: Finalizing consensus ..." << endl;
 
@@ -736,6 +737,7 @@ int Genome::genomeLocalCons(){
 		if(chr->valid_flag)
 			chr->chrResetConsData();
 	}
+
 	return 0;
 }
 
@@ -880,6 +882,7 @@ int Genome::processConsWork(){
 		cns_work->max_seg_nm_ratio = paras->max_seg_nm_ratio_usr;
 		cns_work->max_absig_density = paras->max_absig_density;
 		cns_work->inBamFile = paras->inBamFile;
+		cns_work->pg_runid_str = paras->pg_runid_str;
 		cns_work->fai = fai;
 		cns_work->var_cand_file = var_cand_file;
 		cns_work->expected_cov_cns = paras->expected_cov_cns;
@@ -936,7 +939,7 @@ void Genome::generateFile(string &filename){
 int Genome::genomeCall(){
 	Time time;
 	
-	// initialize the variables for process monitor killed blat works
+	// initialize the variables for process monitor killed blat works, deleted
 	//initMonitorKilledBlatWorkMem();
 	//initMonitorKilledMinimap2WorkMem();
 
@@ -950,7 +953,7 @@ int Genome::genomeCall(){
 	cout << "Number of regions to be processed: " << paras->call_work_num << endl;
 
 	// invoke the monitor of consensus work process
-	//startWorkProcessMonitor(work_finish_filename, paras->monitoring_proc_names_call, paras->max_proc_running_minutes_call);
+	startWorkProcessMonitor(work_finish_filename_call, paras->monitoring_proc_names_call, paras->max_proc_running_minutes_call);
 
 	// blat alignment work
 	time.setStartTime();
@@ -962,8 +965,11 @@ int Genome::genomeCall(){
 	processCallWork();
 	time.printElapsedTime();
 
-	// finish call work
+	// finish call work, deleted
 	//genomeFinishCallWork();
+
+	// generate work process finish file
+	generateFile(work_finish_filename_call);
 
 	// call TRA according to mate clip regions
 	//genomeCallTra(); // 2023-12-25
@@ -979,8 +985,6 @@ int Genome::genomeCall(){
 		cout << "[" << time.getTime() << "]: local phasing ..." << endl;
 		genomePhasing();
 	}
-	// generate work process finish file
-	//generateFile(work_finish_filename);
 
 	// save SV to file
 	//cout << "5555555555555" << endl;
@@ -1007,6 +1011,9 @@ int Genome::genomeCall(){
 	// compute statistics for call command
 	cout << "[" << time.getTime() << "]: compute variant NUMBER statistics... " << endl;
 	computeVarNumStatCall();
+
+	// remove temporary monitor files
+	removeTempMonitorFiles();
 
 	//releaseMonitorKilledBlatWorkMem();
 	//releaseMonitorKilledMinimap2WorkMem();
@@ -1306,7 +1313,7 @@ int Genome::processCallWork(){
 		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf, minimap2_chr1_143246329-143247038.paf, minimap2_1_649705-650290.paf
 		// minimap2_1_2765904-2766241.paf, minimap2_1_5447230-5447236.paf, minimap2_1_3097653-3098167.paf, minimap2_1_2618216-2619007.paf, minimap2_1_1184268-1184983.paf, minimap2_1_5446916-5447358
 		// minimap2_1_3560147-3560992.paf, minimap2_1_801940-802476.paf, minimap2_1_3560147-3560992.paf, minimap2_1_3561166-3562123.paf
-//		if(var_cand->alnfilename.compare("debug_tmp/3_call/chr1/minimap2_cns_chr1_11522531-11522999.paf")==0){
+//		if(var_cand->alnfilename.compare("debug_tmp2/3_call/chr1/minimap2_chr1_893789-893825.paf")==0){
 //			cout << var_cand->alnfilename << endl;
 //		}else continue;
 
@@ -1425,7 +1432,6 @@ void Genome::recallIndelsFromTRA(){
 											reg->endQueryPos =  seg2->query_start;
 											reg->aln_orient = blat_aln->aln_orient;
 											reg->query_id = blat_aln->query_id;
-											//reg->blat_aln_id = i;
 											reg->blat_aln_id = k;
 											reg->minimap2_aln_id = -1;
 											reg->call_success_status = true;
@@ -1435,6 +1441,7 @@ void Genome::recallIndelsFromTRA(){
 											reg->query_pos_invalid_flag = false;
 											reg->large_indel_flag = false;
 											reg->merge_flag = false;
+											reg->rescue_flag = false;
 											reg->gt_type = -1;
 											reg->gt_seq = "";
 											reg->AF = 0;
@@ -1866,6 +1873,7 @@ varCand* Genome::constructNewVarCand(varCand *var_cand, varCand *var_cand_tmp){
 		var_cand_new->inBamFile = paras->inBamFile;
 		var_cand_new->fai = fai;
 		var_cand_new->technology = paras->technology;
+		var_cand_new->pg_runid_str = paras->pg_runid_str;
 
 		var_cand_new->refseqfilename = var_cand_tmp->refseqfilename;  // refseq file name
 		var_cand_new->ctgfilename = var_cand->ctgfilename;  // contig file name
@@ -2932,6 +2940,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->inBamFile = paras->inBamFile;
 				var_cand_tmp->fai = fai;
 				var_cand_tmp->technology = paras->technology;
+				var_cand_tmp->pg_runid_str = paras->pg_runid_str;
 				var_cand_tmp->call_success = false;
 
 				var_cand_tmp->blat_aligned_info_vec = NULL;
@@ -2972,6 +2981,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				reg->query_pos_invalid_flag = false;
 				reg->large_indel_flag = false;
 				reg->merge_flag = false;
+				reg->rescue_flag = false;
 				reg->gt_type = -1;
 				reg->gt_seq = "";
 				reg->AF = 0;
@@ -3005,7 +3015,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				for(i=0; i<3; i++){
 					cns_extend_size = paras->cnsSideExtSizeClip * i;
 					// local consensus
-					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->min_seqsim_match, reg->endRefPos-reg->startRefPos+1, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
+					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->pg_runid_str, paras->min_seqsim_match, reg->endRefPos-reg->startRefPos+1, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -3063,6 +3073,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				var_cand_tmp->inBamFile = paras->inBamFile;
 				var_cand_tmp->fai = fai;
 				var_cand_tmp->technology = paras->technology;
+				var_cand_tmp->pg_runid_str = paras->pg_runid_str;
 				var_cand_tmp->align_success = false;
 
 				var_cand_tmp->blat_aligned_info_vec = NULL;
@@ -3104,6 +3115,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				reg->query_pos_invalid_flag = false;
 				reg->large_indel_flag = false;
 				reg->merge_flag = false;
+				reg->rescue_flag = false;
 				reg->gt_type = -1;
 				reg->gt_seq = "";
 				reg->AF = 0;
@@ -3137,7 +3149,7 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 				for(i=0; i<3; i++){
 					cns_extend_size = paras->cnsSideExtSizeClip * i;
 					// local consensus
-					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->min_seqsim_match, reg->endRefPos-reg->startRefPos+1, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
+					performLocalCnsTra(var_cand_tmp->readsfilename, var_cand_tmp->ctgfilename, var_cand_tmp->refseqfilename, var_cand_tmp->clusterfilename, tmpdir, paras->technology, paras->pg_runid_str, paras->min_seqsim_match, reg->endRefPos-reg->startRefPos+1, paras->num_threads_per_cns_work, var_cand_tmp->varVec, reg->chrname, paras->inBamFile, fai, cns_extend_size, cns_info_file);
 
 					ref_shift_size_vec = getRefShiftSize(var_cand_tmp->refseqfilename);
 					var_cand_tmp->ref_left_shift_size = ref_shift_size_vec.at(0);
@@ -3185,9 +3197,9 @@ void Genome::fillVarseqSingleMateClipReg(mateClipReg_t *clip_reg, ofstream &cns_
 }
 
 // perform local consensus
-void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
+void Genome::performLocalCnsTra(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &pg_runid_str, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, size_t cns_extend_size, ofstream &cns_info_file){
 
-	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, min_seqsim_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->max_ultra_high_cov, paras->minMapQ, paras->minHighMapQ, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->maxVarRegSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr, paras->max_seg_nm_ratio_usr, paras->max_absig_density);
+	localCns local_cns(readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, technology, pg_runid_str, min_seqsim_match, sv_len_est, num_threads_per_cns_work, varVec, chrname, inBamFile, fai, cns_extend_size, paras->expected_cov_cns, paras->min_input_cov_canu, paras->max_ultra_high_cov, paras->minMapQ, paras->minHighMapQ, paras->delete_reads_flag, paras->keep_failed_reads_flag, true, paras->minClipEndSize, paras->maxVarRegSize, paras->minConReadLen, paras->min_sv_size_usr, paras->minReadsNumSupportSV, paras->max_seg_size_ratio_usr, paras->max_seg_nm_ratio_usr, paras->max_absig_density);
 
 	// extract the corresponding refseq from reference
 	local_cns.extractRefseq();
@@ -3400,22 +3412,22 @@ void Genome::saveTraCall2File(){
 	mateClipReg_t *mate_clip_reg;
 	string line, chrname_tmp, header_line_bedpe, mate_reg_str, id_str, sv_type_str, sv_type_str2;
 	string gt_seq, gt_header, gt_str, ad_str1, ad_str2, dp_str, id_str_mate, id_vec_mate_str;
-	int32_t reg_id, num_bnd, num_tra, DP, AD, id_vec_mate, clip_end, clip_end2, supp_num, DP_num, supp_num_mate;
+	int32_t reg_id, num_bnd, num_tra, num_dup, num_inv, num_del, DP, AD, id_vec_mate, clip_end2, supp_num, DP_num, supp_num_mate;
 	reg_t *reg1, *reg2;
 	int64_t left_clip_pos, right_clip_pos;
 	double AF;
-	vector<string> str_vec, str_vec2;
+	vector<string> str_vec, str_vec2, str_vec_tmp;
 
 	outfile_tra.open(out_filename_result_tra);
 	if(!outfile_tra.is_open()){
 		cerr << __func__ << ", line=" << __LINE__ << ": cannot open file:" << out_filename_result_tra << endl;
 		exit(1);
 	}
-
+	
 	header_line_bedpe = getCallFileHeaderBedpe(paras->sample);
 	outfile_tra << header_line_bedpe << endl;
 
-	num_bnd = num_tra = 1;
+	num_bnd = num_tra = num_dup = num_inv = num_del = 1;
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		if(chr->valid_flag){
@@ -3423,190 +3435,281 @@ void Genome::saveTraCall2File(){
 			for(j=0; j<mate_clipReg_vec.size(); j++){
 				mate_clip_reg = mate_clipReg_vec.at(j);
 
-				if(mate_clip_reg->valid_flag and (mate_clip_reg->sv_type==VAR_TRA or mate_clip_reg->sv_type==VAR_BND)){ // valid TRA
+				if(mate_clip_reg->valid_flag){
 	//				if(mate_clip_reg->leftClipRegNum!=1 or mate_clip_reg->rightClipRegNum!=1){
 	//					cout << "leftClipRegNum=" << to_string(mate_clip_reg->leftClipRegNum) << ", rightClipRegNum=" << to_string(mate_clip_reg->rightClipRegNum) << endl;
 	//					printMateClipReg(mate_clip_reg);
 	//				}else continue;
 
-					// only process half part
-					for(reg_id=0; reg_id<2; reg_id++){
-						str_vec = split(mate_clip_reg->bnd_mate_reg_strs[reg_id], ",");
-						for(m=0; m<str_vec.size(); m++){
-							if(str_vec.at(m).compare("-")!=0){
-								reg1 = reg2 = NULL;
-								left_clip_pos = right_clip_pos = -1;
-								supp_num = supp_num_mate = 0;
+					if(mate_clip_reg->ultra_large_dist_flag==false and (mate_clip_reg->sv_type==VAR_TRA or mate_clip_reg->sv_type==VAR_BND)){ // valid TRA
+						// only process half part
+						for(reg_id=0; reg_id<2; reg_id++){
+							str_vec = split(mate_clip_reg->bnd_mate_reg_strs[reg_id], ",");
+							for(m=0; m<str_vec.size(); m++){
+								if(str_vec.at(m).compare("-")!=0){
+									reg1 = reg2 = NULL;
+									left_clip_pos = right_clip_pos = -1;
+									supp_num = supp_num_mate = 0;
 
-								// main part
-								str_vec2 = split(str_vec.at(m), "|");
-								id_str_mate = str_vec2.at(0);
-								id_vec_mate_str = id_str_mate.at(0);
-								id_vec_mate = stoi(id_vec_mate_str);
-								if(m==0){
-									clip_end = LEFT_END;
-									if(id_str_mate.at(1)=='+') clip_end2 = RIGHT_END;
-									else clip_end2 = LEFT_END;
-								}else{
-									clip_end = RIGHT_END;
-									if(id_str_mate.at(1)=='+') clip_end2 = LEFT_END;
-									else clip_end2 = RIGHT_END;
-								}
-								left_clip_pos = stoi(str_vec2.at(1));
-								supp_num = stoi(str_vec2.at(2));
-								DP_num = stoi(str_vec2.at(3));
+									// main part
+									str_vec2 = split(str_vec.at(m), "|");
+									id_str_mate = str_vec2.at(0);
+									id_vec_mate_str = id_str_mate.at(0);
+									id_vec_mate = stoi(id_vec_mate_str);
+									if(m==0){
+										//clip_end = LEFT_END;
+										if(id_str_mate.at(1)=='+') clip_end2 = RIGHT_END;
+										else clip_end2 = LEFT_END;
+									}else{
+										//clip_end = RIGHT_END;
+										if(id_str_mate.at(1)=='+') clip_end2 = LEFT_END;
+										else clip_end2 = RIGHT_END;
+									}
+									left_clip_pos = stoi(str_vec2.at(1));
+									supp_num = stoi(str_vec2.at(2));
+									DP_num = stoi(str_vec2.at(3));
 
-								if(clip_end==LEFT_END){
+									// deleted on 2026-02-23
+//									if(clip_end==LEFT_END){
+//										if(mate_clip_reg->leftClipReg) reg1 = mate_clip_reg->leftClipReg;
+//									}else{
+//										if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
+//									}
 									if(mate_clip_reg->leftClipReg) reg1 = mate_clip_reg->leftClipReg;
-								}else{
-									if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
-								}
+									else if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
 
-								// mate part
-								if(id_vec_mate==2 or id_vec_mate==3){
-									str_vec = split(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate], ",");
-									if(clip_end2==LEFT_END){ // mate at left end
-										if(str_vec.at(0).compare("-")!=0){
-											str_vec2 = split(str_vec.at(0), "|");
-											right_clip_pos = stoi(str_vec2.at(1));
-											supp_num_mate = stoi(str_vec2.at(2));
-											//DP_num_mate = stoi(str_vec2.at(3));
+									// mate part
+									if(id_vec_mate==2 or id_vec_mate==3){
+										str_vec = split(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate], ",");
+										if(clip_end2==LEFT_END){ // mate at left end
+											if(str_vec.at(0).compare("-")!=0){
+												str_vec2 = split(str_vec.at(0), "|");
+												right_clip_pos = stoi(str_vec2.at(1));
+												supp_num_mate = stoi(str_vec2.at(2));
+												//DP_num_mate = stoi(str_vec2.at(3));
+											}
+										}else{ // mate at right end
+											if(str_vec.at(1).compare("-")!=0){
+												str_vec2 = split(str_vec.at(1), "|");
+												right_clip_pos = stoi(str_vec2.at(1));
+												supp_num_mate = stoi(str_vec2.at(2));
+												//DP_num_mate = stoi(str_vec2.at(3));
+											}
 										}
-									}else{ // mate at right end
-										if(str_vec.at(1).compare("-")!=0){
-											str_vec2 = split(str_vec.at(1), "|");
-											right_clip_pos = stoi(str_vec2.at(1));
-											supp_num_mate = stoi(str_vec2.at(2));
-											//DP_num_mate = stoi(str_vec2.at(3));
-										}
-									}
 
-									if(id_vec_mate==2){
-										if(mate_clip_reg->rightClipReg) reg2 = mate_clip_reg->rightClipReg;
-									}else{
-										if(mate_clip_reg->rightClipReg2) reg2 = mate_clip_reg->rightClipReg2;
-									}
-								}
-
-								if(reg1 and reg2 and left_clip_pos!=-1 and right_clip_pos!=-1 and supp_num>=paras->minReadsNumSupportSV and supp_num_mate>=paras->minReadsNumSupportSV){
-									//cout << "sv_type=" << mate_clip_reg->sv_type << ": " << reg1->chrname << ":" << left_clip_pos << " <--> " << reg2->chrname << ":" << right_clip_pos << endl;
-
-									if(mate_clip_reg->sv_type==VAR_TRA){
-										sv_type_str = VAR_TRA_STR;
-										id_str = "ASVCLR." + sv_type_str + "." + to_string(num_tra);
-										num_tra ++;
-									}else{
-										sv_type_str = VAR_BND_STR;
-										id_str = "ASVCLR." + sv_type_str + "." + to_string(num_bnd);
-										num_bnd ++;
-									}
-									sv_type_str2 = "<" + sv_type_str + ">";
-
-									line = reg1->chrname + "\t" + to_string(left_clip_pos) + "\t" + to_string(left_clip_pos) + "\t" + reg2->chrname + "\t" + to_string(right_clip_pos) + "\t" + to_string(right_clip_pos); // chr1, start1, end1, chr2, start2, end2
-									line +=  + "\t" + id_str + "\t" + sv_type_str2 + "\t-\t-"; // ID, sv_type, SVLEN1, SVLEN2
-
-									// BND mate regions
-									mate_reg_str = mate_clip_reg->bnd_mate_reg_strs[0];
-									for(k=1; k<4; k++) mate_reg_str += ";" + mate_clip_reg->bnd_mate_reg_strs[k];
-									line += "\t" + mate_reg_str;
-
-									line += "\t-\t-\t-\t-"; // Ref1, Alt1, Ref2, Alt2
-
-									// extra information, split with ";": DP, AF, LDISCOV
-									AD = supp_num;
-									DP = DP_num;
-									AF = (double)AD / DP;
-									if(AF<0){
-										cout << "\t---------- AF=" << AF << ", sv_type=" << mate_clip_reg->sv_type << ": " << reg1->chrname << ":" << left_clip_pos << " <--> " << reg2->chrname << ":" << right_clip_pos << ", error!" << endl;
-										exit(1);
-									}
-									stringstream ss;
-									ss << setprecision(3) << AF;
-									line += "\tDP=" + to_string(DP) + ";AF=" + ss.str() + ";LDISCOV=READS";
-
-									gt_header = "GT:AD:DP";
-									gt_str = "./.";
-									ad_str1 = ".";
-									ad_str2 = ".";
-									dp_str = ".";
-
-									if(AF!=-1){
-										if(AF>=paras->gt_homo_ratio){
-											gt_str = GT_HOMOZYGOUS_STR;
-										}else if(AF>=paras->gt_hete_ratio){
-											gt_str = GT_HETEROZYGOUS_STR;
+										if(id_vec_mate==2){
+											if(mate_clip_reg->rightClipReg) reg2 = mate_clip_reg->rightClipReg;
 										}else{
-											gt_str = GT_NOZYGOUS_STR;
+											if(mate_clip_reg->rightClipReg2) reg2 = mate_clip_reg->rightClipReg2;
 										}
-										ad_str1 = to_string(DP-AD);
-										ad_str2 = to_string(AD);
-										dp_str = to_string(DP);
 									}
-									gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
-									line += "\t" + gt_seq;
 
-									outfile_tra << line << endl;
+									if(reg1 and reg2 and left_clip_pos!=-1 and right_clip_pos!=-1 and supp_num>=paras->minReadsNumSupportSV and supp_num_mate>=paras->minReadsNumSupportSV){
+										//cout << "sv_type=" << mate_clip_reg->sv_type << ": " << reg1->chrname << ":" << left_clip_pos << " <--> " << reg2->chrname << ":" << right_clip_pos << endl;
+
+										if(mate_clip_reg->sv_type==VAR_TRA){
+											sv_type_str = VAR_TRA_STR;
+											id_str = "ASVCLR." + sv_type_str + "." + to_string(num_tra);
+											num_tra ++;
+										}else{
+											sv_type_str = VAR_BND_STR;
+											id_str = "ASVCLR." + sv_type_str + "." + to_string(num_bnd);
+											num_bnd ++;
+										}
+										sv_type_str2 = "<" + sv_type_str + ">";
+
+										line = reg1->chrname + "\t" + to_string(left_clip_pos) + "\t" + to_string(left_clip_pos) + "\t" + reg2->chrname + "\t" + to_string(right_clip_pos) + "\t" + to_string(right_clip_pos); // chr1, start1, end1, chr2, start2, end2
+										line +=  + "\t" + id_str + "\t" + sv_type_str2 + "\t-\t-"; // ID, sv_type, SVLEN1, SVLEN2
+
+										// BND mate regions
+										mate_reg_str = mate_clip_reg->bnd_mate_reg_strs[0];
+										for(k=1; k<4; k++) mate_reg_str += ";" + mate_clip_reg->bnd_mate_reg_strs[k];
+										line += "\t" + mate_reg_str;
+
+										line += "\t-\t-\t-\t-"; // Ref1, Alt1, Ref2, Alt2
+
+										// extra information, split with ";": DP, AF, LDISCOV
+										AD = supp_num;
+										DP = DP_num;
+										AF = (double)AD / DP;
+										if(AF<0){
+											cout << "\t---------- AF=" << AF << ", sv_type=" << mate_clip_reg->sv_type << ": " << reg1->chrname << ":" << left_clip_pos << " <--> " << reg2->chrname << ":" << right_clip_pos << ", error!" << endl;
+											exit(1);
+										}
+										stringstream ss;
+										ss << setprecision(3) << AF;
+										line += "\tDP=" + to_string(DP) + ";AF=" + ss.str() +";ULDist=" + to_string(mate_clip_reg->dist_breakpoint) + ";LDISCOV=READS";
+
+										gt_header = "GT:AD:DP";
+										gt_str = "./.";
+										ad_str1 = ".";
+										ad_str2 = ".";
+										dp_str = ".";
+
+										if(AF!=-1){
+											if(AF>=paras->gt_homo_ratio){
+												gt_str = GT_HOMOZYGOUS_STR;
+											}else if(AF>=paras->gt_hete_ratio){
+												gt_str = GT_HETEROZYGOUS_STR;
+											}else{
+												gt_str = GT_NOZYGOUS_STR;
+											}
+											ad_str1 = to_string(DP-AD);
+											ad_str2 = to_string(AD);
+											dp_str = to_string(DP);
+										}
+										gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
+										line += "\t" + gt_seq;
+
+										outfile_tra << line << endl;
+									}
+								}
+							}
+						}
+					}else if(mate_clip_reg->ultra_large_dist_flag){ // process ultra-large items
+						//printMateClipReg(mate_clip_reg);
+
+						for(reg_id=0; reg_id<2; reg_id++){
+							str_vec = split(mate_clip_reg->bnd_mate_reg_strs[reg_id], ",");
+							for(m=0; m<str_vec.size(); m++){
+								if(str_vec.at(m).compare("-")!=0){
+									reg1 = reg2 = NULL;
+									left_clip_pos = right_clip_pos = -1;
+									supp_num = supp_num_mate = 0;
+
+									str_vec2 = split(str_vec.at(m), "|");
+									id_str_mate = str_vec2.at(0);
+									id_vec_mate_str = id_str_mate.at(0);
+									id_vec_mate = stoi(id_vec_mate_str);
+
+									if(m==0){
+										//clip_end = LEFT_END;
+										if(id_str_mate.at(1)=='+') clip_end2 = RIGHT_END;
+										else clip_end2 = LEFT_END;
+									}else{
+										//clip_end = RIGHT_END;
+										if(id_str_mate.at(1)=='+') clip_end2 = LEFT_END;
+										else clip_end2 = RIGHT_END;
+									}
+
+									left_clip_pos = stoi(str_vec2.at(1));
+									supp_num = stoi(str_vec2.at(2));
+									DP_num = stoi(str_vec2.at(3));
+
+									// added on 2026-01-23
+									if(mate_clip_reg->leftClipReg) reg1 = mate_clip_reg->leftClipReg;
+									else if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
+
+									if(id_vec_mate==2 or id_vec_mate==3){
+										str_vec_tmp = split(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate], ",");
+										
+//										if(str_vec_tmp.size()==1){
+//											printMateClipReg(mate_clip_reg);
+//										}
+
+										if(clip_end2==LEFT_END){
+											if(str_vec_tmp.at(0).compare("-")!=0){
+												str_vec2 = split(str_vec_tmp.at(0), "|");
+												right_clip_pos = stoi(str_vec2.at(1));
+												supp_num_mate = stoi(str_vec2.at(2));
+											}
+										}else{
+											if(str_vec_tmp.at(1).compare("-")!=0){
+												str_vec2 = split(str_vec_tmp.at(1), "|");
+												right_clip_pos = stoi(str_vec2.at(1));
+												supp_num_mate = stoi(str_vec2.at(2));
+											}
+										}
+										
+										if(id_vec_mate==2){
+											if(mate_clip_reg->rightClipReg) reg2 = mate_clip_reg->rightClipReg;
+										}else{
+											if(mate_clip_reg->rightClipReg2) reg2 = mate_clip_reg->rightClipReg2;
+										}
+									}
+
+//									if(reg1==NULL or reg2==NULL){
+//										printMateClipReg(mate_clip_reg);
+//									}
+
+									if(reg1 and reg2 and left_clip_pos!=-1 and right_clip_pos!=-1 and supp_num>=paras->minReadsNumSupportSV and supp_num_mate>=paras->minReadsNumSupportSV){
+										switch(mate_clip_reg->sv_type){
+											case VAR_DUP:
+												sv_type_str = VAR_DUP_STR; // "DUP"
+												id_str = "ASVCLR." + sv_type_str + "." + to_string(num_dup);
+												num_dup++;
+												break;
+											case VAR_INV:
+												sv_type_str = VAR_INV_STR; // "INV"
+												id_str = "ASVCLR." + sv_type_str + "." + to_string(num_inv);
+												num_inv++;
+												break;
+											case VAR_DEL:
+												sv_type_str = VAR_DEL_STR; // "DEL"
+												id_str = "ASVCLR." + sv_type_str + "." + to_string(num_del);
+												num_del++;
+												break;
+											case VAR_TRA:
+												sv_type_str = VAR_TRA_STR;
+												id_str = "ASVCLR." + sv_type_str + "." + to_string(num_tra);
+												num_tra ++;
+												break;
+											case VAR_BND:
+												sv_type_str = VAR_BND_STR;
+												id_str = "ASVCLR." + sv_type_str + "." + to_string(num_bnd);
+												num_bnd ++;
+												break;
+											default:
+												cout << "line=" << __LINE__ << ", sv_type=" << mate_clip_reg->sv_type << ", error!" << endl;
+												break;
+										}
+
+										sv_type_str2 = "<" + sv_type_str + ">";
+										line = reg1->chrname + "\t" + to_string(left_clip_pos) + "\t" + to_string(left_clip_pos) + "\t" + reg2->chrname + "\t" + to_string(right_clip_pos) + "\t" + to_string(right_clip_pos); 
+										line += "\t" + id_str + "\t" + sv_type_str2 + "\t-\t-";
+
+										mate_reg_str = mate_clip_reg->bnd_mate_reg_strs[0];
+										for(k=1; k<4; k++) mate_reg_str += ";" + mate_clip_reg->bnd_mate_reg_strs[k];
+										line += "\t" + mate_reg_str;
+										line += "\t-\t-\t-\t-";
+
+										AD = supp_num;
+										DP = DP_num;
+										AF = (double)AD / DP;
+
+										stringstream ss;
+										ss << setprecision(3) << AF;
+										line += "\tDP=" + to_string(DP) + ";AF=" + ss.str() +";ULDist=" + to_string(mate_clip_reg->dist_breakpoint) + ";LDISCOV=READS";
+
+										gt_header = "GT:AD:DP";
+										gt_str = "./.";
+										ad_str1 = ".";
+										ad_str2 = ".";
+										dp_str = ".";
+
+										if(AF!=-1){
+											if(AF>=paras->gt_homo_ratio){
+												gt_str = GT_HOMOZYGOUS_STR;
+											}else if(AF>=paras->gt_hete_ratio){
+												gt_str = GT_HETEROZYGOUS_STR;
+											}else{
+												gt_str = GT_NOZYGOUS_STR;
+											}
+											ad_str1 = to_string(DP-AD);
+											ad_str2 = to_string(AD);
+											dp_str = to_string(DP);
+										}
+
+										gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
+										line += "\t" + gt_seq;
+
+										outfile_tra << line << endl;
+									}
 								}
 							}
 						}
 					}
 				}
-
-	/*
-				if(clip_reg->valid_flag and (clip_reg->call_success_flag or clip_reg->tra_rescue_success_flag) and clip_reg->sv_type==VAR_TRA and (clip_reg->leftClipPosTra1>0 or clip_reg->leftClipPosTra2>0) and (clip_reg->rightClipPosTra1>0 or clip_reg->rightClipPosTra2>0)){
-	//				if(clip_reg->left_var_cand_tra==NULL or clip_reg->right_var_cand_tra==NULL){
-	//					cout << "i=" << i << ", j=" << j << endl;
-	//				}
-					//line = clip_reg->left_var_cand_tra->chrname;
-					//line = clip_reg->chrname_leftTra1.size()>0 ? clip_reg->chrname_leftTra1 : "-";
-					chrname_vec = getLeftRightPartChrname(clip_reg);
-					line = chrname_vec.at(0).size()>0 ? chrname_vec.at(0) : "-";
-					if(clip_reg->leftClipPosTra1>0) line += "\t" + to_string(clip_reg->leftClipPosTra1);
-					else line += "\t-";
-					if(clip_reg->leftClipPosTra2>0) line += "\t" + to_string(clip_reg->leftClipPosTra2);
-					else line += "\t-";
-					chrname_tmp = chrname_vec.at(1).size()>0 ? chrname_vec.at(1) : "-";
-					line += "\t" + chrname_tmp;
-					if(clip_reg->rightClipPosTra1>0) line += "\t" + to_string(clip_reg->rightClipPosTra1);
-					else line += "\t-";
-					if(clip_reg->rightClipPosTra2>0) line += "\t" + to_string(clip_reg->rightClipPosTra2);
-					else line += "\t-";
-					line += "\tTRA";
-
-					sv_len = sv_len2 = -1;
-					if(clip_reg->leftClipPosTra1>0 and clip_reg->leftClipPosTra2>0){
-						sv_len = clip_reg->leftClipPosTra2 - clip_reg->leftClipPosTra1 + 1;
-						line += "\t" + to_string(sv_len);
-					}else line += "\t-";
-					if(clip_reg->rightClipPosTra1>0 and clip_reg->rightClipPosTra2>0){
-						sv_len2 = clip_reg->rightClipPosTra2 - clip_reg->rightClipPosTra1 + 1;
-						line += "\t" + to_string(sv_len2);
-					}else line += "\t-";
-
-					// BND mate regions
-					mate_reg_str = clip_reg->bnd_mate_reg_strs[0];
-					for(k=1; k<4; k++) mate_reg_str += ";" + clip_reg->bnd_mate_reg_strs[k];
-					line += "\t" + mate_reg_str;
-
-					if(clip_reg->refseq_tra.size()>0) line += "\t" + clip_reg->refseq_tra;
-					else line += "\t-";
-					if(clip_reg->altseq_tra.size()>0) line += "\t" + clip_reg->altseq_tra;
-					else line += "\t-";
-					if(clip_reg->refseq_tra2.size()>0) line += "\t" + clip_reg->refseq_tra2;
-					else line += "\t-";
-					if(clip_reg->altseq_tra2.size()>0) line += "\t" + clip_reg->altseq_tra2;
-					else line += "\t-";
-
-	//				if(reg->gt_seq.size()==0) reg->gt_seq = GT_STR_DEFAULT;
-	//				line += "\t" + reg->gt_seq;
-
-					// size select
-					//if((sv_len==-1 and sv_len2==-1) or (sv_len!=-1 and sv_len>=paras->min_sv_size_usr and sv_len<=paras->max_sv_size_usr) or (sv_len2!=-1 and sv_len2>=paras->min_sv_size_usr and sv_len2<=paras->max_sv_size_usr)) // deleted on 2025-03-20
-					if((sv_len==-1 and sv_len2==-1) or (sv_len!=-1 and sv_len>=paras->min_sv_size_usr_final and sv_len<=paras->max_sv_size_usr) or (sv_len2!=-1 and sv_len2>=paras->min_sv_size_usr_final and sv_len2<=paras->max_sv_size_usr))
-						outfile_tra << line << endl;
-						//cout << line << endl;
-				}
-	*/
 			}
 		}
 	}
@@ -3690,20 +3793,22 @@ void Genome::saveResultVCF(){
 
 // save indel in VCF file format for detect command
 void Genome::saveResultToVCF(string &in, string &out_vcf){
-	string line, line_vcf, chr, start_pos, id, ref, alt, qual, filter, info, format, format_val, sample, reg;
-	string end_pos, sv_type, sv_type_tmp, sv_len, dup_num, blat_inner, extra_info;
+	string line, line_vcf, chr, start_pos, end_pos, id, ref, alt, qual, filter, info, format, format_val, sample, reg;
+	string sv_type, sv_type_tmp, sv_len, ULDist, dup_num, blat_inner, extra_info, seq_str;
 	ifstream infile;
 	ofstream outfile;
-	vector<string> str_vec;
+	vector<string> str_vec, SVLEN;
 
-	string bnd_id_str, mate_bnd_id_str, mate_reg_str, mate_bnd_str, mate_bnd_str2, reg_str, mate_chr, chrname1, chrname2;
+	string bnd_id_str, mate_bnd_id_str, mate_reg_str, mate_bnd_str, mate_bnd_str2, reg_str, mate_chr, chrname1, chrname2, gt_str;
 	vector<string> bnd_str_vec, bnd_str_vec2;
 	int64_t tra_pos_arr[4];
-	int32_t i, j, checked_arr[4][2]; //, ins_id, del_id, dup_id, inv_id, tra_id;
+	int32_t i, j, checked_arr[4][2], seq_len; //, ins_id, del_id, dup_id, inv_id, tra_id;
 	vector<BND_t*> bnd_vec, sub_bnd_vec;
 	BND_t *bnd_item;
 	string format_name_bnd;
-
+	char *seq;
+	size_t start_str, end_str, base, support_num, DP;
+	double AF;
 	// open files
 	infile.open(in);
 	if(!infile.is_open()){
@@ -3824,10 +3929,59 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 						}
 					}
 				}else{ // MIX
-					cout << __func__ << ": unexpected variant item: " << line << ", skipped." << endl;
+					//cout << __func__ << ": unexpected variant item: " << line << ", skipped." << endl;
+					sv_type_tmp = str_vec.at(7);
+					if(sv_type_tmp.at(0)=='<') {
+						sv_type = sv_type_tmp.substr(1, sv_type_tmp.size()-2);
+						alt = sv_type_tmp;
+					}else sv_type = sv_type_tmp;
+					if(sv_type == VAR_INV_STR || sv_type == VAR_DUP_STR){
+						chr = str_vec.at(0);
+						id = str_vec.at(6);
+						start_str = (str_vec.at(10)).find('|');
+						end_str = (str_vec.at(10)).find('|', str_vec.at(10).find(';'));
+						start_pos = str_vec.at(10).substr(start_str + 1, str_vec.at(10).find('|', start_str + 1) - (start_str + 1));
+						end_pos = str_vec.at(10).substr(end_str + 1, str_vec.at(10).find('|', end_str + 1)   - (end_str + 1));
+						base = (stoll(start_pos) < stol(end_pos)) ? start_str : end_str;
+						if(stoll(start_pos)>stoll(end_pos)){
+							start_pos = str_vec.at(10).substr(end_str + 1, str_vec.at(10).find('|', end_str + 1)   - (end_str + 1));
+							end_pos = str_vec.at(10).substr(start_str + 1, str_vec.at(10).find('|', start_str + 1) - (start_str + 1));
+						}
+						support_num = str_vec.at(10).find('|', base + 1);
+						DP = stoi(str_vec.at(10).substr(str_vec.at(10).find('|', support_num + 1) + 1));
+						support_num = std::stoi(str_vec.at(10).substr(support_num + 1));
+						if((int)support_num>=paras->minReadsNumSupportSV){
+							AF = (double)support_num / DP;
+							if(AF>=paras->gt_homo_ratio) gt_str = GT_HOMOZYGOUS_STR;
+							else if(AF>=paras->gt_hete_ratio) gt_str = GT_HETEROZYGOUS_STR;
+							else gt_str = GT_NOZYGOUS_STR;
+							stringstream ss;
+							ss << fixed << setprecision(3) << AF;
+
+							reg_str = chr + ":" + start_pos + "-" + start_pos;
+							pthread_mutex_lock(&mutex_fai);
+							seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+							pthread_mutex_unlock(&mutex_fai);
+							seq_str = seq;
+							free(seq);
+
+							ref = seq_str;
+							alt = str_vec.at(7);
+							qual = ".";	
+							filter = "PASS";
+
+							SVLEN = split(str_vec.at(15), ";");
+							sv_len = (SVLEN.at(2)).substr(7);
+							format = str_vec.at(16);
+							format_val = gt_str + ":" + to_string(DP-support_num) + "," + to_string(support_num) + ":" + to_string(DP);
+
+							line_vcf = chr + "\t" + start_pos + "\t" + id + "\t" + ref + "\t" + alt + "\t" + qual + "\t" + filter + "\t" + "SVTYPE=" + sv_type + ";" + "SVLEN=" + sv_len + ";" + "END=" + end_pos + ";" + "DP=" + to_string(DP) + ";" +"AF=" + ss.str() + ";" + "ULDist=" + sv_len + ";" + "LDISCOV=READS" + "\t" + format + "\t" + format_val;
+
+							outfile << line_vcf << endl;
+						}
+					}
 				}
 			}
-
 			//free(seq);
 		}
 	infile.close();
@@ -3923,9 +4077,10 @@ void Genome::saveVCFHeader(ofstream &fp, string &sample_str){
 	fp << "##INFO=<ID=LDISCOV,Number=1,Type=String,Description=\"Variant discover level: ALN for variants are discovered from consensus alignments, RES-ALN for variants are discovered from rescued consensus alignments around variant regions, READS for variants are discovered from reads alignments directly\">" << endl;
 	fp << "##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Total Depth\">" << endl;
 	fp << "##INFO=<ID=AF,Number=A,Type=Float,Description=\"Allele Frequency\">" << endl;
-	//fp << "##INFO=<ID=BLATINNER,Number=1,Type=Flag,Description=\"variants called from inner parts of BLAT align segment\">" << endl;
-//	fp << "##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of Samples With Data\">" << endl;
-//	fp << "##FILTER=<ID=q10,Description=\"Quality below 10\">" << endl;
+	fp << "##INFO=<ID=ULDist,Number=1,Type=Integer,Description=\"UltraLarge Distance\">" << endl;
+	// fp << "##INFO=<ID=BLATINNER,Number=1,Type=Flag,Description=\"variants called from inner parts of BLAT align segment\">" << endl;
+	//	fp << "##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of Samples With Data\">" << endl;
+	//	fp << "##FILTER=<ID=q10,Description=\"Quality below 10\">" << endl;
 	if(paras->phasing_flag) fp << "##FORMAT=<ID=PS,Number=.,Type=String,Description=\"Phase set\">" << endl;
 	fp << "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">" << endl;
 	fp << "##FORMAT=<ID=AD,Number=R,Type=Integer,Description=\"Read depth per allele\">" << endl;
@@ -4233,6 +4388,12 @@ void Genome::outputResult(string &outfilename, vector<vector<SV_item*>> &subsets
 		for(size_t j=0; j<sv_vec.size(); j++) if(sv_vec.at(j)->valid_flag) outfile << sv_vec.at(j)->info << endl;
 	}
 	outfile.close();
+}
+
+// remove temporary monitor files
+void Genome::removeTempMonitorFiles(){
+	if(isFileExist(work_finish_filename_cns)) remove(work_finish_filename_cns.c_str());
+	if(isFileExist(work_finish_filename_call)) remove(work_finish_filename_call.c_str());
 }
 
 // remove temporary results

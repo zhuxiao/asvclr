@@ -8,7 +8,7 @@
 #define DISAGREE_THRES_REG		(0.85)
 #define DISAGREE_NUM_THRES_REG	2
 #define DISAGREE_CHK_REG		2
-#define MIN_RATIO_SNV			(0.75)
+#define MIN_RATIO_SNV			(0.7) // 0.75
 
 
 // Base

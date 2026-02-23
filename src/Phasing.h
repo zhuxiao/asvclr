@@ -8,7 +8,6 @@
 
 #define PHASING_DEBUG			0
 
-#define MAX_CHECK_READS_NUM		3
 #define MIN_LINK_READS_NUM		3
 
 class Phasing {
@@ -29,7 +28,6 @@ private:
 	void generateHapNodeSingleVarCand(vector< vector<phasing_reg_t*> > &hapnodes_vec, varCand *var_cand);
 	bool linkHapNodes(vector< vector<phasing_reg_t*> > &hapnodes_vec, vector< vector<phasing_reg_t*> > &hapnodes_vec2);
 	int32_t computeLinkNum(vector<string> &qname_vec, vector<string> &qname_vec2);
-	int32_t getReadGroupId(int32_t query_id, vector< vector<string> > &qnames_vec_cluster, varCand *var_cand);
 	vector<string> getReadNamesFromCnsHeader(string &cns_header_name);
 	phasing_reg_t* dupPhasingRegItem(phasing_reg_t *phasing_reg);
 	bool isValidStartLinkHapNode(vector< vector<phasing_reg_t*> > &hapnodes_vec);

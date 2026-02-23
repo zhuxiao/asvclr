@@ -2,7 +2,7 @@
 
 extern pthread_mutex_t mutex_fai;
 
-clipRegCluster::clipRegCluster(string &chrname, int64_t var_startRefPos, int64_t var_endRefPos, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t min_sv_size, int32_t min_supp_num, double min_seqsim_match, string &technology, faidx_t *fai) {
+clipRegCluster::clipRegCluster(string &chrname, int64_t var_startRefPos, int64_t var_endRefPos, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t min_sv_size, int32_t min_supp_num, int32_t minMapQ, double min_seqsim_match, string &technology, faidx_t *fai) {
 	this->chrname = chrname;
 	this->var_startRefPos = var_startRefPos;
 	this->var_endRefPos = var_endRefPos;
@@ -10,6 +10,7 @@ clipRegCluster::clipRegCluster(string &chrname, int64_t var_startRefPos, int64_t
 	this->maxVarRegSize = maxVarRegSize;
 	this->min_sv_size = min_sv_size;
 	this->min_supp_num = min_supp_num;
+	this->minMapQ = minMapQ;
 	this->chrlen = faidx_seq_len64(fai, chrname.c_str()); // get reference size
 	this->fai = fai;
 	this->min_seqsim_match = min_seqsim_match;
@@ -108,7 +109,7 @@ vector<qcSigListVec_t*> clipRegCluster::queryClusterOp(vector<qcSigList_t*> &qcS
 		match_ratio_vec.push_back(1);
 		match_id_vec.push_back(k);
 		for(i=1; i<qcSigList_vec.size(); i++){
-			if(qcSigList_vec.at(i)->qcSig_vec.size()>0 and qcSigList_vec.at(i)->entire_flanking_flag){ // prefer the items flanking the entire region
+			if(qcSigList_vec.at(i)->qcSig_vec.size()>0 and (qcSigList_vec.at(i)->entire_flanking_flag or qcSigList_vec.at(i)->single_aln_seg_flag)){ // prefer the items flanking the entire region, or the items with single align segment
 				seed_info_a = chooseSeedClusterQueryClipReg(qcSigList_vec.at(i), q_cluster_a);
 				if(seed_info_a->span_intersection>0){
 					match_ratio_a = computeMatchRatioClipReg(qcSigList_vec.at(i), q_cluster_a.at(seed_info_a->id), seed_info_a->startSpanPos, seed_info_a->endSpanPos);
@@ -686,7 +687,7 @@ void clipRegCluster::printQcSigListVec(vector<qcSigList_t*> &qcSigList_vec){
 	// print the feature
 	for(i=0; i<qcSigList_vec.size(); i++){
 		qcSigList_node = qcSigList_vec.at(i);
-		cout << "[" << i << "]: " << qcSigList_node->query_seqs_vec.at(0)->qname << ", cluster_finished=" << qcSigList_node->cluster_finished_flag << ", entire_flanking=" << qcSigList_node->entire_flanking_flag << ", ins_sum=" << qcSigList_node->ins_sum << ", del_sum=" << qcSigList_node->del_sum << ", qcSig_vec.size=" << qcSigList_node->qcSig_vec.size() << ":";
+		cout << "[" << i << "]: " << qcSigList_node->query_seqs_vec.at(0)->qname << ", cluster_finished=" << qcSigList_node->cluster_finished_flag << ", entire_flanking=" << qcSigList_node->entire_flanking_flag << ", single_aln_seg=" << qcSigList_node->single_aln_seg_flag << ", ins_sum=" << qcSigList_node->ins_sum << ", del_sum=" << qcSigList_node->del_sum << ", qcSig_vec.size=" << qcSigList_node->qcSig_vec.size() << ":";
 		for(j=0; j<qcSigList_node->qcSig_vec.size(); j++){
 			qc_sig = qcSigList_node->qcSig_vec.at(j);
 			if(qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP) // clippings
@@ -713,7 +714,7 @@ vector<qcSigList_t*> clipRegCluster::extractQcSigsClipReg(vector<struct querySeq
 		queryseq_node = query_seq_info_vec.at(i);
 		if(queryseq_node->selected_flag==false){
 
-//			if(queryseq_node->qname.compare("SRR8955953.15104791")==0){
+//			if(queryseq_node->qname.compare("m84039_230415_002321_s3/200282924/ccs")==0){
 //				cout << "i=" << i << ", " << queryseq_node->qname << endl;
 //			}
 
@@ -1170,12 +1171,15 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 		qcSigList_node->qcSig_vec = qcSig_vec;
 		qcSigList_node->ins_sum = qcSigList_node->del_sum = 0;
 
-		var_startRefPos_tmp = var_startRefPos - EXT_SIZE_CHK_VAR_LOC;
+		var_startRefPos_tmp = var_startRefPos + EXT_SIZE_CHK_VAR_LOC;
 		if(var_startRefPos_tmp<1) var_startRefPos_tmp = 1;
-		var_endRefPos_tmp = var_endRefPos + EXT_SIZE_CHK_VAR_LOC;
+		var_endRefPos_tmp = var_endRefPos - EXT_SIZE_CHK_VAR_LOC;
 		if(var_endRefPos_tmp>chrlen) var_endRefPos_tmp = chrlen;
 		if(qcSigList_node->startSpanRefPos<=var_startRefPos_tmp and qcSigList_node->endSpanRefPos>=var_endRefPos_tmp) qcSigList_node->entire_flanking_flag = true;
 		else qcSigList_node->entire_flanking_flag = false;
+
+		if(query_seqs.size()==1) qcSigList_node->single_aln_seg_flag = true;
+		else qcSigList_node->single_aln_seg_flag = false;
 
 		return qcSigList_node;
 	}else{
@@ -1281,7 +1285,7 @@ vector<int32_t> clipRegCluster::getAdjacentAlnSegClipReg(int32_t arr_idx, int32_
 	size_t i;
 
 	for(i=0; i<query_seqs.size(); i++) if(query_seqs.at(i)->clip_aln) query_aln_segs.push_back(query_seqs.at(i)->clip_aln);
-	adjClipAlnSegInfo = getAdjacentClipAlnSeg(arr_idx, clip_end_flag, query_aln_segs, minClipEndSize, maxVarRegSize);
+	adjClipAlnSegInfo = getAdjacentClipAlnSeg(arr_idx, clip_end_flag, query_aln_segs, minClipEndSize, maxVarRegSize, minMapQ);
 
 	return adjClipAlnSegInfo;
 }

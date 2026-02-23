@@ -247,6 +247,7 @@ reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosR
 	reg->query_pos_invalid_flag = false;
 	reg->large_indel_flag = false;
 	reg->merge_flag = false;
+	reg->rescue_flag = false;
 	reg->gt_type = -1;
 	reg->gt_seq = "";
 	reg->AF = 0;
@@ -843,7 +844,7 @@ void Region::detectHighClipReg(){
 	int64_t i = startMidPartPos - SUB_CLIP_REG_SIZE;
 	if(i<1) i = 1;
 	while(i<endMidPartPos){
-//		if(i>178283000) //178232000
+//		if(i>9495000) //178232000
 //			cout << i << endl;
 
 		reg_t *reg = getClipReg(i);
@@ -874,7 +875,8 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 		startPos_tmp = checkPos;
 		endPos_tmp = checkPos + subclipreg_size - 1;
 		if(endPos_tmp>endMidPartPos) endPos_tmp = endMidPartPos;
-		normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp, HIGH_CLIP_RATIO_THRES, paras->minReadsNumSupportSV);
+		//normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp, HIGH_CLIP_RATIO_THRES, paras->minReadsNumSupportSV); // deleted on 2026-02-22
+		normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp, paras->clip_ratio_thres, paras->minReadsNumSupportSV);
 		if(normal_reg_flag==false){ // clip region
 			if(clip_reg_flag==false){ // first clip region
 				clip_reg_flag = true;
@@ -1076,10 +1078,13 @@ bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_t
 				tmp_num ++;
 			}
 		}
-		//if(tmp_num>0) cout << "\tclip: " << i << ", num=" << tmp_num << endl;
+//		if(tmp_num>=min_supp_num){ // added on 2026-02-22
+//			flag = false;
+//			break;
+//		}
 	}
 
-	if(clip_num>0){
+	if(flag and clip_num>0){
 		//if(localRegCov>0){ // deleted on 2023-12-18
 		if(refinedLocalRegCov>=min_supp_num*READS_NUM_SUPPORT_FACTOR){
 			//ratio = clip_num / localRegCov; // deleted on 2023-12-18

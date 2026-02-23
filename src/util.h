@@ -53,8 +53,11 @@ bool isOverlappedMateClipReg(mateClipReg_t *mate_clip_reg1, mateClipReg_t *mate_
 mateClipReg_t* getOverlappedMateClipReg(mateClipReg_t *mate_clip_reg_given, vector<mateClipReg_t*> &mateClipRegVec);
 bool isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_vec);
 bool isIndelInSingleClipReg(reg_t *reg, mateClipReg_t *clip_reg);
+bool isRegInSingleClipReg(string &chrname, size_t start_pos_para, size_t end_pos_para, mateClipReg_t *clip_reg, int64_t maxVarRegSize);
 bool isSnvInClipReg(string &chrname, size_t pos, vector<mateClipReg_t*> &mate_clipReg_vec);
+bool isSnvInClipReg(string &chrname, size_t pos, int32_t start_idx, int32_t end_idx, vector<mateClipReg_t*> &mate_clipReg_vec);
 bool isSnvInSingleClipReg(string &chrname, size_t pos, mateClipReg_t *clip_reg);
+vector<int32_t> getStartEndIndexInClipRegVec(string &chrname, size_t start_pos, size_t end_pos, vector<mateClipReg_t*> &mate_clipReg_vec, int64_t maxVarRegSize);
 bam_hdr_t* loadSamHeader(string &inBamFile);
 bool isInReg(int32_t pos, vector<reg_t*> &vec);
 int32_t computeDisagreeNum(Base *baseArray, int32_t arr_size);
@@ -94,7 +97,7 @@ void destroyConsWorkOptVec(vector<cnsWork_opt*> &cns_work_vec);
 void deleteItemFromCnsWorkVec(int32_t item_id, vector<cnsWork_opt*> &cns_work_vec);
 int32_t getItemIDFromCnsWorkVec(string &contigfilename, vector<cnsWork_opt*> &cns_work_vec);
 void* processSingleConsWork(void *arg);
-void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, double max_absig_density, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
+void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &pg_runid_str, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, double max_absig_density, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 bool isReadableFile(string &filename);
 void* processSingleMinimap2AlnWork(void *arg);
 void* processSingleBlatAlnWork(void *arg);
@@ -130,14 +133,15 @@ vector<clipAlnData_t*> getQueryClipAlnSegsAll(string &queryname, vector<clipAlnD
 bool isQuerySelfOverlap(vector<clipAlnData_t*> &query_aln_segs, int32_t maxVarRegSize);
 bool isSegSelfOverlap(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, int32_t maxVarRegSize);
 int32_t getVecIdxClipAlnData(clipAlnData_t *clip_aln, vector<clipAlnData_t*> &clipAlnDataVector);
-vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize, int32_t max_reg_size);
-vector<int32_t> getAdjacentClipAlnSeg(clipAlnData_t *clip_aln, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize, int32_t max_reg_size);
-clipAlnData_t* getAdjacentClipAlnSegPreferSameChr(clipAlnData_t *clip_aln, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize, int32_t max_reg_size);
+vector<int32_t> getAdjacentClipAlnSeg(int32_t arr_idx, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize, int32_t max_reg_size, int32_t min_MapQ_thres);
+vector<int32_t> getAdjacentClipAlnSeg(clipAlnData_t *clip_aln, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize, int32_t max_reg_size, int32_t min_MapQ_thres);
+clipAlnData_t* getAdjacentClipAlnSegPreferSameChr(clipAlnData_t *clip_aln, int32_t clip_end_flag, vector<clipAlnData_t*> &query_aln_segs, int32_t minClipEndSize, int32_t max_reg_size, int32_t min_MapQ_thres);
 vector<BND_t*> generateBNDItems(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec, faidx_t *fai, double gt_homo_ratio_thres, double gt_hete_ratio_thres);
 int64_t getClipPosFromBNDStr(string &bnd_str);
 void checkBNDStrVec(mateClipReg_t &mate_clip_reg);
 bool isValidBNDStr(int32_t reg_id, int32_t clip_end, int32_t checked_arr[][2], string &chrname1, string &chrname2, int64_t tra_pos_arr[4], vector<string> &bnd_str_vec);
 void checkSuppNum(mateClipReg_t &mate_clip_reg, int32_t support_num_thres);
+void setUltraLargeFlag(mateClipReg_t &mate_clip_reg, Paras *paras);
 void copyClipPosVec(vector<clipPos_t*> &sourceClipPosVector, vector<clipPos_t*> &destClipPosVector);
 int32_t computeCovNumReg(string &chrname, int64_t startPos, int64_t endPos, faidx_t *fai, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov);
 bool isSizeSatisfied(int64_t ref_dist, int64_t query_dist, int64_t min_sv_size_usr, int64_t max_sv_size_usr);
@@ -199,6 +203,7 @@ vector<string> extractQcSigCompSeqs(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, faidx
 struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNode*> &query_seq_info_vec, int64_t startRefPos_cns, int32_t min_sv_size);
 
 vector<vector<string>> getClusterInfo(string &clusterfilename);
+int32_t getReadGroupId(reg_t *reg, vector< vector<string> > &qnames_vec_cluster, varCand *var_cand);
 
 void computeRefSpanForIter(bam1_t *b, int64_t &startpos, int64_t &endpos);
 double computeSigDensityFromAlnData(bam1_t *b, faidx_t *fai, bam_hdr_t *header, int64_t startRpos, int64_t endRpos);
@@ -214,10 +219,10 @@ void printMRVec(vector<mrmin_match_t *> &match_vec);
 
 void sortQueryAlnSegs(vector<clipAlnData_t*> &query_aln_segs);
 bool Filteredbychrname(vector<clipAlnData_t*> &query_aln_segs);//self
-void FilteredbyAlignmentSegment(vector<clipAlnData_t*> &query_aln_segs, string &chrname);//self
+void FilteredbyAlignmentSegment(vector<clipAlnData_t*> &query_aln_segs, string &chrname, int32_t minMapQ, int32_t min_aln_size);
 bool ischeckSameOrient(vector<clipAlnData_t*> &query_aln_segs);//self
 bool isSameChrome(vector<clipAlnData_t*> &query_aln_segs);
-bool isSameOrient(vector<clipAlnData_t*> &query_aln_segs);
+bool isSameOrient(vector<clipAlnData_t*> &query_aln_segs, int32_t min_aln_size);
 bool isSameAlnReg(vector<clipAlnData_t*> &query_aln_segs, int64_t maxVarRegSize);
 int32_t getOccNumInVecs(vector<clipAlnData_t*> &query_aln_segs, vector<clipPos_t*> &leftClipPosVector, vector<clipPos_t*> &leftClipPosVector2, vector<clipPos_t*> &rightClipPosVector, vector<clipPos_t*> &rightClipPosVector2);
 bool isAdjacentClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, size_t dist_thres);

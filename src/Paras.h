@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <thread>
 #include <numeric>
+#include <random>
 
 #include "structures.h"
 #include "meminfo.h"
@@ -19,7 +20,7 @@ using namespace std;
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"multi-Allele-aware Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.5.0"
+#define PROG_VERSION				"1.5.1"
 #define VCF_VERSION					"4.2"
 
 #define CMD_DET_STR					"det"
@@ -177,12 +178,14 @@ using namespace std;
 //#define MAX_PROC_RUNNING_MINUTES				120
 #define MAX_PROC_RUNNING_MINUTES_CNS			30	//300
 #define MAX_PROC_RUNNING_MINUTES_CALL			30  //120
-#define MONITOR_WAIT_SECONDS					60
+#define MONITOR_WAIT_SECONDS					10  //60
 #define ULTRA_LOW_PROC_RUNNING_MINUTES			30
 
 //#define DEFAULT_MONITOR_PROC_NAMES				"overlapInCore,falconsense,blat"
-#define DEFAULT_MONITOR_PROC_NAMES_CNS			"overlapInCore,falconsense"
-#define DEFAULT_MONITOR_PROC_NAMES_CALL			"blat"
+//#define DEFAULT_MONITOR_PROC_NAMES_CNS			"overlapInCore,falconsense"
+//#define DEFAULT_MONITOR_PROC_NAMES_CALL			"blat"
+#define DEFAULT_MONITOR_PROC_NAMES_CNS			"abpoa,wtdbg2"
+#define DEFAULT_MONITOR_PROC_NAMES_CALL			"abpoa"
 
 // consensus parameters
 #define CNS_GENOME_SIZE_INITIAL				30000
@@ -191,12 +194,14 @@ using namespace std;
 
 #define MAX_RESCUE_VAR_SIZE					40000
 
+#define MAX_CHECK_READS_NUM					3
+
 // program parameters
 class Paras
 {
 	public:
 		// user/system defined parameters
-		string command, refFile, inBamFile, outFilePrefix, sample, pg_cmd_str, technology;
+		string command, refFile, inBamFile, outFilePrefix, sample, pg_cmd_str, technology, pg_runid_str;
 		string wtdbg2_version, minimap2_version, abpoa_version, canu_version;
 		string outDir;
 		string out_dir_detect = "1_candidates";    // "1_candidates"
@@ -205,7 +210,7 @@ class Paras
 		string out_dir_tra = out_dir_call + "/" + "tra";
 		string out_dir_result = "4_results";	// "4_results"
 		int32_t blockSize, slideSize, min_sv_size_usr, min_sv_size_usr_final, max_sv_size_usr, num_threads, large_indel_size_thres;
-		double max_seg_size_ratio_usr, min_seqsim_match, min_seqsim_merge, max_seg_nm_ratio_usr, min_sv_size_usr_factor, reads_num_supp_factor_low_cov, max_absig_density;
+		double max_seg_size_ratio_usr, min_seqsim_match, min_seqsim_merge, max_seg_nm_ratio_usr, min_sv_size_usr_factor, reads_num_supp_factor_low_cov, max_absig_density, clip_ratio_thres;
 		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy, include_alt, keep_temp_results_flag, phasing_flag, tumor_mode_flag;
 		size_t misAlnRegLenSum = 0;
 		int32_t minReadsNumSupportSV: 29, min_Nsupp_est_flag: 3; //, minClipReadsNumSupportSV; Nsupp_est_flag: 1 for estimated, 0 for user-specified
@@ -291,6 +296,7 @@ class Paras
 		bool isRecommendCanuVersion(string &canu_version, const string &recommend_version);
 //		string getMinimap2Version();
 //		string getAbpoaVersion();
+		string generatePgRunidStr();
 		void initPreset();
 		int checkBamFile();
 		int parseParas(int argc, char **argv);

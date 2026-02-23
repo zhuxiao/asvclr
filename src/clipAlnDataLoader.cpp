@@ -221,6 +221,9 @@ clipAlnData_t* clipAlnDataLoader::generateClipAlnData(bam1_t* b, bam_hdr_t *head
 	}else
 		clip_aln->rightClipSize = 0;
 
+	// MapQ
+	clip_aln->MapQ = clip_aln->bam->core.qual;
+
 	// NM
 	nm_ptr = bam_aux_get(b, "NM");
 	if(nm_ptr){
@@ -417,6 +420,8 @@ clipAlnData_t* clipAlnDataLoader::addNewSAItemToClipAlnDataVec(string &queryname
 		clip_aln_new->endQueryPos = clip_aln_tmp.endQueryPos;
 		clip_aln_new->leftClipSize = clip_aln_tmp.leftClipSize;
 		clip_aln_new->rightClipSize = clip_aln_tmp.rightClipSize;
+		clip_aln_new->MapQ = clip_aln_tmp.MapQ;
+		clip_aln_new->NM = clip_aln_tmp.NM;
 		clip_aln_new->ref_dist = clip_aln_tmp.endRefPos - clip_aln_tmp.startRefPos + 1;
 		if(clip_aln_new->aln_orient==ALN_PLUS_ORIENT) clip_aln_new->query_dist = clip_aln_tmp.endQueryPos - clip_aln_tmp.startQueryPos + 1;
 		else clip_aln_new->query_dist = clip_aln_tmp.startQueryPos - clip_aln_tmp.endQueryPos + 1;
@@ -464,8 +469,9 @@ void clipAlnDataLoader::parseSingleAlnStrSA(clipAlnData_t &clip_aln_ret, string 
 		}
 	}
 
-	// NM
-	// clip_aln_ret.NM = stoi(aln_info_vec.at(aln_info_vec.size()-1));
+	// MapQ and NM
+	clip_aln_ret.MapQ = stoi(aln_info_vec.at(aln_info_vec.size()-2));
+	clip_aln_ret.NM = stoi(aln_info_vec.at(aln_info_vec.size()-1));
 
 	// leftClipSize and leftClipSize
 	if(op_vec.at(0)=='S' or op_vec.at(0)=='H') clip_aln_ret.leftClipSize = op_len_vec.at(0);
@@ -587,7 +593,7 @@ void clipAlnDataLoader::orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &quer
 
 			if(valid_query_end_flag){
 				// deal with the mate clip end
-				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize, maxVarRegSize);
+				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize, maxVarRegSize, minMapQ);
 				mate_arr_idx = adjClipAlnSegInfo.at(0);
 				mate_clip_end_flag = adjClipAlnSegInfo.at(1);
 				if(mate_arr_idx!=-1){ // mated
@@ -619,7 +625,7 @@ void clipAlnDataLoader::orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &quer
 
 			if(valid_query_end_flag){
 				// deal with the mate clip end
-				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize, maxVarRegSize);
+				adjClipAlnSegInfo = getAdjacentClipAlnSeg(i, clip_end_flag, query_aln_vec, minClipEndSize, maxVarRegSize, minMapQ);
 				mate_arr_idx = adjClipAlnSegInfo.at(0);
 				mate_clip_end_flag = adjClipAlnSegInfo.at(1);
 				if(mate_arr_idx!=-1){ // mated

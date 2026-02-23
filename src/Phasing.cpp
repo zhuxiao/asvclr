@@ -43,10 +43,11 @@ void Phasing::performPhasing(){
 		var_cand = var_cand_vec.at(i);
 		if(var_cand->call_success){
 
+//			if(var_cand->alnfilename.compare("debug_tmp2/3_call/chr1/minimap2_chr1_893789-893825.paf")==0){
+//				cout << "line=" << __LINE__ << ", i=" << i << ", alnfilename=" << var_cand->alnfilename << endl;
+//			}
+
 #if PHASING_DEBUG
-			if(var_cand->newVarVec.at(0)->startRefPos==1108719){
-				cout << var_cand->newVarVec.at(0)->startRefPos << endl;
-			}
 			cout << var_cand->chrname << ":" << var_cand->newVarVec.at(0)->startRefPos << "-" << var_cand->newVarVec.at(var_cand->newVarVec.size()-1)->endRefPos << ", ctg_num=" << var_cand->ctg_num << ", var_num=" << var_cand->newVarVec.size() << endl;
 #endif
 
@@ -61,11 +62,12 @@ void Phasing::performPhasing(){
 				var_cand2 = var_cand_vec.at(j);
 				if(var_cand2->call_success){
 
+//					if(var_cand2->alnfilename.compare("debug_tmp2/3_call/chr1/minimap2_chr1_893789-893825.paf")==0){
+//						cout << "line=" << __LINE__ << ", i=" << i << ", alnfilename2=" << var_cand2->alnfilename << endl;
+//					}
+
 #if PHASING_DEBUG
 					cout << var_cand2->chrname << ":" << var_cand2->newVarVec.at(0)->startRefPos << "-" << var_cand2->newVarVec.at(var_cand2->newVarVec.size()-1)->endRefPos << ", ctg_num=" << var_cand2->ctg_num << ", var_num=" << var_cand2->newVarVec.size() << endl;
-					if(var_cand2->newVarVec.at(0)->startRefPos==1108719){
-						cout << var_cand2->newVarVec.at(0)->startRefPos << endl;
-					}
 #endif
 
 					generateHapNodeSingleVarCand(hapnodes_vec2, var_cand2);
@@ -182,7 +184,7 @@ void Phasing::performPhasing(){
 
 // initialize haplotype node
 void Phasing::generateHapNodeSingleVarCand(vector< vector<phasing_reg_t*> > &hapnodes_vec, varCand *var_cand){
-	int32_t query_id, group_id, id_vec;
+	int32_t group_id, group_id_tmp, id_vec;
 	int64_t min_val;
 	size_t i, j;
 	reg_t *reg;
@@ -203,33 +205,37 @@ void Phasing::generateHapNodeSingleVarCand(vector< vector<phasing_reg_t*> > &hap
 		// compute the group id for each query
 		for(i=0; i<var_cand->newVarVec.size(); i++){
 			reg = var_cand->newVarVec.at(i);
-			if(reg->var_type!=VAR_UNC and reg->call_success_status and reg->query_id!=-1)
-				if(find(query_id_vec.begin(), query_id_vec.end(), reg->query_id) == query_id_vec.end()) query_id_vec.push_back(reg->query_id); // not found
-		}
-		for(i=0; i<query_id_vec.size(); i++){
-			query_id = query_id_vec.at(i);
-			group_id = getReadGroupId(query_id, qnames_vec_cluster, var_cand);
-			group_id_vec.push_back(group_id);
+			if(reg->var_type!=VAR_UNC and reg->call_success_status and reg->query_id!=-1){
+				group_id = getReadGroupId(reg, qnames_vec_cluster, var_cand);
+				if(group_id!=-1 and find(group_id_vec.begin(), group_id_vec.end(), reg->query_id) == group_id_vec.end()) // not found, then add new item
+					group_id_vec.push_back(group_id);
+			}
 		}
 
 		if(group_id_vec.size()==1){
-			ps_id_vec.push_back(var_cand->newVarVec.at(0)->startRefPos); // ??????
-		//}else if(group_id_vec.size()==2){
+			for(i=0; i<var_cand->newVarVec.size(); i++){
+				reg = var_cand->newVarVec.at(i);
+				if(reg->var_type!=VAR_UNC and reg->call_success_status and reg->query_id!=-1){
+					ps_id_vec.push_back(reg->startRefPos);
+					break;
+				}
+			}
 		}else if(group_id_vec.size()>=2){
 			// get minimal value
-			for(i=0; i<query_id_vec.size(); i++){
-				//group_id = group_id_vec.at(i);
-				query_id = query_id_vec.at(i);
+			for(i=0; i<group_id_vec.size(); i++){
+				group_id = group_id_vec.at(i);
+				//query_id = query_id_vec.at(i);
 				min_val = LONG_MAX;
 				for(j=0; j<var_cand->newVarVec.size(); j++){
 					reg = var_cand->newVarVec.at(j);
-					if(reg->var_type!=VAR_UNC and reg->call_success_status and reg->query_id==query_id){
-						if(reg->startRefPos<min_val) min_val = reg->startRefPos;
+					if(reg->var_type!=VAR_UNC and reg->call_success_status and reg->query_id!=-1){
+						group_id_tmp = getReadGroupId(reg, qnames_vec_cluster, var_cand);
+						if(group_id_tmp==group_id and reg->startRefPos<min_val) min_val = reg->startRefPos;
 					}
 				}
 				ps_id_vec.push_back(min_val);
 			}
-			if(ps_id_vec.size()>=2 and ps_id_vec.at(0)==ps_id_vec.at(1) and ps_id_vec.at(0)!=LONG_MAX) ps_id_vec.at(1)++;  // ??????????
+			if(ps_id_vec.size()>=2 and ps_id_vec.at(0)==ps_id_vec.at(1) and ps_id_vec.at(0)!=LONG_MAX) ps_id_vec.at(1)++;
 		}
 //		else{
 //			cerr << "group count: " << group_id_vec.size() << ", error!" << endl;
@@ -239,16 +245,16 @@ void Phasing::generateHapNodeSingleVarCand(vector< vector<phasing_reg_t*> > &hap
 		for(i=0; i<var_cand->newVarVec.size(); i++){
 			reg = var_cand->newVarVec.at(i);
 			if(reg->var_type!=VAR_UNC and reg->call_success_status and reg->query_id!=-1){
-				group_id = id_vec = -1;
-				for(j=0; j<query_id_vec.size(); j++){
-					if(query_id_vec.at(j)==reg->query_id){
-						group_id = group_id_vec.at(j);
+				group_id = getReadGroupId(reg, qnames_vec_cluster, var_cand);
+				id_vec = -1;
+				for(j=0; j<group_id_vec.size(); j++){
+					if(group_id_vec.at(j)==group_id){
 						id_vec = j;
 						break;
 					}
 				}
 
-				if(group_id!=-1){
+				if(id_vec!=-1){
 					phasing_reg = new phasing_reg_t();
 					phasing_reg->reg = reg;
 					phasing_reg->inner_group_id = group_id;
@@ -512,49 +518,6 @@ int32_t Phasing::computeLinkNum(vector<string> &qname_vec, vector<string> &qname
 	}
 
 	return link_num;
-}
-
-// get group id
-int32_t Phasing::getReadGroupId(int32_t query_id, vector< vector<string> > &qnames_vec_cluster, varCand *var_cand){
-	int32_t group_id, check_num;
-	vector< vector<string> > qnames_vec;
-	vector<string> qname_vec, qname_vec_cluster;
-	string qname, tmp_cnsfilename;
-	size_t i, j;
-
-	if(var_cand->rescue_flag) tmp_cnsfilename = var_cand->rescue_cnsfilename;
-	else tmp_cnsfilename = var_cand->ctgfilename;
-
-	FastaSeqLoader fa_loader(tmp_cnsfilename);
-	qnames_vec = fa_loader.getReadNamesFromCnsHeaders();
-//	if(query_id>=(int32_t)qnames_vec_cluster.size()){
-//		cout << "query_id=" << query_id << ", qnames_vec_cluster.size=" << qnames_vec_cluster.size() << endl;
-//	}
-	qname_vec = qnames_vec.at(query_id);
-
-	group_id = -1;
-	for(i=0; i<qnames_vec_cluster.size(); i++){
-		qname_vec_cluster = qnames_vec_cluster.at(i);
-		check_num = 0;
-		for(j=0; j<qname_vec.size(); j++){
-			qname = qname_vec.at(j);
-			if(find(qname_vec_cluster.begin(), qname_vec_cluster.end(), qname) != qname_vec_cluster.end()){  // found
-				check_num ++;
-				if(check_num>=MAX_CHECK_READS_NUM){
-					group_id = i;
-					break;
-				}
-			}
-		}
-
-#if PHASING_DEBUG
-		cout << __LINE__ << ", In " << __func__ << "(), check_num=" << check_num << endl;
-#endif
-
-		if(group_id!=-1) break;
-	}
-
-	return group_id;
 }
 
 phasing_reg_t* Phasing::dupPhasingRegItem(phasing_reg_t *phasing_reg){

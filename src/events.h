@@ -17,7 +17,8 @@ using namespace std;
 #define VAR_INV				4	// inversion
 #define VAR_TRA				5	// translocation
 #define VAR_BND				6	// translocation
-#define VAR_INV_TRA			7	// inverted translocation
+#define VAR_INVDUP			7	// inverted duplication
+#define VAR_INV_TRA			8	// inverted translocation
 #define VAR_MIX				10	// mixed variant
 #define VAR_MNP				11	// MNP
 #define VAR_SNV				12	// SNV
@@ -30,7 +31,8 @@ using namespace std;
 #define VAR_INV_STR				"INV"	// inversion
 #define VAR_TRA_STR				"TRA"	// translocation
 #define VAR_BND_STR				"BND"	// translocation
-#define VAR_INV_TRA_STR			"INV_TRA"	// inverted translocation
+#define VAR_INVDUP_STR			"INVDUP"	// inverted duplication
+#define VAR_INV_TRA_STR			"INVTRA"	// inverted translocation
 #define VAR_MIX_STR				"MIX"	// mixed variant
 
 #define VAR_UNC_STR1			"uncertain"	// uncertain
@@ -39,6 +41,7 @@ using namespace std;
 #define VAR_DUP_STR1			"duplication"	// duplication
 #define VAR_INV_STR1			"inversion"	// inversion
 #define VAR_TRA_STR1			"translocation"	// translocation
+#define VAR_INVDUP_STR1			"inverted_duplication"	// translocation
 
 #define VAR_UNC_STR2			"UNCERTAIN"	// UNCERTAIN
 #define VAR_INS_STR2			"INSERTION"	// INSERTION
@@ -46,6 +49,7 @@ using namespace std;
 #define VAR_DUP_STR2			"DUPLICATION"	// DUPLICATION
 #define VAR_INV_STR2			"INVERSION"	// INVERSION
 #define VAR_TRA_STR2			"TRANSLOCATION"	// TRANSLOCATION
+#define VAR_INVDUP_STR2			"INVERTED_DUPLICATION"	// INVERTED DUPLICATION
 
 
 #define CTG_END_SKIP_SIZE		1000
