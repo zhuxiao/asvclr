@@ -3480,17 +3480,17 @@ void Genome::saveTraCall2File(){
 
 									// mate part
 									if(id_vec_mate==2 or id_vec_mate==3){
-										str_vec = split(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate], ",");
+										str_vec_tmp = split(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate], ",");
 										if(clip_end2==LEFT_END){ // mate at left end
-											if(str_vec.at(0).compare("-")!=0){
-												str_vec2 = split(str_vec.at(0), "|");
+											if(str_vec_tmp.at(0).compare("-")!=0){
+												str_vec2 = split(str_vec_tmp.at(0), "|");
 												right_clip_pos = stoi(str_vec2.at(1));
 												supp_num_mate = stoi(str_vec2.at(2));
 												//DP_num_mate = stoi(str_vec2.at(3));
 											}
 										}else{ // mate at right end
-											if(str_vec.at(1).compare("-")!=0){
-												str_vec2 = split(str_vec.at(1), "|");
+											if(str_vec_tmp.at(1).compare("-")!=0){
+												str_vec2 = split(str_vec_tmp.at(1), "|");
 												right_clip_pos = stoi(str_vec2.at(1));
 												supp_num_mate = stoi(str_vec2.at(2));
 												//DP_num_mate = stoi(str_vec2.at(3));
