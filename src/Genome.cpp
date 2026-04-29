@@ -104,8 +104,8 @@ void Genome::init(){
 	// load the sam/bam header
 	header = loadSamHeader(paras->inBamFile);
 
-	if(header->n_targets!=faidx_nseq(fai))
-		cout << "Warn: the number of sequences in reference is not the same with the number of sequences of BAM header, the same reference is recommended for better performance." << endl;
+//	if(header->n_targets!=faidx_nseq(fai))
+//		cout << "Warn: the number of sequences in reference is not the same with the number of sequences of BAM header, the same reference is recommended for better performance." << endl;
 
 	// confirm chrlen
 	for(int i=0; i<header->n_targets; i++){
@@ -824,7 +824,7 @@ int Genome::processConsWork(){
 		// chr1_hg002_clr_20241218/2_cns/1/cns_1_1074689-1076105.fa, cns_1_3097653-3098167.fa, cns_1_670807-676101.fa, cns_1_1223650-1224865.fa, cns_1_7174821-7175786.fa, cns_1_8391251-8391639.fa
 		// cns_1_844226-845192.fa, cns_1_46679031-46679316.fa, cns_1_48187816-48187819, cns_1_44605948-44606254.fa, cns_1_30243897-30244578.fa
 		// clipReg_cns_chr1_114265459-114272005.fa
-//		if(cns_work_opt->contigfilename.compare("debug_tmp_chr1_20250808/2_cns/chr1/clipReg_cns_chr1_186868553-186879339.fa")==0){
+//		if(cns_work_opt->contigfilename.compare("debug_tmp/2_cns/1/cns_1_6858622-6858858.fa")==0){
 //			cout << "cnsfilename=" << cns_work_opt->contigfilename << endl;
 //		}else continue;
 
@@ -1056,9 +1056,9 @@ void Genome::initMonitorKilledMinimap2WorkMem(){
 				str_vec = split(line, "\t");
 				if(str_vec.size()==3){
 					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_call);
-					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
-					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
-					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir, paras->out_dir_call);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir, paras->out_dir_call);
+					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir, paras->out_dir_call);
 
 					killed_minimap2_work = new killedMinimap2Work_t();
 					killed_minimap2_work->alnfilename = alnfilename;		// alnfilename;
@@ -1111,9 +1111,9 @@ void Genome::initMonitorKilledBlatWorkMem(){
 				str_vec = split(line, "\t");
 				if(str_vec.size()==3){
 					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_call);
-					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
-					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
-					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir, paras->out_dir_call);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir, paras->out_dir_call);
+					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir, paras->out_dir_call);
 
 					killed_blat_work = new killedBlatWork_t();
 					killed_blat_work->alnfilename = alnfilename;		// alnfilename;
@@ -1313,7 +1313,7 @@ int Genome::processCallWork(){
 		// minimap2_cns_5_1414495-1414633.paf, minimap2_cns_5_1192021-1192323.paf, minimap2_cns_1_26966226-26974816.paf, minimap2_chr1_143246329-143247038.paf, minimap2_1_649705-650290.paf
 		// minimap2_1_2765904-2766241.paf, minimap2_1_5447230-5447236.paf, minimap2_1_3097653-3098167.paf, minimap2_1_2618216-2619007.paf, minimap2_1_1184268-1184983.paf, minimap2_1_5446916-5447358
 		// minimap2_1_3560147-3560992.paf, minimap2_1_801940-802476.paf, minimap2_1_3560147-3560992.paf, minimap2_1_3561166-3562123.paf
-//		if(var_cand->alnfilename.compare("debug_tmp2/3_call/chr1/minimap2_chr1_893789-893825.paf")==0){
+//		if(var_cand->alnfilename.compare("debug_tmp/3_call/1/minimap2_1_6858622-6858858.paf")==0){
 //			cout << var_cand->alnfilename << endl;
 //		}else continue;
 
@@ -3395,7 +3395,6 @@ void Genome::genomeSaveCallSV2File(){
 	for(size_t i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		if(chr->valid_flag)
-			//chr->saveCallSV2File();
 			chr->saveCallSV2File02();
 	}
 
@@ -3405,18 +3404,18 @@ void Genome::genomeSaveCallSV2File(){
 
 // save TRA
 void Genome::saveTraCall2File(){
-	size_t i, j, k, m;
+	size_t i, j, m;
 	Chrome *chr;
 	ofstream outfile_tra;
 	vector<mateClipReg_t*> mate_clipReg_vec;
 	mateClipReg_t *mate_clip_reg;
 	string line, chrname_tmp, header_line_bedpe, mate_reg_str, id_str, sv_type_str, sv_type_str2;
-	string gt_seq, gt_header, gt_str, ad_str1, ad_str2, dp_str, id_str_mate, id_vec_mate_str;
-	int32_t reg_id, num_bnd, num_tra, num_dup, num_inv, num_del, DP, AD, id_vec_mate, clip_end2, supp_num, DP_num, supp_num_mate;
+	string gt_seq, gt_header, gt_str, ad_str1, ad_str2, dp_str, id_str_mate, id_vec_mate_str, id_vec_mate_mate_str, sep_str, mate_item_str;
+	int32_t k, reg_id, DP, AD, id_vec_mate, clip_end, clip_end2, supp_num, DP_num, supp_num_mate, id_vec_mate_mate;
 	reg_t *reg1, *reg2;
 	int64_t left_clip_pos, right_clip_pos;
 	double AF;
-	vector<string> str_vec, str_vec2, str_vec_tmp;
+	vector<string> str_vec, str_vec2, str_vec_tmp, str_vec2_tmp, mate_str_vec2_tmp, bnd_mate_reg_strs_new;
 
 	outfile_tra.open(out_filename_result_tra);
 	if(!outfile_tra.is_open()){
@@ -3427,141 +3426,163 @@ void Genome::saveTraCall2File(){
 	header_line_bedpe = getCallFileHeaderBedpe(paras->sample);
 	outfile_tra << header_line_bedpe << endl;
 
-	num_bnd = num_tra = num_dup = num_inv = num_del = 1;
+	//num_bnd = num_tra = num_dup = num_inv = num_del = 1;
 	for(i=0; i<chromeVector.size(); i++){
 		chr = chromeVector.at(i);
 		if(chr->valid_flag){
 			mate_clipReg_vec = chr->mateClipRegVector;
 			for(j=0; j<mate_clipReg_vec.size(); j++){
 				mate_clip_reg = mate_clipReg_vec.at(j);
-
 				if(mate_clip_reg->valid_flag){
-	//				if(mate_clip_reg->leftClipRegNum!=1 or mate_clip_reg->rightClipRegNum!=1){
-	//					cout << "leftClipRegNum=" << to_string(mate_clip_reg->leftClipRegNum) << ", rightClipRegNum=" << to_string(mate_clip_reg->rightClipRegNum) << endl;
-	//					printMateClipReg(mate_clip_reg);
-	//				}else continue;
-
 					if(mate_clip_reg->ultra_large_dist_flag==false and (mate_clip_reg->sv_type==VAR_TRA or mate_clip_reg->sv_type==VAR_BND)){ // valid TRA
 						// only process half part
 						for(reg_id=0; reg_id<2; reg_id++){
-							str_vec = split(mate_clip_reg->bnd_mate_reg_strs[reg_id], ",");
-							for(m=0; m<str_vec.size(); m++){
-								if(str_vec.at(m).compare("-")!=0){
-									reg1 = reg2 = NULL;
-									left_clip_pos = right_clip_pos = -1;
-									supp_num = supp_num_mate = 0;
+							if(mate_clip_reg->bnd_mate_reg_strs[reg_id].compare("-")!=0){
+								str_vec = split(mate_clip_reg->bnd_mate_reg_strs[reg_id], ",");
+								for(m=0; m<str_vec.size(); m++){
+									if(str_vec.at(m).compare("-")!=0){
+										reg1 = reg2 = NULL;
+										left_clip_pos = right_clip_pos = -1;
+										supp_num = supp_num_mate = 0;
 
-									// main part
-									str_vec2 = split(str_vec.at(m), "|");
-									id_str_mate = str_vec2.at(0);
-									id_vec_mate_str = id_str_mate.at(0);
-									id_vec_mate = stoi(id_vec_mate_str);
-									if(m==0){
-										//clip_end = LEFT_END;
-										if(id_str_mate.at(1)=='+') clip_end2 = RIGHT_END;
-										else clip_end2 = LEFT_END;
-									}else{
-										//clip_end = RIGHT_END;
-										if(id_str_mate.at(1)=='+') clip_end2 = LEFT_END;
-										else clip_end2 = RIGHT_END;
-									}
-									left_clip_pos = stoi(str_vec2.at(1));
-									supp_num = stoi(str_vec2.at(2));
-									DP_num = stoi(str_vec2.at(3));
-
-									// deleted on 2026-02-23
-//									if(clip_end==LEFT_END){
-//										if(mate_clip_reg->leftClipReg) reg1 = mate_clip_reg->leftClipReg;
-//									}else{
-//										if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
-//									}
-									if(mate_clip_reg->leftClipReg) reg1 = mate_clip_reg->leftClipReg;
-									else if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
-
-									// mate part
-									if(id_vec_mate==2 or id_vec_mate==3){
-										str_vec_tmp = split(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate], ",");
-										if(clip_end2==LEFT_END){ // mate at left end
-											if(str_vec_tmp.at(0).compare("-")!=0){
-												str_vec2 = split(str_vec_tmp.at(0), "|");
-												right_clip_pos = stoi(str_vec2.at(1));
-												supp_num_mate = stoi(str_vec2.at(2));
-												//DP_num_mate = stoi(str_vec2.at(3));
-											}
-										}else{ // mate at right end
-											if(str_vec_tmp.at(1).compare("-")!=0){
-												str_vec2 = split(str_vec_tmp.at(1), "|");
-												right_clip_pos = stoi(str_vec2.at(1));
-												supp_num_mate = stoi(str_vec2.at(2));
-												//DP_num_mate = stoi(str_vec2.at(3));
-											}
-										}
-
-										if(id_vec_mate==2){
-											if(mate_clip_reg->rightClipReg) reg2 = mate_clip_reg->rightClipReg;
-										}else{
-											if(mate_clip_reg->rightClipReg2) reg2 = mate_clip_reg->rightClipReg2;
-										}
-									}
-
-									if(reg1 and reg2 and left_clip_pos!=-1 and right_clip_pos!=-1 and supp_num>=paras->minReadsNumSupportSV and supp_num_mate>=paras->minReadsNumSupportSV){
-										//cout << "sv_type=" << mate_clip_reg->sv_type << ": " << reg1->chrname << ":" << left_clip_pos << " <--> " << reg2->chrname << ":" << right_clip_pos << endl;
-
-										if(mate_clip_reg->sv_type==VAR_TRA){
-											sv_type_str = VAR_TRA_STR;
-											id_str = "ASVCLR." + sv_type_str + "." + to_string(num_tra);
-											num_tra ++;
-										}else{
-											sv_type_str = VAR_BND_STR;
-											id_str = "ASVCLR." + sv_type_str + "." + to_string(num_bnd);
-											num_bnd ++;
-										}
-										sv_type_str2 = "<" + sv_type_str + ">";
-
-										line = reg1->chrname + "\t" + to_string(left_clip_pos) + "\t" + to_string(left_clip_pos) + "\t" + reg2->chrname + "\t" + to_string(right_clip_pos) + "\t" + to_string(right_clip_pos); // chr1, start1, end1, chr2, start2, end2
-										line +=  + "\t" + id_str + "\t" + sv_type_str2 + "\t-\t-"; // ID, sv_type, SVLEN1, SVLEN2
-
-										// BND mate regions
-										mate_reg_str = mate_clip_reg->bnd_mate_reg_strs[0];
-										for(k=1; k<4; k++) mate_reg_str += ";" + mate_clip_reg->bnd_mate_reg_strs[k];
-										line += "\t" + mate_reg_str;
-
-										line += "\t-\t-\t-\t-"; // Ref1, Alt1, Ref2, Alt2
-
-										// extra information, split with ";": DP, AF, LDISCOV
-										AD = supp_num;
-										DP = DP_num;
-										AF = (double)AD / DP;
-										if(AF<0){
-											cout << "\t---------- AF=" << AF << ", sv_type=" << mate_clip_reg->sv_type << ": " << reg1->chrname << ":" << left_clip_pos << " <--> " << reg2->chrname << ":" << right_clip_pos << ", error!" << endl;
-											exit(1);
-										}
-										stringstream ss;
-										ss << setprecision(3) << AF;
-										line += "\tDP=" + to_string(DP) + ";AF=" + ss.str() +";ULDist=" + to_string(mate_clip_reg->dist_breakpoint) + ";LDISCOV=READS";
-
-										gt_header = "GT:AD:DP";
-										gt_str = "./.";
-										ad_str1 = ".";
-										ad_str2 = ".";
-										dp_str = ".";
-
-										if(AF!=-1){
-											if(AF>=paras->gt_homo_ratio){
-												gt_str = GT_HOMOZYGOUS_STR;
-											}else if(AF>=paras->gt_hete_ratio){
-												gt_str = GT_HETEROZYGOUS_STR;
+										// main part
+										str_vec2_tmp = split(str_vec.at(m), "_");
+										for(const auto& item : str_vec2_tmp){
+											str_vec2 = split(item, "|");
+											id_str_mate = str_vec2.at(0);
+											id_vec_mate_str = id_str_mate.at(0);
+											id_vec_mate = stoi(id_vec_mate_str);
+											if(m==0){
+												clip_end = LEFT_END;
+												if(id_str_mate.at(1)=='+') clip_end2 = RIGHT_END;
+												else clip_end2 = LEFT_END;
 											}else{
-												gt_str = GT_NOZYGOUS_STR;
+												clip_end = RIGHT_END;
+												if(id_str_mate.at(1)=='+') clip_end2 = LEFT_END;
+												else clip_end2 = RIGHT_END;
 											}
-											ad_str1 = to_string(DP-AD);
-											ad_str2 = to_string(AD);
-											dp_str = to_string(DP);
-										}
-										gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
-										line += "\t" + gt_seq;
+											left_clip_pos = stoi(str_vec2.at(1));
+											supp_num = stoi(str_vec2.at(2));
+											DP_num = stoi(str_vec2.at(3));
 
-										outfile_tra << line << endl;
+											// deleted on 2026-02-23
+		//									if(clip_end==LEFT_END){
+		//										if(mate_clip_reg->leftClipReg) reg1 = mate_clip_reg->leftClipReg;
+		//									}else{
+		//										if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
+		//									}
+											if(mate_clip_reg->leftClipReg) reg1 = mate_clip_reg->leftClipReg;
+											else if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
+
+											// mate part
+											if(id_vec_mate==2 or id_vec_mate==3){
+												id_vec_mate_mate = right_clip_pos = supp_num_mate = -1;
+												mate_str_vec2_tmp.clear();
+												mate_item_str = "";
+												if(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate].compare("-")!=0){
+													str_vec_tmp = split(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate], ",");
+													if(clip_end2==LEFT_END){ // mate at left end
+														if(str_vec_tmp.at(0).compare("-")!=0) mate_str_vec2_tmp = split(str_vec_tmp.at(0), "_");
+													}else{ // mate at right end
+														if(str_vec_tmp.at(1).compare("-")!=0) mate_str_vec2_tmp = split(str_vec_tmp.at(1), "_");
+													}
+													for(const auto& item2 : mate_str_vec2_tmp){
+														str_vec2 = split(item2, "|");
+														id_vec_mate_mate_str = str_vec2.at(0).at(0);
+														id_vec_mate_mate = stoi(id_vec_mate_mate_str);
+														right_clip_pos = stoi(str_vec2.at(1));
+														supp_num_mate = stoi(str_vec2.at(2));
+														//DP_num_mate = stoi(str_vec2.at(3));
+														if(id_vec_mate_mate==reg_id) {
+															mate_item_str = item2;
+															break;
+														}
+													}
+													if(mate_item_str.size()==0) mate_item_str = "-";
+
+													if(id_vec_mate==2){
+														if(mate_clip_reg->rightClipReg) reg2 = mate_clip_reg->rightClipReg;
+													}else{
+														if(mate_clip_reg->rightClipReg2) reg2 = mate_clip_reg->rightClipReg2;
+													}
+												}
+											}
+
+											if(reg1 and reg2 and left_clip_pos!=-1 and right_clip_pos!=-1 and supp_num>=paras->minReadsNumSupportSV and supp_num_mate>=paras->minReadsNumSupportSV){
+												//cout << "sv_type=" << mate_clip_reg->sv_type << ": " << reg1->chrname << ":" << left_clip_pos << " <--> " << reg2->chrname << ":" << right_clip_pos << endl;
+
+												if(mate_clip_reg->sv_type==VAR_TRA){
+													sv_type_str = VAR_TRA_STR;
+													paras->num_tra ++;
+													id_str = "ASVCLR." + sv_type_str + "." + to_string(paras->num_tra);
+												}else{
+													sv_type_str = VAR_BND_STR;
+													paras->num_bnd ++;
+													id_str = "ASVCLR." + sv_type_str + "." + to_string(paras->num_bnd);
+												}
+												sv_type_str2 = "<" + sv_type_str + ">";
+
+												line = reg1->chrname + "\t" + to_string(left_clip_pos) + "\t" + to_string(left_clip_pos) + "\t" + reg2->chrname + "\t" + to_string(right_clip_pos) + "\t" + to_string(right_clip_pos); // chr1, start1, end1, chr2, start2, end2
+												line +=  + "\t" + id_str + "\t" + sv_type_str2 + "\t-\t-"; // ID, sv_type, SVLEN1, SVLEN2
+
+												// update BND mate regions
+												mate_reg_str = "";
+												for(k=0; k<4; k++){
+													if(k==0) sep_str = "";
+													else sep_str = ";";
+													if(k==reg_id){
+														if(clip_end==LEFT_END) mate_reg_str += sep_str + item + ",-";
+														else mate_reg_str += sep_str + "-," + item;
+													}else if(k==id_vec_mate){
+														if(clip_end2==LEFT_END) mate_reg_str += sep_str + mate_item_str + ",-";
+														else mate_reg_str += sep_str + "-," + mate_item_str;
+													}else{
+														mate_reg_str += sep_str + "-";
+													}
+												}
+
+	//											mate_reg_str = mate_clip_reg->bnd_mate_reg_strs[0];
+	//											for(k=1; k<4; k++) mate_reg_str += ";" + mate_clip_reg->bnd_mate_reg_strs[k];
+
+												line += "\t" + mate_reg_str;
+												line += "\t-\t-\t-\t-"; // Ref1, Alt1, Ref2, Alt2
+
+												// extra information, split with ";": DP, AF, LDISCOV
+												AD = supp_num;
+												DP = DP_num;
+												AF = (double)AD / DP;
+												if(AF<0){
+													cout << "\t---------- AF=" << AF << ", sv_type=" << mate_clip_reg->sv_type << ": " << reg1->chrname << ":" << left_clip_pos << " <--> " << reg2->chrname << ":" << right_clip_pos << ", error!" << endl;
+													exit(1);
+												}
+												stringstream ss;
+												ss << setprecision(3) << AF;
+												line += "\tDP=" + to_string(DP) + ";AF=" + ss.str() + ";LDISCOV=READS";
+
+												gt_header = "GT:AD:DP";
+												gt_str = "./.";
+												ad_str1 = ".";
+												ad_str2 = ".";
+												dp_str = ".";
+
+												if(AF!=-1){
+													if(AF>=paras->gt_homo_ratio){
+														gt_str = GT_HOMOZYGOUS_STR;
+													}else if(AF>=paras->gt_hete_ratio){
+														gt_str = GT_HETEROZYGOUS_STR;
+													}else{
+														gt_str = GT_NOZYGOUS_STR;
+													}
+													ad_str1 = to_string(DP-AD);
+													ad_str2 = to_string(AD);
+													dp_str = to_string(DP);
+												}
+												gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
+												line += "\t" + gt_seq;
+
+												outfile_tra << line << endl;
+											}
+										}
 									}
 								}
 							}
@@ -3570,140 +3591,166 @@ void Genome::saveTraCall2File(){
 						//printMateClipReg(mate_clip_reg);
 
 						for(reg_id=0; reg_id<2; reg_id++){
-							str_vec = split(mate_clip_reg->bnd_mate_reg_strs[reg_id], ",");
-							for(m=0; m<str_vec.size(); m++){
-								if(str_vec.at(m).compare("-")!=0){
-									reg1 = reg2 = NULL;
-									left_clip_pos = right_clip_pos = -1;
-									supp_num = supp_num_mate = 0;
+							if(mate_clip_reg->bnd_mate_reg_strs[reg_id].compare("-")!=0){
+								str_vec = split(mate_clip_reg->bnd_mate_reg_strs[reg_id], ",");
+								for(m=0; m<str_vec.size(); m++){
+									if(str_vec.at(m).compare("-")!=0){
+										reg1 = reg2 = NULL;
+										left_clip_pos = right_clip_pos = -1;
+										supp_num = supp_num_mate = 0;
 
-									str_vec2 = split(str_vec.at(m), "|");
-									id_str_mate = str_vec2.at(0);
-									id_vec_mate_str = id_str_mate.at(0);
-									id_vec_mate = stoi(id_vec_mate_str);
+										str_vec2_tmp = split(str_vec.at(m), "_");
+										for(const auto& item : str_vec2_tmp){
+											str_vec2 = split(item, "|");
+											id_str_mate = str_vec2.at(0);
+											id_vec_mate_str = id_str_mate.at(0);
+											id_vec_mate = stoi(id_vec_mate_str);
 
-									if(m==0){
-										//clip_end = LEFT_END;
-										if(id_str_mate.at(1)=='+') clip_end2 = RIGHT_END;
-										else clip_end2 = LEFT_END;
-									}else{
-										//clip_end = RIGHT_END;
-										if(id_str_mate.at(1)=='+') clip_end2 = LEFT_END;
-										else clip_end2 = RIGHT_END;
-									}
-
-									left_clip_pos = stoi(str_vec2.at(1));
-									supp_num = stoi(str_vec2.at(2));
-									DP_num = stoi(str_vec2.at(3));
-
-									// added on 2026-01-23
-									if(mate_clip_reg->leftClipReg) reg1 = mate_clip_reg->leftClipReg;
-									else if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
-
-									if(id_vec_mate==2 or id_vec_mate==3){
-										str_vec_tmp = split(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate], ",");
-										
-//										if(str_vec_tmp.size()==1){
-//											printMateClipReg(mate_clip_reg);
-//										}
-
-										if(clip_end2==LEFT_END){
-											if(str_vec_tmp.at(0).compare("-")!=0){
-												str_vec2 = split(str_vec_tmp.at(0), "|");
-												right_clip_pos = stoi(str_vec2.at(1));
-												supp_num_mate = stoi(str_vec2.at(2));
-											}
-										}else{
-											if(str_vec_tmp.at(1).compare("-")!=0){
-												str_vec2 = split(str_vec_tmp.at(1), "|");
-												right_clip_pos = stoi(str_vec2.at(1));
-												supp_num_mate = stoi(str_vec2.at(2));
-											}
-										}
-										
-										if(id_vec_mate==2){
-											if(mate_clip_reg->rightClipReg) reg2 = mate_clip_reg->rightClipReg;
-										}else{
-											if(mate_clip_reg->rightClipReg2) reg2 = mate_clip_reg->rightClipReg2;
-										}
-									}
-
-//									if(reg1==NULL or reg2==NULL){
-//										printMateClipReg(mate_clip_reg);
-//									}
-
-									if(reg1 and reg2 and left_clip_pos!=-1 and right_clip_pos!=-1 and supp_num>=paras->minReadsNumSupportSV and supp_num_mate>=paras->minReadsNumSupportSV){
-										switch(mate_clip_reg->sv_type){
-											case VAR_DUP:
-												sv_type_str = VAR_DUP_STR; // "DUP"
-												id_str = "ASVCLR." + sv_type_str + "." + to_string(num_dup);
-												num_dup++;
-												break;
-											case VAR_INV:
-												sv_type_str = VAR_INV_STR; // "INV"
-												id_str = "ASVCLR." + sv_type_str + "." + to_string(num_inv);
-												num_inv++;
-												break;
-											case VAR_DEL:
-												sv_type_str = VAR_DEL_STR; // "DEL"
-												id_str = "ASVCLR." + sv_type_str + "." + to_string(num_del);
-												num_del++;
-												break;
-											case VAR_TRA:
-												sv_type_str = VAR_TRA_STR;
-												id_str = "ASVCLR." + sv_type_str + "." + to_string(num_tra);
-												num_tra ++;
-												break;
-											case VAR_BND:
-												sv_type_str = VAR_BND_STR;
-												id_str = "ASVCLR." + sv_type_str + "." + to_string(num_bnd);
-												num_bnd ++;
-												break;
-											default:
-												cout << "line=" << __LINE__ << ", sv_type=" << mate_clip_reg->sv_type << ", error!" << endl;
-												break;
-										}
-
-										sv_type_str2 = "<" + sv_type_str + ">";
-										line = reg1->chrname + "\t" + to_string(left_clip_pos) + "\t" + to_string(left_clip_pos) + "\t" + reg2->chrname + "\t" + to_string(right_clip_pos) + "\t" + to_string(right_clip_pos); 
-										line += "\t" + id_str + "\t" + sv_type_str2 + "\t-\t-";
-
-										mate_reg_str = mate_clip_reg->bnd_mate_reg_strs[0];
-										for(k=1; k<4; k++) mate_reg_str += ";" + mate_clip_reg->bnd_mate_reg_strs[k];
-										line += "\t" + mate_reg_str;
-										line += "\t-\t-\t-\t-";
-
-										AD = supp_num;
-										DP = DP_num;
-										AF = (double)AD / DP;
-
-										stringstream ss;
-										ss << setprecision(3) << AF;
-										line += "\tDP=" + to_string(DP) + ";AF=" + ss.str() +";ULDist=" + to_string(mate_clip_reg->dist_breakpoint) + ";LDISCOV=READS";
-
-										gt_header = "GT:AD:DP";
-										gt_str = "./.";
-										ad_str1 = ".";
-										ad_str2 = ".";
-										dp_str = ".";
-
-										if(AF!=-1){
-											if(AF>=paras->gt_homo_ratio){
-												gt_str = GT_HOMOZYGOUS_STR;
-											}else if(AF>=paras->gt_hete_ratio){
-												gt_str = GT_HETEROZYGOUS_STR;
+											if(m==0){
+												//clip_end = LEFT_END;
+												if(id_str_mate.at(1)=='+') clip_end2 = RIGHT_END;
+												else clip_end2 = LEFT_END;
 											}else{
-												gt_str = GT_NOZYGOUS_STR;
+												//clip_end = RIGHT_END;
+												if(id_str_mate.at(1)=='+') clip_end2 = LEFT_END;
+												else clip_end2 = RIGHT_END;
 											}
-											ad_str1 = to_string(DP-AD);
-											ad_str2 = to_string(AD);
-											dp_str = to_string(DP);
+
+											left_clip_pos = stoi(str_vec2.at(1));
+											supp_num = stoi(str_vec2.at(2));
+											DP_num = stoi(str_vec2.at(3));
+
+											// added on 2026-01-23
+											if(mate_clip_reg->leftClipReg) reg1 = mate_clip_reg->leftClipReg;
+											else if(mate_clip_reg->leftClipReg2) reg1 = mate_clip_reg->leftClipReg2;
+
+											if(id_vec_mate==2 or id_vec_mate==3){
+												id_vec_mate_mate = right_clip_pos = supp_num_mate = -1;
+												mate_str_vec2_tmp.clear();
+												mate_item_str = "";
+												if(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate].compare("-")!=0){
+													str_vec_tmp = split(mate_clip_reg->bnd_mate_reg_strs[id_vec_mate], ",");
+													if(clip_end2==LEFT_END){
+														if(str_vec_tmp.at(0).compare("-")!=0) mate_str_vec2_tmp = split(str_vec_tmp.at(0), "_");
+													}else{
+														if(str_vec_tmp.at(1).compare("-")!=0) mate_str_vec2_tmp = split(str_vec_tmp.at(1), "_");
+													}
+													for(const auto& item2 : mate_str_vec2_tmp){
+														str_vec2 = split(item2, "|");
+														id_vec_mate_mate_str = str_vec2.at(0).at(0);
+														id_vec_mate_mate = stoi(id_vec_mate_mate_str);
+														right_clip_pos = stoi(str_vec2.at(1));
+														supp_num_mate = stoi(str_vec2.at(2));
+														if(id_vec_mate_mate==reg_id){
+															mate_item_str = item2;
+															break;
+														}
+													}
+													if(mate_item_str.size()==0) mate_item_str = "-";
+
+													if(id_vec_mate==2){
+														if(mate_clip_reg->rightClipReg) reg2 = mate_clip_reg->rightClipReg;
+													}else{
+														if(mate_clip_reg->rightClipReg2) reg2 = mate_clip_reg->rightClipReg2;
+													}
+												}
+											}
+
+		//									if(reg1==NULL or reg2==NULL){
+		//										printMateClipReg(mate_clip_reg);
+		//									}
+
+											if(reg1 and reg2 and left_clip_pos!=-1 and right_clip_pos!=-1 and supp_num>=paras->minReadsNumSupportSV and supp_num_mate>=paras->minReadsNumSupportSV){
+												switch(mate_clip_reg->sv_type){
+													case VAR_DUP:
+														sv_type_str = VAR_DUP_STR; // "DUP"
+														paras->num_dup ++;
+														id_str = "ASVCLR." + sv_type_str + "." + to_string(paras->num_dup);
+														break;
+													case VAR_INV:
+														sv_type_str = VAR_INV_STR; // "INV"
+														paras->num_inv ++;
+														id_str = "ASVCLR." + sv_type_str + "." + to_string(paras->num_inv);
+														break;
+													case VAR_DEL:
+														sv_type_str = VAR_DEL_STR; // "DEL"
+														paras->num_del ++;
+														id_str = "ASVCLR." + sv_type_str + "." + to_string(paras->num_del);
+														break;
+													case VAR_TRA:
+														sv_type_str = VAR_TRA_STR;
+														paras->num_tra ++;
+														id_str = "ASVCLR." + sv_type_str + "." + to_string(paras->num_tra);
+														break;
+													case VAR_BND:
+														sv_type_str = VAR_BND_STR;
+														paras->num_bnd ++;
+														id_str = "ASVCLR." + sv_type_str + "." + to_string(paras->num_bnd);
+														break;
+													default:
+														cout << "line=" << __LINE__ << ", sv_type=" << mate_clip_reg->sv_type << ", error!" << endl;
+														break;
+												}
+
+												sv_type_str2 = "<" + sv_type_str + ">";
+												line = reg1->chrname + "\t" + to_string(left_clip_pos) + "\t" + to_string(left_clip_pos) + "\t" + reg2->chrname + "\t" + to_string(right_clip_pos) + "\t" + to_string(right_clip_pos);
+												line += "\t" + id_str + "\t" + sv_type_str2 + "\t-\t-";
+
+												// update BND mate regions
+												mate_reg_str = "";
+												for(k=0; k<4; k++){
+													if(k==0) sep_str = "";
+													else sep_str = ";";
+													if(k==reg_id){
+														if(clip_end==LEFT_END) mate_reg_str += sep_str + item + ",-";
+														else mate_reg_str += sep_str + "-," + item;
+													}else if(k==id_vec_mate){
+														if(clip_end2==LEFT_END) mate_reg_str += sep_str + mate_item_str + ",-";
+														else mate_reg_str += sep_str + "-," + mate_item_str;
+													}else{
+														mate_reg_str += sep_str + "-";
+													}
+												}
+
+	//											mate_reg_str = mate_clip_reg->bnd_mate_reg_strs[0];
+	//											for(k=1; k<4; k++) mate_reg_str += ";" + mate_clip_reg->bnd_mate_reg_strs[k];
+
+												line += "\t" + mate_reg_str;
+												line += "\t-\t-\t-\t-";
+
+												AD = supp_num;
+												DP = DP_num;
+												AF = (double)AD / DP;
+
+												stringstream ss;
+												ss << setprecision(3) << AF;
+												line += "\tDP=" + to_string(DP) + ";AF=" + ss.str() +";ULDist=" + to_string(mate_clip_reg->dist_breakpoint) + ";LDISCOV=READS";
+
+												gt_header = "GT:AD:DP";
+												gt_str = "./.";
+												ad_str1 = ".";
+												ad_str2 = ".";
+												dp_str = ".";
+
+												if(AF!=-1){
+													if(AF>=paras->gt_homo_ratio){
+														gt_str = GT_HOMOZYGOUS_STR;
+													}else if(AF>=paras->gt_hete_ratio){
+														gt_str = GT_HETEROZYGOUS_STR;
+													}else{
+														gt_str = GT_NOZYGOUS_STR;
+													}
+													ad_str1 = to_string(DP-AD);
+													ad_str2 = to_string(AD);
+													dp_str = to_string(DP);
+												}
+
+												gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
+												line += "\t" + gt_seq;
+
+												outfile_tra << line << endl;
+											}
 										}
-
-										gt_seq = gt_header + "\t" + gt_str + ":" + ad_str1 + "," + ad_str2 + ":" + dp_str;
-										line += "\t" + gt_seq;
-
-										outfile_tra << line << endl;
 									}
 								}
 							}
@@ -3771,26 +3818,6 @@ void Genome::saveResultVCF(){
 	saveResultToVCF(out_filename_result_vars, out_filename_result_vars_vcf);
 }
 
-// save results in VCF file format for detect command
-//void Genome::saveResultVCFDetect(){
-//	string outIndelFile, outSnvFile;
-//
-//	cout << "Output results to file ..." << endl;
-//
-//	// initialize the output filenames
-//	if(paras->outFilePrefix.size()>0) {
-//		outIndelFile = out_dir_detect + "/" + paras->outFilePrefix + "_INDEL.vcf";
-//		outSnvFile = out_dir_detect + "/" + paras->outFilePrefix + "_SNV.vcf";
-//	}else {
-//		outIndelFile = out_dir_detect + "/" + "INDEL.vcf";
-//		outSnvFile = out_dir_detect + "/" + "SNV.vcf";
-//	}
-//
-//	// save results
-//	saveIndelVCFDetect(out_filename_detect_indel, outIndelFile);
-//	saveSnvVCFDetect(out_filename_detect_snv, outSnvFile);
-//}
-
 // save indel in VCF file format for detect command
 void Genome::saveResultToVCF(string &in, string &out_vcf){
 	string line, line_vcf, chr, start_pos, end_pos, id, ref, alt, qual, filter, info, format, format_val, sample, reg;
@@ -3830,11 +3857,6 @@ void Genome::saveResultToVCF(string &in, string &out_vcf){
 	while(getline(infile, line))
 		if(line.size()>0 and line.at(0)!='#'){	// skip header
 			str_vec = split(line, "\t");
-
-			//line_vcf = str_vec.at(0) + "\t" + str_vec.at(1) + "\t."; // CHROM, POS, ID
-			//reg = str_vec[0] + ":" + str_vec[1] + "-" + str_vec[2];
-			//seq = fai_fetch(fai, reg.c_str(), &seq_len);
-
 			if(str_vec.size()<=MAX_BED_COLS_NUM){ // INS, DEL, DUP, INV, MIX, UNC
 				chr = str_vec.at(0);		// CHROM
 				start_pos = str_vec.at(1);	// POS
@@ -4257,9 +4279,11 @@ size_t Genome::getSVTypeSingleLine(string &line){
 		str_tmp2 = str_vec.at(7);
 		if(str_tmp2.at(0)=='<') str_tmp = str_tmp2.substr(1, str_tmp2.size()-2);
 		else str_tmp = str_tmp2;
-		if(str_vec.size()>MAX_BED_COLS_NUM and (str_tmp.compare(VAR_TRA_STR)==0 or str_tmp.compare(VAR_TRA_STR1)==0 or str_tmp.compare(VAR_BND_STR)==0)){
-			if(str_tmp.compare(VAR_TRA_STR)==0 or str_tmp.compare(VAR_TRA_STR1)==0) sv_type = VAR_TRA;
-			else sv_type = VAR_BND;
+		if(str_vec.size()>MAX_BED_COLS_NUM){
+			if(str_tmp.compare(VAR_INV_STR)==0 or str_tmp.compare(VAR_INV_STR1)==0 or str_tmp.compare(VAR_INV_STR2)==0) sv_type = VAR_INV;
+			else if(str_tmp.compare(VAR_TRA_STR)==0 or str_tmp.compare(VAR_TRA_STR1)==0 or str_tmp.compare(VAR_TRA_STR2)==0) sv_type = VAR_TRA;
+			else if(str_tmp.compare(VAR_BND_STR)==0) sv_type = VAR_BND;
+			else sv_type = VAR_MIX;
 		}else{
 			sv_type = VAR_MIX;
 		}
@@ -4284,7 +4308,7 @@ void Genome::sortVarResults(string &infilename, int32_t filetype){
 
 	subsets = constructSubsetByChr(sv_vec, fai);
 	sortSVitem(subsets);
-	rmRedundantSVitem(subsets, MIN_SIZE_RATIO_REDUNDANT_FILTER, MIN_SEQSIM_REDUNDANT_FILTER, fai); // remove redundant items
+	rmRedundantSVitem(subsets, MAX_DIST_MATCH_CLIP_POS, MIN_SIZE_RATIO_REDUNDANT_FILTER, MIN_SEQSIM_REDUNDANT_FILTER, fai); // remove redundant items
 	if(filetype==1 and paras->phasing_flag) computePhaseSetNum(subsets);
 	outputResult(outfilename, subsets, filetype);
 

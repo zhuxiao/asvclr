@@ -10,7 +10,9 @@ int64_t extend_total = 0;	// in kB, the minimum of mem_total and swap_total
 int64_t mem_seqAln = 0;		// in kB
 double mem_use_block_factor = 0.7; // 0.9, 0.8
 double extend_use_block_factor = 0.1;
-int32_t mem_wait_seconds = 1;	// wait time  // 2
+int32_t mem_wait_seconds = 3;	// wait time  // 1
+int32_t mem_wait_seconds_vsz = 1;  // wait time according to VSZ
+int32_t runs_num_per_round = 3;
 int64_t min_mem_avail = (1L << 24);	// minimum memory available, in kB
 
 int32_t work_num = 0;

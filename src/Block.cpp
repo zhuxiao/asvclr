@@ -273,8 +273,10 @@ void Block::blockDetect(){
 
 //	printRegVec(indelVector, "indelVector");
 
+#if SNV_DETECT_FLAG
 	// remove false SNV
 	removeFalseSNV();
+#endif
 
 	// sort the indels and clip regions
 	sortRegVec(indelVector);
@@ -516,7 +518,7 @@ void Block::computeBlockMismatchesEst(){
 	if(!alnDataVector.empty()){
 		for(size_t i=0; i<alnDataVector.size(); i++){
 			b = alnDataVector.at(i);
-			if(b->core.l_qseq>0 and (b->core.qual>=paras->minMapQ and b->core.qual!=255)){
+			if(b->core.l_qseq>0 and b->core.qual>=paras->minMapQ and b->core.qual!=255 and !(b->core.flag & BAM_FSECONDARY)){
 				// compute position
 				current_end_pos = bam_endpos(b);
 				if(b->core.pos < startRpos) startRpos = b->core.pos;
@@ -532,59 +534,56 @@ void Block::computeBlockMismatchesEst(){
 		free(seq);
 
 		bam_type = getBamType(alnDataVector);
-		if(bam_type==BAM_INVALID){
-			cerr << __func__ << ": unknown bam type, error!" << endl;
-			exit(1);
-		}
-
-		// cout << "startRpos=" << startRpos << " endRpos=" << endRpos << endl;
-		// get sig_num
-		for(size_t i=0; i<alnDataVector.size(); i++){
-			qname = bam_get_qname(b);
-			if(!(b->core.flag & BAM_FUNMAP)){ // aligned
-				switch(bam_type){
-					//MD_tag
-					case BAM_CIGAR_NO_DIFF_MD:
-						//alnSegs = generateAlnSegs(b);
-						alnSegs = generateAlnSegs2(b, startRpos, endRpos);
-						// alnSegs = generateAlnSegs2(b, startPos, endPos);
-						break;
-					case BAM_CIGAR_NO_DIFF_NO_MD:
-					case BAM_CIGAR_DIFF_MD:
-					case BAM_CIGAR_DIFF_NO_MD:
-						alnSegs = generateAlnSegs_no_MD2(b, refseq, startRpos, endRpos);
-						// alnSegs = generateAlnSegs_no_MD2(b, baseArr, startPos, endPos);
-						break;
-					default:
-						cerr << __func__ << ": unknown bam type, error!" << endl;
-						exit(1);
-				}// generate align segments
-				for(size_t i = 0; i<alnSegs.size(); i++){
-					switch(alnSegs.at(i)->opflag){
-						case BAM_CINS:
-						case BAM_CDEL:
-						case BAM_CDIFF:
-							num += alnSegs.at(i)->seglen;
-							len += alnSegs.at(i)->seglen;
+		if(bam_type!=BAM_INVALID){
+			// cout << "startRpos=" << startRpos << " endRpos=" << endRpos << endl;
+			// get sig_num
+			for(size_t i=0; i<alnDataVector.size(); i++){
+				qname = bam_get_qname(b);
+				if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+					switch(bam_type){
+						//MD_tag
+						case BAM_CIGAR_NO_DIFF_MD:
+							//alnSegs = generateAlnSegs(b);
+							alnSegs = generateAlnSegs2(b, startRpos, endRpos);
+							// alnSegs = generateAlnSegs2(b, startPos, endPos);
 							break;
-						// case BAM_CDEL:
-						// 	num += alnSegs.at(i)->seglen;
-						// 	len += alnSegs.at(i)->seglen;
-						// 	break;
-						case BAM_CEQUAL:
-							len += alnSegs.at(i)->seglen;
+						case BAM_CIGAR_NO_DIFF_NO_MD:
+						case BAM_CIGAR_DIFF_MD:
+						case BAM_CIGAR_DIFF_NO_MD:
+							alnSegs = generateAlnSegs_no_MD2(b, refseq, startRpos, endRpos);
+							// alnSegs = generateAlnSegs_no_MD2(b, baseArr, startPos, endPos);
 							break;
-						// case BAM_CDIFF:
-						// 	num += alnSegs.at(i)->seglen;
-						// 	len += alnSegs.at(i)->seglen;
-						// 	break;
+						default:
+							cerr << __func__ << ": unknown bam type, error!" << endl;
+							exit(1);
+					}// generate align segments
+					for(size_t i = 0; i<alnSegs.size(); i++){
+						switch(alnSegs.at(i)->opflag){
+							case BAM_CINS:
+							case BAM_CDEL:
+							case BAM_CDIFF:
+								num += alnSegs.at(i)->seglen;
+								len += alnSegs.at(i)->seglen;
+								break;
+							// case BAM_CDEL:
+							// 	num += alnSegs.at(i)->seglen;
+							// 	len += alnSegs.at(i)->seglen;
+							// 	break;
+							case BAM_CEQUAL:
+								len += alnSegs.at(i)->seglen;
+								break;
+							// case BAM_CDIFF:
+							// 	num += alnSegs.at(i)->seglen;
+							// 	len += alnSegs.at(i)->seglen;
+							// 	break;
+						}
 					}
-				}
 
-				destroyAlnSegs(alnSegs);
+					destroyAlnSegs(alnSegs);
+				}
+				paras->total_error_num_est += num;
+				paras->total_mapped_read_len_est += len;
 			}
-			paras->total_error_num_est += num;
-			paras->total_mapped_read_len_est += len;
 		}
 	}
 }
@@ -667,8 +666,10 @@ int Block::processSingleRegion(int64_t startRpos, int64_t endRPos, int64_t regFl
 
 			// detect indel candidate regions and SNV candidates
 			tmp_reg.detectIndelReg();
-			tmp_reg.detectSNV();
 
+#if SNV_DETECT_FLAG
+			tmp_reg.detectSNV();
+#endif
 			// copy the indels and SNVs
 			copySVEvents(tmp_reg);
 
@@ -687,8 +688,6 @@ void Block::copySVEvents(Region &reg){
 	size_t i;
 	vector<reg_t*> regVec;
 	reg_t *reg_tmp;
-	vector<int64_t> posVec;
-	int64_t pos_tmp;
 
 	// copy clip region
 	regVec = reg.getClipRegVector();
@@ -705,11 +704,15 @@ void Block::copySVEvents(Region &reg){
 	}
 
 	// copy SNV
+#if SNV_DETECT_FLAG
+	int64_t pos_tmp;
+	vector<int64_t> posVec;
 	posVec = reg.getSnvVector();
 	for(i=0; i<posVec.size(); i++){
 		pos_tmp = posVec.at(i);
 		snvVector.push_back(pos_tmp);
 	}
+#endif
 
 	// compute zero coverage region
 	computeZeroCovReg(reg);
@@ -1037,7 +1040,7 @@ void Block::blockGenerateLocalConsWorkOpt_Indel(){
 			if(sub_limit_reg_vec_work.empty()) generate_flag = false;
 		}
 		if(generate_flag)
-			generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, false);
+			generateCnsWork(varVec, -1, paras->limit_reg_process_flag, sub_limit_reg_vec_work, false);
 
 		i = end_reg_id + 1;
 	}
@@ -1123,24 +1126,23 @@ void Block::blockGenerateLocalConsWorkOpt_ClipReg(){
 								reg_len = end_pos - start_pos;
 								if(reg_len<0) reg_len = -reg_len;
 								if(reg_len<=paras->maxVarRegSize)
-								//if(reg_len<paras->cnsChunkSize)
 									generate_new_flag = true;
 							}
 
 							if(generate_new_flag){
-								generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+								generateCnsWork(varVec, clip_reg->sv_type, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 							}else{
 								// cns left regions
 								varVec.clear();
 								if(reg1) varVec.push_back(reg1);
 								if(reg2) varVec.push_back(reg2);
-								generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+								generateCnsWork(varVec, clip_reg->sv_type, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 
 								// cns right regions
 								varVec.clear();
 								if(reg3) varVec.push_back(reg3);
 								if(reg4) varVec.push_back(reg4);
-								generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+								generateCnsWork(varVec, clip_reg->sv_type, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 							}
 						}
 					}
@@ -1167,7 +1169,7 @@ void Block::blockGenerateLocalConsWorkOpt_ClipReg(){
 							varVec.clear();
 							if(reg1) varVec.push_back(reg1);
 							if(reg2) varVec.push_back(reg2);
-							generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+							generateCnsWork(varVec, clip_reg->sv_type, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 						}
 
 						// cns right regions
@@ -1175,7 +1177,7 @@ void Block::blockGenerateLocalConsWorkOpt_ClipReg(){
 							varVec.clear();
 							if(reg3) varVec.push_back(reg3);
 							if(reg4) varVec.push_back(reg4);
-							generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+							generateCnsWork(varVec, clip_reg->sv_type, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 						}
 					}
 				}
@@ -1191,7 +1193,7 @@ void Block::blockGenerateLocalConsWorkOpt_ClipReg(){
 				}
 				if(generate_flag){
 					if(clip_reg->largeIndelClipReg->sv_len<=paras->maxVarRegSize)
-						generateCnsWork(varVec, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
+						generateCnsWork(varVec, clip_reg->sv_type, paras->limit_reg_process_flag, sub_limit_reg_vec_work, true);
 				}
 			}
 		}
@@ -1214,7 +1216,6 @@ vector<simpleReg_t*> Block::computeLimitRegsForConsWork(vector<reg_t*> &varVec, 
 			reg = varVec.at(i);
 
 			if(reg){
-				//sub_limit_reg_vec_tmp = getSimpleRegs(reg->chrname, reg->startRefPos, reg->endRefPos, paras->limit_reg_vec);
 				sub_limit_reg_vec_tmp = getOverlappedSimpleRegs(reg->chrname, reg->startRefPos, reg->endRefPos, limit_reg_vec);
 				for(j=0; j<sub_limit_reg_vec_tmp.size(); j++){
 					simple_reg = sub_limit_reg_vec_tmp.at(j);
@@ -1236,11 +1237,11 @@ vector<simpleReg_t*> Block::computeLimitRegsForConsWork(vector<reg_t*> &varVec, 
 }
 
 // generate consensus work
-void Block::generateCnsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &sub_limit_reg_vec_work, bool clip_reg_flag){
+void Block::generateCnsWork(vector<reg_t*> &varVec, int32_t sv_type, bool limit_reg_process_flag, vector<simpleReg_t*> &sub_limit_reg_vec_work, bool clip_reg_flag){
 	size_t i;
 	int64_t minRefPos, maxRefPos;
 	reg_t *reg;
-	string chrname_tmp, readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, file_prefix_str;
+	string chrname_tmp, readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, file_prefix_str, cnsfilename_tmp, aux_str;
 	cnsWork_opt *cns_work_opt;
 
 	// get the minimum and maximum reference position
@@ -1262,15 +1263,41 @@ void Block::generateCnsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag,
 	if(minRefPos!=-1 and maxRefPos!=-1){
 		// construct the variant region
 		chrname_tmp = varVec.at(0)->chrname;
-		readsfilename = out_dir_cns  + "/" + file_prefix_str + "reads_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
-		contigfilename = out_dir_cns  + "/" + file_prefix_str + "cns_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
-		refseqfilename = out_dir_cns  + "/" + file_prefix_str + "refseq_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
-		clusterfilename = out_dir_cns  + "/" + file_prefix_str + "cluster_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos);
-		tmpdir = out_dir_cns + "/" + "tmp_" + file_prefix_str + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos);
+		aux_str = "";
+		if(sv_type!=-1){
+			cnsfilename_tmp = file_prefix_str + "cns_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + ".fa";
+			if(cns_filename_set.find(cnsfilename_tmp)!=cns_filename_set.end()){
+				switch(sv_type){
+					case VAR_UNC: aux_str = ".unc"; break;
+					case VAR_INS: aux_str = ".ins"; break;
+					case VAR_DEL: aux_str = ".del"; break;
+					case VAR_DUP: aux_str = ".dup"; break;
+					case VAR_INV: aux_str = ".inv"; break;
+					case VAR_TRA: aux_str = ".tra"; break;
+					case VAR_BND: aux_str = ".bnd"; break;
+					case VAR_INVDUP: aux_str = ".invdup"; break;
+					case VAR_INV_TRA: aux_str = ".invtra"; break;
+					case VAR_MIX: aux_str = ".mix"; break;
+					case VAR_MNP: aux_str = ".mnp"; break;
+					case VAR_SNV: aux_str = ".snv"; break;
+					case VAR_CNV: aux_str = ".cnv"; break;
+					default: cerr << "unknown sv_type: " << sv_type << ", error!" << endl; exit(1);
+				}
+			}
+		}
+
+		cnsfilename_tmp = file_prefix_str + "cns_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + aux_str + ".fa";
+		readsfilename = out_dir_cns  + "/" + file_prefix_str + "reads_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + aux_str + ".fa";
+		contigfilename = out_dir_cns  + "/" + file_prefix_str + "cns_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + aux_str + ".fa";
+		refseqfilename = out_dir_cns  + "/" + file_prefix_str + "refseq_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + aux_str + ".fa";
+		clusterfilename = out_dir_cns  + "/" + file_prefix_str + "cluster_" + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + aux_str;
+		tmpdir = out_dir_cns + "/" + "tmp_" + file_prefix_str + chrname_tmp + "_" + to_string(minRefPos) + "-" + to_string(maxRefPos) + aux_str;
 
 		// check previously consensused information before consensus
 		cns_work_opt = allocateCnsWorkOpt(chrname_tmp, readsfilename, contigfilename, refseqfilename, clusterfilename, tmpdir, varVec, clip_reg_flag, limit_reg_process_flag, sub_limit_reg_vec_work);
 		if(cns_work_opt){
+			cns_filename_set.insert(cnsfilename_tmp);
+
 			pthread_mutex_lock(&mutex_cns_work);
 			paras->cns_work_vec.push_back(cns_work_opt);
 			paras->cns_reg_work_total ++;

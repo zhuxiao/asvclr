@@ -140,48 +140,46 @@ void covLoader::generateBaseCoverage(Base *baseArr, vector<bam1_t*> &alnDataVect
 	if(alnDataVector.empty()) return; // tolerate zero coverage regions
 
 	bam_type = getBamType(alnDataVector);
-	if(bam_type==BAM_INVALID){
-		cerr << __func__ << ": unknown bam type, error!" << endl;
-		exit(1);
-	}
-	for(size_t i=0; i<alnDataVector.size(); i++){
-		b = alnDataVector.at(i);
-		if(!(b->core.flag & BAM_FUNMAP)){ // aligned
-//			qname = bam_get_qname(b);
-//			cin>>qname_com;
-//			qname_com = "b219a8ba_98667_6199";
-//			if(qname.compare(qname_com)==0)
-//				cout << qname << endl;
-//			else continue;
+	if(bam_type!=BAM_INVALID){
+		for(size_t i=0; i<alnDataVector.size(); i++){
+			b = alnDataVector.at(i);
+			if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+	//			qname = bam_get_qname(b);
+	//			cin>>qname_com;
+	//			qname_com = "b219a8ba_98667_6199";
+	//			if(qname.compare(qname_com)==0)
+	//				cout << qname << endl;
+	//			else continue;
 
-			switch(bam_type){
-				case BAM_CIGAR_NO_DIFF_MD:
-					//alnSegs = generateAlnSegs(b);
-					alnSegs = generateAlnSegs2(b, startPos, endPos);
-					break;
-				case BAM_CIGAR_NO_DIFF_NO_MD:
-				case BAM_CIGAR_DIFF_MD:
-				case BAM_CIGAR_DIFF_NO_MD:
-					//alnSegs = generateAlnSegs_no_MD(b, baseArr, startPos, endPos);
-					alnSegs = generateAlnSegs_no_MD2(b, baseArr, startPos, endPos);
-					break;
-				default:
-					cerr << __func__ << ": unknown bam type, error!" << endl;
-					exit(1);
-			}// generate align segments
+				switch(bam_type){
+					case BAM_CIGAR_NO_DIFF_MD:
+						//alnSegs = generateAlnSegs(b);
+						alnSegs = generateAlnSegs2(b, startPos, endPos);
+						break;
+					case BAM_CIGAR_NO_DIFF_NO_MD:
+					case BAM_CIGAR_DIFF_MD:
+					case BAM_CIGAR_DIFF_NO_MD:
+						//alnSegs = generateAlnSegs_no_MD(b, baseArr, startPos, endPos);
+						alnSegs = generateAlnSegs_no_MD2(b, baseArr, startPos, endPos);
+						break;
+					default:
+						cerr << __func__ << ": unknown bam type, error!" << endl;
+						exit(1);
+				}// generate align segments
 
-			updateBaseInfo(baseArr, alnSegs); // update base information
-			destroyAlnSegs(alnSegs);
+				updateBaseInfo(baseArr, alnSegs); // update base information
+				destroyAlnSegs(alnSegs);
+			}
 		}
+
+		updateBaseCovInfo(baseArr);
+
+		// compute number of deletions
+		computeDelNumFromDelVec(baseArr);
+
+		// compute consensus indel events
+		computeConIndelEventRatio(baseArr);
 	}
-
-	updateBaseCovInfo(baseArr);
-
-	// compute number of deletions
-	computeDelNumFromDelVec(baseArr);
-
-	// compute consensus indel events
-	computeConIndelEventRatio(baseArr);
 }
 
 // update the block base array information according to read alignments

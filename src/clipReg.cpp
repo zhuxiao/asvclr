@@ -201,7 +201,7 @@ void clipReg::extractClipPosVec(){
 				continue;
 			}
 
-//			if(queryname.compare("m84039_230415_002321_s3/23398795/ccs")==0 or queryname.compare("m84039_230414_235240_s2/224266381/ccs")==0){
+//			if(queryname.compare("m84039_230414_235240_s2/139595912/ccs")==0){
 //				cout << queryname << endl;
 //			}
 
@@ -306,13 +306,15 @@ void clipReg::extractClipPosVec(){
 								mate_clip_pos_item->clipRefPos = mate_clip_aln_seg->startRefPos;
 								mate_clip_pos_item->clipQueryPos = mate_clip_aln_seg->startQueryPos;
 								mate_clip_aln_seg->left_clip_checked_flag = true;
-								mate_clip_vec_idx = 0;
+								if(mate_clip_pos_item->aln_orient==clip_pos_item->aln_orient) mate_clip_vec_idx = 0;
+								else mate_clip_vec_idx = 1;
 							}else{
 								mate_clip_pos_item->clipRefPos = mate_clip_aln_seg->endRefPos;
 								mate_clip_pos_item->clipQueryPos = mate_clip_aln_seg->endQueryPos;
 								mate_clip_pos_item->aln_orient = mate_clip_aln_seg->aln_orient;
 								mate_clip_aln_seg->right_clip_checked_flag = true;
-								mate_clip_vec_idx = 1;
+								if(mate_clip_pos_item->aln_orient==clip_pos_item->aln_orient) mate_clip_vec_idx = 1;
+								else mate_clip_vec_idx = 0;
 							}
 							valid_mate_query_end_flag = true;
 
@@ -2096,10 +2098,14 @@ void clipReg::removeFakeClips(){
 	removeFakeClipsLongDistSameOrientSingleVec(rightClipPosVector);
 	removeFakeClipsLongDistSameOrientSingleVec(rightClipPosVector2);
 
-	removeFakeClipsLowCov(leftClipPosVector, int32_t(paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR));
-	removeFakeClipsLowCov(leftClipPosVector2, int32_t(paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR));
-	removeFakeClipsLowCov(rightClipPosVector, int32_t(paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR));
-	removeFakeClipsLowCov(rightClipPosVector2, int32_t(paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR));
+	removeFakeClipsLowCov(leftClipPosVector, paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR);
+	removeFakeClipsLowCov(leftClipPosVector2, paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR);
+	removeFakeClipsLowCov(rightClipPosVector, paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR);
+	removeFakeClipsLowCov(rightClipPosVector2, paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR);
+
+	// remove fake items of low ratio, added on 2026-04-13
+	removeFakeClipsLowCovRatio(leftClipPosVector, leftClipPosVector2, paras->minReadsNumSupportSV, MIN_VALID_SIG_SIZE_RATIO_THRES);
+	removeFakeClipsLowCovRatio(rightClipPosVector, rightClipPosVector2, paras->minReadsNumSupportSV, MIN_VALID_SIG_SIZE_RATIO_THRES);
 
 	// remove unreliable unbalanced alignments
 	removeFakeClipsUnbalancedVec(MIN_CLIP_REG_UNBALANCED_RATIO, paras->minReadsNumSupportSV);
@@ -2220,8 +2226,28 @@ void clipReg::removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &cli
 }
 
 // remove fake clips with long dist based on single vector
-void clipReg::removeFakeClipsLowCov(vector<clipPos_t*> &clipPosVector, int32_t min_clip_reads_num){
-	if(clipPosVector.size()<(size_t)min_clip_reads_num) destroyClipPosVec(clipPosVector); // remove fake clips Only this function modifies the minimum number of supports
+void clipReg::removeFakeClipsLowCov(vector<clipPos_t*> &clipPosVector, double min_clip_reads_num){
+	if(clipPosVector.size()<min_clip_reads_num) destroyClipPosVec(clipPosVector); // remove fake clips Only this function modifies the minimum number of supports
+}
+
+// remove fake clips with long dist based on single vector
+void clipReg::removeFakeClipsLowCovRatio(vector<clipPos_t*> &clipPosVector, vector<clipPos_t*> &clipPosVector2, double min_clip_reads_num, double min_ratio_thres){
+	int32_t min_val, vec_size1, vec_size2;
+	double ratio;
+
+	if(clipPosVector.size()>0 and clipPosVector2.size()>0){
+		vec_size1 = clipPosVector.size();
+		vec_size2 = clipPosVector2.size();
+
+		ratio = -1;
+		min_val = -1;
+		if(vec_size1>vec_size2) { min_val = vec_size2; ratio = (double)vec_size2 / vec_size1; }
+		else { min_val = vec_size1; ratio = (double)vec_size1 / vec_size2; }
+		if(ratio!=-1 and ratio<MIN_VALID_SIG_SIZE_RATIO_THRES and min_val>0 and min_val<paras->minReadsNumSupportSV){
+			if(vec_size1>vec_size2) destroyClipPosVec(clipPosVector2);
+			else destroyClipPosVec(clipPosVector);
+		}
+	}
 }
 
 // remove redundant secondary alignments
@@ -2264,12 +2290,12 @@ int32_t clipReg::getItemIdxClipPosVec(clipPos_t *item, vector<clipPos_t*> &vec){
 
 // compute single mate region for BND format
 string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, int32_t vec_id, string &chrname_clip, int64_t meanClipPos){
-	string mate_reg_str, left_mate_str, right_mate_str, vec_id_str, orient_str, BND_str, mate_clip_pos_str;
+	string mate_reg_str, left_mate_str, right_mate_str, mate_str2, vec_id_str, orient_str, mate_clip_pos_str; //, bnd_str;
 	size_t i;
 	clipPos_t *clip_pos;
 	clipAlnData_t *clip_aln, *clip_aln2;
 	int32_t j, clip_end2, vec_id2, num_arr[4], orient_num_arr[2][4];
-	int32_t maxValue, maxIdx, support_num, cov_num;
+	int32_t maxValue, maxIdx, secValue, secIdx, support_num, cov_num, mate_reg_num;
 
 	if(clip_pos_vec.size()==0) return "-";
 
@@ -2307,12 +2333,12 @@ string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, 
 					num_arr[vec_id2] ++;
 					if(clip_end2==LEFT_END){ // same orient
 						orient_num_arr[0][vec_id2] ++;
-						BND_str = "N[" + clip_aln2->chrname + ":" + to_string(clip_aln2->startRefPos) + "[";
-						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->endRefPos << ", mate item: " << BND_str << endl;
+						//bnd_str = "N[" + clip_aln2->chrname + ":" + to_string(clip_aln2->startRefPos) + "[";
+						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->endRefPos << ", mate item: " << bnd_str << endl;
 					}else { // different orient
 						orient_num_arr[1][vec_id2] ++;
-						BND_str = "N]" + clip_aln2->chrname + ":" + to_string(clip_aln2->endRefPos) + "]";
-						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->endRefPos << ", mate item: " << BND_str << endl;
+						//bnd_str = "N]" + clip_aln2->chrname + ":" + to_string(clip_aln2->endRefPos) + "]";
+						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->endRefPos << ", mate item: " << bnd_str << endl;
 					}
 				}else{
 					//cerr << __func__ << ", line=" << __LINE__ <<  ": invalid same vector id, vec_id=" << vec_id << ", vec_id2=" << vec_id2 << ", clip_vec_size=" << clip_pos_vec.size() << ", error!" << endl;
@@ -2327,18 +2353,28 @@ string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, 
 //	cout << num_arr[3] << endl;
 
 	// get the final vector id for right clipping end
-	maxValue = maxIdx = -1;
+	maxValue = maxIdx = secValue = secIdx = -1;
 	for(j=0; j<4; j++){
-		if(num_arr[j]>0 and num_arr[j]>maxValue) {
-			maxValue = num_arr[j];
-			maxIdx = j;
+		if(num_arr[j]>0) {
+			if(num_arr[j]>maxValue){
+				secValue = maxValue;
+				secIdx = maxIdx;
+				maxValue = num_arr[j];
+				maxIdx = j;
+			}else if(num_arr[j]>secValue){
+				secValue = num_arr[j];
+				secIdx = j;
+			}
 		}
 	}
-	//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", support_num=" << support_num << endl;
+	//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", secIdx=" << secIdx << ", secValue=" << secValue << ", support_num=" << support_num << endl;
 
 	//if(maxIdx!=-1){
 	if(maxIdx!=-1 and maxValue>=MIN_CLIP_REG_MATED_RATIO*support_num){
 		//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", orient_nums=[" << orient_num_arr[0][maxIdx] << "," << orient_num_arr[1][maxIdx] << "]" << endl;
+
+		mate_reg_num = 1;
+		if(secIdx!=-1 and secValue>=MIN_CLIP_REG_MATED_RATIO*support_num) mate_reg_num = 2;
 
 		vec_id_str = to_string(maxIdx);
 		if(orient_num_arr[0][maxIdx]>orient_num_arr[1][maxIdx]){ // mate at left end
@@ -2350,7 +2386,26 @@ string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, 
 			else mate_clip_pos_str = "1";
 		}
 		if(support_num>cov_num) cov_num = support_num;
-		left_mate_str = vec_id_str + orient_str + "|" + mate_clip_pos_str + "|" + to_string(support_num) + "|" + to_string(cov_num);
+		if(mate_reg_num==1) left_mate_str = vec_id_str + orient_str + "|" + mate_clip_pos_str + "|" + to_string(support_num) + "|" + to_string(cov_num);
+		else left_mate_str = vec_id_str + orient_str + "|" + mate_clip_pos_str + "|" + to_string(maxValue) + "|" + to_string(cov_num);
+
+		// the second mate region
+		if(mate_reg_num==2){
+			//cout << "secIdx=" << secIdx << ", secValue=" << secValue << ", orient_nums=[" << orient_num_arr[0][secIdx] << "," << orient_num_arr[1][secIdx] << "]" << endl;
+
+			vec_id_str = to_string(secIdx);
+			if(orient_num_arr[0][secIdx]>orient_num_arr[1][secIdx]){ // mate at left end
+				orient_str = "+";
+				mate_clip_pos_str = to_string(meanClipPos);
+			}else{ // mate at right end
+				orient_str = "-";
+				if(meanClipPos-1>=1) mate_clip_pos_str = to_string(meanClipPos-1);
+				else mate_clip_pos_str = "1";
+			}
+			mate_str2 = vec_id_str + orient_str + "|" + mate_clip_pos_str + "|" + to_string(secValue) + "|" + to_string(cov_num);
+
+			left_mate_str = left_mate_str + "_" + mate_str2;
+		}
 	}else
 		left_mate_str = "-";
 
@@ -2388,12 +2443,12 @@ string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, 
 					num_arr[vec_id2] ++;
 					if(clip_end2==RIGHT_END) { // same orient
 						orient_num_arr[0][vec_id2] ++;
-						BND_str = "]" + clip_aln2->chrname + ":" + to_string(clip_aln2->endRefPos) + "]N";
-						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->startRefPos << ", mate item: " << BND_str << endl;
+						//bnd_str = "]" + clip_aln2->chrname + ":" + to_string(clip_aln2->endRefPos) + "]N";
+						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->startRefPos << ", mate item: " << bnd_str << endl;
 					}else{ // different orient
 						orient_num_arr[1][vec_id2] ++;
-						BND_str = "[" + clip_aln2->chrname + ":" + to_string(clip_aln2->startRefPos) + "[N";
-						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->startRefPos << ", mate item: " << BND_str << endl;
+						//bnd_str = "[" + clip_aln2->chrname + ":" + to_string(clip_aln2->startRefPos) + "[N";
+						//cout << "Vec[" << vec_id << "]: qname=" << clip_aln->queryname << ", " << clip_aln->chrname << ":" << clip_aln->startRefPos << ", mate item: " << bnd_str << endl;
 					}
 				}else{
 					//cerr << __func__ << ", line=" << __LINE__ <<  ": invalid same vector id, vec_id=" << vec_id << ", vec_id2=" << vec_id2 << ", clip_vec_size=" << clip_pos_vec.size() << ", error!" << endl;
@@ -2408,19 +2463,29 @@ string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, 
 //	cout << num_arr[3] << endl;
 
 	// get the final vector id for left clipping end
-	maxValue = maxIdx = -1;
+	maxValue = maxIdx = secValue = secIdx = -1;
 	for(j=0; j<4; j++){
-		if(num_arr[j]>0 and num_arr[j]>maxValue) {
-			maxValue = num_arr[j];
-			maxIdx = j;
+		if(num_arr[j]>0) {
+			if(num_arr[j]>maxValue){
+				secValue = maxValue;
+				secIdx = maxIdx;
+				maxValue = num_arr[j];
+				maxIdx = j;
+			}else if(num_arr[j]>secValue){
+				secValue = num_arr[j];
+				secIdx = j;
+			}
 		}
 	}
 
-	//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", support_num=" << support_num << endl;
+	//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", secIdx=" << secIdx << ", secValue=" << secValue << ", support_num=" << support_num << endl;
 
 	//if(maxIdx!=-1){
 	if(maxIdx!=-1 and maxValue>=MIN_CLIP_REG_MATED_RATIO*support_num){
 		//cout << "maxIdx=" << maxIdx << ", maxValue=" << maxValue << ", orient_nums=[" << orient_num_arr[0][maxIdx] << "," << orient_num_arr[1][maxIdx] << "]" << endl;
+
+		mate_reg_num = 1;
+		if(secIdx!=-1 and secValue>=MIN_CLIP_REG_MATED_RATIO*support_num) mate_reg_num = 2;
 
 		vec_id_str = to_string(maxIdx);
 		if(orient_num_arr[0][maxIdx]>orient_num_arr[1][maxIdx]){ // mate at right end
@@ -2432,7 +2497,26 @@ string clipReg::computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, 
 			mate_clip_pos_str = to_string(meanClipPos);
 		}
 		if(support_num>cov_num) cov_num = support_num;
-		right_mate_str = vec_id_str + orient_str + "|" + mate_clip_pos_str + "|" + to_string(support_num) + "|" + to_string(cov_num);
+		if(mate_reg_num==1) right_mate_str = vec_id_str + orient_str + "|" + mate_clip_pos_str + "|" + to_string(support_num) + "|" + to_string(cov_num);
+		else right_mate_str = vec_id_str + orient_str + "|" + mate_clip_pos_str + "|" + to_string(maxValue) + "|" + to_string(cov_num);
+
+		if(mate_reg_num==2){
+			//cout << "secIdx=" << secIdx << ", secValue=" << secValue << ", orient_nums=[" << orient_num_arr[0][secIdx] << "," << orient_num_arr[1][secIdx] << "]" << endl;
+
+			vec_id_str = to_string(secIdx);
+			if(orient_num_arr[0][secIdx]>orient_num_arr[1][secIdx]){ // mate at right end
+				orient_str =  "+";
+				if(meanClipPos-1>=1) mate_clip_pos_str = to_string(meanClipPos-1);
+				else mate_clip_pos_str = "1";
+			}else{ // mate at left end
+				orient_str =  "-";
+				mate_clip_pos_str = to_string(meanClipPos);
+			}
+			mate_str2 = vec_id_str + orient_str + "|" + mate_clip_pos_str + "|" + to_string(secValue) + "|" + to_string(cov_num);
+
+			right_mate_str = right_mate_str + "_" + mate_str2;
+		}
+
 	}else
 		right_mate_str = "-";
 
@@ -2648,8 +2732,8 @@ void clipReg::computeClipRegs(){
 	computeVarTypeClipReg(mate_clip_reg);
 
 	// determine large indel region
-	//if(mate_clip_reg.sv_type==VAR_UNC or mate_clip_reg.sv_type==VAR_TRA) {
-	if(mate_clip_reg.sv_type!=VAR_INS or mate_clip_reg.sv_type!=VAR_DEL) {
+	if(mate_clip_reg.sv_type==VAR_UNC or mate_clip_reg.sv_type==VAR_TRA) {
+	//if(mate_clip_reg.sv_type!=VAR_INS or mate_clip_reg.sv_type!=VAR_DEL) { // deleted on 2026-04-01
 		determineLargeIndelReg();
 		computeLargeIndelTypeClipReg(mate_clip_reg);
 	}
@@ -2782,11 +2866,11 @@ void clipReg::determineLargeIndelReg(){
 								if(dist>0){
 									mate_arr_idx = mate_arr_idx_same_chr;
 									mate_clip_end_flag = mate_clip_end_flag_same_chr;
-									seg_skip_flag = true;
+									seg_skip_flag = true; // INS
 								}else{
 									mate_arr_idx = mate_arr_idx_same_chr;
 									mate_clip_end_flag = mate_clip_end_flag_same_chr;
-									ref_skip_flag = true;
+									ref_skip_flag = true; // DEL
 								}
 							}
 						}
@@ -3013,44 +3097,51 @@ vector<int32_t> clipReg::getMateMateRegID(int32_t reg_idx, int32_t end_flag, str
 	vector<int32_t> mate_mate_reg_id_vec;
 	int32_t mate_reg_id, mate_reg_id2, mate_end_flag, mate_end_flag2;
 	char ch_orient;
-	vector<string> str_vec, str_vec2;
+	vector<string> str_vec, str_vec2, mate_reg_id_vec, mate_reg_id_vec2;
 	string mate_reg_id_str, mate_reg_id_str2;
+	size_t i, j;
 
 	if(bnd_mate_reg_strs[reg_idx].compare("-")!=0){
 		// right end
-		mate_reg_id_str = getBNDMateRegStr(reg_idx, end_flag, bnd_mate_reg_strs);
-		if(mate_reg_id_str.compare("-")!=0){
-			mate_reg_id = stoi(mate_reg_id_str.substr(0, 1));
-			ch_orient = mate_reg_id_str.at(1);
-			if(ch_orient=='+'){ // same orient
-				if(end_flag==RIGHT_END)
-					mate_end_flag = LEFT_END;
-				else
-					mate_end_flag = RIGHT_END;
-			}else{ // different orient
-				if(end_flag==RIGHT_END)
-					mate_end_flag = RIGHT_END;
-				else
-					mate_end_flag = LEFT_END;
-			}
-			mate_reg_id_str2 = getBNDMateRegStr(mate_reg_id, mate_end_flag, bnd_mate_reg_strs);
-			if(mate_reg_id_str2.compare("-")!=0){
-				mate_reg_id2 = stoi(mate_reg_id_str2.substr(0, 1));
-				ch_orient = mate_reg_id_str2.at(1);
+		mate_reg_id_vec = getBNDMateRegStr(reg_idx, end_flag, bnd_mate_reg_strs);
+		for(i=0; i<mate_reg_id_vec.size(); i++){
+			mate_reg_id_str = mate_reg_id_vec.at(i);
+			if(mate_reg_id_str.compare("-")!=0){
+				mate_reg_id = stoi(mate_reg_id_str.substr(0, 1));
+				ch_orient = mate_reg_id_str.at(1);
 				if(ch_orient=='+'){ // same orient
-					if(mate_end_flag==RIGHT_END)
-						mate_end_flag2 = LEFT_END;
+					if(end_flag==RIGHT_END)
+						mate_end_flag = LEFT_END;
 					else
-						mate_end_flag2 = RIGHT_END;
+						mate_end_flag = RIGHT_END;
 				}else{ // different orient
-					if(mate_end_flag==RIGHT_END)
-						mate_end_flag2 = RIGHT_END;
+					if(end_flag==RIGHT_END)
+						mate_end_flag = RIGHT_END;
 					else
-						mate_end_flag2 = LEFT_END;
+						mate_end_flag = LEFT_END;
 				}
+				mate_reg_id_vec2 = getBNDMateRegStr(mate_reg_id, mate_end_flag, bnd_mate_reg_strs);
+				for(j=0; j<mate_reg_id_vec2.size(); j++){
+					mate_reg_id_str2 = mate_reg_id_vec2.at(j);
+					if(mate_reg_id_str2.compare("-")!=0){
+						mate_reg_id2 = stoi(mate_reg_id_str2.substr(0, 1));
+						ch_orient = mate_reg_id_str2.at(1);
+						if(ch_orient=='+'){ // same orient
+							if(mate_end_flag==RIGHT_END)
+								mate_end_flag2 = LEFT_END;
+							else
+								mate_end_flag2 = RIGHT_END;
+						}else{ // different orient
+							if(mate_end_flag==RIGHT_END)
+								mate_end_flag2 = RIGHT_END;
+							else
+								mate_end_flag2 = LEFT_END;
+						}
 
-				mate_mate_reg_id_vec.push_back(mate_reg_id2);
-				mate_mate_reg_id_vec.push_back(mate_end_flag2);
+						mate_mate_reg_id_vec.push_back(mate_reg_id2);
+						mate_mate_reg_id_vec.push_back(mate_end_flag2);
+					}
+				}
 			}
 		}
 	}
@@ -3059,26 +3150,36 @@ vector<int32_t> clipReg::getMateMateRegID(int32_t reg_idx, int32_t end_flag, str
 }
 
 // get mate region id string
-string clipReg::getBNDMateRegStr(int32_t reg_idx, int32_t end_flag, string bnd_mate_reg_strs[4]){
-	vector<string> str_vec, str_vec2;
-	string bnd_reg_str, mate_reg_id_str = "-";
+vector<string> clipReg::getBNDMateRegStr(int32_t reg_idx, int32_t end_flag, string bnd_mate_reg_strs[4]){
+	vector<string> str_vec, str_vec2, str_vec_tmp, mate_reg_id_vec;
+	string bnd_reg_str, bnd_reg_str2, mate_reg_id_str = "-";
 
-	if(reg_idx<0 or reg_idx>=4){
+	if(reg_idx>=0 and reg_idx<=3){
 		if(bnd_mate_reg_strs[reg_idx].compare("-")!=0){
-			bnd_reg_str = "";
+			bnd_reg_str = bnd_reg_str2 = "";
 			str_vec = split(bnd_mate_reg_strs[reg_idx], ",");
 			if(end_flag==RIGHT_END) // right end
 				bnd_reg_str = str_vec.at(0);
 			else // left end
 				bnd_reg_str = str_vec.at(1);
-
 			if(bnd_reg_str.compare("-")!=0){ // 2+|.|.|.
-				str_vec2 = split(bnd_reg_str, "|");  // 2+
-				mate_reg_id_str = str_vec2.at(0);
+				// if there is two regions
+				if(bnd_reg_str.find('_')==string::npos){ // single region
+					str_vec2 = split(bnd_reg_str, "|");  // 2+
+					mate_reg_id_str = str_vec2.at(0);
+					mate_reg_id_vec.push_back(mate_reg_id_str);
+				}else{ // two regions
+					str_vec_tmp = split(bnd_reg_str, "_");  // '_'
+					for(const auto& item : str_vec_tmp){
+						str_vec2 = split(item, "|");  // 2+
+						mate_reg_id_str = str_vec2.at(0);
+						mate_reg_id_vec.push_back(mate_reg_id_str);
+					}
+				}
 			}
 		}
 	}
-	return mate_reg_id_str;
+	return mate_reg_id_vec;
 }
 
 // remove false overlapped clip region
@@ -3096,13 +3197,24 @@ void clipReg::removeFalseOverlappedMateClipReg(){
 void clipReg::removeFPClipSingleEnd(mateClipReg_t &mate_clip_reg){
 	int64_t dist;
 	bool valid_flag;
+	vector<string> mate_regid_vec, mate_regid_vec2;
 
 	if(mate_clip_reg.leftClipRegNum==2){
 		valid_flag = true;
 		if(mate_clip_reg.leftClipReg->chrname.compare(mate_clip_reg.leftClipReg2->chrname)==0){
 			if(mate_clip_reg.leftClipReg->startRefPos<mate_clip_reg.leftClipReg2->startRefPos) dist = mate_clip_reg.leftClipReg2->startRefPos - mate_clip_reg.leftClipReg->startRefPos;
 			else dist = mate_clip_reg.leftClipReg->startRefPos - mate_clip_reg.leftClipReg2->startRefPos;
-			if(dist>MAX_DIST_SAME_CLIP_END) valid_flag = false;
+			//if(dist>MAX_DIST_SAME_CLIP_END) {
+			if(dist>maxVarRegSize) {
+				for(size_t i=0; i<2; i++){
+					mate_regid_vec = getBNDMateRegStr(i, LEFT_END, mate_clip_reg.bnd_mate_reg_strs);
+					mate_regid_vec2 = getBNDMateRegStr(i, RIGHT_END, mate_clip_reg.bnd_mate_reg_strs);
+					if(mate_regid_vec.size()==0 and mate_regid_vec2.size()==0){
+						valid_flag = false;
+						break;
+					}
+				}
+			}
 		}else valid_flag = false;
 		if(valid_flag==false){
 			if(mate_clip_reg.leftClipPosNum>mate_clip_reg.leftClipPosNum2){
@@ -3124,7 +3236,17 @@ void clipReg::removeFPClipSingleEnd(mateClipReg_t &mate_clip_reg){
 		if(mate_clip_reg.rightClipReg->chrname.compare(mate_clip_reg.rightClipReg2->chrname)==0){
 			if(mate_clip_reg.rightClipReg->startRefPos<mate_clip_reg.rightClipReg2->startRefPos) dist = mate_clip_reg.rightClipReg2->startRefPos - mate_clip_reg.rightClipReg->startRefPos;
 			else dist = mate_clip_reg.rightClipReg->startRefPos - mate_clip_reg.rightClipReg2->startRefPos;
-			if(dist>MAX_DIST_SAME_CLIP_END) valid_flag = false;
+			//if(dist>MAX_DIST_SAME_CLIP_END) valid_flag = false;
+			if(dist>maxVarRegSize) {
+				for(size_t i=2; i<4; i++){
+					mate_regid_vec = getBNDMateRegStr(i, LEFT_END, mate_clip_reg.bnd_mate_reg_strs);
+					mate_regid_vec2 = getBNDMateRegStr(i, RIGHT_END, mate_clip_reg.bnd_mate_reg_strs);
+					if(mate_regid_vec.size()==0 and mate_regid_vec2.size()==0){
+						valid_flag = false;
+						break;
+					}
+				}
+			}
 		}else valid_flag = false;
 		if(valid_flag==false){
 			if(mate_clip_reg.rightClipPosNum>mate_clip_reg.rightClipPosNum2){
@@ -3258,7 +3380,7 @@ void clipReg::computeVarTypeClipReg(mateClipReg_t &mate_clip_reg){
 	vector<int32_t> adjClipAlnSegInfo;
 	clipPos_t clip_pos_item, mate_clip_pos_item;
 	int32_t arr_idx, clip_end_flag, mate_clip_end_flag, occ_num;
-	bool same_chr_flag, same_orient_flag, self_overlap_flag, same_aln_reg_flag; // four features
+	bool same_chr_flag, same_orient_flag, self_overlap_flag, same_aln_reg_flag, both_ends_overlap, turn_round_flag; // six features
 	bool valid_query_end_flag, valid_query_flag;
 
 	resetClipCheckFlag(clipAlnDataVector); // reset clipping check flag
@@ -3274,7 +3396,7 @@ void clipReg::computeVarTypeClipReg(mateClipReg_t &mate_clip_reg){
 	//				cout << i << "\t" << clip_aln_seg->chrname << "\t" << clip_aln_seg->startRefPos << "\t" << clip_aln_seg->endRefPos << endl;
 					queryname = clipAlnDataVector.at(i)->queryname;
 
-//					if(queryname.compare("SRR8955953.13091398")==0 or queryname.compare("SRR8955953.9363063")==0 or queryname.compare("SRR8955953.3498976")==0 or queryname.compare("SRR8955953.14015618")==0){
+//					if(queryname.compare("m84039_230414_235240_s2/99289778/ccs")==0){
 //						cout << "qname=" << queryname << endl;
 //					}
 
@@ -3298,16 +3420,30 @@ void clipReg::computeVarTypeClipReg(mateClipReg_t &mate_clip_reg){
 					same_orient_flag = isSameOrient(query_aln_segs, MIN_ALN_SEG_SIZE_CLIPREG);
 					self_overlap_flag = isQuerySelfOverlap(query_aln_segs, maxVarRegSize);
 					same_aln_reg_flag = isSameAlnReg(query_aln_segs, maxVarRegSize);
+					both_ends_overlap = isBothEndsOverlap(query_aln_segs, startRefPos, endRefPos);
+					turn_round_flag = isTurnRound(query_aln_segs, startRefPos, endRefPos);
 
 					// predict the variant type
 					var_type_tmp = VAR_UNC;
-					if(same_chr_flag and same_orient_flag and self_overlap_flag and same_aln_reg_flag){ // DUP
+					//if(same_chr_flag and same_orient_flag and self_overlap_flag and same_aln_reg_flag){ // DUP, deleted on 2026-04-09
+					if(same_chr_flag and same_orient_flag and both_ends_overlap and turn_round_flag){ // DUP
+#if CLIP_REG_DEBUG
+						cout << "DUP: " << queryname << ", aln_size=" << query_aln_segs.size() << endl;
+#endif
 						var_type_tmp = VAR_DUP;
 						dup_type_num ++;
-					}else if(same_chr_flag and same_orient_flag==false and self_overlap_flag==false){// and same_aln_reg_flag){ // INV
+					//}else if(same_chr_flag and same_orient_flag==false and self_overlap_flag==false){// and same_aln_reg_flag){ // INV, deleted on 2026-04-15
+					}else if(same_chr_flag and same_orient_flag==false and both_ends_overlap){// and same_aln_reg_flag){ // INV
+#if CLIP_REG_DEBUG
+						cout << "INV: " << queryname << ", aln_size=" << query_aln_segs.size() << endl;
+#endif
 						var_type_tmp = VAR_INV;
 						inv_type_num ++;
-					}else if(self_overlap_flag==false and same_aln_reg_flag==false)	{ // TRA
+					//}else if(self_overlap_flag==false and same_aln_reg_flag==false)	{ // TRA, deleted on 2026-04-16
+					}else if(self_overlap_flag==false and same_aln_reg_flag==false and both_ends_overlap)	{ // TRA
+#if CLIP_REG_DEBUG
+						cout << "TRA: " << queryname << ", aln_size=" << query_aln_segs.size() << endl;
+#endif
 						var_type_tmp = VAR_TRA;
 						tra_type_num ++;
 					}
@@ -3377,8 +3513,9 @@ void clipReg::computeVarTypeClipReg(mateClipReg_t &mate_clip_reg){
 	//			for(j=0; j<query_aln_segs.size(); j++) query_aln_segs.at(j)->query_checked_flag = true;
 			}
 
-			//cout << "In " << __func__ << "(): dup_type_num=" << dup_type_num << ", inv_type_num=" << inv_type_num << ", tra_type_num=" << tra_type_num << endl;
-
+#if CLIP_REG_DEBUG
+			cout << "In " << __func__ << "(): dup_type_num=" << dup_type_num << ", inv_type_num=" << inv_type_num << ", tra_type_num=" << tra_type_num << endl;
+#endif
 			// extract var_type
 			var_type = extractVarType(mate_clip_reg, dup_type_num, inv_type_num, tra_type_num, int32_t(paras->minReadsNumSupportSV*READS_NUM_SUPPORT_FACTOR));
 		}
@@ -3459,11 +3596,11 @@ void clipReg::computeLargeIndelTypeClipReg(mateClipReg_t &mate_clip_reg){
 								if(dist>0){
 									mate_arr_idx = mate_arr_idx_same_chr;
 									mate_clip_end_flag = mate_clip_end_flag_same_chr;
-									seg_skip_flag = true;
+									seg_skip_flag = true; // INS
 								}else{
 									mate_arr_idx = mate_arr_idx_same_chr;
 									mate_clip_end_flag = mate_clip_end_flag_same_chr;
-									ref_skip_flag = true;
+									ref_skip_flag = true; // DEL
 								}
 							}
 						}
@@ -3621,47 +3758,45 @@ int32_t clipReg::computeSuppNumIntraAlnSeg(string &chrname, size_t startRefPos, 
 
 		if(!alnDataVector.empty()){
 			bam_type = getBamType(alnDataVector);
-			if(bam_type==BAM_INVALID){
-				cerr << __func__ << ": unknown bam type, error!" << endl;
-				exit(1);
-			}
-			for(i=0; i<alnDataVector.size(); i++){
-				b = alnDataVector.at(i);
-				if(!(b->core.flag & BAM_FUNMAP)){ // aligned
-					switch(bam_type){
-						case BAM_CIGAR_NO_DIFF_MD:
-							alnSegs = generateAlnSegs2(b, start_pos, end_pos);
-							break;
-						case BAM_CIGAR_NO_DIFF_NO_MD:
-						case BAM_CIGAR_DIFF_MD:
-						case BAM_CIGAR_DIFF_NO_MD:
-							alnSegs = generateAlnSegs_no_MD2(b, refseq, start_pos, end_pos);
-							break;
-						default:
-							cerr << __func__ << ": unknown bam type, error!" << endl;
-							exit(1);
-					}// generate align segments
+			if(bam_type!=BAM_INVALID){
+				for(i=0; i<alnDataVector.size(); i++){
+					b = alnDataVector.at(i);
+					if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+						switch(bam_type){
+							case BAM_CIGAR_NO_DIFF_MD:
+								alnSegs = generateAlnSegs2(b, start_pos, end_pos);
+								break;
+							case BAM_CIGAR_NO_DIFF_NO_MD:
+							case BAM_CIGAR_DIFF_MD:
+							case BAM_CIGAR_DIFF_NO_MD:
+								alnSegs = generateAlnSegs_no_MD2(b, refseq, start_pos, end_pos);
+								break;
+							default:
+								cerr << __func__ << ": unknown bam type, error!" << endl;
+								exit(1);
+						}// generate align segments
 
-					size_sum = 0;
-					for(j=0; j<alnSegs.size(); j++){
-						seg = alnSegs.at(j);
-						if((seg->opflag==BAM_CINS and var_type==VAR_INS) or (seg->opflag==BAM_CDEL and var_type==VAR_DEL)){ // 1. type match
-							end_pos_tmp = getEndRefPosAlnSeg(seg->startRpos, seg->opflag, seg->seglen);
-							if(isOverlappedPos(seg->startRpos, end_pos_tmp, startRefPos, endRefPos)) // 2. overlap
-								size_sum += seg->seglen;
+						size_sum = 0;
+						for(j=0; j<alnSegs.size(); j++){
+							seg = alnSegs.at(j);
+							if((seg->opflag==BAM_CINS and var_type==VAR_INS) or (seg->opflag==BAM_CDEL and var_type==VAR_DEL)){ // 1. type match
+								end_pos_tmp = getEndRefPosAlnSeg(seg->startRpos, seg->opflag, seg->seglen);
+								if(isOverlappedPos(seg->startRpos, end_pos_tmp, startRefPos, endRefPos)) // 2. overlap
+									size_sum += seg->seglen;
+							}
 						}
-					}
 
-					if(size_sum>0){
-						if(size_sum<abs(sv_len)) val = size_sum / abs(sv_len);
-						else val = abs(sv_len) / size_sum;
-						if(val>size_match_ratio_thres){
-							//cout << "val=" << val << ", supp_num=" << supp_num << endl;
-							supp_num ++;
+						if(size_sum>0){
+							if(size_sum<abs(sv_len)) val = size_sum / abs(sv_len);
+							else val = abs(sv_len) / size_sum;
+							if(val>size_match_ratio_thres){
+								//cout << "val=" << val << ", supp_num=" << supp_num << endl;
+								supp_num ++;
+							}
 						}
+						//updateBaseInfo(baseArr, alnSegs); // update base information
+						destroyAlnSegs(alnSegs);
 					}
-					//updateBaseInfo(baseArr, alnSegs); // update base information
-					destroyAlnSegs(alnSegs);
 				}
 			}
 		}

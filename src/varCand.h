@@ -67,11 +67,13 @@ using namespace std;
 
 #define MIN_SPAN_SINGLE_QUERY				2000
 
+#define MAX_INV_ALN_MARGIN_DIST				5000
+
 #define MIN_RATIO_ALLELE_CALL				(0.1f)
 
-#define ULTRA_SHORT_SV_SIZE_FACTOR			(0.6f)
+#define ULTRA_SHORT_SV_SIZE_FACTOR			(0.8f)  // 0.6f
 
-#define VALID_DUP_INV_SIZE_RATIO_CLIP_REG	(0.3f)
+#define VALID_DUP_INV_SIZE_RATIO_CLIP_REG	(0.75f)	// 0.3 (deleted on 2026-04-14)
 
 
 class varCand {
@@ -94,7 +96,7 @@ class varCand {
 		// clippings
 		reg_t *clip_reg, *clip_reg_allele; //, *clip_reg_mate;
 		int64_t leftClipRefPos, rightClipRefPos;
-		int32_t sv_type, dup_num, depth_largeIndel; // leftClipQueryPos, rightClipQueryPos, aln_orient;
+		int32_t sv_type, dup_num, supp_num_largeIndel, depth_largeIndel; // leftClipQueryPos, rightClipQueryPos, aln_orient;
 		string bnd_mate_reg_strs[4];
 		bool margin_adjusted_flag, large_indel_flag;
 //		int32_t sv_len;
@@ -183,9 +185,9 @@ class varCand {
 		void updateCovArray(blat_aln_t *blat_aln, int8_t *cov_array, bool query_flag);
 		void determineIndelType();
 		vector<reg_t*> computeIndelVarLoc(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, string &refseqfilename_para, bool rescue_flag);
-		void computeIntraMisPafAlnSeg(vector<reg_t*> &var_vec, vector<reg_t*> &varVec, vector<int32_t> &cand_mm2_aln_idx_vec, vector<struct pafalnSeg*> &cand_paf_alnseg_vec, vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para);
-		void computeIndelFromSplitSegs(vector<reg_t*> &var_vec, vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
-		vector<reg_t*> computeIndelFromSplitSegsSingleQuery(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, int32_t query_id_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
+		void computeIntraMisPafAlnSeg(vector<reg_t*> &var_vec, vector<reg_t*> &varVec, vector<int32_t> &cand_mm2_aln_idx_vec, vector<struct pafalnSeg*> &cand_paf_alnseg_vec, vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, bool rescue_flag);
+		void computeIndelFromSplitSegs(vector<reg_t*> &var_vec, vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge, bool rescue_flag);
+		vector<reg_t*> computeIndelFromSplitSegsSingleQuery(vector<minimap2_aln_t*> &minimap2_aln_vec, string &ctgfilename_para, int32_t query_id_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge, bool rescue_flag);
 
 		// merge neighbouring indels
 		void mergeNeighbouringVars(vector<reg_t*> &regVector, int32_t min_ref_dist_arbitary_thres, int32_t max_ref_dist_thres, double min_merge_seqsim_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai, string &contigfilename, string &reffilename);
@@ -201,7 +203,9 @@ class varCand {
 		void svPosCorrection(reg_t* reg);
 		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, struct pafalnSeg* paf_alnseg, vector<clipAlnData_t*> &clipAlnDataVector, string &chrname, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
 		vector<int32_t> computeSuppNumFromRegionAlnSegs(vector<string> &clu_qname_vec, int32_t opflag_para, int32_t oplen_para, string &chrname_para, int64_t start_var_pos_para, int64_t end_var_pos_para, int64_t startRefPos_cns, int64_t endRefPos_cns, double size_ratio_match_thres, double size_ratio_match_thres_merge);
-		void updateAlleleFreq(vector<reg_t*> &var_vec);
+		void refineAlleleFreq(vector<reg_t*> &var_vec);
+		bool isAlleleFreqOk(vector<reg_t*> &var_vec);
+		void refineAlleleFreqOp(vector<reg_t*> &var_vec);
 		void computeGenotypeIndelReg(vector<reg_t*> &var_vec);
 		void destoryClipAlnData(vector<clipAlnData_t*> &clipAlnDataVector);
 		void destoryPosCorrectionVec();
@@ -246,13 +250,15 @@ class varCand {
 		// clippings
 		vector<reg_t*> computeClipRegVarLoc(string &alnfilename, string &refseqfilename, string &cnsfilename, string &clusterfilename, vector<minimap2_aln_t*> &minimap2_aln_vec, vector<int32_t> *clusterId_incomplete, bool rescue_flag);
 		vector<int32_t> getClusterIdCalledIncomplete(vector<reg_t*> &var_vec, string &clusterfilename, vector<minimap2_aln_t*> &minimap2_aln_vec);
-		int32_t computeSuppNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov, vector<string> &target_qname_vec);
+		vector<int32_t> getSuppNumCovClipReg(string bnd_mate_reg_strs[4], int32_t supp_num_largeIndel, int32_t depth_largeIndel, vector<string> &target_qname_vec, bool large_indel_flag);
+//		int32_t computeSuppNum(string &chrname, size_t startRefPos, size_t endRefPos, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov, vector<string> &target_qname_vec);
 		vector<reg_t*> computeGenotypeClipReg(vector<reg_t*> &var_vec);
 		vector<reg_t*> rescueDupInvClipReg(vector<int32_t> &clusterId_incomplete);
 		vector<reg_t*> rescueLargeIndelClipReg(vector<int32_t> &clusterId_incomplete);
 		vector<int32_t> getMinimapItemIdVec(vector<string> &queryname_vec, vector<minimap2_aln_t*> &minimap2_aln_vec);
 		vector<int32_t> getLeftRightMinimapItemId(int64_t leftClipRefPos, int64_t rightClipRefPos, vector<int32_t> &minimap2_item_id_vec, vector<minimap2_aln_t*> &minimap2_aln_vec);
 		vector<int32_t> getLeftRightClipAlnId(int64_t leftClipRefPos, int64_t rightClipRefPos, vector<clipAlnData_t*> &query_aln_segs);
+		vector<int32_t> getLeftRightClipAlnIdINV(int64_t leftClipRefPos, int64_t rightClipRefPos, vector<clipAlnData_t*> &query_aln_segs);
 		void determineClipRegVarType();
 		void determineClipRegDupType();
 		void determineClipRegInvType();
@@ -279,7 +285,6 @@ class varCand {
 		// call indel from reads
 		vector<reg_t*> callIndelFromReadsIndelReg();
 		vector<reg_t*> callVarFromReadsClipReg(vector<int32_t> &clusterId_incomplete);
-		bool isBothEndsOverlap(vector<clipAlnData_t*> &query_aln_segs, int64_t leftClipRefPos, int64_t rightClipRefPos);
 		void updateClusterIdIncomplete(vector<reg_t*> &var_vec, vector<reg_t*> &var_vec_rescue, vector<int32_t> &clusterId_incomplete);
 
 		// genotyping

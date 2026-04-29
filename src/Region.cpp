@@ -844,7 +844,7 @@ void Region::detectHighClipReg(){
 	int64_t i = startMidPartPos - SUB_CLIP_REG_SIZE;
 	if(i<1) i = 1;
 	while(i<endMidPartPos){
-//		if(i>9495000) //178232000
+//		if(i>22347000) //178232000
 //			cout << i << endl;
 
 		reg_t *reg = getClipReg(i);
@@ -875,6 +875,7 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 		startPos_tmp = checkPos;
 		endPos_tmp = checkPos + subclipreg_size - 1;
 		if(endPos_tmp>endMidPartPos) endPos_tmp = endMidPartPos;
+		//cout << "startPos_tmp=" << startPos_tmp << ", endPos_tmp=" << endPos_tmp << endl;
 		//normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp, HIGH_CLIP_RATIO_THRES, paras->minReadsNumSupportSV); // deleted on 2026-02-22
 		normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp, paras->clip_ratio_thres, paras->minReadsNumSupportSV);
 		if(normal_reg_flag==false){ // clip region
@@ -1062,9 +1063,10 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 
 bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_thres, int32_t min_supp_num){
 	bool flag = true;
-	int64_t i, clip_num, tmp_num;
+	int64_t i, clip_num, tmp_num, span;
 	size_t j;
 	vector<clipEvent_t*> clip_vec;
+	vector<int64_t> clip_pos_vec;
 	double ratio;
 
 	//cout << "========" << endl;
@@ -1076,6 +1078,7 @@ bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_t
 			if(stoi(clip_vec.at(j)->seq)>=paras->minClipEndSize){
 				clip_num ++;
 				tmp_num ++;
+				clip_pos_vec.push_back(i);
 			}
 		}
 //		if(tmp_num>=min_supp_num){ // added on 2026-02-22
@@ -1089,8 +1092,11 @@ bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_t
 		if(refinedLocalRegCov>=min_supp_num*READS_NUM_SUPPORT_FACTOR){
 			//ratio = clip_num / localRegCov; // deleted on 2023-12-18
 			ratio = clip_num / refinedLocalRegCov;
+			if(clip_pos_vec.size()>0) span = clip_pos_vec.at(clip_pos_vec.size()-1) - clip_pos_vec.at(0);
+			else span = endPos - startPos;
 			//if(ratio>=clip_ratio_thres or clip_num>=min_supp_num*READS_NUM_SUPPORT_FACTOR){ // deleted on 2025-08-21
 			if((ratio>=clip_ratio_thres and clip_num>=min_supp_num*READS_NUM_SUPPORT_FACTOR) or (clip_num>=min_supp_num and ratio>=clip_ratio_thres*READS_NUM_SUPPORT_FACTOR)) flag = false;
+			else if(clip_num>=(double)min_supp_num*READS_NUM_SUPPORT_FACTOR_LOW_COV and (ratio>=clip_ratio_thres*READS_NUM_SUPPORT_FACTOR or span<MIN_REG_SIZE_EXTRACT_SIG)) flag = false;
 			//cout << startPos << "-" << endPos << ": clip_num=" << clip_num << ", ratio=" << ratio << ", refinedLocalRegCov=" << refinedLocalRegCov << ", flag=" << flag << endl;
 		}
 	}

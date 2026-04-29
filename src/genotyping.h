@@ -31,8 +31,9 @@ using namespace std;
 #define GT_MIN_ALLE_RATIO_THRES				(0.3f)
 #define GT_MAX_ALLE_RATIO_THRES				(0.7f)
 
-#define GT_MIN_SEQSIM_MERGE_THRES			(0.9f)	// 0.95
-#define GT_MIN_SIZE_MERGE_THRES				(0.95f)
+#define GT_MIN_SEQSIM_MERGE_THRES_CCS		(0.9f)	// 0.95
+#define GT_MIN_SEQSIM_MERGE_THRES_OTHER		(0.8f)	// added on 2026-03-29
+//#define GT_MIN_SIZE_MERGE_THRES				(0.95f)
 #define GT_HOMO_RATIO_THRES					(0.7f)	//0.75
 #define GT_HETE_RATIO_THRES					(0.2f)
 

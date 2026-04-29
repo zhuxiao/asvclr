@@ -40,8 +40,8 @@ vector<vector<SV_item*>> constructSubsetByChr(vector<SV_item*> &sv_vec, faidx_t 
 bool sortFunSameChr(const SV_item *item1, const SV_item *item2);
 void sortSVitem(vector<vector<SV_item*>> &subsets);
 void sortSubset(vector<SV_item*> &sv_vec);
-void rmRedundantSVitem(vector<vector<SV_item*>> &subsets, double size_ratio_thres, double seqsim_thres, faidx_t *fai);
-void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, double seqsim_thres, faidx_t *fai);
+void rmRedundantSVitem(vector<vector<SV_item*>> &subsets, int64_t max_ref_dist, double size_ratio_thres, double seqsim_thres, faidx_t *fai);
+void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, int64_t max_ref_dist, double size_ratio_thres, double seqsim_thres, faidx_t *fai);
 vector<string> getCompSeqs(SV_item *item1, SV_item *item2, faidx_t *fai);
 
 

@@ -16,6 +16,8 @@ extern int64_t mem_seqAln;		// in kB
 extern double mem_use_block_factor;
 extern double extend_use_block_factor;
 extern int32_t mem_wait_seconds;	// wait time
+extern int32_t mem_wait_seconds_vsz;  // wait time according to VSZ
+extern int32_t runs_num_per_round;
 extern int64_t min_mem_avail;	// minimum memory available, in kB
 
 extern int32_t work_num;
@@ -23,6 +25,5 @@ extern int32_t work_num;
 extern pthread_mutex_t mutex_mem;
 
 int64_t getMemInfo(const char *name, int32_t index);
-
 
 #endif /* SRC_MEMINFO_H_ */

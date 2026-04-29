@@ -42,6 +42,7 @@ class Block{
 		// clip regions
 		vector<reg_t*> clipRegVector;
 		vector<mateClipReg_t*> mateClipRegVector;
+		set<string> cns_filename_set;
 
 		// detect abnormal signatures
 		bool headIgnFlag, tailIgnFlag;
@@ -108,7 +109,7 @@ class Block{
 		void blockGenerateLocalConsWorkOpt_ClipReg();
 		void saveSV2File();
 		vector<simpleReg_t*> computeLimitRegsForConsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
-		void generateCnsWork(vector<reg_t*> &varVec, bool limit_reg_process_flag, vector<simpleReg_t*> &sub_limit_reg_vec_work, bool clip_reg_flag);
+		void generateCnsWork(vector<reg_t*> &varVec, int32_t sv_type, bool limit_reg_process_flag, vector<simpleReg_t*> &sub_limit_reg_vec_work, bool clip_reg_flag);
 
 		// duplication and inversion
 		void mergeOverlappedClipReg();

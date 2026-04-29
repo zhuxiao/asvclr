@@ -898,11 +898,11 @@ bool localCns::localConsensus(){
 
 // get heter local consensus using abPOA
 bool localCns::cnsByPoa(){
-	bool flag, abpoa_flag;
+	bool flag, abpoa_flag, high_mem_flag;
 	string tmp_cons_filename, tmp_reads_filename, cons_header, cmd0, cmd1, cmd2, cmd3, cmd4;
 	ofstream cons_file, reads_file;
 	size_t k, i, j, n_seqs, serial_number;
-	int64_t mem_avail;
+	int64_t mem_avail; //, total_vsz;
 	// check the file
 	flag = isFileExist(contigfilename);
 	if(flag) return true; // cons was generated successfully previously
@@ -940,15 +940,25 @@ bool localCns::cnsByPoa(){
 				cmd0 = "cp " + tmp_reads_filename + " " + tmp_cons_filename;
 				system(cmd0.c_str());
 			}else{ // multiple reads
-				abpoa_flag = false;
+				abpoa_flag = high_mem_flag = false;
 				while(1){
-					pthread_mutex_lock(&mutex_mem);
 					mem_avail = getMemInfo("MemAvailable", 2);
+					//total_vsz = getTotalVirtSize("abpoa"); // added on 2026-03-09
+					pthread_mutex_lock(&mutex_mem);
 					// prepare for alignment computation
-					if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
+					//if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor and (total_vsz<=mem_total or mem_avail>=0.6*mem_total)){
+					//if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){ // deleted on 2026-04-28
+					if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor and mem_avail>=(1.0-mem_use_block_factor)*mem_total){
 	//				if(mem_seqAln+mem_cost<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
 						work_num ++;
 						abpoa_flag = true;
+
+						// added on 2026-03-09
+						if(mem_total-mem_avail>mem_total*mem_use_block_factor){ // block the run when high memory consumption
+							high_mem_flag = true;
+							mem_wait_seconds_vsz ++;
+							if(mem_wait_seconds_vsz>=runs_num_per_round) mem_wait_seconds_vsz = 0;
+						}
 					}
 					pthread_mutex_unlock(&mutex_mem);
 
@@ -956,11 +966,14 @@ bool localCns::cnsByPoa(){
 						//cout << "\t" << __func__ << ": wait " << mem_wait_seconds << " seconds, mem_avail=" << (mem_avail >> 10) << " MB, work_num=" << work_num << ", " << contigfilename << endl;
 						sleep(mem_wait_seconds);
 					}else{
+						if(high_mem_flag and mem_wait_seconds_vsz>0) sleep(mem_wait_seconds_vsz);
+
 						//cmd2 = "abpoa -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
 						cmd2 = "abpoa";
 						//if(mean_read_len>=MIN_SEQ_LEN_USING_MINIMIZER) cmd2 += " -S"; // deleted on 2025-03-16
 						if(sv_len_est>MIN_SEQ_LEN_USING_MINIMIZER) cmd2 += " -S";
 						cmd2 += " -o " + tmp_cons_filename + " " + tmp_reads_filename + " > /dev/null 2>&1";
+//						cmd2 = "spoa " + tmp_reads_filename + " > " + tmp_cons_filename ;
 
 						//cout << cmd2 << endl;
 						system(cmd2.c_str());
@@ -973,7 +986,7 @@ bool localCns::cnsByPoa(){
 								//cout << "invalid sequence : " << tmp_cons_filename << ", retry consensus ..." << endl;
 								cmd3 = "rm -f " + tmp_cons_filename;
 								system(cmd3.c_str());  // remove temporary files
-								system(cmd2.c_str()); // try consensus again
+								system(cmd2.c_str());  // try consensus again
 							}
 						}
 
@@ -1083,8 +1096,8 @@ bool localCns::localCnsWtdbg2(){
 			}else{ // multiple reads
 				wtdbg2_flag = false;
 				while(1){
-					pthread_mutex_lock(&mutex_mem);
 					mem_avail = getMemInfo("MemAvailable", 2);
+					pthread_mutex_lock(&mutex_mem);
 					// prepare for alignment computation
 					if(mem_avail>=min_mem_avail and mem_total-mem_avail<=mem_total*mem_use_block_factor+extend_total*extend_use_block_factor){
 						work_num ++;

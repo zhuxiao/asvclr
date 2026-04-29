@@ -104,7 +104,7 @@ void* processSingleBlatAlnWork(void *arg);
 void* processSingleCallWork(void *arg);
 void outputCnsWorkOptToFile_debug(vector<cnsWork_opt*> &cns_work_opt_vec);
 string getOldOutDirname(string &filename, string &sub_work_dir);
-string getUpdatedItemFilename(string &filename, string &out_dir, string &old_out_dir);
+string getUpdatedItemFilename(string &filename, string &out_dir, string &old_out_dir, string &sub_work_dir);
 string getChrnameByFilename(string &filename);
 string deleteTailPathChar(string &dirname);
 // get overlapped simple regions
@@ -161,6 +161,7 @@ void sortRegVec(vector<reg_t*> &regVector);
 bool isRegSorted(vector<reg_t*> &regVector);
 void startWorkProcessMonitor(string &work_finish_filename, string &monitoring_proc_names, int32_t max_proc_running_minutes);
 void *workProcessMonitor(void *arg);
+int64_t getTotalVirtSize(const string &proc_names);
 
 void destoryAlnData(vector<bam1_t*> &alnDataVector);
 vector<struct alnSeg*> generateAlnSegs(bam1_t* b);
@@ -193,7 +194,7 @@ int64_t getEndRefPosAlnSeg(int64_t startRpos, int32_t opflag, int32_t op_len);
 int64_t getEndSubjectPosAlnSeg(int64_t startSubpos, int32_t opflag, int32_t op_len);
 int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len);
 
-bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres, double seqsim_ratio_match_thres, faidx_t *fai);
+bool isQcSigMatch(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t var_startRefPos, int64_t var_endRefPos, int64_t max_ref_dist_match, int32_t min_size_ignore_seqsim, double size_ratio_match_thres, double seqsim_ratio_match_thres, faidx_t *fai);
 bool isQcSigMatchBasedOnSVlen(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_ref_dist_match, double size_ratio_match_thres);
 vector<qcSig_t*> extractQcSigsFromAlnSegsSingleQuery(struct querySeqInfoNode *query_seq_info_node, string &chrname, int64_t startSpanPos, int64_t endSpanPos, int32_t min_sv_size);
 qcSig_t *allocateQcSigNode(struct alnSeg *aln_seg);
@@ -210,6 +211,7 @@ double computeSigDensityFromAlnData(bam1_t *b, faidx_t *fai, bam_hdr_t *header, 
 
 void rmNeighborFalseSig(vector<qcSig_t*> &sig_vec, int64_t max_ref_dist, double min_size_ratio);
 bool mergeNeighbouringSigsFlag(struct querySeqInfoNode* query_seq_info_node, vector<qcSig_t*> &sig_vec, int32_t min_ref_dist_thres, int32_t max_ref_dist_thres, double min_merge_seqsim_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai);
+bool mergeNeighbouringSigsFlagClipReg(qcSigList_t *qcSigList_node, vector<qcSig_t*> &sig_vec, int32_t min_ref_dist_thres, int32_t max_ref_dist_thres, double min_merge_seqsim_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai);
 void filterSmallSigs(vector<qcSig_t *> &qcSig_vec, double valid_size_ratio_thres);
 void computeVarSums(struct querySeqInfoNode* &query_seq_info_node, int64_t start_var_pos, int64_t end_var_pos);
 
@@ -224,6 +226,8 @@ bool ischeckSameOrient(vector<clipAlnData_t*> &query_aln_segs);//self
 bool isSameChrome(vector<clipAlnData_t*> &query_aln_segs);
 bool isSameOrient(vector<clipAlnData_t*> &query_aln_segs, int32_t min_aln_size);
 bool isSameAlnReg(vector<clipAlnData_t*> &query_aln_segs, int64_t maxVarRegSize);
+bool isBothEndsOverlap(vector<clipAlnData_t*> &query_aln_segs, int64_t leftClipRefPos, int64_t rightClipRefPos);
+bool isTurnRound(vector<clipAlnData_t*> &query_aln_segs, int64_t leftClipRefPos, int64_t rightClipRefPos);
 int32_t getOccNumInVecs(vector<clipAlnData_t*> &query_aln_segs, vector<clipPos_t*> &leftClipPosVector, vector<clipPos_t*> &leftClipPosVector2, vector<clipPos_t*> &rightClipPosVector, vector<clipPos_t*> &rightClipPosVector2);
 bool isAdjacentClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2, size_t dist_thres);
 

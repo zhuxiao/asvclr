@@ -48,7 +48,7 @@ void Paras::init(){
 	include_decoy = false;
 	include_alt = false;
 	phasing_flag = false;
-	tumor_mode_flag = false;
+	tumor_sample_flag = false;
 
 	//min_seqsim_match = QC_SEQSIM_RATIO_MATCH_THRES; // deleted on 2024-09-04
 	min_seqsim_match = -1;
@@ -118,6 +118,8 @@ void Paras::init(){
 	gt_size_ratio_match = GT_SIZE_RATIO_MATCH_THRES;
 	gt_homo_ratio = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio = GT_HETE_RATIO_THRES;
+
+	num_ins = num_del = num_dup = num_inv = num_tra = num_bnd = 0;
 }
 
 // get the program version
@@ -172,13 +174,15 @@ void Paras::initPreset(){
 		if(min_seqsim_merge==-1) min_seqsim_merge = CALL_MIN_SEQSIM_MERGE_THRES;
 		if(max_seg_nm_ratio_usr==-1) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_1;
 		if(max_absig_density==-1) max_absig_density = MAX_ABSIG_DENSITY_CCS;
+		if(gt_min_seqsim_merge==-1) gt_min_seqsim_merge = GT_MIN_SEQSIM_MERGE_THRES_CCS;
 	}else{// CLR, ONT
 		if(min_seqsim_match==-1) min_seqsim_match = QC_SEQSIM_RATIO_MATCH_THRES2;
 		if(min_seqsim_merge==-1) min_seqsim_merge = CALL_MIN_SEQSIM_MERGE_THRES2;
 		if(max_seg_nm_ratio_usr==-1) max_seg_nm_ratio_usr = MAX_SEG_NM_RATIO_2;
 		if(max_absig_density==-1) max_absig_density = MAX_ABSIG_DENSITY_OTHER;
+		if(gt_min_seqsim_merge==-1) gt_min_seqsim_merge = GT_MIN_SEQSIM_MERGE_THRES_OTHER;
 	}
-	if(tumor_mode_flag) { // update for tumor mode
+	if(tumor_sample_flag) { // update for tumor sample
 		min_seqsim_match = min_seqsim_match * QC_SEQSIM_RATIO_THRES_FACTOR;
 		max_absig_density = max_absig_density * MAX_ABSIG_DENSITY_TUMOR_FACTOR;
 	}
@@ -586,7 +590,7 @@ int Paras::parseCallParas(int argc, char **argv){
 	
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
-	gt_min_seqsim_merge = GT_MIN_SEQSIM_MERGE_THRES;
+	gt_min_seqsim_merge = -1;
 	gt_homo_ratio = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio = GT_HETE_RATIO_THRES;
 	keep_temp_results_flag = false;
@@ -723,7 +727,7 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	num_threads_per_cns_work = NUM_THREADS_PER_CNS_WORK;
 	outDir = OUT_DIR;
 	outFilePrefix = RESULT_PREFIX_DEFAULT;
-	gt_min_seqsim_merge = GT_MIN_SEQSIM_MERGE_THRES;
+	gt_min_seqsim_merge = -1;
 	gt_homo_ratio = GT_HOMO_RATIO_THRES;
 	gt_hete_ratio = GT_HETE_RATIO_THRES;
 	keep_temp_results_flag = false;
@@ -899,7 +903,7 @@ void Paras::showUsage(){
 	cout << "   # run the pipeline on the whole genome for PacBio CCS sequencing" << endl;
 	cout << "   $ asvclr all -x ccs -t 32 -m 20 -n 3 -o output ref.fa genome_sorted.bam" << endl << endl;
 
-	cout << "   # run the pipeline in tumor mode" << endl;
+	cout << "   # run the pipeline for tumor sample" << endl;
 	cout << "   $ asvclr all -x ccs -t 32 -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl << endl;
 
 	cout << "   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000" << endl;
@@ -954,7 +958,7 @@ void Paras::showDetectUsage(){
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
-	cout << "   --tumor       Perform the variant calling in tumor mode [False]" << endl;
+	cout << "   --tumor       Perform the variant calling for tumor sample [False]" << endl;
 
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl << endl;
@@ -963,7 +967,7 @@ void Paras::showDetectUsage(){
 	cout << "   # run 'det' command on the whole genome" << endl;
 	cout << "   $ asvclr det -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam" << endl << endl;
 
-	cout << "   # run 'det' command in tumor mode" << endl;
+	cout << "   # run 'det' command for tumor sample" << endl;
 	cout << "   $ asvclr det -t 32 -x ccs -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl << endl;
 
 	cout << "   # run 'det' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
@@ -989,8 +993,8 @@ void Paras::showCnsUsage(){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9 -N 0.1 -A " << MAX_ABSIG_DENSITY_CCS << endl;
-	cout << "                   sq/rs/ont: -i 0.75 -N 0.2 -A " << MAX_ABSIG_DENSITY_OTHER << endl;
+	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1 -A " << MAX_ABSIG_DENSITY_CCS << " --gt-min-seqsim-merge " << GT_MIN_SEQSIM_MERGE_THRES_CCS << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2 -A " << MAX_ABSIG_DENSITY_OTHER << " --gt-min-seqsim-merge " << GT_MIN_SEQSIM_MERGE_THRES_OTHER << endl;
 	cout << "   -i FLOAT      minimal sequence similarity for variant match. [" << QC_SEQSIM_RATIO_MATCH_THRES << "]" << endl;
 	cout << "   -r FLOAT      minimal ratio threshold of the largest split-alignment segment" << endl;
 	cout << "                 of a read allowing for indel detection. [" << MAX_SEG_SIZE_RATIO << "]" << endl;
@@ -1051,14 +1055,14 @@ void Paras::showCnsUsage(){
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
-	cout << "   --tumor       Perform the variant calling in tumor mode [False]" << endl;
+	cout << "   --tumor       Perform the variant calling for tumor sample [False]" << endl;
 	cout << "   -v,--version  show version information" << endl;
 	cout << "   -h,--help     show this help message and exit" << endl << endl;
 
 	cout << "Example:" << endl;
 	cout << "   # run 'cns' command on the whole genome or the user-specified regions according to previous 'det' command" << endl;
 	cout << "   $ asvclr cns -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam" << endl << endl;
-	cout << "   # run 'cns' command in tumor mode" << endl;
+	cout << "   # run 'cns' command for tumor sample" << endl;
 	cout << "   $ asvclr cns -t 32 -x ccs -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl;
 }
 
@@ -1081,8 +1085,8 @@ void Paras::showCallUsage(){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1 -A " << MAX_ABSIG_DENSITY_CCS << endl;
-	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2 -A " << MAX_ABSIG_DENSITY_OTHER << endl;
+	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1 -A " << MAX_ABSIG_DENSITY_CCS << " --gt-min-seqsim-merge " << GT_MIN_SEQSIM_MERGE_THRES_CCS << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2 -A " << MAX_ABSIG_DENSITY_OTHER << " --gt-min-seqsim-merge " << GT_MIN_SEQSIM_MERGE_THRES_OTHER << endl;
 	cout << "   -i FLOAT      minimal sequence similarity for variant match. [" << QC_SEQSIM_RATIO_MATCH_THRES << "]" << endl;
 	cout << "   -I FLOAT      minimal sequence similarity for merge [" << CALL_MIN_SEQSIM_MERGE_THRES << "]" << endl;
 	cout << "   -d INT        minimal reference distance for merge [" << CALL_MIN_DISTANCE_MERGE_THRES << "]" << endl;
@@ -1110,7 +1114,7 @@ void Paras::showCallUsage(){
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
-	cout << "   --tumor       Perform the variant calling in tumor mode [False]" << endl;
+	cout << "   --tumor       Perform the variant calling for tumor sample [False]" << endl;
 
 //	cout << "   --gt-min-sig-size INT" << endl;
 //	cout << "                 minimal signature size threshold for genotyping [" << GT_SIG_SIZE_THRES << "]." << endl;
@@ -1119,8 +1123,9 @@ void Paras::showCallUsage(){
 //	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
 //	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
 	cout << "   --gt-min-seqsim-merge FLOAT" << endl;
-	cout << "                 minimal sequence similarity for allele merge [" << GT_MIN_SEQSIM_MERGE_THRES << "]." << endl;
+	cout << "                 minimal sequence similarity for allele merge [" << GT_MIN_SEQSIM_MERGE_THRES_CCS << "]." << endl;
 	cout << "                 Allelic variants will be merged if their sequence similarity are larger than FLOAT. " << endl;
+	cout << "                 CCS/HiFi: " << GT_MIN_SEQSIM_MERGE_THRES_CCS << ", ONT/CLR: " << GT_MIN_SEQSIM_MERGE_THRES_OTHER << endl;
 	cout << "   -A, --max-absig-density FLOAT" << endl;
 	cout << "                 maximal abnormal signature density " << "[null]." << endl;
 	cout << "                 Only alignment segments of density less than FLOAT will be used for variant calling." << endl;
@@ -1142,7 +1147,7 @@ void Paras::showCallUsage(){
 	cout << "Example:" << endl;
 	cout << "   # run 'call' command on the whole genome or the user-specified regions according to previous 'det' command" << endl;
 	cout << "   $ asvclr call -t 32 -m 20 -n 3 -o output ref.fa genome_sorted.bam" << endl << endl;
-	cout << "   # run 'call' command in tumor mode" << endl;
+	cout << "   # run 'call' command for tumor sample" << endl;
 	cout << "   $ asvclr call -t 32 -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl;
 }
 
@@ -1170,8 +1175,8 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "                 When it is not specified, " << MIN_SUPPORT_READS_NUM_EST << " means the value will be" << endl;
 	cout << "                 estimated to be max(2+floor("<< MIN_SUPPORT_READS_NUM_FACTOR << "*depth), " << MIN_SUPPORT_READS_NUM_DEFAULT << ")." << endl;
 	cout << "   -x STR        sequencing technology preset: rs, ont, sq, ccs. [" << SEQUENCING_TECH_DEFAULT << "]" << endl;
-	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1 -A " << MAX_ABSIG_DENSITY_CCS << endl;
-	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2 -A " << MAX_ABSIG_DENSITY_OTHER << endl;
+	cout << "                         ccs: -i 0.9 -I 0.95 -N 0.1 -A " << MAX_ABSIG_DENSITY_CCS << " --gt-min-seqsim-merge " << GT_MIN_SEQSIM_MERGE_THRES_CCS << endl;
+	cout << "                   sq/rs/ont: -i 0.75 -I 0.7 -N 0.2 -A " << MAX_ABSIG_DENSITY_OTHER << " --gt-min-seqsim-merge " << GT_MIN_SEQSIM_MERGE_THRES_OTHER << endl;
 	cout << "   -i FLOAT      minimal sequence similarity for variant match. [" << QC_SEQSIM_RATIO_MATCH_THRES << "]" << endl;
 	cout << "   -I FLOAT      minimal sequence similarity for merge [" << CALL_MIN_SEQSIM_MERGE_THRES << "]" << endl;
 	cout << "   -d INT        minimal reference distance for merge [" << CALL_MIN_DISTANCE_MERGE_THRES << "]" << endl;
@@ -1257,7 +1262,7 @@ void Paras::showAllUsage(const string &cmd_str){
 	cout << "   --include-decoy" << endl;
 	cout << "                 include decoy chromosomal items in result [False]" << endl;
 	cout << "   --sample STR  Sample name [\"" << SAMPLE_DEFAULT << "\"]" << endl;
-	cout << "   --tumor       Perform the variant calling in tumor mode [False]" << endl;
+	cout << "   --tumor       Perform the variant calling for tumor sample [False]" << endl;
 
 if(cmd_str.compare(CMD_CALL_STR)==0 or cmd_str.compare(CMD_ALL_STR)==0){
 //	cout << "   --gt-min-sig-size INT" << endl;
@@ -1267,8 +1272,9 @@ if(cmd_str.compare(CMD_CALL_STR)==0 or cmd_str.compare(CMD_ALL_STR)==0){
 //	cout << "                 signature size ratio threshold for genotyping [" << GT_SIZE_RATIO_MATCH_THRES << "]." << endl;
 //	cout << "                 Two signatures are match if the ratio of their sizes is larger than FLOAT." << endl;
 	cout << "   --gt-min-seqsim-merge FLOAT" << endl;
-	cout << "                 minimal sequence similarity for allele merge [" << GT_MIN_SEQSIM_MERGE_THRES << "]." << endl;
-	cout << "                 Allelic Variants will be merged if their sequence similarity are larger than FLOAT. " << endl;
+	cout << "                 minimal sequence similarity for allele merge [" << GT_MIN_SEQSIM_MERGE_THRES_CCS << "]." << endl;
+	cout << "                 Allelic variants will be merged if their sequence similarity are larger than FLOAT. " << endl;
+	cout << "                 CCS/HiFi: " << GT_MIN_SEQSIM_MERGE_THRES_CCS << ", ONT/CLR: " << GT_MIN_SEQSIM_MERGE_THRES_OTHER << endl;
 	cout << "   --gt-homo-ratio FLOAT" << endl;
 	cout << "                 minimal allele ratio for homozygous alleles [" << GT_HOMO_RATIO_THRES << "]." << endl;
 	cout << "                 Variant is homozygous if the ratio of allele count is larger than FLOAT." << endl;
@@ -1294,9 +1300,9 @@ if(cmd_str.compare(CMD_ALL_STR)==0){
 	cout << "   $ asvclr " << cmd_str << " -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam" << endl << endl;
 
 if(cmd_str.compare(CMD_ALL_STR)==0){
-	cout << "   # run the pipeline on the whole genome for PacBio CCS sequencing in tumor mode" << endl;
+	cout << "   # run the pipeline on the whole genome for PacBio CCS sequencing for tumor sample" << endl;
 }else{
-	cout << "   # run the '" << cmd_str << "' command in tumor mode" << endl;
+	cout << "   # run the '" << cmd_str << "' command for tumor sample" << endl;
 }
 	cout << "   $ asvclr " << cmd_str << " -t 32 -x ccs -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl << endl;
 
@@ -1359,7 +1365,7 @@ void Paras::outputParas(){
 	//cout << "Minimal high read mapping quality threshold: " << minHighMapQ << endl;
 	if(command.compare(CMD_CNS_STR)==0 or command.compare(CMD_ALL_STR)==0 or command.compare(CMD_DET_CNS_STR)==0){ // cns, all, det-cns
 		cout << "Expected sampling coverage: " << expected_cov_cns << endl;
-		cout << "Local consensus chunk size : " << cnsChunkSize << " bp" << endl;
+		cout << "Local consensus chunk size: " << cnsChunkSize << " bp" << endl;
 	}
 //	if(command.compare(CMD_DET_STR)!=0){
 //		cout << "Local consensus chunk extend size for indels: " << cnsSideExtSize << " bp" << endl; // not det
@@ -1400,7 +1406,7 @@ void Paras::outputParas(){
 	else cout << "Clean temporary results: yes" << endl;
 	if(phasing_flag) cout << "Local phasing: yes" << endl;
 	else cout << "Local phasing: no" << endl;
-	if(tumor_mode_flag) cout << "Tumor mode: yes" << endl;
+	if(tumor_sample_flag) cout << "Tumor sample: yes" << endl;
 	cout << "Sequencing technology: " << technology << endl;
 	cout << "abPOA version: " << abpoa_version << endl;
 	cout << "minimap2 version: " << minimap2_version << endl;
@@ -1477,7 +1483,17 @@ void Paras::estimate(size_t op_est){
 		else mean_error_rate = 0;
 		cout << "Estimated error rate: " << mean_error_rate << endl;
 
-
+		if(technology.compare("ccs")==0 and mean_error_rate>MAX_ERR_RATE_CCS){
+			cout << "warnning: the value of `-x` option is " << technology << ", however, the estimated error rate is much lower than expected, the system guesses the value should not be `ccs`, please confirm the specified value of `-x` option." << endl;
+			if(max_absig_density<0.5*MAX_ABSIG_DENSITY_OTHER) max_absig_density = MAX_ABSIG_DENSITY_OTHER;
+			if(tumor_sample_flag) max_absig_density *= MAX_ABSIG_DENSITY_TUMOR_FACTOR;
+			cout << "And, the value of `--max-absig-density` option is automatically adapted to " << max_absig_density << " for better performance." << endl;
+		}else if(technology.compare("ccs")!=0 and mean_error_rate<MAX_ERR_RATE_CCS){
+			cout << "warnning: the value of `-x` option is " << technology << ", however, the estimated error rate is much lower than expected, the system guesses the value should be `ccs`, please confirm the specified value of `-x` option." << endl;
+			if(max_absig_density>MAX_ABSIG_DENSITY_CCS * 2) max_absig_density = MAX_ABSIG_DENSITY_CCS;
+			if(tumor_sample_flag) max_absig_density *= MAX_ABSIG_DENSITY_TUMOR_FACTOR;
+			cout << "And, the value of `--max-absig-density` option is automatically adapted to " << max_absig_density << " for better performance." << endl;
+		}
 	}else if(op_est==NUM_EST_OP){
 		// min_ins_num_filt
 //		cout << "min_ins_num_filt:" << endl;
@@ -1673,7 +1689,7 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 	}else if(opt_name_str.compare("include-decoy")==0){ // include-decoy
 		include_decoy = true;
 	}else if(opt_name_str.compare("tumor")==0){ // tumor
-		tumor_mode_flag = true;
+		tumor_sample_flag = true;
 	}
 //	else if(opt_name_str.compare("gt-min-sig-size")==0){ // "gt-min-sig-size"
 //		gt_min_sig_size = stoi(optarg);

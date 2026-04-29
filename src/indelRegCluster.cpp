@@ -75,8 +75,10 @@ void indelRegCluster::extractQcSigsFromAlnSegs(struct querySeqInfoNode* &query_s
 	endSpanPos_extend = end_var_pos;
 
 	query_seq_info_node->qcSig_vec = extractQcSigsFromAlnSegsSingleQuery(query_seq_info_node, query_seq_info_node->clip_aln->chrname, startSpanPos_extend, endSpanPos_extend, min_sv_size);
-	rmNeighborFalseSig(query_seq_info_node->qcSig_vec, MIN_AVER_SIZE_ALN_SEG, MIN_SIZE_RATIO_MATCH_CLIP_POS);
-	query_seq_info_node->qcSig_merge_flag = mergeNeighbouringSigsFlag(query_seq_info_node, query_seq_info_node->qcSig_vec, MAX_DIST_MERGE_ARBITARY, max_merge_span, CNS_MIN_SEQSIM_MERGE_THRES2, MIN_VALID_SIG_SIZE_RATIO_THRES, fai);
+	if(query_seq_info_node->qcSig_vec.size()>=2){
+		rmNeighborFalseSig(query_seq_info_node->qcSig_vec, MIN_AVER_SIZE_ALN_SEG, MIN_SIZE_RATIO_MATCH_CLIP_POS);
+		query_seq_info_node->qcSig_merge_flag = mergeNeighbouringSigsFlag(query_seq_info_node, query_seq_info_node->qcSig_vec, MAX_DIST_MERGE_ARBITARY, max_merge_span, CNS_MIN_SEQSIM_MERGE_THRES2, MIN_VALID_SIG_SIZE_RATIO_THRES, fai);
+	}
 	filterSmallSigs(query_seq_info_node->qcSig_vec, MIN_SIG_SIZE_RATIO_FILTER_THRES);
 	computeVarSums(query_seq_info_node, start_var_pos, end_var_pos);
 }
@@ -1554,10 +1556,10 @@ vector<int8_t> indelRegCluster::computeQcMatchProfileSingleQuery(queryCluSig_t *
 		for(i=1; i<rowsNum; i++){
 			for(j=1; j<colsNum; j++){
 				if(mergeFlag)
-					matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL_MERGE, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_seqsim_match, fai);
+					matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), var_startRefPos, var_endRefPos, MAX_DIST_MATCH_INDEL_MERGE, MIN_SIZE_IGNORE_SEQSIM, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_seqsim_match, fai);
 				else
 					// matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, QC_SEQSIM_RATIO_MATCH_THRES, fai);
-					matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), MAX_DIST_MATCH_INDEL, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_seqsim_match, fai);
+					matchFlag = isQcSigMatch(queryCluSig->qcSig_vec.at(i-1), seed_qcQuery->qcSig_vec.at(j-1), var_startRefPos, var_endRefPos, MAX_DIST_MATCH_INDEL, MIN_SIZE_IGNORE_SEQSIM, QC_SIZE_RATIO_MATCH_THRES_INDEL, min_seqsim_match, fai);
 				if(matchFlag) scoreIJ = matchScore;
 				else scoreIJ = mismatchScore;
 

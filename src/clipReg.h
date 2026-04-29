@@ -44,7 +44,7 @@ using namespace std;
 #define MIN_QUERY_SELF_OVERLAP_SIZE			100		// 100
 //#define MAX_SAME_REG_THRES_SAME_ORIENT		5000	// 500, use paras.maxVarRegSize instead
 
-#define MAX_DIST_SAME_CLIP_END				100000
+//#define MAX_DIST_SAME_CLIP_END				100000
 
 #define MAX_ALN_SEG_NUM_PER_READ_CCS		5  // to be parameterized, 4
 #define MAX_ALN_SEG_NUM_PER_READ_OTHER		15  // to be parameterized, 4
@@ -119,7 +119,8 @@ class clipReg {
 		void removeFakeClips();
 		void removeFakeClipsDifferentChrSingleVec(vector<clipPos_t*> &clipPosVector);
 		void removeFakeClipsLongDistSameOrientSingleVec(vector<clipPos_t*> &clipPosVector);
-		void removeFakeClipsLowCov(vector<clipPos_t*> &clipPosVector, int32_t min_clip_reads_num);
+		void removeFakeClipsLowCov(vector<clipPos_t*> &clipPosVector, double min_clip_reads_num);
+		void removeFakeClipsLowCovRatio(vector<clipPos_t*> &clipPosVector, vector<clipPos_t*> &clipPosVector2, double min_clip_reads_num, double min_ratio_thres);
 		void removeFakeClipsUnbalancedVec(double unbalance_ratio, int32_t min_clip_reads_num);
 		string computeMateSingleRegStrForBND(vector<clipPos_t*> &clip_pos_vec, int32_t vec_id, string &chrname_clip, int64_t meanClipPos);
 		int32_t computeCovNumClipPos(string &chrname, int64_t meanClipPos, int32_t clip_end, faidx_t *fai, Paras *paras);
@@ -128,7 +129,7 @@ class clipReg {
 		reg_t* computeClipRegSingleVec(vector<clipPos_t*> &clipPosVector);
 		int32_t getItemIdxClipPosVec(clipPos_t *item, vector<clipPos_t*> &vec);
 		void removeBNDUnmatedClipRegs();
-		string getBNDMateRegStr(int32_t reg_idx, int32_t end_flag, string bnd_mate_reg_strs[4]);
+		vector<string> getBNDMateRegStr(int32_t reg_idx, int32_t end_flag, string bnd_mate_reg_strs[4]);
 		vector<int32_t> getMateMateRegID(int32_t reg_idx, int32_t end_flag, string bnd_mate_reg_strs[4]);
 		void removeFalseOverlappedMateClipReg();
 		size_t computeMeanClipPos(vector<clipPos_t*> &clipPosVector);

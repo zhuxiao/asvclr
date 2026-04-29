@@ -9,11 +9,14 @@ using namespace std;
 
 #define CLIP_REG_CLUSTER_DEBUG					0
 
+#define CIGAR_OP_INV_CLIP						21
+
 #define MIN_SV_SIZE_CLIP_REG					100		// Added on 2025-08-13
 
 #define MAX_DIST_MATCH_INDEL					400		// 200, 500 updated on 2025-06-02
 #define MAX_DIST_MATCH_INDEL_MERGE				800
-#define MAX_DIST_MATCH_CLIP_POS					1000	// 500, updated on 2025-08-14
+#define MAX_DIST_MATCH_CLIP_POS					2000	// 500, updated on 2025-08-14; 1000, updated on 2026-03-18
+#define MIN_SIZE_IGNORE_SEQSIM					20000	// added on 2026-04-01
 #define MIN_SIZE_RATIO_MATCH_CLIP_POS			(0.8f)
 #define QC_SIZE_RATIO_MATCH_THRES_INDEL			(0.75f) // (0.7f)
 #define QC_SIZE_RATIO_MATCH_THRES_INDEL_MERGE	(0.9f)
@@ -22,11 +25,15 @@ using namespace std;
 #define QC_SEQSIM_RATIO_THRES_FACTOR			(0.85f) // added on 2025-07-18
 #define MIN_NUM_RATIO_SINGLE_CLUSTER			(0.85f)
 
+#define MIN_SEG_NUM_READ_COLLAPSE				5		// added on 2026-03-11
+#define MIN_SEG_RATIO_READ_COLLAPSE				(0.7f)
+#define MIN_RATIO_COLLAPSE_READS				(0.25f) // added on 2026-03-11
+
 class clipRegCluster {
 private:
 	string chrname, technology;
 	int64_t var_startRefPos, var_endRefPos, chrlen;
-	int32_t minClipEndSize, maxVarRegSize, min_sv_size, min_supp_num, minMapQ;
+	int32_t minClipEndSize, maxVarRegSize, min_sv_size, min_supp_num, minMapQ, max_merge_span;
 	double min_seqsim_match;
 	faidx_t *fai;
 
@@ -54,7 +61,7 @@ private:
 	struct seedQueryInfo* chooseSeedClusterQueryClipReg(qcSigList_t* qcSigList_node, vector<qcSigList_t*> &q_cluster);
 	double computeMatchRatioClipReg(qcSigList_t* query_seq_info_node, qcSigList_t* q_cluster_node, int64_t startSpanPos, int64_t endSpanPos);
 	vector<int8_t> computeQcMatchProfileSingleQueryClipReg(qcSigList_t *queryCluSig, qcSigList_t *seed_qcQuery);
-	bool isQcSigMatchClipReg(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t max_dist_match_clip_pos, double min_size_ratio_match_thres_clip, double size_ratio_match_thres, double seqsim_ratio_match_thres);
+	bool isQcSigMatchClipReg(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t var_startRefPos, int64_t var_endRefPos, int64_t max_dist_match_clip_pos, int32_t min_size_ignore_seqsim, double min_size_ratio_match_thres_clip, double size_ratio_match_thres, double seqsim_ratio_match_thres);
 	vector<int8_t> qComputeSigMatchProfileClipReg(struct alnScoreNode *scoreArr, int32_t rowsNum, int32_t colsNum, qcSigList_t *queryCluSig, qcSigList_t *seed_qcQuery);
 };
 

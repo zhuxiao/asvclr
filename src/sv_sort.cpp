@@ -613,16 +613,17 @@ void sortSVitem(vector<vector<SV_item*>> &subsets){
 }
 
 // remove redundant items
-void rmRedundantSVitem(vector<vector<SV_item*>> &subsets, double size_ratio_thres, double seqsim_thres, faidx_t *fai){
+void rmRedundantSVitem(vector<vector<SV_item*>> &subsets, int64_t max_ref_dist, double size_ratio_thres, double seqsim_thres, faidx_t *fai){
 	//cout << "remove redundant items ..." << endl;
 	for(size_t i=0;i<subsets.size();i++)
-		rmRedundantSVitemSubset(subsets.at(i), size_ratio_thres, seqsim_thres, fai);
+		rmRedundantSVitemSubset(subsets.at(i), max_ref_dist, size_ratio_thres, seqsim_thres, fai);
 }
 
-void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, double seqsim_thres, faidx_t *fai){
+void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, int64_t max_ref_dist, double size_ratio_thres, double seqsim_thres, faidx_t *fai){
 	SV_item *item1, *item2;
 	double val, max_len, secmax_len, size_ratio, min_len;
 	bool overlap_flag;
+	int64_t ref_dist;
 	string compseq1, compseq2;
 	vector<string> compseq_vec;
 
@@ -630,39 +631,50 @@ void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, double size_ratio_thres, 
 		item1 = sv_vec.at(i-1);
 		item2 = sv_vec.at(i);
 		if (item1->sv_type == item2->sv_type and item1->chrname.compare(item2->chrname) == 0){
-			overlap_flag = false;
-			if(item1->startPos==item2->startPos and item1->endPos==item2->endPos) overlap_flag = true;
-			else overlap_flag = isOverlappedPos(item1->startPos-SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item1->endPos+SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item2->startPos-SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item2->endPos+SHORT_VAR_ALN_CHECK_EXTEND_SIZE);
+			// check same region
+			ref_dist = abs(item2->startPos-item1->startPos);
+			if(ref_dist<=max_ref_dist){//MAX_DIST_MATCH_CLIP_POS
+				// check overlap
+				overlap_flag = false;
+				if(item1->startPos==item2->startPos and item1->endPos==item2->endPos) overlap_flag = true;
+				else overlap_flag = isOverlappedPos(item1->startPos-SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item1->endPos+SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item2->startPos-SHORT_VAR_ALN_CHECK_EXTEND_SIZE, item2->endPos+SHORT_VAR_ALN_CHECK_EXTEND_SIZE);
 
-			if(overlap_flag==false and abs(item1->sv_len)>=EXT_SIZE_CHK_VAR_LOC and abs(item2->sv_len)>=EXT_SIZE_CHK_VAR_LOC) // check for larger variants
-				overlap_flag = isOverlappedPos(item1->startPos-EXT_SIZE_CHK_VAR_LOC, item1->endPos+EXT_SIZE_CHK_VAR_LOC, item2->startPos-EXT_SIZE_CHK_VAR_LOC, item2->endPos+EXT_SIZE_CHK_VAR_LOC); // 500 bp around
+				if(overlap_flag==false and abs(item1->sv_len)>=EXT_SIZE_CHK_VAR_LOC and abs(item2->sv_len)>=EXT_SIZE_CHK_VAR_LOC) // check for larger variants
+					overlap_flag = isOverlappedPos(item1->startPos-EXT_SIZE_CHK_VAR_LOC, item1->endPos+EXT_SIZE_CHK_VAR_LOC, item2->startPos-EXT_SIZE_CHK_VAR_LOC, item2->endPos+EXT_SIZE_CHK_VAR_LOC); // 500 bp around
 
-			if(overlap_flag){
-				if(abs(item1->sv_len)==abs(item2->sv_len)) size_ratio = 1;
-				else{
-					if(abs(item1->sv_len)>abs(item2->sv_len)) { max_len = abs(item1->sv_len); secmax_len = abs(item2->sv_len); }
-					else{ max_len = abs(item2->sv_len); secmax_len = abs(item1->sv_len); }
-					// max_len = item1->sv_len>item2->sv_len ? (max_len=item1->sv_len, secmax_len=item2->sv_len) : (max_len=item2->sv_len, secmax_len=item1->sv_len);
-					size_ratio = secmax_len / max_len;
-				}
+				if(overlap_flag){
+					// check size ratio
+					if(abs(item1->sv_len)==abs(item2->sv_len)) size_ratio = 1;
+					else{
+						if(abs(item1->sv_len)>abs(item2->sv_len)) { max_len = abs(item1->sv_len); secmax_len = abs(item2->sv_len); }
+						else{ max_len = abs(item2->sv_len); secmax_len = abs(item1->sv_len); }
+						// max_len = item1->sv_len>item2->sv_len ? (max_len=item1->sv_len, secmax_len=item2->sv_len) : (max_len=item2->sv_len, secmax_len=item1->sv_len);
+						size_ratio = secmax_len / max_len;
+					}
 
-				if(size_ratio>=size_ratio_thres){
-					if(item1->sv_type!=VAR_DEL){
-						compseq_vec = getCompSeqs(item1, item2, fai);
-						compseq1 = compseq_vec.at(0);
-						compseq2 = compseq_vec.at(1);
+					if(size_ratio>=size_ratio_thres){
+						if(item1->sv_type!=VAR_DEL){
+							if(abs(item1->sv_len)<=MAX_VAR_REG_SIZE or abs(item2->sv_len)<=MAX_VAR_REG_SIZE){
+								compseq_vec = getCompSeqs(item1, item2, fai);
+								compseq1 = compseq_vec.at(0);
+								compseq2 = compseq_vec.at(1);
 
-						//val = computeVarseqSim(item1->altseq, item2->altseq);
-						val = computeVarseqSim(compseq1, compseq2);
-						//cout << "seqsim=" << val << endl << item1->altseq << endl << item2->altseq << endl;
-						min_len = min(abs(item1->sv_len), abs(item2->sv_len));
-						if(val>=seqsim_thres or (val>=QC_SEQSIM_RATIO_THRES_FACTOR*seqsim_thres and min_len<MAX_DIST_MERGE_ARBITARY)) item2->valid_flag = false;
-					}else{
-						item2->valid_flag = false;
+//								if(compseq1.size()>MAX_VAR_REG_SIZE and compseq2.size()>MAX_VAR_REG_SIZE){
+//									cout << __func__ << ": " << item1->chrname << ":" << item1->startPos << "-" << item1->endPos << " <--> " << item2->chrname << ":" << item2->startPos << "-" << item2->endPos << ", sv_type=" << item1->sv_type << ", sv_len1=" << item1->sv_len << ", sv_len2=" << item2->sv_len << endl;
+//								}
+
+								val = computeVarseqSim(compseq1, compseq2);
+								//cout << "seqsim=" << val << endl << item1->altseq << endl << item2->altseq << endl;
+								min_len = min(abs(item1->sv_len), abs(item2->sv_len));
+								if(val>=seqsim_thres or (val>=QC_SEQSIM_RATIO_THRES_FACTOR*seqsim_thres and min_len<MAX_DIST_MERGE_ARBITARY)) item2->valid_flag = false;
+							}
+						}else{
+							item2->valid_flag = false;
+						}
 					}
 				}
+				//if(item2->valid_flag==false) cout << "====== " << item2->chrname << ":" << item2->startPos << "-" << item2->endPos << ", vartype=" << to_string(item2->sv_type) << ", svlen=" << item2->sv_len << ", valid=" << item2->valid_flag << endl;
 			}
-			//if(item2->valid_flag==false) cout << "====== " << item2->chrname << ":" << item2->startPos << "-" << item2->endPos << ", vartype=" << to_string(item2->sv_type) << ", svlen=" << item2->sv_len << ", valid=" << item2->valid_flag << endl;
 		}
 	}
 }

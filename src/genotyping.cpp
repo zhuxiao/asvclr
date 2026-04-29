@@ -193,40 +193,37 @@ vector<queryGtSig_t*> genotyping::extractGtSigVec(){
 			free(seq);
 
 			bam_type = getBamType(alnDataVector);
-			if(bam_type==BAM_INVALID){
-				cerr << __func__ << ": unknown bam type, error!" << endl;
-				exit(1);
-			}
+			if(bam_type!=BAM_INVALID){
+				for(size_t i=0; i<alnDataVector.size(); i++){
+					b = alnDataVector.at(i);
 
-			for(size_t i=0; i<alnDataVector.size(); i++){
-				b = alnDataVector.at(i);
+					if(!(b->core.flag & BAM_FUNMAP)){ // aligned
+						switch(bam_type){
+							case BAM_CIGAR_NO_DIFF_MD:
+								//alnSegs = generateAlnSegs(b);
+								alnSegs = generateAlnSegs2(b, startPos, endPos);
+								break;
+							case BAM_CIGAR_NO_DIFF_NO_MD:
+							case BAM_CIGAR_DIFF_MD:
+							case BAM_CIGAR_DIFF_NO_MD:
+								//alnSegs = generateAlnSegs_no_MD(b, refseq, startPos, endPos);
+								alnSegs = generateAlnSegs_no_MD2(b, refseq, startPos, endPos);
+								break;
+							default:
+								cerr << __func__ << ": unknown bam type, error!" << endl;
+								exit(1);
+						}// generate align segments
 
-				if(!(b->core.flag & BAM_FUNMAP)){ // aligned
-					switch(bam_type){
-						case BAM_CIGAR_NO_DIFF_MD:
-							//alnSegs = generateAlnSegs(b);
-							alnSegs = generateAlnSegs2(b, startPos, endPos);
-							break;
-						case BAM_CIGAR_NO_DIFF_NO_MD:
-						case BAM_CIGAR_DIFF_MD:
-						case BAM_CIGAR_DIFF_NO_MD:
-							//alnSegs = generateAlnSegs_no_MD(b, refseq, startPos, endPos);
-							alnSegs = generateAlnSegs_no_MD2(b, refseq, startPos, endPos);
-							break;
-						default:
-							cerr << __func__ << ": unknown bam type, error!" << endl;
-							exit(1);
-					}// generate align segments
+						queryGtSig = new queryGtSig_t();
+						queryGtSig->group_id = -1;
+						//queryGtSig->score = -1;
+						queryGtSig->seed_flag = false;
+						queryGtSig->queryname = bam_get_qname(b);
+						queryGtSig->gtSig_vec = extractGtSigsFromAlnSegsSingleQuery(alnSegs, startPos, endPos, refseq, sig_size_thres, clip_size_thres);
+						queryGtSig_vec.push_back(queryGtSig);
 
-					queryGtSig = new queryGtSig_t();
-					queryGtSig->group_id = -1;
-					//queryGtSig->score = -1;
-					queryGtSig->seed_flag = false;
-					queryGtSig->queryname = bam_get_qname(b);
-					queryGtSig->gtSig_vec = extractGtSigsFromAlnSegsSingleQuery(alnSegs, startPos, endPos, refseq, sig_size_thres, clip_size_thres);
-					queryGtSig_vec.push_back(queryGtSig);
-
-					destroyAlnSegs(alnSegs);
+						destroyAlnSegs(alnSegs);
+					}
 				}
 			}
 		}

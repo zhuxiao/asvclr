@@ -135,13 +135,12 @@ struct fqSeqNode{
 
 // single signature for cluster
 typedef struct qcSigNode{
-	int32_t sig_id: 24, cigar_op: 8, cigar_op_len: 28, aln_orient: 4; // align_orient not used
-	bool reg_contain_flag, have_next_clip, merge_flag;
-	int64_t ref_pos, query_pos, dist_next_clip;
+	int32_t sig_id:24, cigar_op:8, cigar_op_len:28, aln_orient:4;
+	bool reg_contain_flag, have_next_clip, merge_flag, inv_flag, altseq_complete_flag;
+	int64_t ref_pos, end_ref_pos, query_pos, end_query_pos, dist_next_clip;
 	string chrname, chrname_next_clip;
 	//int64_t start_ref_pos, end_ref_pos; // ------- not used
 	string refseq, altseq;
-	//vector<int32_t> adjClipAlnSegInfo;
 	struct qcSigNode *mate_qcSig;
 }qcSig_t;
 
@@ -160,8 +159,8 @@ typedef struct qcSigListNode{
 	vector<struct querySeqInfoNode*> query_seqs_vec;
 	vector<qcSig_t*> qcSig_vec;
 	vector<int8_t> match_profile_vec;
-	int32_t ins_sum, del_sum;
-	bool cluster_finished_flag, entire_flanking_flag, single_aln_seg_flag;
+	int32_t ins_sum, del_sum, inv_sum, total_valid_seg_num:16, seg_num_aln_to_single_reg:16;
+	bool cluster_finished_flag, entire_flanking_flag, single_aln_seg_flag, collapse_to_single_reg_flag, qcSig_merge_flag;
 }qcSigList_t;
 
 typedef struct qcSigListVecNode{

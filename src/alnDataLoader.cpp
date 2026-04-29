@@ -331,7 +331,7 @@ double alnDataLoader::computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, 
 	max_pos = LONG_MIN;
 	b = bam_init1();
 	while ((result = sam_itr_next(in, iter, b)) >= 0) {
-		if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+		if(b->core.l_qseq>0 and b->core.qual>=minMapQ and b->core.qual!=255 and !(b->core.flag & BAM_FSECONDARY)){
 			total_len += b->core.l_qseq;
 			total_num++;
 			qname = bam_get_qname(b);
@@ -350,12 +350,13 @@ double alnDataLoader::computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, 
 		bam_destroy1(b);
 		b = bam_init1();
 	}
+	bam_destroy1(b);
+
 	mean_read_len = (double)total_len / total_num;
 	ref_span = max_pos - min_pos + 1;
 	if(num>0) localCov = 4 * (double)total / ref_span;
 
 //	cout << reg << ", total_len=" << total_len << " ; total_num=" << total_num << " ; mean_read_len=" << mean_read_len << ", localCov=" << localCov << ", ref_span=" << ref_span << endl;
-	bam_destroy1(b);
 
 	if (result < -1) {
 		cerr <<  __func__ << ": retrieval of region " << reg << " failed due to truncated file or corrupt BAM index file." << endl;
@@ -376,7 +377,7 @@ void alnDataLoader::computeRefSpanFromIter(samFile *in, bam_hdr_t *header, hts_i
 	endRpos = LONG_MIN;
 
 	while ((result = sam_itr_next(in, iter, b)) >= 0) {
-		if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+		if(b->core.l_qseq>0 and b->core.qual>=minMapQ and b->core.qual!=255 and !(b->core.flag & BAM_FSECONDARY)){
 			// compute position
 			current_end_pos = bam_endpos(b);
 			if(b->core.pos < startRpos) startRpos = b->core.pos;
@@ -414,7 +415,7 @@ void alnDataLoader::computeAlnDataNumFromIter(samFile *in, bam_hdr_t *header, ht
 
 	b = bam_init1();
 	while((result = sam_itr_next(in, iter, b)) >= 0){
-		if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+		if(b->core.l_qseq>0 and b->core.qual>=minMapQ and b->core.qual!=255 and !(b->core.flag & BAM_FSECONDARY)){
 			qname = bam_get_qname(b);
 
 			sig_density = computeSigDensityFromAlnData(b, fai, header, startRpos, endRpos);
@@ -713,7 +714,7 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 		b = bam_init1();
 		i = 0;
 		while((result = sam_itr_next(in, iter, b)) >= 0) {
-			if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+			if(b->core.l_qseq>0 and b->core.qual>=minMapQ and b->core.qual!=255 and !(b->core.flag & BAM_FSECONDARY)){
 				if(selected_flag_array[i]==1) alnDataVector.push_back(b);
 				else bam_destroy1(b);
 				i++;
@@ -724,7 +725,7 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 		for(const string& qname_val : qname_vec) { selected_qname_vec.insert(qname_val); /*cout << "qname=" << qname_val << endl;*/ }
 		b = bam_init1();
 		while((result = sam_itr_next(in, iter, b)) >= 0) {
-			if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+			if(b->core.l_qseq>0 and b->core.qual>=minMapQ and b->core.qual!=255 and !(b->core.flag & BAM_FSECONDARY)){
 				if(selected_qname_vec.count(bam_get_qname(b))) alnDataVector.push_back(b);
 				else bam_destroy1(b);
 				b = bam_init1();
@@ -922,7 +923,7 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 		b = bam_init1();
 		i = 0;
 		while((result = sam_itr_next(in, iter, b)) >= 0) {
-			if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+			if(b->core.l_qseq>0 and b->core.qual>=minMapQ and b->core.qual!=255 and !(b->core.flag & BAM_FSECONDARY)){
 				if(selected_flag_array[i]==1) alnDataVector.push_back(b);
 				else bam_destroy1(b);
 				i++;
@@ -932,7 +933,7 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 	}else{ // load all data according to target_qname_vec
 		b = bam_init1();
 		while ((result = sam_itr_next(in, iter, b)) >= 0) {
-			if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)) alnDataVector.push_back(b); // found
+			if(b->core.l_qseq>0 and b->core.qual>=minMapQ and b->core.qual!=255 and !(b->core.flag & BAM_FSECONDARY)) alnDataVector.push_back(b); // found
 			else bam_destroy1(b);
 			b = bam_init1();
 		}
@@ -961,7 +962,7 @@ void alnDataLoader::loadAlnDataFromIter(vector<bam1_t*> &alnDataVector, samFile 
 	b = bam_init1();
 	while ((result = sam_itr_next(in, iter, b)) >= 0) {
 		flag = false;
-		if(b->core.l_qseq>0 and (b->core.qual>=minMapQ and b->core.qual!=255)){
+		if(b->core.l_qseq>0 and b->core.qual>=minMapQ and b->core.qual!=255 and !(b->core.flag & BAM_FSECONDARY)){
 			qname = bam_get_qname(b);
 			if(find(qname_vec.begin(), qname_vec.end(), qname) != qname_vec.end()){  // found
 				sum += b->core.l_qseq;

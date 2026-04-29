@@ -18,6 +18,8 @@
 
 using namespace std;
 
+#define SNV_DETECT_FLAG		0
+
 #define BLOCK_SIZE_EST		20000
 #define DIST_CHR_END		20000
 #define MIN_CHR_SIZE_EST	((DIST_CHR_END*2+BLOCK_SIZE_EST)*2)
@@ -56,7 +58,6 @@ class Chrome{
 
 		//int32_t mate_clip_reg_fail_num;
 
-	//private:
 		int32_t blockNum, process_block_num;
 		string blocks_out_file;
 		faidx_t *fai;

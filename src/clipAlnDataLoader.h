@@ -40,6 +40,7 @@ class clipAlnDataLoader {
 		clipAlnData_t* addNewSAItemToClipAlnDataVec(string &queryname, string &aln_seg_info_str, vector<clipAlnData_t*> &clipAlnDataVector);
 		void parseSingleAlnStrSA(clipAlnData_t &clip_aln_ret, string &aln_seg_info_str);
 		bool isSameClipAlnSeg(clipAlnData_t *clip_aln1, clipAlnData_t *clip_aln2);
+		void removeUltraShortClipAlnSeg(vector<clipAlnData_t*> &clipAlnDataVector);
 		void addAdjacentInfo(vector<clipAlnData_t*> &clipAlnDataVector);
 		void orderClipAlnSegsSingleQuery(vector<clipAlnData_t*> &query_aln_vec);
 		void assignSideMostFlag(vector<clipAlnData_t*> &query_aln_vec);

@@ -14,13 +14,12 @@
 #include "structures.h"
 #include "meminfo.h"
 
-
 using namespace std;
 
 // program variables
 #define PROG_NAME					"ASVCLR"
 #define PROG_DESC					"multi-Allele-aware Structural Variant Caller for Long Reads"
-#define PROG_VERSION				"1.5.1"
+#define PROG_VERSION				"1.5.2"
 #define VCF_VERSION					"4.2"
 
 #define CMD_DET_STR					"det"
@@ -91,13 +90,14 @@ using namespace std;
 #define MAX_ABSIG_DENSITY_TUMOR_FACTOR	(1.5f)
 //#define MAX_ABSIG_DENSITY_ONT			(2*MAX_ABSIG_DENSITY_CCS)
 
+#define MAX_ERR_RATE_CCS				(0.01f)  // added on 2026-04-26
 
 #define MIN_DUP_SIZE				30  // 2021-07-27
 
 //#define MIN_CLIP_READS_NUM_THRES	7
 #define MIN_SUPPORT_READS_NUM_EST			(-1L)
 #define MIN_SUPPORT_READS_NUM_FACTOR		(0.03f)	// 0.07f (updated 2024-06-25), 0.05f (updated 2024-09-04)
-#define READS_NUM_SUPPORT_FACTOR			(0.5f)
+#define READS_NUM_SUPPORT_FACTOR			(0.5f)  // 0.5f (updated 2026-04-12), 0.4
 #define READS_NUM_SUPPORT_FACTOR_LOW_COV	(0.6f)
 #define MIN_SUPPORT_READS_NUM_DEFAULT		3
 #define MIN_SUPPORT_READS_NUM_CLR			4
@@ -211,11 +211,12 @@ class Paras
 		string out_dir_result = "4_results";	// "4_results"
 		int32_t blockSize, slideSize, min_sv_size_usr, min_sv_size_usr_final, max_sv_size_usr, num_threads, large_indel_size_thres;
 		double max_seg_size_ratio_usr, min_seqsim_match, min_seqsim_merge, max_seg_nm_ratio_usr, min_sv_size_usr_factor, reads_num_supp_factor_low_cov, max_absig_density, clip_ratio_thres;
-		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy, include_alt, keep_temp_results_flag, phasing_flag, tumor_mode_flag;
+		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy, include_alt, keep_temp_results_flag, phasing_flag, tumor_sample_flag;
 		size_t misAlnRegLenSum = 0;
 		int32_t minReadsNumSupportSV: 29, min_Nsupp_est_flag: 3; //, minClipReadsNumSupportSV; Nsupp_est_flag: 1 for estimated, 0 for user-specified
 		int32_t minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12;
 		int32_t min_distance_merge;
+		int32_t num_ins, num_del, num_dup, num_inv, num_tra, num_bnd; // sv count for numbering
 		
 		// process monitor
 		string monitoring_proc_names_cns, monitoring_proc_names_call;

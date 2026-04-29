@@ -486,7 +486,7 @@ void Chrome::processMateClipRegDetectWork(){
 		//if(clip_processed_flag_vec.at(i)==false){
 			reg = clipRegVector.at(i);
 
-//			if(i>=1 and i<=1) // 36, 60
+//			if(i>=0 and i<=0) // 36, 60
 //				cout << "[" << i << "]: " << reg->chrname << ":" << reg->startRefPos << "-" << reg->endRefPos << endl;
 //			else continue;
 
@@ -1294,12 +1294,16 @@ vector<size_t> Chrome::getOverlapClipReg(reg_t *given_reg){
 
 // remove FP indels in clipping regions
 void Chrome::removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec){
-	size_t i, j, pos;
+	size_t i, j;
 	Block *block;
 	reg_t *reg;
 	bool flag;
+
+#if SNV_DETECT_FLAG
+	size_t pos;
 	vector<int32_t> idx_vec;
 	int32_t start_pos, end_pos, start_idx, end_idx;
+#endif
 
 	if(mate_clipReg_vec.size()>0){
 		for(i=0; i<blockVector.size(); i++){
@@ -1314,6 +1318,7 @@ void Chrome::removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec)
 				}else j++;
 			}
 
+#if SNV_DETECT_FLAG
 			// get the overlapped start and end idx of mate_clipReg_vec
 			start_pos = block->startPos;
 			end_pos = block->endPos;
@@ -1330,6 +1335,7 @@ void Chrome::removeFPIndelSnvInClipReg(vector<mateClipReg_t*> &mate_clipReg_vec)
 					else j++;
 				}
 			}
+#endif
 		}
 	}
 
@@ -1624,9 +1630,9 @@ void Chrome::chrSetVarCandFiles(){
 				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0){
 					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_cns);
 
-					refseqfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
-					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
-					readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+					refseqfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir, paras->out_dir_cns);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir, paras->out_dir_cns);
+					readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir, paras->out_dir_cns);
 
 					flag = true;
 					pos_contained_flag = false;
@@ -1731,9 +1737,9 @@ void Chrome::chrSetVarCandFiles(){
 				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0){
 					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_cns);
 
-					refseqfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
-					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
-					readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+					refseqfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir, paras->out_dir_cns);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir, paras->out_dir_cns);
+					readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir, paras->out_dir_cns);
 
 					flag = true;
 					pos_contained_flag = false;
@@ -2197,7 +2203,7 @@ void Chrome::loadPrevConsInfo(){
 void Chrome::loadPrevConsInfo2(bool clipReg_flag, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec, vector<cnsWork_opt*> &cns_work_vec){
 	ifstream infile;
 	ofstream *out_file;
-	string infilename, line, done_str, old_out_dir, refseqfilename, contigfilename, readsfilename, pattern_str, limit_reg_str;
+	string infilename, line, done_str, old_out_dir, refseqfilename, contigfilename, readsfilename, clusterfilename, pattern_str, limit_reg_str;
 	string tmp_filename, header_line, new_line;
 	vector<string> var_str, var_str1, var_str2;
 	vector<string> str_vec, str_vec2, str_vec3;
@@ -2247,9 +2253,10 @@ void Chrome::loadPrevConsInfo2(bool clipReg_flag, bool limit_reg_process_flag, v
 
 				// update item file name
 				if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_cns);
-				refseqfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
-				contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
-				readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+				refseqfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir, paras->out_dir_cns);
+				contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir, paras->out_dir_cns);
+				readsfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir, paras->out_dir_cns);
+				clusterfilename = getUpdatedItemFilename(str_vec.at(3), paras->outDir, old_out_dir, paras->out_dir_cns);
 
 	//			if(refseqfilename.compare("output_test_limit_reg_20200807/output_chr2/2_cns/chr2/refseq_chr2_149997126-150006879.fa")==0){
 	//				cout << __LINE__ << ": " << refseqfilename << endl;
@@ -2264,7 +2271,7 @@ void Chrome::loadPrevConsInfo2(bool clipReg_flag, bool limit_reg_process_flag, v
 					sub_limit_reg_vec = getOverlappedSimpleRegs(simple_reg->chrname, simple_reg->startPos, simple_reg->endPos, limit_reg_vec);
 					if(sub_limit_reg_vec.size()==0){ // further to check previously recorded limited process regions
 						flag = false;
-						prev_limit_reg_vec = extractSimpleRegsByStr(str_vec.at(8));
+						prev_limit_reg_vec = extractSimpleRegsByStr(str_vec.at(9));
 						for(i=0; i<prev_limit_reg_vec.size(); i++){
 							prev_simple_reg = prev_limit_reg_vec.at(i);
 							//prev_limit_reg_vec_tmp = getSimpleRegs(prev_simple_reg->chrname, prev_simple_reg->startPos, prev_simple_reg->endPos, limit_reg_vec);
@@ -2303,8 +2310,8 @@ void Chrome::loadPrevConsInfo2(bool clipReg_flag, bool limit_reg_process_flag, v
 						paras->cns_reg_work_total --;
 
 						// save to file
-						new_line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename;
-						for(i=3; i<=7; i++) new_line += "\t" + str_vec.at(i);
+						new_line = refseqfilename + "\t" + contigfilename + "\t" + readsfilename + "\t" + clusterfilename;
+						for(i=4; i<=8; i++) new_line += "\t" + str_vec.at(i);
 
 						// limit regions
 						if(limit_reg_process_flag){
@@ -2316,7 +2323,7 @@ void Chrome::loadPrevConsInfo2(bool clipReg_flag, bool limit_reg_process_flag, v
 						}else limit_reg_str = LIMIT_REG_ALL_STR;
 						new_line += "\t" + limit_reg_str;
 
-						for(i=9; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i); // other fields
+						for(i=10; i<str_vec.size(); i++) new_line += "\t" + str_vec.at(i); // other fields
 						*out_file << new_line << endl;
 					}
 				}
@@ -2538,16 +2545,11 @@ void Chrome::chrLoadDataCall(){
 
 void Chrome::loadVarCandData(){
 	vector<simpleReg_t*> limit_reg_vec;
-	//if(paras->limit_reg_process_flag) limit_reg_vec = getSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
 	if(paras->limit_reg_process_flag) limit_reg_vec = getOverlappedSimpleRegs(chrname, -1, -1, paras->limit_reg_vec);
 
 	//if(mateClipRegVector.size()==0) chrLoadMateClipRegDataOp(paras->limit_reg_process_flag, limit_reg_vec);
 	loadVarCandDataFromFile(var_cand_vec, var_cand_indel_filename, false, paras->limit_reg_process_flag, limit_reg_vec);
 	loadVarCandDataFromFile(var_cand_clipReg_vec, var_cand_clipReg_filename, true, paras->limit_reg_process_flag, paras->limit_reg_vec);
-
-	// load previously minimap2 aligned information
-	//loadPrevMinimapAlnItems(false, paras->limit_reg_process_flag, limit_reg_vec);
-	//loadPrevMinimapAlnItems(true, paras->limit_reg_process_flag, paras->limit_reg_vec);
 }
 
 void Chrome::chrLoadMateClipRegData(){
@@ -2595,15 +2597,15 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 
 			// update item file name
 			if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(line_vec.at(0), paras->out_dir_cns);
-			refseqfilename = getUpdatedItemFilename(line_vec.at(0), paras->outDir, old_out_dir);
-			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
-			readsfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
-			clusterfilename = getUpdatedItemFilename(line_vec.at(3), paras->outDir, old_out_dir);
+			refseqfilename = getUpdatedItemFilename(line_vec.at(0), paras->outDir, old_out_dir, paras->out_dir_cns);
+			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir, paras->out_dir_cns);
+			readsfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir, paras->out_dir_cns);
+			clusterfilename = getUpdatedItemFilename(line_vec.at(3), paras->outDir, old_out_dir, paras->out_dir_cns);
 			chrname_mate_clip_reg = getChrnameByFilename(contigfilename);
 
-			//if(refseqfilename.compare("output_20210418/2_cns/chr1/clipReg_refseq_chr1_1127942-1132735.fa")==0){
-			//	cout << line << endl;
-			//}
+//			if(refseqfilename.compare("debug_tmp/2_cns/chr6/clipReg_refseq_chr6_69531484-69533119.fa")==0){
+//				cout << line << endl;
+//			}
 
 			flag = true;
 			pos_contained_flag = false;
@@ -2767,6 +2769,7 @@ void Chrome::loadVarCandDataFromFile(vector<varCand*> &var_cand_vec, string &var
 				}
 				if(mate_clip_reg){
 					var_cand_tmp->large_indel_flag = mate_clip_reg->large_indel_flag;
+					var_cand_tmp->supp_num_largeIndel = mate_clip_reg->supp_num_largeIndel;
 					var_cand_tmp->depth_largeIndel = mate_clip_reg->depth_largeIndel;
 					if(mate_clip_reg->large_indel_flag==false){ // clip region
 						if(mate_clip_reg->sv_type==VAR_DUP or mate_clip_reg->sv_type==VAR_INV){ // DUP or INV
@@ -3091,9 +3094,9 @@ void Chrome::loadPrevMinimapAlnItems(bool clipReg_flag, bool limit_reg_process_f
 
 			// update item file name
 			if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(line_vec.at(0), paras->out_dir_call);
-			alnfilename = getUpdatedItemFilename(line_vec.at(0), paras->outDir, old_out_dir);
-			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir);
-			refseqfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir);
+			alnfilename = getUpdatedItemFilename(line_vec.at(0), paras->outDir, old_out_dir, paras->out_dir_call);
+			contigfilename = getUpdatedItemFilename(line_vec.at(1), paras->outDir, old_out_dir, paras->out_dir_call);
+			refseqfilename = getUpdatedItemFilename(line_vec.at(2), paras->outDir, old_out_dir, paras->out_dir_call);
 
 			flag = true;
 			pos_contained_flag = false;
@@ -3266,9 +3269,9 @@ void Chrome::setBlatVarcandFiles(){
 				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0){
 					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_call);
 
-					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
-					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
-					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir, paras->out_dir_call);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir, paras->out_dir_call);
+					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir, paras->out_dir_call);
 
 					flag = true;
 					pos_contained_flag = false;
@@ -3376,9 +3379,9 @@ void Chrome::setBlatVarcandFiles(){
 				if(str_vec.at(str_vec.size()-1).compare(DONE_STR)==0){
 					if(old_out_dir.size()==0) old_out_dir = getOldOutDirname(str_vec.at(0), paras->out_dir_call);
 
-					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir);
-					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir);
-					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir);
+					alnfilename = getUpdatedItemFilename(str_vec.at(0), paras->outDir, old_out_dir, paras->out_dir_call);
+					contigfilename = getUpdatedItemFilename(str_vec.at(1), paras->outDir, old_out_dir, paras->out_dir_call);
+					refseqfilename = getUpdatedItemFilename(str_vec.at(2), paras->outDir, old_out_dir, paras->out_dir_call);
 
 					flag = true;
 					pos_contained_flag = false;
@@ -3864,8 +3867,7 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 	varCand *var_cand; //, *var_cand_pre, *var_cand_pre_pre;
 	reg_t *reg;
 	string line, sv_type, sv_type2, header_line_bed, discov_level_str;
-	int32_t ref_dist, query_dist;
-	static int32_t ins_num = 0, del_num = 0, dup_num= 0, inv_num = 0, tra_num = 0, sv_num; 
+	int32_t ref_dist, query_dist, sv_num;
 	bool size_satisfied; //, no_existed;
 
 	if(var_cand_vec.size()==0 and var_cand_clipReg_vec.size()==0) return; // skip
@@ -3901,11 +3903,12 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 			if(reg->var_type!=VAR_UNC and reg->call_success_status and size_satisfied){
 				switch(reg->var_type){
 					case VAR_UNC: sv_type = VAR_UNC_STR; break;
-					case VAR_INS: sv_type = VAR_INS_STR; ins_num++; sv_num = ins_num; break;
-					case VAR_DEL: sv_type = VAR_DEL_STR; del_num++; sv_num = del_num; break;
-					case VAR_DUP: sv_type = VAR_DUP_STR; dup_num++; sv_num = dup_num; break;
-					case VAR_INV: sv_type = VAR_INV_STR; inv_num++; sv_num = inv_num; break;
-					case VAR_TRA: sv_type = VAR_TRA_STR; tra_num++; sv_num = tra_num; break;
+					case VAR_INS: sv_type = VAR_INS_STR; paras->num_ins++; sv_num = paras->num_ins; break;
+					case VAR_DEL: sv_type = VAR_DEL_STR; paras->num_del++; sv_num = paras->num_del; break;
+					case VAR_DUP: sv_type = VAR_DUP_STR; paras->num_dup++; sv_num = paras->num_dup; break;
+					case VAR_INV: sv_type = VAR_INV_STR; paras->num_inv++; sv_num = paras->num_inv; break;
+					case VAR_TRA: sv_type = VAR_TRA_STR; paras->num_tra++; sv_num = paras->num_tra; break;
+					case VAR_BND: sv_type = VAR_BND_STR; paras->num_bnd++; sv_num = paras->num_bnd; break;
 					default: sv_type = VAR_MIX_STR; break;
 				}
 				if(reg->altseq.size()==0) sv_type2 = "<" + sv_type + ">";
@@ -4004,11 +4007,12 @@ void Chrome::saveCallIndelClipReg2File02(string &outfilename_indel, string &outf
 			if(reg and reg->var_type!=VAR_UNC and var_cand->call_success and size_satisfied){
 				switch(reg->var_type){
 					case VAR_UNC: sv_type = VAR_UNC_STR; break;
-					case VAR_INS: sv_type = VAR_INS_STR; ins_num++; sv_num = ins_num; break;
-					case VAR_DEL: sv_type = VAR_DEL_STR; del_num++; sv_num = del_num; break;
-					case VAR_DUP: sv_type = VAR_DUP_STR; dup_num++; sv_num = dup_num; break;
-					case VAR_INV: sv_type = VAR_INV_STR; inv_num++; sv_num = inv_num; break;
-					case VAR_TRA: sv_type = VAR_TRA_STR; tra_num++; sv_num = tra_num; break;
+					case VAR_INS: sv_type = VAR_INS_STR; paras->num_ins++; sv_num = paras->num_ins; break;
+					case VAR_DEL: sv_type = VAR_DEL_STR; paras->num_del++; sv_num = paras->num_del; break;
+					case VAR_DUP: sv_type = VAR_DUP_STR; paras->num_dup++; sv_num = paras->num_dup; break;
+					case VAR_INV: sv_type = VAR_INV_STR; paras->num_inv++; sv_num = paras->num_inv; break;
+					case VAR_TRA: sv_type = VAR_TRA_STR; paras->num_tra++; sv_num = paras->num_tra; break;
+					case VAR_BND: sv_type = VAR_BND_STR; paras->num_bnd++; sv_num = paras->num_bnd; break;
 					default: sv_type = VAR_MIX_STR; break;
 				}
 				if(reg->altseq.size()==0) sv_type2 = "<" + sv_type + ">";
