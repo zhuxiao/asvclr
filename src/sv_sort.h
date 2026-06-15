@@ -14,15 +14,15 @@
 
 using namespace std;
 
-
 typedef struct{
 	string chrname, chrname2, altseq, info;
 	int64_t startPos, endPos, startPos2:56, valid_flag:8, endPos2:56, sv_type:8;
-	int32_t sv_len;
+	int32_t sv_len, supp_num, DP;
+	double AF;
 }SV_item;
 
 
-SV_item *constructSVItem(string &line);
+SV_item *constructSVItemFromBed(string &line);
 vector<SV_item*> loadDataBED(string &filename);
 bool isComma(string &seq);
 bool isSeq(string &seq);

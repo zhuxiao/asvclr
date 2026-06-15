@@ -76,13 +76,6 @@ class clipReg {
 		reg_t *largeIndelClipReg;
 		int32_t supp_num_largeIndel, depth_largeIndel;
 		vector<clipPos_t*> largeIndelClipPosVector;
-//		vector<Block*> *blockVector;
-//		pthread_mutex_t *p_mutex_mate_clip_reg;
-
-		//string bnd_mate_reg_strs[4]; // mate region strings for BND format
-
-		// deal with ultra-high coverage region
-
 
 	public:
 		clipReg(string &chrname, int64_t startRefPos, int64_t endRefPos, string &inBamFile, faidx_t *fai, Paras *paras);
@@ -103,6 +96,7 @@ class clipReg {
 		clipPos_t* getClipPosSameAlnSeg(clipPos_t *clip_pos_item, vector<clipPos_t*> &clip_pos_vec);
 		void splitClipPosVec();
 		int32_t computeBPConsistencyFlag(clipAlnData_t *clip_aln, int32_t clip_end, clipAlnData_t *adj_aln, int32_t adj_clip_end, vector<clipPos_t*> &clip_pos_vec);
+		void removeOtherClips(vector<clipPos_t*> &clipPosVector, vector<clipPos_t*> &clippos_vec_indel);
 		void AdjustClipPosVecByBPConsistency(vector<clipPos_t*> &clip_pos_vec, int32_t vec_id);
 		void AdjustClipPosVecByBPConsistencySingleVec(vector<clipPos_t*> &clip_pos_vec, vector<clipPos_t*> &clip_pos_vec_main);
 		vector<clipPos_t*> getClipPosItemsByQueryname(string &queryname, vector<clipPos_t*> &clip_pos_vec);
@@ -137,7 +131,8 @@ class clipReg {
 		void checkLocOrder(mateClipReg_t &mate_clip_reg);
 		void computeVarTypeClipReg(mateClipReg_t &mate_clip_reg);
 		void computeLargeIndelTypeClipReg(mateClipReg_t &mate_clip_reg);
-		int32_t computeSuppNumIntraAlnSeg(string &chrname, size_t startRefPos, size_t endRefPos, int32_t var_type, int32_t sv_len, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov, faidx_t *fai, double size_match_ratio_thres);
+		vector<int64_t> getVarMarginsFromMateClipReg(string &chrname, int64_t startRefPos, int64_t endRefPos, mateClipReg_t &mate_clip_reg);
+		vector<int32_t> computeSuppNumIntraAlnSeg(string &chrname, size_t startRefPos, size_t endRefPos, int32_t var_type, int32_t sv_len, string &inBamFile, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov, faidx_t *fai, double size_match_ratio_thres);
 		void resetClipCheckFlag(vector<clipAlnData_t*> &clipAlnDataVector);
 		bool containCompleteDup(vector<clipAlnData_t*> &query_aln_segs, mateClipReg_t &mate_clip_reg);
 		size_t extractVarType(mateClipReg_t &mate_clip_reg, size_t dup_type_num, size_t inv_type_num, size_t tra_type_num, size_t min_reads_thres);

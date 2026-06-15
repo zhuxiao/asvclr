@@ -10,6 +10,8 @@
 #include <thread>
 #include <numeric>
 #include <random>
+#include <stdexcept>
+#include <utility>
 
 #include "structures.h"
 #include "meminfo.h"
@@ -85,7 +87,7 @@ using namespace std;
 #define MAX_SEG_NM_RATIO_2			(0.2f)
 #define MAX_SV_SIZE_USR				100000	// 50000
 
-#define MAX_ABSIG_DENSITY_CCS			(10.0f)
+#define MAX_ABSIG_DENSITY_CCS			(15.0f)  // 10 deleted on 2026-05-12
 #define MAX_ABSIG_DENSITY_OTHER			(100.0f)
 #define MAX_ABSIG_DENSITY_TUMOR_FACTOR	(1.5f)
 //#define MAX_ABSIG_DENSITY_ONT			(2*MAX_ABSIG_DENSITY_CCS)
@@ -155,10 +157,10 @@ using namespace std;
 #define MIN_MAPQ_THRES				20		// 0, 10
 #define MIN_HIGH_MAPQ_THRES			(MIN_MAPQ_THRES+10)
 
-#define CALL_MIN_SEQSIM_MERGE_THRES			(0.95f)
-#define CALL_MIN_SEQSIM_MERGE_THRES2		(0.8f)	// 0.7
-#define CALL_MIN_DISTANCE_MERGE_THRES		300
-#define CALL_MIN_DISTANCE_MERGE_THRES2		500
+#define CALL_MIN_SEQSIM_MERGE_THRES			(0.7f)	// 0.95, 0.8
+#define CALL_MIN_SEQSIM_MERGE_THRES2		(0.6f)	// 0.8, 0.6
+#define CALL_MIN_DISTANCE_MERGE_THRES		800  // 300 deleted on 2026-05-12
+//#define CALL_MIN_DISTANCE_MERGE_THRES2		500
 
 //#define CNS_MIN_SEQSIM_MERGE_THRES		(0.95f)
 #define CNS_MIN_SEQSIM_MERGE_THRES2			(0.6f) // 0.7
@@ -181,9 +183,6 @@ using namespace std;
 #define MONITOR_WAIT_SECONDS					10  //60
 #define ULTRA_LOW_PROC_RUNNING_MINUTES			30
 
-//#define DEFAULT_MONITOR_PROC_NAMES				"overlapInCore,falconsense,blat"
-//#define DEFAULT_MONITOR_PROC_NAMES_CNS			"overlapInCore,falconsense"
-//#define DEFAULT_MONITOR_PROC_NAMES_CALL			"blat"
 #define DEFAULT_MONITOR_PROC_NAMES_CNS			"abpoa,wtdbg2"
 #define DEFAULT_MONITOR_PROC_NAMES_CALL			"abpoa"
 
@@ -195,6 +194,35 @@ using namespace std;
 #define MAX_RESCUE_VAR_SIZE					40000
 
 #define MAX_CHECK_READS_NUM					3
+
+#define HIGH_CLIP_RATIO_THRES				(0.1f)  // (0.1f) - 2023-12-18, (0.2f) -- 2026-02-22
+
+// genotyping
+#define MATCH_SCORE							2
+#define MISMATCH_SCORE						-5
+#define GAP_SCORE							-2
+#define GAP_OPEN_SCORE						-4
+
+#define GT_NOZYGOUS							0
+#define GT_HOMOZYGOUS						1	// homozygous
+#define GT_HETEROZYGOUS						2	// heterozygous
+
+#define GT_NOZYGOUS_STR						"0/0"
+#define GT_HOMOZYGOUS_STR					"1/1"	// homozygous
+#define GT_HETEROZYGOUS_STR					"0/1"	// heterozygous
+
+#define GT_SIG_SIZE_THRES					3
+#define GT_SIZE_RATIO_MATCH_THRES			(0.7f)
+#define GT_MIN_ALLE_RATIO_THRES				(0.3f)
+#define GT_MAX_ALLE_RATIO_THRES				(0.7f)
+
+#define GT_MIN_SEQSIM_MERGE_THRES_CCS		(0.9f)	// 0.95
+#define GT_MIN_SEQSIM_MERGE_THRES_OTHER		(0.8f)	// added on 2026-03-29
+//#define GT_MIN_SIZE_MERGE_THRES				(0.95f)
+#define GT_HOMO_RATIO_THRES					(0.7f)	//0.75
+#define GT_HETE_RATIO_THRES					(0.2f)
+
+#define GT_STR_DEFAULT						"GT:AD:DP\t./.:.,.:."
 
 // program parameters
 class Paras
@@ -211,8 +239,7 @@ class Paras
 		string out_dir_result = "4_results";	// "4_results"
 		int32_t blockSize, slideSize, min_sv_size_usr, min_sv_size_usr_final, max_sv_size_usr, num_threads, large_indel_size_thres;
 		double max_seg_size_ratio_usr, min_seqsim_match, min_seqsim_merge, max_seg_nm_ratio_usr, min_sv_size_usr_factor, reads_num_supp_factor_low_cov, max_absig_density, clip_ratio_thres;
-		bool maskMisAlnRegFlag, load_from_file_flag, include_decoy, include_alt, keep_temp_results_flag, phasing_flag, tumor_sample_flag;
-		size_t misAlnRegLenSum = 0;
+		bool load_from_file_flag, include_decoy, include_alt, keep_temp_results_flag, phasing_flag, tumor_sample_flag;
 		int32_t minReadsNumSupportSV: 29, min_Nsupp_est_flag: 3; //, minClipReadsNumSupportSV; Nsupp_est_flag: 1 for estimated, 0 for user-specified
 		int32_t minMapQ: 10, minHighMapQ: 10, max_seg_num_per_read: 12;
 		int32_t min_distance_merge;
@@ -265,18 +292,6 @@ class Paras
 		int32_t call_work_num, call_workDone_num;
 		pthread_mutex_t mtx_call_workDone_num;
 
-		// process monitor killed blat work
-		vector<killedBlatWork_t*> killed_blat_work_vec;
-		string killed_blat_work_filename = out_dir_call + "/" + "monitor_killed_blat_work";	// colums: alnfilename,ctgfilename,refseqfilename
-		ofstream killed_blat_work_file;
-		pthread_mutex_t mtx_killed_blat_work;
-
-		// process monitor killed blat work
-		vector<killedMinimap2Work_t*> killed_minimap2_work_vec;
-		string killed_minimap2_work_filename = out_dir_call + "/" + "monitor_killed_minimap2_work";	// colums: alnfilename,ctgfilename,refseqfilename
-		ofstream killed_minimap2_work_file;
-		pthread_mutex_t mtx_killed_minimap2_work;
-
 		//genotyping parameters
 		int32_t gt_min_sig_size; // not used
 		double gt_min_seqsim_merge, gt_homo_ratio, gt_hete_ratio;
@@ -300,6 +315,7 @@ class Paras
 		string generatePgRunidStr();
 		void initPreset();
 		int checkBamFile();
+		vector<string> expandRangeChrStrs(const string &chr_str);
 		int parseParas(int argc, char **argv);
 		string getPgCmd(int argc, char **argv);
 		void show_version();

@@ -10,6 +10,8 @@ using namespace std;
 #define ALN_PLUS_ORIENT				0   // plus orientation
 #define ALN_MINUS_ORIENT			1   // minus orientation
 
+#define MAX_BED_COLS_NUM			13		//	maximum column number of BED file
+
 #define VAR_UNC				0	// uncertain
 #define VAR_INS				1	// insertion
 #define VAR_DEL				2	// deletion

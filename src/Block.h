@@ -12,7 +12,6 @@
 
 #include "structures.h"
 #include "Paras.h"
-#include "misAlnReg.h"
 #include "alnDataLoader.h"
 #include "localCns.h"
 
@@ -36,7 +35,6 @@ class Block{
 		// SNV and indel
 		vector<size_t> snvVector;
 		vector<reg_t*> indelVector;
-		vector<misAlnReg> misAlnRegVector;
 		vector<reg_t*> zeroCovRegVector;	// for long deletions
 
 		// clip regions
@@ -54,7 +52,7 @@ class Block{
 		string snvDetectPrefix_local, indelDetectPrefix_local, clipRegDetectPrefix_local, snvFilenameDetect, indelFilenameDetect, clipRegFilenameDetect;
 
 		string indelCnsPrefix_local, indelFilenameCns;
-		ofstream *var_cand_indel_file, *misAln_reg_file, *var_cand_clipReg_file;
+		ofstream *var_cand_indel_file, *var_cand_clipReg_file;
 
 	public:
 		Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai, Paras *paras);
@@ -68,8 +66,6 @@ class Block{
 		void blockGenerateLocalConsWorkOpt();
 		void setVarCandFiles(ofstream *var_cand_indel_file, ofstream *var_cand_clipReg_file);
 		void resetVarCandFiles();
-		void setMisAlnRegFile(ofstream *misAln_reg_file);
-		void resetMisAlnRegFile();
 
 	private:
 		void destroyBaseArray();
@@ -78,7 +74,6 @@ class Block{
 		void destroyIndelVector();
 		void destroyClipRegVector();
 		void destroyZeroCovRegVector();
-		void destroyMisAlnRegVector();
 		Base *initBaseArray();
 		int loadAlnData();
 		int computeBlockBaseInfo();
@@ -88,12 +83,6 @@ class Block{
 		void AddReadLenEstInfo();
 		void AddCovDepthEstInfo();
 		int outputCovFile();
-		void maskMisAlnRegs();
-		int computeMisAlnDisagrReg();
-		void extractMisAlnRegions();
-		void saveMisAlnRegToFile();
-		void computeDisagrNumSingleRegion(size_t startRpos, size_t endRPos, size_t regFlag);
-		bool isMisAlnReg(Region &reg);
 		int computeAbSigs();
 		int processSingleRegion(int64_t startRpos, int64_t endRPos, int64_t regFlag);
 		void copySVEvents(Region &reg);

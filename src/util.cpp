@@ -37,17 +37,6 @@ inline vector<string> split(const string& s, const string& delim)
 	return elems;
 }
 
-// determine whether the str exist in string vector
-bool isExistStr(string &str, vector<string> &vec){
-	bool exist_flag = false;
-	for(size_t i=0; i<vec.size(); i++)
-		if(str.compare(vec.at(i))==0){
-			exist_flag = true;
-			break;
-		}
-	return exist_flag;
-}
-
 // get the current maximum open files
 rlim_t getMaxOpenFileNum() {
 	struct rlimit limit;
@@ -273,7 +262,6 @@ reg_t* dupVarReg(reg_t *reg){
 		reg_ret->aln_orient = reg->aln_orient;
 		reg_ret->dup_num = reg->dup_num;
 		reg_ret->query_id = reg->query_id;
-		reg_ret->blat_aln_id = reg->blat_aln_id;
 		reg_ret->minimap2_aln_id = reg->minimap2_aln_id;
 		reg_ret->leftExtGapSize = reg->leftExtGapSize;
 		reg_ret->rightExtGapSize = reg->rightExtGapSize;
@@ -831,7 +819,8 @@ bool isIndelInClipReg(reg_t *reg, vector<mateClipReg_t*> &mate_clipReg_vec){
 
 	for(size_t i=0; i<mate_clipReg_vec.size(); i++){
 		clip_reg = mate_clipReg_vec.at(i);
-		if(clip_reg->valid_flag and clip_reg->ultra_large_dist_flag==false){
+		//if(clip_reg->valid_flag and clip_reg->ultra_large_dist_flag==false){ // deleted on 2026-05-08
+		if(clip_reg->valid_flag and clip_reg->ultra_large_dist_flag==false and clip_reg->sv_type!=VAR_TRA and clip_reg->sv_type!=VAR_BND){
 			flag = isIndelInSingleClipReg(reg, clip_reg);
 			if(flag) break;
 		}
@@ -1504,7 +1493,6 @@ int32_t minimap2Aln(string &alnfilename, string &contigfilename, string &refseqf
 	//minimap2_cmd = "minimap2 -c --secondary=no -o " + alnfilename + " " + refseqfilename + " " + contigfilename + " > /dev/null 2>&1";
 	minimap2_cmd = "minimap2 -c -x asm20 -o " + alnfilename + " " + refseqfilename + " " + contigfilename + " > /dev/null 2>&1";
 
-	//cout << "blat_cmd: " + blat_cmd << endl;
 	time(&start_time);
 	end_time = 0;
 
@@ -1516,7 +1504,7 @@ int32_t minimap2Aln(string &alnfilename, string &contigfilename, string &refseqf
 			status = system(minimap2_cmd.c_str());
 			ret_status = getSuccessStatusSystemCmd(status);
 			if(ret_status!=0){ // command executed failed
-				//cout << __func__ << ", line=" << __LINE__ << ": ret_status=" << ret_status << ", blat_cmd=" << blat_cmd << endl;
+				//cout << __func__ << ", line=" << __LINE__ << ": ret_status=" << ret_status << ", minimap2_cmd=" << minimap2_cmd << endl;
 
 				if(i<2){
 					time(&end_time);
@@ -1537,64 +1525,6 @@ int32_t minimap2Aln(string &alnfilename, string &contigfilename, string &refseqf
 	return ret_status;
 }
 
-// BLAT alignment, and the output is in sim4 format
-int32_t blatAln(string &alnfilename, string &contigfilename, string &refseqfilename, int32_t max_proc_running_minutes){
-	string blat_cmd, out_opt;
-	int32_t i, ret_status, status, sleep_sec;
-	time_t start_time, end_time; // start time and end time
-	double cost_min;
-
-	out_opt = "-out=sim4 " + alnfilename;
-	blat_cmd = "blat " + refseqfilename + " " + contigfilename + " " + out_opt + " > /dev/null 2>&1";
-
-	//cout << "blat_cmd: " + blat_cmd << endl;
-	time(&start_time);
-	end_time = 0;
-
-	ret_status = 0;
-	for(i=0; i<3; i++){
-		time(&end_time);
-		cost_min = difftime(end_time, start_time) / 60.0;
-		if(cost_min<=MAX_ALN_MINUTES){
-			status = system(blat_cmd.c_str());
-			ret_status = getSuccessStatusSystemCmd(status);
-			if(ret_status!=0){ // command executed failed
-				//cout << __func__ << ", line=" << __LINE__ << ": ret_status=" << ret_status << ", blat_cmd=" << blat_cmd << endl;
-
-				if(i<2){
-					time(&end_time);
-					cost_min = difftime(end_time, start_time) / 60.0;
-					if(cost_min<=MAX_ALN_MINUTES){
-						sleep_sec = (i + 1) * (i + 2);
-						sleep(sleep_sec);
-						cout << __func__ << ": retry aligning " << contigfilename << endl;
-					}
-				}else{
-					cerr << "Please run the correct blat command or check whether blat was correctly installed when aligning " << contigfilename <<"." << endl;
-					//exit(1);
-				}
-			}else break;
-		}else break;
-	}
-
-	if(ret_status!=0){
-		time(&end_time);
-		cost_min = difftime(end_time, start_time) / 60.0;
-		if(cost_min>max_proc_running_minutes) { // killed work
-			ret_status = -2;
-		}
-	}
-
-	/*
-	 https://www.cnblogs.com/alantu2018/p/8554281.html
-	 http://blog.chinaunix.net/uid-22263887-id-3023260.html
-	 https://www.cnblogs.com/zhaoyl/p/4963551.html
-	 https://blog.csdn.net/zybasjj/article/details/8231837
-	 */
-
-	return ret_status;
-}
-
 // get the success status to determine whether the command is executed successfully
 // 		0: successful; -1: failed;
 int32_t getSuccessStatusSystemCmd(int32_t status){
@@ -1611,7 +1541,7 @@ int32_t getSuccessStatusSystemCmd(int32_t status){
 	return ret_status;
 }
 
-// check whether the blat alignment is matched to the contig
+// check whether the minimap2 alignment is matched to the contig
 bool isMinimap2AlnResultMatch(string &contigfilename, string &alnfilename){
 	bool flag;
 	vector<string> query_name_vec_ctg, query_name_vec_minimap2, line_vec;
@@ -1632,7 +1562,7 @@ bool isMinimap2AlnResultMatch(string &contigfilename, string &alnfilename){
 	query_name_vec_ctg = fa_loader.getFastaSeqNames();
 
 
-	// get blat alignment information
+	// get minimap2 alignment information
 	while(getline(infile, line)){
 		if(line.size()){
 			line_vec = split(line, "	");
@@ -1673,72 +1603,6 @@ bool isMinimap2AlnResultMatch(string &contigfilename, string &alnfilename){
 	return flag;
 }
 
-// check whether the blat alignment is matched to the contig
-bool isBlatAlnResultMatch(string &contigfilename, string &alnfilename){
-	bool flag;
-	vector<string> query_name_vec_ctg, query_name_vec_blat, line_vec, line_vec1, len_vec;
-	vector<size_t> query_len_vec_blat;
-	ifstream infile;
-	string line, query_name_blat, query_name_ctg;
-	size_t i, query_len_blat, query_len_ctg;
-	int32_t query_loc;
-
-	infile.open(alnfilename);
-	if(!infile.is_open()){
-		cerr << __func__ << "(), line=" << __LINE__ << ": cannot open file:" << alnfilename << endl;
-		exit(1);
-	}
-
-	// load query names
-	FastaSeqLoader fa_loader(contigfilename);
-	query_name_vec_ctg = fa_loader.getFastaSeqNames();
-
-
-	// get blat alignment information
-	while(getline(infile, line)){
-		if(line.size()){
-			if(line.substr(0, 3).compare("seq")==0){  // query and subject titles
-				line_vec = split(line, "=");
-				line_vec1 = split(line_vec[1].substr(1), ",");
-
-				if(line_vec1.size()==2){
-					if(line_vec[0][3]=='1') {
-						// get the query name and length
-						query_name_vec_blat.push_back(line_vec1.at(0));
-						len_vec = split(line_vec1[line_vec1.size()-1].substr(1), " ");
-						query_len_vec_blat.push_back(stoi(len_vec[0]));
-					}
-				}
-			}
-		}
-	}
-	infile.close();
-
-	// check the match items
-	flag = true;
-	for(i=0; i<query_name_vec_blat.size(); i++){
-		query_name_blat = query_name_vec_blat.at(i);
-		query_len_blat = query_len_vec_blat.at(i);
-
-		// search the query from contig vector
-		query_loc = getQueryNameLoc(query_name_blat, query_name_vec_ctg);
-		if(query_loc!=-1){ // query name matched
-			query_len_ctg = fa_loader.getFastaSeqLen(query_loc);
-			if(query_len_blat!=query_len_ctg) {
-				flag = false;
-				break;
-			}
-		}else{ // query name unmatched
-			flag = false;
-			break;
-		}
-	}
-
-	if(flag==false){
-		cerr << __func__ << ", line=" << __LINE__ << ", it is not matched between the blat alignment and its corresponding contig, contigfile=" << contigfilename << ", alnfile=" << alnfilename << ", error!" << endl;
-	}
-	return flag;
-}
 
 // get query name location
 int32_t getQueryNameLoc(string &query_name, vector<string> &query_name_vec){
@@ -1752,73 +1616,6 @@ int32_t getQueryNameLoc(string &query_name, vector<string> &query_name_vec){
 		}
 	}
 	return loc;
-}
-
-// determine whether the blat align is completed
-bool isBlatAlnCompleted(string &alnfilename){
-	bool flag = true;
-	string line;
-	ifstream infile;
-	vector<string> line_vec, line_vec1, len_vec;
-
-	if(!isFileExist(alnfilename)) return false;
-
-	infile.open(alnfilename);
-	if(!infile.is_open()){
-		cerr << __func__ << "(), line=" << __LINE__ << ": cannot open file:" << alnfilename << endl;
-		exit(1);
-	}
-
-	// get data
-	while(getline(infile, line)){
-		if(line.size()){
-			if(line.substr(0, 3).compare("seq")==0){  // query and subject titles
-				line_vec = split(line, "=");
-				line_vec1 = split(line_vec[1].substr(1), ",");
-
-				if(line_vec1.size()<2){
-//					cout << line_vec1.size() << endl;
-					flag = false;
-					break;
-				}
-
-				len_vec = split(line_vec1[line_vec1.size()-1].substr(1), " ");
-				if(line_vec[0][3]=='1' or line_vec[0][3]=='2') {
-					if(len_vec.at(1).compare("bp")!=0){
-						flag = false;
-						break;
-					}
-				}else{
-					flag = false;
-					break;
-				}
-			}else if(line[0]=='('){ // complement
-				if(line.size()==12){
-					if(line.substr(1, 10).compare("complement")!=0){
-						flag = false;
-						break;
-					}
-				}else{
-					flag = false;
-					break;
-				}
-			}else{    // segments
-				line_vec = split(line, " ");
-				if(line_vec.size()==4){
-					if(line_vec.at(3).compare("->")!=0 and line_vec.at(3).compare("-")!=0 and line_vec.at(3).compare("<-")!=0 and line_vec.at(3).compare("<")!=0){
-						flag = false;
-						break;
-					}
-				}else{
-					flag = false;
-					break;
-				}
-			}
-		}
-	}
-	infile.close();
-
-	return flag;
 }
 
 // clean consensus temporary folders
@@ -2108,8 +1905,8 @@ vector<int32_t> computeQueryStartEndLocByRefPos(bam1_t *b, int64_t startRefPos, 
 		}// generate align segments
 		//outputAlnSegs(alnSegs);
 
-		op = query_alnSegs.at(0)->opflag;
 		if(query_alnSegs.size()>0){
+			op = query_alnSegs.at(0)->opflag;
 			switch (op) {
 				case BAM_CMATCH:
 					target_startQpos = query_alnSegs.at(0)->startQpos;
@@ -2432,41 +2229,6 @@ void* processSingleMinimap2AlnWork(void *arg){
 
 	//cout << var_cand->alnfilename << endl;
 
-	var_cand->alnCtg2Refseq02();
-
-	// output progress information
-	pthread_mutex_lock(call_work_opt->p_mtx_call_workDone_num);
-	(*call_work_opt->p_call_workDone_num) ++;
-	num_done = *call_work_opt->p_call_workDone_num;
-
-	num_work = call_work_opt->num_work;
-	num_work_percent = call_work_opt->num_work_percent;
-	if(num_done==1 and num_done!=num_work){
-		num_done = 0;
-		percentage = (double)num_done / num_work * 100;
-		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
-	}else if(num_done%num_work_percent==0 or num_done==num_work){
-		percentage = (double)num_done / num_work * 100;
-		cout << "[" << time.getTime() << "]: processed regions: " << num_done << "/" << num_work << " (" << percentage << "%)" << endl;
-	}
-	//cout << "\t[" << call_work_opt->work_id << "]: " << var_cand->alnfilename << ", sv_type=" << var_cand->sv_type << endl;
-	pthread_mutex_unlock(call_work_opt->p_mtx_call_workDone_num);
-
-	delete (callWork_opt *)arg;
-
-	return NULL;
-}
-
-// process single blat align work
-void* processSingleBlatAlnWork(void *arg){
-	callWork_opt *call_work_opt = (callWork_opt *)arg;
-	varCand *var_cand = call_work_opt->var_cand;
-	size_t num_done, num_work, num_work_percent;
-	double percentage;
-	Time time;
-
-	//cout << var_cand->alnfilename << endl;
-
 	var_cand->alnCtg2Refseq();
 
 	// output progress information
@@ -2502,8 +2264,7 @@ void* processSingleCallWork(void *arg){
 
 //	time.setStartTime();
 
-	//var_cand->callVariants();
-	var_cand->callVariants02();
+	var_cand->callVariants();
 
 //	double run_seconds = time.getElapsedSeconds();
 //	if(run_seconds>60) {
@@ -2735,11 +2496,12 @@ bool isPosContained(string &chrname1, int64_t begPos1, string &chrname2, int64_t
 }
 
 // allocate simple region node
-simpleReg_t* allocateSimpleReg(string &simple_reg_str){
+simpleReg_t* allocateSimpleReg(const string &simple_reg_str){
 	simpleReg_t *simple_reg = NULL;
 	vector<string> str_vec, pos_vec;
-	string chrname_tmp;
+	string chrname_tmp, str_tmp;
 	int64_t pos1, pos2;
+	char ch;
 
 	str_vec = split(simple_reg_str, ":");
 	if(str_vec.size()){
@@ -2749,8 +2511,26 @@ simpleReg_t* allocateSimpleReg(string &simple_reg_str){
 		}else if(str_vec.size()==2){
 			pos_vec = split(str_vec.at(1), "-");
 			if(pos_vec.size()==2){
-				pos1 = stoi(pos_vec.at(0));
-				pos2 = stoi(pos_vec.at(1));
+				str_tmp = pos_vec.at(0);
+				ch = str_tmp.at(str_tmp.size()-1);
+				if(!std::isdigit(static_cast<unsigned char>(ch))){
+					if(ch=='m' or ch=='M'){
+						pos1 = stoi(str_tmp.substr(0, str_tmp.size()-1));
+						pos1 *= 1000000;
+					}else throw std::invalid_argument("Format error: Invalid characters found after digits in '" + simple_reg_str + "'");
+				}else
+					pos1 = stoi(str_tmp);
+
+				str_tmp = pos_vec.at(1);
+				ch = str_tmp.at(str_tmp.size()-1);
+				if(!std::isdigit(static_cast<unsigned char>(ch))){
+					if(ch=='m' or ch=='M'){
+						pos2 = stoi(str_tmp.substr(0, str_tmp.size()-1));
+						pos2 *= 1000000;
+					}else throw std::invalid_argument("Format error: Invalid characters found after digits in '" + simple_reg_str + "'");
+				}else
+					pos2 = stoi(str_tmp);
+
 				if(pos1>pos2) goto fail;
 			}else goto fail;
 		}else goto fail;
@@ -2917,512 +2697,6 @@ vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_s
 	base_num_vec.push_back(ratio);
 
 	return base_num_vec;
-}
-
-// get mismatch regions
-vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln){
-	vector<mismatchReg_t*> misReg_vec;	// all the mismatch regions including gap regions
-	int64_t ref_pos, local_ref_pos, query_pos, tmp, startMisRefPos, endMisRefPos, startMisLocalRefPos, endMisLocalRefPos, startMisQueryPos, endMisQueryPos;
-	int32_t i, j, start_aln_idx, start_check_idx, end_check_idx, mis_reg_size, begin_mismatch_aln_idx, end_mismatch_aln_idx;
-	string ctgseq_aln, midseq_aln, refseq_aln;
-	mismatchReg_t *mis_reg, *mis_reg2;
-	reg_t *reg;
-	bool gap_flag, extend_flag, flag;
-	int16_t mis_loc_flag;	// -1 for unused, 0 for gap in query, 1 for gap in reference, 2 for mismatch
-
-	if(local_aln->reg==NULL or local_aln->start_aln_idx_var==-1 or local_aln->end_aln_idx_var==-1) return misReg_vec;
-
-	ctgseq_aln = local_aln->alignResultVec[0];
-	midseq_aln = local_aln->alignResultVec[1];
-	refseq_aln = local_aln->alignResultVec[2];
-
-	// compute refPos and queryPos at start_aln_idx
-	start_check_idx = local_aln->start_aln_idx_var - 2* EXT_SIZE_CHK_VAR_LOC;
-	end_check_idx = local_aln->end_aln_idx_var + 2 * EXT_SIZE_CHK_VAR_LOC;
-	if(start_check_idx<0) start_check_idx = 0;
-	if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
-	extend_flag = false;
-
-	reg = local_aln->reg;
-	ref_pos = reg->startRefPos;
-	local_ref_pos = reg->startLocalRefPos;
-	query_pos = reg->startQueryPos;
-
-	// initialize the start positions
-	start_aln_idx = local_aln->start_aln_idx_var;
-	if(ctgseq_aln[start_aln_idx]=='-'){ // gap in query
-		query_pos --;
-		while(ctgseq_aln[start_aln_idx]=='-' and start_aln_idx>0){
-			ref_pos --;
-			local_ref_pos --;
-			start_aln_idx --;
-		}
-	}else if(refseq_aln[start_aln_idx]=='-'){ // gap in reference
-		while(refseq_aln[start_aln_idx]=='-' and start_aln_idx>0){
-			query_pos --;
-			start_aln_idx --;
-		}
-		ref_pos --;
-		local_ref_pos --;
-	}
-
-	for(i=start_aln_idx; i>=start_check_idx; i--){
-		if(midseq_aln[i]==' '){ // mismatch including gap
-			if(ctgseq_aln[i]=='-'){ // gap in query
-				ref_pos --;
-				local_ref_pos --;
-			}else if(refseq_aln[i]=='-'){ // gap in reference
-				query_pos --;
-			}else{ // mismatch
-				query_pos --;
-				ref_pos --;
-				local_ref_pos --;
-			}
-
-			if(i==end_check_idx and extend_flag==false){
-				end_check_idx -= EXT_SIZE_CHK_VAR_LOC;
-				if(end_check_idx<0) end_check_idx = 0;
-				extend_flag = true;
-				//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
-			}
-		}else{ // match
-			if(extend_flag) break;
-
-			query_pos --;
-			ref_pos --;
-			local_ref_pos --;
-		}
-	}
-	if(i>=start_check_idx) {
-		start_check_idx = i;
-	}else{ // adjust to correct value
-		start_check_idx = i + 1;
-		query_pos ++;
-		ref_pos ++;
-		local_ref_pos ++;
-	}
-
-	startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
-	begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-	mis_reg_size = 0;
-	gap_flag = extend_flag = false;
-	mis_loc_flag = -1;
-	for(i=start_check_idx; i<=end_check_idx; i++){
-		if(midseq_aln[i]==' '){ // mismatch including gap
-			if(begin_mismatch_aln_idx==-1){
-				begin_mismatch_aln_idx = i;
-				startMisRefPos = ref_pos;
-				startMisLocalRefPos = local_ref_pos;
-				startMisQueryPos = query_pos;
-
-				if(ctgseq_aln[i]=='-'){ // gap in query
-					mis_loc_flag = 0;
-				}else if(refseq_aln[i]=='-'){ // gap in reference
-					mis_loc_flag = 1;
-				}else{ // mismatch
-					mis_loc_flag = 2;
-				}
-				mis_reg_size = 1;
-			}else{
-				mis_reg_size ++;
-			}
-
-			if(ctgseq_aln[i]=='-'){ // gap in query
-				ref_pos ++;
-				local_ref_pos ++;
-				gap_flag = true;
-			}else if(refseq_aln[i]=='-'){ // gap in reference
-				query_pos ++;
-				gap_flag = true;
-			}else{ // mismatch
-				query_pos ++;
-				ref_pos ++;
-				local_ref_pos ++;
-			}
-
-			if(i==end_check_idx){
-				if(extend_flag==false){
-					end_check_idx += EXT_SIZE_CHK_VAR_LOC;
-					if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
-					extend_flag = true;
-					//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
-				}else if(begin_mismatch_aln_idx!=-1){ // mismatch region not closed
-					end_check_idx += EXT_SIZE_CHK_VAR_LOC;
-					if(end_check_idx>(int32_t)midseq_aln.size()-1) end_check_idx = midseq_aln.size() - 1;
-					//cout << "line=" << __LINE__ << ", end_check_idx=" << end_check_idx << endl;
-				}
-			}
-		}else{ // match
-			if(begin_mismatch_aln_idx!=-1){
-				end_mismatch_aln_idx = i - 1;
-				switch(mis_loc_flag){
-					case 0:  // gap in query
-						endMisRefPos = ref_pos - 1;
-						endMisLocalRefPos = local_ref_pos - 1;
-						endMisQueryPos = query_pos;
-						break;
-					case 1:  // gap in reference
-						endMisRefPos = ref_pos;
-						endMisLocalRefPos = local_ref_pos;
-						endMisQueryPos = query_pos - 1;
-						break;
-					case 2:  // mismatch
-						endMisRefPos = ref_pos - 1;
-						endMisLocalRefPos = local_ref_pos - 1;
-						endMisQueryPos = query_pos - 1;
-						break;
-					default: // error
-						cerr << __func__ << ", line=" << __LINE__ << ", invalid mis_loc_flag: " << mis_loc_flag << ", error!" << endl;
-						exit(1);
-				}
-
-				mis_reg = new mismatchReg_t();
-				mis_reg->start_aln_idx = begin_mismatch_aln_idx;
-				mis_reg->end_aln_idx = end_mismatch_aln_idx;
-				mis_reg->reg_size = mis_reg_size;
-				mis_reg->startRefPos = startMisRefPos;
-				mis_reg->endRefPos = endMisRefPos;
-				mis_reg->startLocalRefPos = startMisLocalRefPos;
-				mis_reg->endLocalRefPos = endMisLocalRefPos;
-				mis_reg->startQueryPos = startMisQueryPos;
-				mis_reg->endQueryPos = endMisQueryPos;
-				mis_reg->valid_flag = true;
-				mis_reg->gap_flag = gap_flag;
-				misReg_vec.push_back(mis_reg);
-
-				begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-				startMisRefPos = endMisRefPos = startMisLocalRefPos = endMisLocalRefPos = startMisQueryPos = endMisQueryPos = -1;
-				mis_reg_size = 0;
-				mis_loc_flag = -1;
-
-				if(extend_flag) break;
-			}
-			if(extend_flag) break;
-
-			query_pos ++;
-			ref_pos ++;
-			local_ref_pos ++;
-			gap_flag = false;
-		}
-	}
-
-	// sort
-	for(i=0; i<(int32_t)misReg_vec.size(); i++){
-		mis_reg = misReg_vec.at(i);
-		for(j=i+1; j<(int32_t)misReg_vec.size(); j++){
-			mis_reg2 = misReg_vec.at(j);
-			if(mis_reg->start_aln_idx>mis_reg2->start_aln_idx){ // swap
-				tmp = mis_reg->start_aln_idx; mis_reg->start_aln_idx = mis_reg2->start_aln_idx; mis_reg2->start_aln_idx = tmp;
-				tmp = mis_reg->end_aln_idx; mis_reg->end_aln_idx = mis_reg2->end_aln_idx; mis_reg2->end_aln_idx = tmp;
-				tmp = mis_reg->reg_size; mis_reg->reg_size = mis_reg2->reg_size; mis_reg2->reg_size = tmp;
-				tmp = mis_reg->startRefPos; mis_reg->startRefPos = mis_reg2->startRefPos; mis_reg2->startRefPos = tmp;
-				tmp = mis_reg->endRefPos; mis_reg->endRefPos = mis_reg2->endRefPos; mis_reg2->endRefPos = tmp;
-				tmp = mis_reg->startLocalRefPos; mis_reg->startLocalRefPos = mis_reg2->startLocalRefPos; mis_reg2->startLocalRefPos = tmp;
-				tmp = mis_reg->endLocalRefPos; mis_reg->endLocalRefPos = mis_reg2->endLocalRefPos; mis_reg2->endLocalRefPos = tmp;
-				tmp = mis_reg->startQueryPos; mis_reg->startQueryPos = mis_reg2->startQueryPos; mis_reg2->startQueryPos = tmp;
-				tmp = mis_reg->endQueryPos; mis_reg->endQueryPos = mis_reg2->endQueryPos; mis_reg2->endQueryPos = tmp;
-				flag = mis_reg->valid_flag; mis_reg->valid_flag = mis_reg2->valid_flag; mis_reg2->valid_flag = flag;
-				flag = mis_reg->gap_flag; mis_reg->gap_flag = mis_reg2->gap_flag; mis_reg2->gap_flag = flag;
-			}
-		}
-	}
-
-	return misReg_vec;
-}
-
-// get mismatch regions
-vector<mismatchReg_t*> getMismatchRegVecWithoutPos(localAln_t *local_aln){
-	vector<mismatchReg_t*> misReg_vec;	// all the mismatch regions including gap regions
-	string ctgseq_aln, midseq_aln, refseq_aln;
-	int32_t i, j, tmp, start_check_idx, end_check_idx, mis_reg_size, begin_mismatch_aln_idx, end_mismatch_aln_idx;
-	mismatchReg_t *mis_reg, *mis_reg2;
-	bool gap_flag, flag;
-
-	ctgseq_aln = local_aln->alignResultVec[0];
-	midseq_aln = local_aln->alignResultVec[1];
-	refseq_aln = local_aln->alignResultVec[2];
-
-	// compute refPos and queryPos at start_aln_idx
-	start_check_idx = 0;
-	end_check_idx = midseq_aln.size() - 1;
-
-	begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-	mis_reg_size = 0;
-	gap_flag = false;
-	for(i=start_check_idx; i<=end_check_idx; i++){
-		if(midseq_aln[i]==' '){ // mismatch including gap
-			if(begin_mismatch_aln_idx==-1){
-				begin_mismatch_aln_idx = i;
-				mis_reg_size = 1;
-			}else{
-				mis_reg_size ++;
-			}
-
-			if(ctgseq_aln[i]=='-' or refseq_aln[i]=='-'){ // gap in query or reference
-				gap_flag = true;
-			}
-		}else{ // match
-			if(begin_mismatch_aln_idx!=-1){
-				end_mismatch_aln_idx = i - 1;
-
-				mis_reg = new mismatchReg_t();
-				mis_reg->start_aln_idx = begin_mismatch_aln_idx;
-				mis_reg->end_aln_idx = end_mismatch_aln_idx;
-				mis_reg->reg_size = mis_reg_size;
-				mis_reg->startRefPos = mis_reg->endRefPos = mis_reg->startLocalRefPos = mis_reg->endLocalRefPos = mis_reg->startQueryPos = mis_reg->endQueryPos = -1;
-				mis_reg->valid_flag = true;
-				mis_reg->gap_flag = gap_flag;
-				misReg_vec.push_back(mis_reg);
-
-				begin_mismatch_aln_idx = end_mismatch_aln_idx = -1;
-				mis_reg_size = 0;
-			}
-			gap_flag = false;
-		}
-	}
-
-	// sort
-	for(i=0; i<(int32_t)misReg_vec.size(); i++){
-		mis_reg = misReg_vec.at(i);
-		for(j=i+1; j<(int32_t)misReg_vec.size(); j++){
-			mis_reg2 = misReg_vec.at(j);
-			if(mis_reg->start_aln_idx>mis_reg2->start_aln_idx){ // swap
-				tmp = mis_reg->start_aln_idx; mis_reg->start_aln_idx = mis_reg2->start_aln_idx; mis_reg2->start_aln_idx = tmp;
-				tmp = mis_reg->end_aln_idx; mis_reg->end_aln_idx = mis_reg2->end_aln_idx; mis_reg2->end_aln_idx = tmp;
-				tmp = mis_reg->reg_size; mis_reg->reg_size = mis_reg2->reg_size; mis_reg2->reg_size = tmp;
-				flag = mis_reg->valid_flag; mis_reg->valid_flag = mis_reg2->valid_flag; mis_reg2->valid_flag = flag;
-				flag = mis_reg->gap_flag; mis_reg->gap_flag = mis_reg2->gap_flag; mis_reg2->gap_flag = flag;
-			}
-		}
-	}
-
-	return misReg_vec;
-}
-
-void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov){
-	size_t m;
-	int64_t start_ref_pos, end_ref_pos, chrlen_tmp;
-	int32_t i, j, start_check_idx, end_check_idx;
-	string chrname_tmp, ctgseq_aln, refseq_aln, query_substr, subject_substr, substr, substr_gap;
-	mismatchReg_t *mis_reg, *mis_reg0, *mis_reg2, *tmp_mis_reg;
-	char ch_left, ch_right;
-	bool flag, large_neighbor_dist_flag, high_con_ratio_flag, disagree_flag;
-	vector<bam1_t*> alnDataVector;
-	Base *start_base, *end_base;
-
-	if(misReg_vec.empty()) return;
-
-	if(local_aln->reg) chrname_tmp = local_aln->reg->chrname;
-	else if(local_aln->cand_reg) chrname_tmp = local_aln->cand_reg->chrname;
-	else return;
-	chrlen_tmp = faidx_seq_len(fai, chrname_tmp.c_str()); // get the reference length
-	if(chrlen_tmp==-1) return;
-
-	start_ref_pos = misReg_vec.at(0)->startRefPos - 2 * EXT_SIZE_CHK_VAR_LOC;
-	end_ref_pos = misReg_vec.at(misReg_vec.size()-1)->endRefPos + 2* EXT_SIZE_CHK_VAR_LOC;
-	if(start_ref_pos<1) start_ref_pos = 1;
-	if(end_ref_pos>chrlen_tmp) end_ref_pos = chrlen_tmp;
-
-	// load align data
-
-	alnDataLoader data_loader(chrname_tmp, start_ref_pos, end_ref_pos, inBamFile, minMapQ, minHighMapQ);
-	data_loader.loadAlnData(alnDataVector, max_ultra_high_cov);
-
-	// load coverage
-	covLoader cov_loader(chrname_tmp, start_ref_pos, end_ref_pos, fai);
-	Base *baseArray = cov_loader.initBaseArray();
-	cov_loader.generateBaseCoverage(baseArray, alnDataVector);
-
-	ctgseq_aln = local_aln->alignResultVec[0];
-	refseq_aln = local_aln->alignResultVec[2];
-
-	// filter out short (e.g. <= 1 bp) mismatched polymer items
-	for(i=0; i<(int32_t)misReg_vec.size(); i++){
-		mis_reg = misReg_vec.at(i);
-		start_check_idx = mis_reg->start_aln_idx;
-		end_check_idx = mis_reg->end_aln_idx;
-
-		// determine whether the base contains many insertions or deletions
-		start_base = baseArray + mis_reg->startRefPos - start_ref_pos;
-		end_base = baseArray + mis_reg->endRefPos - start_ref_pos;
-		high_con_ratio_flag = disagree_flag = false;
-
-		if(((start_base->max_con_type==BAM_CINS and start_base->maxConIndelEventRatio>=MIN_HIGH_CONSENSUS_INS_RATIO) or (start_base->max_con_type==BAM_CDEL and start_base->maxConIndelEventRatio>=MIN_HIGH_CONSENSUS_DEL_RATIO)) or ((end_base->max_con_type==BAM_CINS and end_base->maxConIndelEventRatio>=MIN_HIGH_CONSENSUS_INS_RATIO) or (end_base->max_con_type==BAM_CDEL and end_base->maxConIndelEventRatio>=MIN_HIGH_CONSENSUS_DEL_RATIO)))
-			high_con_ratio_flag = true;
-		if(start_base->isDisagreeBase() or end_base->isDisagreeBase())
-			disagree_flag = true;
-
-		if(high_con_ratio_flag or disagree_flag) continue; // skip below operations
-
-		if(mis_reg->gap_flag){
-			query_substr = ctgseq_aln.substr(start_check_idx, end_check_idx-start_check_idx+1);
-			subject_substr = refseq_aln.substr(start_check_idx, end_check_idx-start_check_idx+1);
-
-			// check polymer
-			if(query_substr.find("-")!=string::npos){ // gap in query
-				substr_gap = query_substr;
-				substr = subject_substr;
-				ch_left = refseq_aln.at(start_check_idx-1);
-				ch_right = refseq_aln.at(end_check_idx+1);
-			}else{ // gap in subject
-				substr = query_substr;
-				substr_gap = subject_substr;
-				ch_left = ctgseq_aln.at(start_check_idx-1);
-				ch_right = ctgseq_aln.at(end_check_idx+1);
-			}
-
-			flag = isPolymerSeq(substr);
-			if(flag){ // check
-				if(high_con_ratio_flag==false and disagree_flag==false and (substr.at(0)==ch_left or substr.at(substr.size()-1)==ch_right) and substr.size()<MIN_VALID_POLYMER_SIZE)
-					mis_reg->valid_flag = false;
-			}
-		}
-
-		// further to check the distance of its neighbors
-		large_neighbor_dist_flag = false;
-		if(mis_reg->valid_flag and mis_reg->reg_size<=MAX_SHORT_MIS_REG_SIZE){
-			if(i==0){ // first item
-				mis_reg2 = NULL;
-				for(m=i+1; m<misReg_vec.size(); m++){ // search right side
-					tmp_mis_reg = misReg_vec.at(m);
-					if(tmp_mis_reg->valid_flag){
-						mis_reg2 = tmp_mis_reg;
-						break;
-					}
-				}
-				if(mis_reg2==NULL or (mis_reg2->start_aln_idx-mis_reg->end_aln_idx>MIN_ADJACENT_REG_DIST))
-					large_neighbor_dist_flag = true;
-			}else if(i==(int32_t)misReg_vec.size()-1){ // last item
-				mis_reg0 = NULL;
-				for(j=i-1; j>=0; j--){ // search left side
-					tmp_mis_reg = misReg_vec.at(j);
-					if(tmp_mis_reg->valid_flag){
-						mis_reg0 = tmp_mis_reg;
-						break;
-					}
-				}
-				if(mis_reg0==NULL or (mis_reg->start_aln_idx-mis_reg0->end_aln_idx>MIN_ADJACENT_REG_DIST))
-					large_neighbor_dist_flag = true;
-			}else{ // middle items
-				mis_reg0 = NULL;
-				for(j=i-1; j>=0; j--){ // search left side
-					tmp_mis_reg = misReg_vec.at(j);
-					if(tmp_mis_reg->valid_flag){
-						mis_reg0 = tmp_mis_reg;
-						break;
-					}
-				}
-				mis_reg2 = NULL;
-				for(m=i+1; m<misReg_vec.size(); m++){ // search right side
-					tmp_mis_reg = misReg_vec.at(m);
-					if(tmp_mis_reg->valid_flag){
-						mis_reg2 = tmp_mis_reg;
-						break;
-					}
-				}
-				if((mis_reg0==NULL or (mis_reg->start_aln_idx-mis_reg0->end_aln_idx>MIN_ADJACENT_REG_DIST)) and (mis_reg2==NULL or (mis_reg2->start_aln_idx-mis_reg->end_aln_idx>MIN_ADJACENT_REG_DIST)))
-					large_neighbor_dist_flag = true;
-			}
-
-			if(large_neighbor_dist_flag==true and high_con_ratio_flag==false and disagree_flag==false)
-				mis_reg->valid_flag = false;
-		}
-	}
-
-	// remove invalid items
-	for(m=0; m<misReg_vec.size(); ){
-		mis_reg = misReg_vec.at(m);
-		if(mis_reg->valid_flag==false){
-			delete mis_reg;
-			misReg_vec.erase(misReg_vec.begin()+m);
-		}else m++;
-	}
-
-	// release memory
-	data_loader.freeAlnData(alnDataVector);
-	cov_loader.freeBaseArray(baseArray);
-}
-
-void adjustVarLocByMismatchRegs(reg_t *reg, vector<mismatchReg_t*> &misReg_vec, int32_t start_aln_idx_var, int32_t end_aln_idx_var){
-	int32_t i, max_reg_idx, maxValue, secMax_reg_idx, secMaxValue, left_reg_idx, right_reg_idx;
-	mismatchReg_t *mis_reg, *mis_reg2;
-
-	if(start_aln_idx_var!=-1 and end_aln_idx_var!=-1){
-		// get maximum and second maximum mismatch region
-		max_reg_idx = secMax_reg_idx = -1;
-		maxValue = secMaxValue = 0;
-		for(i=0; i<(int32_t)misReg_vec.size(); i++){
-			mis_reg = misReg_vec.at(i);
-			if(mis_reg->reg_size>maxValue){
-				max_reg_idx = i;
-				maxValue = mis_reg->reg_size;
-			}
-			if(mis_reg->reg_size>=secMaxValue){
-				secMax_reg_idx = i;
-				secMaxValue = mis_reg->reg_size;
-			}
-		}
-
-		// check its neighbors
-		if(max_reg_idx!=-1){
-			left_reg_idx = right_reg_idx = -1;
-
-			// left side extend
-			mis_reg = misReg_vec.at(max_reg_idx);
-			for(i=max_reg_idx-1; i>=0; i--){
-				mis_reg2 = misReg_vec.at(i);
-				//if((mis_reg->start_aln_idx-mis_reg2->end_aln_idx<=MIN_ADJACENT_REG_DIST) or (mis_reg->start_aln_idx>=end_aln_idx_var and mis_reg2->end_aln_idx<=start_aln_idx_var)){ // distance less than threshold
-				if((mis_reg->start_aln_idx-mis_reg2->end_aln_idx<=MIN_ADJACENT_REG_DIST) and (mis_reg->start_aln_idx>=end_aln_idx_var and mis_reg2->end_aln_idx<=start_aln_idx_var)){ // distance less than threshold
-					left_reg_idx = i;
-					mis_reg = mis_reg2;
-					mis_reg2 = NULL;
-				}else break;
-			}
-			if(left_reg_idx==-1) left_reg_idx = max_reg_idx;
-
-			// right side extend
-			mis_reg = misReg_vec.at(max_reg_idx);
-			for(i=max_reg_idx+1; i<(int32_t)misReg_vec.size(); i++){
-				mis_reg2 = misReg_vec.at(i);
-				//if((mis_reg2->start_aln_idx-mis_reg->end_aln_idx<=MIN_ADJACENT_REG_DIST) or (mis_reg->end_aln_idx<=start_aln_idx_var and mis_reg2->start_aln_idx>=end_aln_idx_var)){ // distance less than threshold
-				if((mis_reg2->start_aln_idx-mis_reg->end_aln_idx<=MIN_ADJACENT_REG_DIST) and (mis_reg->end_aln_idx<=start_aln_idx_var and mis_reg2->start_aln_idx>=end_aln_idx_var)){ // distance less than threshold
-					right_reg_idx = i;
-					mis_reg = mis_reg2;
-					mis_reg2 = NULL;
-				}else break;
-			}
-			if(right_reg_idx==-1) right_reg_idx = max_reg_idx;
-
-			mis_reg = misReg_vec.at(left_reg_idx);
-			mis_reg2 = misReg_vec.at(right_reg_idx);
-			reg->startRefPos = mis_reg->startRefPos - 1;
-			reg->endRefPos = mis_reg2->endRefPos;
-			reg->startLocalRefPos = mis_reg->startLocalRefPos - 1;
-			reg->endLocalRefPos = mis_reg2->endLocalRefPos;
-			reg->startQueryPos = mis_reg->startQueryPos - 1;
-			reg->endQueryPos = mis_reg2->endQueryPos;
-		}
-	}
-}
-
-void releaseMismatchRegVec(vector<mismatchReg_t*> &misReg_vec){
-	// release memory
-	for(size_t i=0; i<misReg_vec.size(); i++) delete misReg_vec.at(i);
-	vector<mismatchReg_t*>().swap(misReg_vec);
-}
-
-mismatchReg_t *getMismatchReg(int32_t aln_idx, vector<mismatchReg_t*> &misReg_vec){
-	mismatchReg_t *mis_item_ret = NULL, *mis_item;
-	for(size_t i=0; i<misReg_vec.size(); i++){
-		mis_item = misReg_vec.at(i);
-		if(mis_item->valid_flag){
-			if(aln_idx>=mis_item->start_aln_idx and aln_idx<=mis_item->end_aln_idx){
-				mis_item_ret = mis_item;
-				break;
-			}
-		}
-	}
-	return mis_item_ret;
 }
 
 bool isPolymerSeq(string &seq){
@@ -4698,7 +3972,6 @@ void processClipRegs(int32_t work_id, mateClipReg_t &mate_clip_reg, reg_t *clip_
 			reg->var_type = VAR_UNC;
 			reg->sv_len = 0;
 			reg->query_id = -1;
-			reg->blat_aln_id = -1;
 			reg->minimap2_aln_id = -1;
 			reg->call_success_status = false;
 			reg->short_sv_flag = false;
@@ -6669,8 +5942,7 @@ vector<string> extractQcSigCompSeqs(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, faidx
 	vector<string> comp_seqs;
 	string seq_new1, seq_new2;
 	string seq_left, seq_right, reg_str;
-	int startpos1, startpos2, endpos1, endpos2;
-	int32_t refseq_len_tmp;
+	int32_t startpos1, startpos2, endpos1, endpos2, refseq_len_tmp;
 	char *seq;
 
 	startpos1 = qc_sig->ref_pos;
@@ -6726,6 +5998,163 @@ vector<string> extractQcSigCompSeqs(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, faidx
 
 	return comp_seqs;
 }
+
+vector<string> extractQcSigCompSeqsClip(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int32_t min_clip_dist_thres, faidx_t *fai){
+	vector<string> comp_seqs;
+	string reg_str, seq_new1, seq_new2, tmp_seq, tmp_seq2, tmp_seq3;
+	int32_t endpos, refseq_len_tmp, idx, start_pos_tmp, end_pos_tmp;
+	char *seq;
+	qcSig_t *clip_sig, *indel_sig;
+
+	if(qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP){
+		clip_sig = qc_sig;
+		indel_sig = seed_qc_sig;
+	}else{
+		clip_sig = seed_qc_sig;
+		indel_sig = qc_sig;
+	}
+
+	seq_new1 = seq_new2 = "";
+	if(indel_sig->altseq.size()>=(size_t)min_clip_dist_thres and clip_sig->cigar_op_len<2*indel_sig->cigar_op_len){
+		endpos = getEndRefPosAlnSeg(indel_sig->ref_pos, indel_sig->cigar_op, indel_sig->cigar_op_len);
+		if(indel_sig->cigar_op==BAM_CINS){
+			if(clip_sig->clip_end_flag==LEFT_END){ // left end
+				if(clip_sig->ref_pos<indel_sig->ref_pos){
+					reg_str = indel_sig->chrname + ":" + to_string(clip_sig->ref_pos) + "-" + to_string(indel_sig->ref_pos - 1);
+					pthread_mutex_lock(&mutex_fai);
+					seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+					pthread_mutex_unlock(&mutex_fai);
+					tmp_seq = seq;
+					free(seq);
+
+					seq_new1 = clip_sig->altseq + tmp_seq;
+					if(indel_sig->altseq.size()>=seq_new1.size()){
+						idx = indel_sig->altseq.size() - seq_new1.size();
+						seq_new2 = indel_sig->altseq.substr(idx, seq_new1.size());
+					}else{
+						start_pos_tmp = indel_sig->ref_pos - (seq_new1.size() - indel_sig->altseq.size());
+						if(start_pos_tmp>0 and start_pos_tmp<=indel_sig->ref_pos-1){
+							reg_str = indel_sig->chrname + ":" + to_string(start_pos_tmp) + "-" + to_string(indel_sig->ref_pos - 1);
+							pthread_mutex_lock(&mutex_fai);
+							seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+							pthread_mutex_unlock(&mutex_fai);
+							tmp_seq2 = seq;
+							free(seq);
+
+							seq_new2 = tmp_seq2 + indel_sig->altseq;
+						}
+					}
+				}else{
+					if((int32_t)clip_sig->altseq.size()>=clip_sig->ref_pos-indel_sig->ref_pos){
+						seq_new1 = clip_sig->altseq;
+
+						tmp_seq = "";
+						if(indel_sig->ref_pos<clip_sig->ref_pos){
+							reg_str = indel_sig->chrname + ":" + to_string(endpos) + "-" + to_string(clip_sig->ref_pos - 1);
+							pthread_mutex_lock(&mutex_fai);
+							seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+							pthread_mutex_unlock(&mutex_fai);
+							tmp_seq = seq;
+							free(seq);
+						}
+
+						if(clip_sig->altseq.size()<=indel_sig->altseq.size()+tmp_seq.size()){ // two parts
+							idx = indel_sig->altseq.size() - (clip_sig->altseq.size() - tmp_seq.size());
+							tmp_seq2 = indel_sig->altseq.substr(idx, clip_sig->altseq.size() - tmp_seq.size());
+							seq_new2 = tmp_seq2 + tmp_seq;
+						}else{ // three parts
+							refseq_len_tmp = clip_sig->altseq.size() - indel_sig->altseq.size() - tmp_seq.size();
+							start_pos_tmp = indel_sig->ref_pos - refseq_len_tmp;
+							if(start_pos_tmp>0 and start_pos_tmp<=indel_sig->ref_pos-1){
+								reg_str = indel_sig->chrname + ":" + to_string(start_pos_tmp) + "-" + to_string(indel_sig->ref_pos - 1);
+								pthread_mutex_lock(&mutex_fai);
+								seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+								pthread_mutex_unlock(&mutex_fai);
+								tmp_seq3 = seq;
+								free(seq);
+
+								seq_new2 = tmp_seq3 + indel_sig->altseq + tmp_seq;
+							}
+						}
+					}
+				}
+			}else{ // right end
+				if(indel_sig->ref_pos<clip_sig->ref_pos){
+					reg_str = indel_sig->chrname + ":" + to_string(indel_sig->ref_pos) + "-" + to_string(clip_sig->ref_pos - 1);
+					pthread_mutex_lock(&mutex_fai);
+					seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+					pthread_mutex_unlock(&mutex_fai);
+					tmp_seq = seq;
+					free(seq);
+
+					seq_new1 = tmp_seq + clip_sig->altseq;
+					if(indel_sig->altseq.size()>=seq_new1.size()){
+						seq_new2 = indel_sig->altseq.substr(0, seq_new1.size());
+					}else{
+						end_pos_tmp = indel_sig->ref_pos + (seq_new1.size() - indel_sig->altseq.size());
+						if(end_pos_tmp>0 and end_pos_tmp>=indel_sig->ref_pos){
+							reg_str = indel_sig->chrname + ":" + to_string(indel_sig->ref_pos) + "-" + to_string(end_pos_tmp);
+							pthread_mutex_lock(&mutex_fai);
+							seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+							pthread_mutex_unlock(&mutex_fai);
+							tmp_seq2 = seq;
+							free(seq);
+
+							seq_new2 = indel_sig->altseq + tmp_seq2;
+						}
+					}
+				}else{
+					if((int32_t)clip_sig->altseq.size()>=indel_sig->ref_pos-clip_sig->ref_pos){
+						seq_new1 = clip_sig->altseq;
+
+						tmp_seq = "";
+						if(indel_sig->ref_pos>clip_sig->ref_pos){
+							reg_str = indel_sig->chrname + ":" + to_string(clip_sig->ref_pos) + "-" + to_string(indel_sig->ref_pos - 1);
+							pthread_mutex_lock(&mutex_fai);
+							seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+							pthread_mutex_unlock(&mutex_fai);
+							tmp_seq = seq;
+							free(seq);
+						}
+
+						if(clip_sig->altseq.size()<=indel_sig->altseq.size()+tmp_seq.size()){ // two parts
+							tmp_seq2 = indel_sig->altseq.substr(0, clip_sig->altseq.size() - tmp_seq.size());
+							seq_new2 = tmp_seq + tmp_seq2;
+						}else{ // three parts
+							refseq_len_tmp = clip_sig->altseq.size() - indel_sig->altseq.size() - tmp_seq.size();
+							end_pos_tmp = indel_sig->ref_pos + refseq_len_tmp;
+							if(end_pos_tmp>0 and end_pos_tmp>=endpos){
+								reg_str = indel_sig->chrname + ":" + to_string(endpos) + "-" + to_string(end_pos_tmp);
+								pthread_mutex_lock(&mutex_fai);
+								seq = fai_fetch(fai, reg_str.c_str(), &refseq_len_tmp);
+								pthread_mutex_unlock(&mutex_fai);
+								tmp_seq3 = seq;
+								free(seq);
+
+								seq_new2 = tmp_seq + indel_sig->altseq + tmp_seq3;
+							}
+						}
+					}
+				}
+			}
+		}
+//		else if(indel_sig->cigar_op==BAM_CDEL){ // ignore DEL
+//
+//			cout << "DEL: " << indel_sig->chrname << ":" << indel_sig->ref_pos << "-" << endpos << endl;
+//			if(clip_sig->clip_end_flag==LEFT_END){ // left end
+//
+//			}else{ // right end
+//
+//			}
+//		}
+	}
+
+	comp_seqs.push_back(seq_new1);
+	comp_seqs.push_back(seq_new2);
+
+	return comp_seqs;
+}
+
 
 // smooth the query sequence data for Indel regions
 struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNode*> &query_seq_info_vec, int64_t startRefPos_cns, int32_t min_sv_size){
@@ -7010,8 +6439,7 @@ bool mergeNeighbouringSigsFlag(struct querySeqInfoNode* query_seq_info_node, vec
 			if(sig1->cigar_op!=BAM_CINS and sig1->cigar_op!=BAM_CDEL) continue;
 
 			query_opflag = sig1->cigar_op;
-			// pre_refpos_comp = -1;
-			pre_distance = -1;
+			pre_distance = 0;
 
 			query1_startRpos = sig1->ref_pos;
 			query1_svlen = sig1->cigar_op_len;
@@ -7030,8 +6458,10 @@ bool mergeNeighbouringSigsFlag(struct querySeqInfoNode* query_seq_info_node, vec
 				// else distance = query2_startRpos - pre_refpos_comp; // -1;
 				dist = query2_startRpos - query1_endRpos;
 
-				if(dist > max_ref_dist_thres) break;
-				if(query_opflag == sig2->cigar_op and dist <= max_ref_dist_thres){
+				//if(dist > max_ref_dist_thres) break;
+				if(dist-pre_distance > max_ref_dist_thres) break;
+
+				if(query_opflag == sig2->cigar_op){
 					query2_svlen = sig2->cigar_op_len;
 					query2_startQpos = sig2->query_pos;
 					query2_endQpos = getEndQueryPosAlnSeg(query2_startQpos, sig2->cigar_op, query2_svlen);
@@ -7189,7 +6619,7 @@ bool mergeNeighbouringSigsFlagClipReg(qcSigList_t *qcSigList_node, vector<qcSig_
 	int32_t dist, query_opflag, seq_len;
 	int64_t query1_startRpos, query1_endRpos, query1_svlen, query1_startQpos, query1_endQpos, query2_startRpos, query2_svlen, query2_startQpos, query2_endQpos, start_querypos_comp, end_querypos_comp, start_refpos_comp, end_refpos_comp, start_querypos_merged, end_querypos_merged, query2_endRpos;
 	int64_t pre_distance;
-	string queryseq_whole, comp_refseq, comp_queryseq, reg_str, merging_seq;
+	string queryseq_whole, comp_refseq, comp_queryseq, reg_str, merging_seq; //, inner_refseq, inner_queryseq;
 	double sim_val;
 	qcSig_t *sig1, *sig2;
 	char *seq;
@@ -7225,7 +6655,8 @@ bool mergeNeighbouringSigsFlagClipReg(qcSigList_t *qcSigList_node, vector<qcSig_
 			pre_distance = -1;
 
 			query1_startRpos = sig1->ref_pos;
-			query1_svlen = sig1->cigar_op_len>=(int32_t)sig1->altseq.size() ? sig1->altseq.size() : sig1->cigar_op_len;
+			if(sig1->cigar_op==BAM_CINS) query1_svlen = sig1->cigar_op_len>=(int32_t)sig1->altseq.size() ? sig1->altseq.size() : sig1->cigar_op_len;
+			else query1_svlen = sig1->cigar_op_len>=(int32_t)sig1->refseq.size() ? sig1->refseq.size() : sig1->cigar_op_len;
 			query1_endRpos = getEndRefPosAlnSeg(query1_startRpos, query_opflag, query1_svlen);
 			query1_startQpos = sig1->query_pos;
 			query1_endQpos = getEndQueryPosAlnSeg(query1_startQpos, query_opflag, query1_svlen);
@@ -7243,10 +6674,22 @@ bool mergeNeighbouringSigsFlagClipReg(qcSigList_t *qcSigList_node, vector<qcSig_
 
 				if(dist > max_ref_dist_thres) break;
 				if(query_opflag == sig2->cigar_op and dist <= max_ref_dist_thres){
-					query2_svlen = sig2->cigar_op_len>=(int32_t)sig2->altseq.size() ? sig2->altseq.size() : sig2->cigar_op_len;
+					if(sig2->cigar_op==BAM_CINS) query2_svlen = sig2->cigar_op_len>=(int32_t)sig2->altseq.size() ? sig2->altseq.size() : sig2->cigar_op_len;
+					else query2_svlen = sig2->cigar_op_len>=(int32_t)sig2->refseq.size() ? sig2->refseq.size() : sig2->cigar_op_len;
 					query2_startQpos = sig2->query_pos;
 					query2_endQpos = getEndQueryPosAlnSeg(query2_startQpos, sig2->cigar_op, query2_svlen);
 					query2_endRpos = getEndRefPosAlnSeg(query2_startRpos, sig2->cigar_op, query2_svlen);
+
+//					// get inner query seq
+//					if(query1_endQpos<query2_startQpos) inner_queryseq = queryseq_whole.substr(query1_endQpos, query2_startQpos-1-query1_endQpos);
+//					// get inner ref seq
+//					reg_str = queryseq_node->clip_aln->chrname + ":" + to_string(query1_endQpos+1) + "-" + to_string(query2_startQpos-1);
+//					pthread_mutex_lock(&mutex_fai);
+//					seq = fai_fetch(fai, reg_str.c_str(), &seq_len);
+//					pthread_mutex_unlock(&mutex_fai);
+//					inner_refseq = seq;
+//					free(seq);
+
 					if(query_opflag==BAM_CDEL){ // DEL
 						// get compared query pos
 						// start_querypos_comp = query1_endQpos;	// deleted on 2025-01-03
@@ -7297,7 +6740,7 @@ bool mergeNeighbouringSigsFlagClipReg(qcSigList_t *qcSigList_node, vector<qcSig_
 							query1_svlen = sig1->cigar_op_len;
 							query1_endRpos = getEndRefPosAlnSeg(query1_startRpos, query_opflag, query1_svlen);
 
-							sig1->altseq += sig2->altseq;
+							sig1->refseq += sig2->refseq;
 							// pre_refpos_comp = query2_endRpos;
 							pre_distance = dist;
 							delete sig2;
@@ -7396,7 +6839,7 @@ bool mergeNeighbouringSigsFlagClipReg(qcSigList_t *qcSigList_node, vector<qcSig_
 }
 
 // filter small signatures (l/max_size<0.2)
-void filterSmallSigs(vector<qcSig_t *> &qcSig_vec, double valid_size_ratio_thres){
+void filterSmallSigs(vector<qcSig_t *> &qcSig_vec, double valid_size_ratio_thres, int32_t min_valid_seg_size){
 	size_t i;
 	int32_t max_size_ins, max_size_del;
 	qcSig_t *sig;
@@ -7413,8 +6856,8 @@ void filterSmallSigs(vector<qcSig_t *> &qcSig_vec, double valid_size_ratio_thres
 		for(i=0; i<qcSig_vec.size(); ){
 			sig = qcSig_vec.at(i);
 			valid_flag = true;
-			if(sig->cigar_op==BAM_CINS and (double)sig->cigar_op_len/max_size_ins<valid_size_ratio_thres) valid_flag = false;
-			else if(sig->cigar_op==BAM_CDEL and (double)sig->cigar_op_len/max_size_del<valid_size_ratio_thres) valid_flag = false;
+			if(sig->cigar_op==BAM_CINS and sig->cigar_op_len<min_valid_seg_size and (double)sig->cigar_op_len/max_size_ins<valid_size_ratio_thres) valid_flag = false;
+			else if(sig->cigar_op==BAM_CDEL and sig->cigar_op_len<min_valid_seg_size and (double)sig->cigar_op_len/max_size_del<valid_size_ratio_thres) valid_flag = false;
 			if(valid_flag==false){
 				delete sig;
 				qcSig_vec.erase(qcSig_vec.begin()+i);
@@ -7650,15 +7093,18 @@ bool isBothEndsOverlap(vector<clipAlnData_t*> &query_aln_segs, int64_t leftClipR
 }
 
 bool isTurnRound(vector<clipAlnData_t*> &query_aln_segs, int64_t leftClipRefPos, int64_t rightClipRefPos){
-	bool flag, overlap_flag, overlap_flag2;
+	bool flag, left_overlap_flag1, left_overlap_flag2, right_overlap_flag1, right_overlap_flag2;
 	clipAlnData_t *clip_aln, *clip_aln_next, *left_aln_seg, *right_aln_seg;
 	size_t i;
-	int64_t start_rpos, end_rpos, min_qpos, max_qpos, tmp_min, tmp_max;
+	int64_t start_rpos1, end_rpos1, start_rpos2, end_rpos2, min_qpos, max_qpos, tmp_min, tmp_max;
 	int32_t clip_end1, clip_end2, min_idx, max_idx;
 
-	start_rpos = leftClipRefPos - EXT_SIZE_CHK_VAR_LOC;
-	if(start_rpos<1) start_rpos = 1;
-	end_rpos = rightClipRefPos + EXT_SIZE_CHK_VAR_LOC;
+	start_rpos1 = leftClipRefPos - EXT_SIZE_CHK_VAR_LOC;
+	if(start_rpos1<1) start_rpos1 = 1;
+	end_rpos1 = leftClipRefPos + EXT_SIZE_CHK_VAR_LOC;
+	start_rpos2 = rightClipRefPos - EXT_SIZE_CHK_VAR_LOC;
+	if(start_rpos2<1) start_rpos2 = 1;
+	end_rpos2 = rightClipRefPos + EXT_SIZE_CHK_VAR_LOC;
 
 	left_aln_seg = right_aln_seg = NULL;
 	for(i=0; i<query_aln_segs.size(); i++){
@@ -7703,9 +7149,11 @@ bool isTurnRound(vector<clipAlnData_t*> &query_aln_segs, int64_t leftClipRefPos,
 			if(clip_end1==RIGHT_END) clip_aln_next = clip_aln->right_aln;
 			else clip_aln_next = clip_aln->left_aln;
 			if(clip_aln_next and clip_aln->chrname.compare(clip_aln_next->chrname)==0 and clip_aln->aln_orient==clip_aln_next->aln_orient){ // same chr, same orientation
-				overlap_flag = isOverlappedPos(clip_aln->startRefPos, clip_aln->endRefPos, start_rpos, end_rpos);
-				overlap_flag2 = isOverlappedPos(clip_aln_next->startRefPos, clip_aln_next->endRefPos, start_rpos, end_rpos);
-				if(overlap_flag or overlap_flag2){ // at least one end overlap
+				left_overlap_flag1 = isOverlappedPos(clip_aln->startRefPos, clip_aln->endRefPos, start_rpos1, end_rpos1);
+				right_overlap_flag1 = isOverlappedPos(clip_aln_next->startRefPos, clip_aln_next->endRefPos, start_rpos2, end_rpos2);
+				right_overlap_flag2 = isOverlappedPos(clip_aln_next->startRefPos, clip_aln_next->endRefPos, start_rpos1, end_rpos1);
+				left_overlap_flag2 = isOverlappedPos(clip_aln->startRefPos, clip_aln->endRefPos, start_rpos2, end_rpos2);
+				if((left_overlap_flag1 and right_overlap_flag1) or (left_overlap_flag2 and right_overlap_flag2)){ // both ends overlap
 					if((clip_aln_next->aln_orient==ALN_PLUS_ORIENT and clip_aln_next->startRefPos<clip_aln->endRefPos) or (clip_aln_next->aln_orient==ALN_MINUS_ORIENT and clip_aln_next->endRefPos>clip_aln->startRefPos)){
 						flag = true;
 						break;

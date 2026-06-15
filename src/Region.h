@@ -8,7 +8,6 @@
 #include "structures.h"
 #include "Paras.h"
 #include "Base.h"
-#include "misAlnReg.h"
 
 using namespace std;
 

@@ -39,7 +39,6 @@ void Paras::init(){
 	num_threads = 0;
 	delete_reads_flag = true;
 	keep_failed_reads_flag = recns_failed_work_flag = false;
-	maskMisAlnRegFlag = false;
 	cnsChunkSize = CNS_CHUNK_SIZE_INDEL;
 	cnsSideExtSize = CNS_CHUNK_SIZE_EXT_INDEL;
 	cnsSideExtSizeClip = CNS_CHUNK_SIZE_EXT_CLIP;
@@ -240,6 +239,103 @@ int Paras::checkBamFile(){
 	return ret;
 }
 
+// Parse and expand a range string like "chr1-chr22", "chrX-chrY", "chrM" or "MT"
+vector<string> Paras::expandRangeChrStrs(const string &input){
+	vector<string> chr_str_vec;
+
+	// If it contains ':', treat it as a specific region (e.g., chr1:100-200) and return as is
+	if(input.find(':') != string::npos){
+		chr_str_vec.push_back(input);
+		return chr_str_vec;
+	}
+
+	// 1. Find the delimiter '-'
+	size_t dash_pos = input.find('-');
+	if (dash_pos == string::npos) {
+		// Single chromosome format like "chrM", "M", "chrMT", "chr1"
+		chr_str_vec.push_back(input);
+		return chr_str_vec;
+	}
+
+	string left_str = input.substr(0, dash_pos);
+	string right_str = input.substr(dash_pos + 1);
+	string left_prefix, right_prefix, left_suffix, right_suffix, m_suffix;
+	int32_t start_num, end_num;
+
+	// 2. Define a lambda function to parse and extract the prefix, suffix and mapped number
+	auto parse_part = [](const string& s, string& prefix, int32_t& num, string& suffix_str) {
+		size_t split_idx = string::npos;
+
+		// Find the first digit to split prefix and suffix
+		for (size_t i = 0; i < s.length(); ++i) {
+			if (std::isdigit(static_cast<unsigned char>(s[i]))) {
+				split_idx = i;
+				break;
+			}
+		}
+
+		// If no digits found, check for standard non-numeric chromosome suffixes (X, Y, M, MT)
+		if (split_idx == string::npos) {
+			// MUST check "MT" before "M" because "MT" ends with 'T'
+			if (s.length() >= 2 && s.substr(s.length() - 2) == "MT") {
+				split_idx = s.length() - 2;
+			} else if (!s.empty() && (s.back() == 'X' || s.back() == 'Y' || s.back() == 'M')) {
+				split_idx = s.length() - 1;
+			} else {
+				throw std::invalid_argument("Format error: No valid chromosome suffix found in '" + s + "'");
+			}
+		}
+
+		prefix = s.substr(0, split_idx);
+		suffix_str = s.substr(split_idx);
+
+		// Map suffix to an integer for range comparison
+		if (suffix_str == "X") num = 23;
+		else if (suffix_str == "Y") num = 24;
+		else if (suffix_str == "M" || suffix_str == "MT") num = 25;
+		else {
+			// Ensure there are no invalid characters after the digits
+			for (char c : suffix_str) {
+				if (!std::isdigit(static_cast<unsigned char>(c))) {
+					throw std::invalid_argument("Format error: Invalid characters found in suffix '" + suffix_str + "'");
+				}
+			}
+			num = std::stoi(suffix_str);
+		}
+	};
+
+	// 3. Parse both the left and right parts
+	parse_part(left_str, left_prefix, start_num, left_suffix);
+	parse_part(right_str, right_prefix, end_num, right_suffix);
+
+	// 4. Validate if the prefixes match
+	if (left_prefix != right_prefix) {
+		throw std::invalid_argument("Format error: Prefix mismatch ('" + left_prefix + "' vs '" + right_prefix + "')");
+	}
+
+	// Swap if start is greater than end (to support reverse ranges like "chrY-chrX" or "chrM-chr1")
+	if (start_num > end_num) {
+		std::swap(start_num, end_num);
+	}
+
+	// Determine whether to use "M" or "MT" based on the original input
+	m_suffix = (left_suffix == "MT" || right_suffix == "MT") ? "MT" : "M";
+
+	// 5. Generate the result list
+	chr_str_vec.reserve(end_num - start_num + 1); // Pre-allocate memory for better performance
+	for(int32_t i = start_num; i <= end_num; ++i) {
+		string suffix;
+		if (i == 23) suffix = "X";
+		else if (i == 24) suffix = "Y";
+		else if (i == 25) suffix = m_suffix;
+		else suffix = std::to_string(i);
+
+		chr_str_vec.push_back(left_prefix + suffix);
+	}
+
+	return chr_str_vec;
+}
+
 // parse the parameters
 int Paras::parseParas(int argc, char **argv){
 	if (argc < 2) { showUsage(); return 1; }
@@ -323,7 +419,8 @@ int Paras::parseDetectParas(int argc, char **argv){
 	max_seg_size_ratio_usr = MAX_SEG_SIZE_RATIO;
 	max_absig_density = -1;
 	simpleReg_t *simple_reg;
-	string simple_reg_str, opt_name_str;
+	string opt_name_str;
+	vector<string> reg_str_vec;
 
 	static struct option lopts[] = {
 //		{ "daemon", no_argument, NULL, 'D' },
@@ -414,13 +511,15 @@ int Paras::parseDetectParas(int argc, char **argv){
 		inBamFile = argv[optind+1];
 
 		for(int i=optind+2; i<argc; i++){
-			simple_reg_str = argv[i];
-			simple_reg = allocateSimpleReg(simple_reg_str);
-			if(simple_reg) limit_reg_vec.push_back(simple_reg);
-			else{
-				cout << "Error: Please specify the correct genomic regions to be processed." << endl << endl;
-				showDetectUsage();
-				return 1;
+			reg_str_vec = expandRangeChrStrs(argv[i]);
+			for(auto const& str : reg_str_vec){
+				simple_reg = allocateSimpleReg(str);
+				if(simple_reg) limit_reg_vec.push_back(simple_reg);
+				else{
+					cout << "Error: Please specify the correct genomic regions to be processed." << endl << endl;
+					showDetectUsage();
+					return 1;
+				}
 			}
 		}
 		if(limit_reg_vec.size()) limit_reg_process_flag = true;
@@ -703,7 +802,8 @@ int Paras::parseCallParas(int argc, char **argv){
 int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 	int opt, threadNum_tmp = 0, option_index;
 	simpleReg_t *simple_reg;
-	string simple_reg_str, lower_str;
+	string lower_str;
+	vector<string> reg_str_vec;
 
 	blockSize = BLOCKSIZE;
 	slideSize = SLIDESIZE;
@@ -847,13 +947,15 @@ int Paras::parseAllParas(int argc, char **argv, const string &cmd_str){
 		inBamFile = argv[optind+1];
 
 		for(int i=optind+2; i<argc; i++){
-			simple_reg_str = argv[i];
-			simple_reg = allocateSimpleReg(simple_reg_str);
-			if(simple_reg) limit_reg_vec.push_back(simple_reg);
-			else{
-				cout << "Error: Please specify the correct genomic regions to be processed." << endl << endl;
-				showAllUsage(cmd_str);
-				return 1;
+			reg_str_vec = expandRangeChrStrs(argv[i]);
+			for(auto const& str : reg_str_vec){
+				simple_reg = allocateSimpleReg(str);
+				if(simple_reg) limit_reg_vec.push_back(simple_reg);
+				else{
+					cout << "Error: Please specify the correct genomic regions to be processed." << endl << endl;
+					showAllUsage(cmd_str);
+					return 1;
+				}
 			}
 		}
 		if(limit_reg_vec.size()) limit_reg_process_flag = true;
@@ -906,8 +1008,8 @@ void Paras::showUsage(){
 	cout << "   # run the pipeline for tumor sample" << endl;
 	cout << "   $ asvclr all -x ccs -t 32 -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl << endl;
 
-	cout << "   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000" << endl;
-	cout << "   $ asvclr all -x ccs -t 32 -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000, chr11-chrY" << endl;
+	cout << "   $ asvclr all -x ccs -t 32 -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10m-20m chr11-chrY" << endl;
 }
 
 // show the usage for detect command
@@ -970,8 +1072,8 @@ void Paras::showDetectUsage(){
 	cout << "   # run 'det' command for tumor sample" << endl;
 	cout << "   $ asvclr det -t 32 -x ccs -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl << endl;
 
-	cout << "   # run 'det' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
-	cout << "   $ asvclr det -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   # run 'det' command to analyze the user-specified regions: chr1, chr2:10000000-20000000, chr11-chrY" << endl;
+	cout << "   $ asvclr det -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10m-20m chr11-chrY" << endl;
 }
 
 // show the usage for 'cns' command
@@ -1101,7 +1203,7 @@ void Paras::showCallUsage(){
 	cout << "   -t INT        number of threads [0]. 0 for the maximal number" << endl;
 	cout << "                 of threads in machine" << endl;
 	cout << "   --monitor_proc_names_call STR" << endl;
-	cout << "                 Process names to be monitored during BLAT alignment. These processes may" << endl;
+	cout << "                 Process names to be monitored during 'call' step. These processes may" << endl;
 	cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
 	cout << "                 should be terminated in advance if they are computation intensive works." << endl;
 	cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
@@ -1235,7 +1337,7 @@ void Paras::showAllUsage(const string &cmd_str){
 
 	if(cmd_str.compare(CMD_ALL_STR)==0){
 		cout << "   --monitor_proc_names_call STR" << endl;
-		cout << "                 Process names to be monitored during BLAT alignment. These processes may" << endl;
+		cout << "                 Process names to be monitored during 'call' step. These processes may" << endl;
 		cout << "                 have ultra-high CPU running time under some certain circumstances and" << endl;
 		cout << "                 should be terminated in advance if they are computation intensive works." << endl;
 		cout << "                 Note that the process names should be comma-delimited and without blanks:" << endl;
@@ -1307,11 +1409,11 @@ if(cmd_str.compare(CMD_ALL_STR)==0){
 	cout << "   $ asvclr " << cmd_str << " -t 32 -x ccs -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam" << endl << endl;
 
 if(cmd_str.compare(CMD_ALL_STR)==0){
-	cout << "   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
+	cout << "   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000, chr11-chrY" << endl;
 }else{
-	cout << "   # run the '" << cmd_str << "' command to analyze the user-specified regions: chr1, chr2:10000000-20000000" << endl;
+	cout << "   # run the '" << cmd_str << "' command to analyze the user-specified regions: chr1, chr2:10000000-20000000, chr11-chrY" << endl;
 }
-	cout << "   $ asvclr " << cmd_str << " -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000" << endl;
+	cout << "   $ asvclr " << cmd_str << " -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10m-20m chr11-chrY" << endl;
 }
 
 // show the usage for det-cns command
@@ -1376,7 +1478,6 @@ void Paras::outputParas(){
 	}
 	cout << "Number of threads: " << num_threads << endl;
 	//cout << "Limited number of threads for each consensus work: " << num_threads_per_cns_work << endl;
-	if(maskMisAlnRegFlag) cout << "Mask noisy regions: yes" << endl;
 	if(delete_reads_flag==false) cout << "Retain local temporary reads: yes" << endl;
 	if(keep_failed_reads_flag) cout << "Retain failed local temporary reads: yes" << endl;
 	if(recns_failed_work_flag) cout << "Reperform previously failed local consensus work: yes" << endl;
@@ -1622,8 +1723,6 @@ int Paras::parse_long_opt(int32_t option_index, const char *optarg, const struct
 	}
 //	else if(opt_name_str.compare("min-cov-cns")==0){ // "min-cov-cns"
 //		min_input_cov_canu = stoi(optarg);
-//	}else if(opt_name_str.compare("mask-noisy-region")==0){ // "mask-noisy-region"
-//		maskMisAlnRegFlag = true;
 //	}
 	else if(opt_name_str.compare("cns-chunk-size")==0){ // cns-chunk-size
 		cnsChunkSize = stoi(optarg);

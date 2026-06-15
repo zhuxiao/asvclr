@@ -24,7 +24,6 @@
 using namespace std;
 
 vector<string> split(const  string& s, const string& delim);
-bool isExistStr(string &str, vector<string> &vec);
 rlim_t getMaxOpenFileNum();
 bool setMaxOpenFileNum(rlim_t newLimit);
 int copySingleFile(string &infilename, ofstream &outfile);
@@ -76,12 +75,9 @@ bool isBaseMatch(char ctgBase, char refBase);
 bool isRegValid(reg_t *reg, int32_t min_size);
 void exchangeRegLoc(reg_t *reg);
 int32_t minimap2Aln(string &alnfilename, string &contigfilename, string &refseqfilename, int32_t max_proc_running_minutes);
-int32_t blatAln(string &alnfilename, string &contigfilename, string &refseqfilename, int32_t max_proc_running_minutes);
 int32_t getSuccessStatusSystemCmd(int32_t status);
-bool isBlatAlnResultMatch(string &contigfilename, string &alnfilename);
 bool isMinimap2AlnResultMatch(string &contigfilename, string &alnfilename);
 int32_t getQueryNameLoc(string &query_name, vector<string> &query_name_vec);
-bool isBlatAlnCompleted(string &alnfilename);
 void cleanPrevConsTmpDir(const string &cns_dir_str, const string &dir_prefix);
 string getCallFileHeaderBed(string &sample);
 string getCallFileHeaderBedpe(string &sample);
@@ -100,7 +96,6 @@ void* processSingleConsWork(void *arg);
 void performLocalCons(string &readsfilename, string &contigfilename, string &refseqfilename, string &clusterfilename, string &tmpdir, string &technology, string &pg_runid_str, double min_seqsim_match, int32_t sv_len_est, size_t num_threads_per_cns_work, vector<reg_t*> &varVec, string &chrname, string &inBamFile, faidx_t *fai, int32_t cns_extend_size, ofstream &cns_info_file, double expected_cov_cns, double min_input_cov_canu, double max_ultra_high_cov, int32_t minMapQ, int32_t minHighMapQ, bool delete_reads_flag, bool keep_failed_reads_flag, bool clip_reg_flag, int32_t minClipEndSize, int32_t maxVarRegSize, int32_t minConReadLen, int32_t min_sv_size, int32_t min_supp_num, double max_seg_size_ratio, double max_seg_nm_ratio, double max_absig_density, bool limit_reg_process_flag, vector<simpleReg_t*> &limit_reg_vec);
 bool isReadableFile(string &filename);
 void* processSingleMinimap2AlnWork(void *arg);
-void* processSingleBlatAlnWork(void *arg);
 void* processSingleCallWork(void *arg);
 void outputCnsWorkOptToFile_debug(vector<cnsWork_opt*> &cns_work_opt_vec);
 string getOldOutDirname(string &filename, string &sub_work_dir);
@@ -113,7 +108,7 @@ vector<simpleReg_t*> getOverlappedSimpleRegs(string &chrname, int64_t begPos, in
 vector<simpleReg_t*> getFullyContainedSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec);
 bool isFullyContainedReg(string &chrname1, int64_t begPos1, int64_t endPos1, string &chrname2, int64_t startPos2, int64_t endPos2);
 vector<simpleReg_t*> getPosContainedSimpleRegs(string &chrname, int64_t begPos, int64_t endPos, vector<simpleReg_t*> &limit_reg_vec);
-simpleReg_t* allocateSimpleReg(string &simple_reg_str);
+simpleReg_t* allocateSimpleReg(const string &simple_reg_str);
 void destroyLimitRegVector(vector<simpleReg_t*> &limit_reg_vec);
 void printLimitRegs(vector<simpleReg_t*> &limit_reg_vec, const string &description);
 void getRegByFilename(simpleReg_t *reg, string &filename, string &pattern_str);
@@ -121,12 +116,6 @@ vector<simpleReg_t*> extractSimpleRegsByStr(string &regs_str);
 string getLimitRegStr(vector<simpleReg_t*> &limit_reg_vec);
 void createDir(string &dirname);
 vector<double> getTotalHighIndelClipRatioBaseNum(Base *regBaseArr, int64_t arr_size, int32_t min_indel_size);
-vector<mismatchReg_t*> getMismatchRegVec(localAln_t *local_aln);
-vector<mismatchReg_t*> getMismatchRegVecWithoutPos(localAln_t *local_aln);
-void removeShortPolymerMismatchRegItems(localAln_t *local_aln, vector<mismatchReg_t*> &misReg_vec, string &inBamFile, faidx_t *fai, int32_t minMapQ, int32_t minHighMapQ, double max_ultra_high_cov);
-void adjustVarLocByMismatchRegs(reg_t *reg, vector<mismatchReg_t*> &misReg_vec, int32_t start_aln_idx_var, int32_t end_aln_idx_var);
-void releaseMismatchRegVec(vector<mismatchReg_t*> &misReg_vec);
-mismatchReg_t *getMismatchReg(int32_t aln_idx, vector<mismatchReg_t*> &misReg_vec);
 bool isPolymerSeq(string &seq);
 vector<clipAlnData_t*> getQueryClipAlnSegs(string &queryname, vector<clipAlnData_t*> &clipAlnDataVector);
 vector<clipAlnData_t*> getQueryClipAlnSegsAll(string &queryname, vector<clipAlnData_t*> &clipAlnDataVector);
@@ -201,6 +190,7 @@ qcSig_t *allocateQcSigNode(struct alnSeg *aln_seg);
 void destoryQuerySeqInfoAll(vector<struct querySeqInfoNode*> &query_seq_info_all);
 void destroyQueryQcSig(vector<qcSig_t *> &qcSig_vec);
 vector<string> extractQcSigCompSeqs(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, faidx_t *fai);
+vector<string> extractQcSigCompSeqsClip(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int32_t min_clip_dist_thres, faidx_t *fai);
 struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNode*> &query_seq_info_vec, int64_t startRefPos_cns, int32_t min_sv_size);
 
 vector<vector<string>> getClusterInfo(string &clusterfilename);
@@ -212,7 +202,7 @@ double computeSigDensityFromAlnData(bam1_t *b, faidx_t *fai, bam_hdr_t *header, 
 void rmNeighborFalseSig(vector<qcSig_t*> &sig_vec, int64_t max_ref_dist, double min_size_ratio);
 bool mergeNeighbouringSigsFlag(struct querySeqInfoNode* query_seq_info_node, vector<qcSig_t*> &sig_vec, int32_t min_ref_dist_thres, int32_t max_ref_dist_thres, double min_merge_seqsim_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai);
 bool mergeNeighbouringSigsFlagClipReg(qcSigList_t *qcSigList_node, vector<qcSig_t*> &sig_vec, int32_t min_ref_dist_thres, int32_t max_ref_dist_thres, double min_merge_seqsim_thres, double min_valid_sig_size_ratio_thres, faidx_t *fai);
-void filterSmallSigs(vector<qcSig_t *> &qcSig_vec, double valid_size_ratio_thres);
+void filterSmallSigs(vector<qcSig_t *> &qcSig_vec, double valid_size_ratio_thres, int32_t min_valid_seg_size);
 void computeVarSums(struct querySeqInfoNode* &query_seq_info_node, int64_t start_var_pos, int64_t end_var_pos);
 
 bool desc_cmp_size_vec(const pair<int32_t, vector<int32_t>> &a, const pair<int32_t, vector<int32_t>> &b);

@@ -79,7 +79,7 @@ void indelRegCluster::extractQcSigsFromAlnSegs(struct querySeqInfoNode* &query_s
 		rmNeighborFalseSig(query_seq_info_node->qcSig_vec, MIN_AVER_SIZE_ALN_SEG, MIN_SIZE_RATIO_MATCH_CLIP_POS);
 		query_seq_info_node->qcSig_merge_flag = mergeNeighbouringSigsFlag(query_seq_info_node, query_seq_info_node->qcSig_vec, MAX_DIST_MERGE_ARBITARY, max_merge_span, CNS_MIN_SEQSIM_MERGE_THRES2, MIN_VALID_SIG_SIZE_RATIO_THRES, fai);
 	}
-	filterSmallSigs(query_seq_info_node->qcSig_vec, MIN_SIG_SIZE_RATIO_FILTER_THRES);
+	filterSmallSigs(query_seq_info_node->qcSig_vec, MIN_SIG_SIZE_RATIO_FILTER_THRES, MAX_INNER_MISSING_IGNORE_SIZE);
 	computeVarSums(query_seq_info_node, start_var_pos, end_var_pos);
 }
 
@@ -386,7 +386,7 @@ vector<struct querySeqInfoVec*> indelRegCluster::queryClusterSingleGroup(vector<
 				if(qnode->overlap_sig_num==0) continue; // skip items of no signatures
 
 				if(target_var_op==BAM_CINS and qnode->ins_sum>0){
-					dif =  abs(qnode->ins_sum - mean_size);
+					dif = abs(qnode->ins_sum - mean_size);
 #if POA_ALIGN_DEBUG
 					cout << "\tdif=" << dif << endl;
 #endif
@@ -1530,10 +1530,10 @@ vector<int8_t> indelRegCluster::computeQcMatchProfileSingleQuery(queryCluSig_t *
 	int64_t i, j, arrSize;
 	bool matchFlag;
 
-	matchScore = GT_SIG_MATCH_SCORE;
-	mismatchScore = GT_SIG_MISMATCH_SCORE;
-	gapScore = GT_SIG_GAP_SCORE;
-	gapOpenScore = GT_SIG_GAP_OPEN_SCORE;
+	matchScore = MATCH_SCORE;
+	mismatchScore = MISMATCH_SCORE;
+	gapScore = GAP_SCORE;
+	gapOpenScore = GAP_OPEN_SCORE;
 
 
 	if(queryCluSig->qcSig_vec.size()>0 or seed_qcQuery->qcSig_vec.size()>0){

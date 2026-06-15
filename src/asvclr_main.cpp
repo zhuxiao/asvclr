@@ -26,7 +26,6 @@ int main(int argc, char **argv) {
 		cout << "[" << time.getTime() << "]: detect structural variants ..." << endl;
 		genome.genomeDetect();
 
-		//cout << "Total misAln region size: " << paras.misAlnRegLenSum << " bp" << endl;
 		cout << "[" << time.getTime() << "]: detect structural variants finished." << endl;
 		time.printSubCmdElapsedTime();
 	}

@@ -238,7 +238,6 @@ reg_t* Region::allocateReg(string &chrname, int64_t startPosReg, int64_t endPosR
 	reg->var_type = VAR_UNC;
 	reg->sv_len = sv_len;
 	reg->query_id = -1;
-	reg->blat_aln_id = -1;
 	reg->minimap2_aln_id = -1;
 	reg->call_success_status = false;
 	reg->short_sv_flag = false;
@@ -479,7 +478,7 @@ void Region::detectIndelReg(){
 	if(i<minRPos) i = minRPos;
 	while(i<endMidPartPos){
 
-//		if(i>109418000)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>, 9786000, 12876474
+//		if(i>1317500)  //109500, 5851000, 11812500, 12601500, 14319500, 14868000, 18343500, <18710000>, 9786000, 12876474
 //			cout << i << endl;  // breakpoints
 
 		reg = getIndelReg(i);
@@ -876,7 +875,6 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 		endPos_tmp = checkPos + subclipreg_size - 1;
 		if(endPos_tmp>endMidPartPos) endPos_tmp = endMidPartPos;
 		//cout << "startPos_tmp=" << startPos_tmp << ", endPos_tmp=" << endPos_tmp << endl;
-		//normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp, HIGH_CLIP_RATIO_THRES, paras->minReadsNumSupportSV); // deleted on 2026-02-22
 		normal_reg_flag = haveNoClipSig(startPos_tmp, endPos_tmp, paras->clip_ratio_thres, paras->minReadsNumSupportSV);
 		if(normal_reg_flag==false){ // clip region
 			if(clip_reg_flag==false){ // first clip region
@@ -909,157 +907,8 @@ reg_t* Region::getClipReg(int64_t startCheckPos){
 		checkPos = endPos_tmp + 1;
 	}
 
-//	// compute clip positions by align data
-//	startPos_clip = endPos_clip = -1;
-//	if(startPos_clip==-1){
-//		subreg_num = (endMidPartPos - startRPos) / SUB_CLIP_REG_SIZE;
-//		for(i=0; i<subreg_num; i++){
-//			startPos_tmp = startRPos + i * SUB_CLIP_REG_SIZE;
-//			endPos_tmp = startPos_tmp + SUB_CLIP_REG_SIZE - 1;
-//			if(endPos_tmp>endMidPartPos) endPos_tmp = endMidPartPos;
-//			clip_num = 0;
-//			for(j=startPos_tmp; j<=endPos_tmp; j++){
-//				clip_vec = regBaseArr[j-startRPos].clipVector;
-//				for(k=0; k<clip_vec.size(); k++){
-//					if(stoi(clip_vec.at(k)->seq)>=paras->minClipEndSize)
-//						clip_num ++;
-//				}
-//			}
-//			if(localRegCov>0){
-//				ratio = clip_num / localRegCov;
-//				if(ratio>=HIGH_CLIP_RATIO_THRES){
-//					startPos_clip = startPos_tmp;
-//					//cout << "####################### startPos_clip=" << startPos_clip << endl;
-//					break;
-//				}
-//			}
-//		}
-//	}
-//	if(startPos_clip==-1){
-//		for(i=startRPos; i<=endMidPartPos; i++)
-//			if((double)regBaseArr[i-startRPos].clipVector.size()/regBaseArr[i-startRPos].coverage.num_bases[5]>=HIGH_CLIP_RATIO_THRES){
-//				startPos_clip = i;
-//				break;
-//			}
-//	}
-//
-//	if(endPos_clip==-1){
-//		subreg_num = (endRPos - startMidPartPos) / SUB_CLIP_REG_SIZE;
-//		for(i=0; i<subreg_num; i++){
-//			endPos_tmp = endRPos - i * SUB_CLIP_REG_SIZE;
-//			startPos_tmp = endPos_tmp - SUB_CLIP_REG_SIZE + 1;
-//			if(startPos_tmp<startMidPartPos) startPos_tmp = startMidPartPos;
-//			clip_num = 0;
-//			for(j=startPos_tmp; j<=endPos_tmp; j++){
-//				clip_vec = regBaseArr[j-startRPos].clipVector;
-//				for(k=0; k<clip_vec.size(); k++){
-//					if(stoi(clip_vec.at(k)->seq)>=paras->minClipEndSize)
-//						clip_num ++;
-//				}
-//			}
-//			if(localRegCov>0){
-//				ratio = clip_num / localRegCov;
-//				if(ratio>=HIGH_CLIP_RATIO_THRES){
-//					endPos_clip = endPos_tmp;
-//					//cout << "=#=#=#=#=#=#=#=#=#=#=#= endPos_clip=" << endPos_clip << endl;
-//					break;
-//				}
-//			}
-//		}
-//	}
-//
-//
-//	if(endPos_clip==-1){
-//		for(i=endRPos; i>=startMidPartPos; i--)
-//			if((double)regBaseArr[i-startRPos].clipVector.size()/regBaseArr[i-startRPos].coverage.num_bases[5]>=HIGH_CLIP_RATIO_THRES){
-//				endPos_clip = i;
-//				break;
-//			}
-//	}
-
-//	// compute region by align data
-//	if(startPos_clip==-1 or endPos_clip==-1){
-//		// load the aligned reads data
-//		clipAlnDataLoader data_loader(chrname, startRPos, endRPos, paras->inBamFile);
-//		data_loader.loadClipAlnData(clipAlnDataVector);
-//
-//		if(clipAlnDataVector.size()>0){
-//			// compute the start position
-//			if(startPos_clip==-1){
-//				subreg_num = (endMidPartPos - startRPos) / SUB_CLIP_REG_SIZE;
-//				for(i=0; i<subreg_num; i++){
-//					startPos_tmp = startRPos + i * SUB_CLIP_REG_SIZE;
-//					endPos_tmp = startPos_tmp + SUB_CLIP_REG_SIZE - 1;
-//					if(endPos_tmp>endMidPartPos) endPos_tmp = endMidPartPos;
-//					total_reads_num = clip_num = 0;
-//					for(j=0; j<clipAlnDataVector.size(); j++){
-//						clip_aln = clipAlnDataVector.at(j);
-//						if((clip_aln->startRefPos>=startPos_tmp and clip_aln->startRefPos<=endPos_tmp)
-//							or (clip_aln->endRefPos>=startPos_tmp and clip_aln->endRefPos<=endPos_tmp)
-//							or (startPos_tmp>=clip_aln->startRefPos and startPos_tmp<=clip_aln->endRefPos)
-//							or (endPos_tmp>=clip_aln->startRefPos and endPos_tmp<=clip_aln->endRefPos)){ // overlap
-//							total_reads_num ++;
-//							if((clip_aln->leftClipSize>=paras->minClipEndSize and clip_aln->startRefPos>=startPos_tmp and clip_aln->startRefPos<=endPos_tmp)
-//								or (clip_aln->rightClipSize>=paras->minClipEndSize and clip_aln->endRefPos>=startPos_tmp and clip_aln->endRefPos<=endPos_tmp))
-//								clip_num ++;
-//						}
-//					}
-//					if(total_reads_num>0){
-//						ratio = (double)clip_num / total_reads_num;
-//						if(ratio>=HIGH_CLIP_RATIO_THRES){
-//							startPos_clip = startPos_tmp;
-//							cout << "####################### startPos_clip=" << startPos_clip << endl;
-//							break;
-//						}
-//					}
-//				}
-//			}
-//
-//			// compute the start position
-//			if(endPos_clip==-1){
-//				subreg_num = (endRPos - startMidPartPos) / SUB_CLIP_REG_SIZE;
-//				for(i=0; i<subreg_num; i++){
-//					endPos_tmp = endRPos - i * SUB_CLIP_REG_SIZE;
-//					startPos_tmp = endPos_tmp - SUB_CLIP_REG_SIZE + 1;
-//					if(startPos_tmp<startMidPartPos) startPos_tmp = startMidPartPos;
-//					total_reads_num = clip_num = 0;
-//					for(k=(int32_t)clipAlnDataVector.size()-1; k>=0; k--){
-//						clip_aln = clipAlnDataVector.at(k);
-//						if((clip_aln->startRefPos>=startPos_tmp and clip_aln->startRefPos<=endPos_tmp)
-//							or (clip_aln->endRefPos>=startPos_tmp and clip_aln->endRefPos<=endPos_tmp)
-//							or (startPos_tmp>=clip_aln->startRefPos and startPos_tmp<=clip_aln->endRefPos)
-//							or (endPos_tmp>=clip_aln->startRefPos and endPos_tmp<=clip_aln->endRefPos)){ // overlap
-//							total_reads_num ++;
-//							if((clip_aln->leftClipSize>=paras->minClipEndSize and clip_aln->startRefPos>=startPos_tmp and clip_aln->startRefPos<=endPos_tmp)
-//								or (clip_aln->rightClipSize>=paras->minClipEndSize and clip_aln->endRefPos>=startPos_tmp and clip_aln->endRefPos<=endPos_tmp))
-//								clip_num ++;
-//						}
-//					}
-//					if(total_reads_num>0){
-//						ratio = (double)clip_num / total_reads_num;
-//						if(ratio>=HIGH_CLIP_RATIO_THRES){
-//							endPos_clip = endPos_tmp;
-//							cout << "=#=#=#=#=#=#=#=#=#=#=#= endPos_clip=" << endPos_clip << endl;
-//							break;
-//						}
-//					}
-//				}
-//			}
-//		}
-//	}
-
-	// check disagreements
-//	if(startPos_clip!=-1 and endPos_clip!=-1){
-//		// compute the number of disagreements
-//		int32_t disagreeNum = computeDisagreeNum(regBaseArr+startPos_clip-startRPos, endPos_clip-startPos_clip+1);
-//		normal_reg_flag = haveNoClipSig(startPos_clip, endPos_clip, HIGH_CLIP_RATIO_THRES*3);
-//
-//		if(disagreeNum>=1 or normal_reg_flag==false) reg = allocateReg(chrname, startPos_clip, endPos_clip);
-//	}
-
 	return reg;
 }
-
 
 bool Region::haveNoClipSig(int64_t startPos, int64_t endPos, double clip_ratio_thres, int32_t min_supp_num){
 	bool flag = true;

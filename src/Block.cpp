@@ -7,8 +7,6 @@
 #include "covLoader.h"
 #include "util.h"
 
-//pthread_mutex_t mutex_print = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t mutex_write_misAln = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mutex_cns_work = PTHREAD_MUTEX_INITIALIZER;
 extern pthread_mutex_t mutex_fai;
 
@@ -46,7 +44,6 @@ Block::Block(string chrname, size_t startPos, size_t endPos, faidx_t *fai,  Para
 	indelFilenameCns = indelCnsPrefix_local + "_" + chrname_tmp + "_" + to_string(startPos) + "-" + to_string(endPos) + ".fa";
 
 	var_cand_indel_file = NULL;
-	misAln_reg_file = NULL;
 	var_cand_clipReg_file = NULL;
 }
 
@@ -58,7 +55,6 @@ Block::~Block(){
 	if(!indelVector.empty()) destroyIndelVector();
 	if(!clipRegVector.empty()) destroyClipRegVector();
 	if(!zeroCovRegVector.empty()) destroyZeroCovRegVector();
-	if(!misAlnRegVector.empty()) destroyMisAlnRegVector();
 }
 
 // set the output directory
@@ -118,11 +114,6 @@ void Block::destroyZeroCovRegVector(){
 	for(it=zeroCovRegVector.begin(); it!=zeroCovRegVector.end(); it++)
 		delete (*it);
 	vector<reg_t*>().swap(zeroCovRegVector);
-}
-
-// destroy misAln region vector
-void Block::destroyMisAlnRegVector(){
-	vector<misAlnReg>().swap(misAlnRegVector);
 }
 
 // set the region ingnore flag in the block
@@ -261,9 +252,6 @@ void Block::blockDetect(){
 	// including coverage, insertions, deletions and clippings
 	computeBlockBaseInfo();
 
-	// mask misAln regions
-	if(paras->maskMisAlnRegFlag) maskMisAlnRegs();
-
 	// compute abnormal signatures
 	computeAbSigs();
 
@@ -344,148 +332,6 @@ int Block::outputCovFile(){
 	}
 	ofile.close();
 	return 0;
-}
-
-// mask misAln regions
-void Block::maskMisAlnRegs(){
-	computeMisAlnDisagrReg();
-	extractMisAlnRegions();
-	saveMisAlnRegToFile();
-}
-
-// compute disagreements for each misAln region
-int Block::computeMisAlnDisagrReg(){
-	int64_t startPosWin, endPosWin, pos, tmp_endPos;
-
-	// process the head region
-	if(!headIgnFlag){
-		startPosWin = startPos;
-		endPosWin = startPosWin + 2 * paras->slideSize - 1;
-		if(endPosWin>endPos) endPosWin = endPos;
-		computeDisagrNumSingleRegion(startPosWin, endPosWin, HEAD_REGION);
-	}
-
-	// process the inner regions
-	if(endPos>=2*(int64_t)paras->slideSize){
-		tmp_endPos = endPos - 2 * paras->slideSize;
-		for(pos=startPos; pos<=tmp_endPos; pos+=paras->slideSize){
-			startPosWin = pos;
-			endPosWin = startPosWin + winSize - 1;
-			computeDisagrNumSingleRegion(startPosWin, endPosWin, INNER_REGION);
-		}
-	}else pos = startPos;
-
-	// process the tail region
-	if(!tailIgnFlag){
-		startPosWin = pos;
-		endPosWin = startPosWin + winSize - 1;
-		if(endPosWin>endPos) endPosWin = endPos;
-		else if(endPosWin<endPos){
-			cerr << __func__ << ", line=" << __LINE__ << ": endPosWin=" << endPosWin
-				 << ", endPos=" << endPos << ", error!" << endl; exit(1);
-		}
-		computeDisagrNumSingleRegion(startPosWin, endPosWin, TAIL_REGION);
-	}
-
-	return 0;
-}
-
-// extract misAln disagr region
-void Block::extractMisAlnRegions(){
-	vector<misAlnReg>::iterator it;
-	size_t i, j, contiguousNum, gappedNum;
-	bool flag;
-
-	for(i=0; i<misAlnRegVector.size(); i++) misAlnRegVector[i].misAlnFlag = false;
-
-	i = 0;
-	while(i<misAlnRegVector.size()){
-		if(misAlnRegVector[i].disagrRegRatio<SUB_MIS_ALN_REG_RATIO_THRES){
-			i++;
-			continue;
-		}
-
-		flag = false;
-		contiguousNum = 0;
-		gappedNum = 0;
-		for(j=i; j<misAlnRegVector.size(); j++) {
-			it = misAlnRegVector.begin() + j;
-
-			//if(it->startPos>=142883000) // 5578000
-			//	cout << it->startPos << "-" << it->endPos << ": " << "disagrRegRatio=" << it->disagrRegRatio << ", highClipBaseNum=" << it->highClipBaseNum << ", zeroCovBaseNum=" << it->zeroCovBaseNum << endl;
-
-			if((it->disagrRegRatio>=SUB_MIS_ALN_REG_RATIO_THRES and it->highClipBaseNum==0 and it->zeroCovBaseNum==0) or (it->disagrRegRatio>=HIGH_SUB_MIS_ALN_REG_RATIO_THRES and it->highClipBaseNum==0)) {
-				if(gappedNum<=GAPPED_MIS_ALN_REG_NUM_THRES) contiguousNum += gappedNum;
-				gappedNum = 0;
-				contiguousNum ++;
-			} else {
-				gappedNum ++;
-				if(gappedNum>GAPPED_MIS_ALN_REG_NUM_THRES) {
-					if(contiguousNum>=MIN_MIS_ALN_REG_NUM_THRES)
-						flag = true;
-					break;
-				}
-			}
-		}
-		//if(flag==false and contiguousNum>0) flag = true;
-		if(flag==false and contiguousNum>=MIN_MIS_ALN_REG_NUM_THRES) flag = true;
-
-		if(flag) for(j=0; j<contiguousNum; j++) {
-			if(misAlnRegVector[i+j].highClipBaseNum==0)
-				misAlnRegVector[i+j].misAlnFlag = true;
-			else
-				misAlnRegVector[i+j].misAlnFlag = false;
-		}
-		i += contiguousNum + gappedNum;
-	}
-
-	for(it=misAlnRegVector.begin(); it!=misAlnRegVector.end(); ) {
-		if(it->misAlnFlag==false){ // remove the region node
-			misAlnRegVector.erase(it);
-		}else{
-			it ++;
-			paras->misAlnRegLenSum += it->endPos - it->startPos + 1; // total misAln region size
-			//cout << "\t" << chrname << ":" << it->startPos << "-" << it->endPos << ":\t" << it->disagrNum << ", " << (double)it->disagrNum/(it->endPos-it->startPos+1) << "\t" << it->misAlnFlag << endl;
-		}
-	}
-	misAlnRegVector.shrink_to_fit();
-}
-
-// save misAln region
-void Block::saveMisAlnRegToFile(){
-	for(size_t i=0; i<misAlnRegVector.size(); i++){
-		pthread_mutex_lock(&mutex_write_misAln);
-		*misAln_reg_file << chrname << "\t" << misAlnRegVector[i].startPos << "\t" << misAlnRegVector[i].endPos << "\t" << misAlnRegVector[i].disagrRegRatio << "\t" << misAlnRegVector[i].highClipBaseNum << endl;
-		pthread_mutex_unlock(&mutex_write_misAln);
-	}
-}
-
-// compute the disagree count for given region
-void Block::computeDisagrNumSingleRegion(size_t startRpos, size_t endRPos, size_t regFlag){
-	// construct a region
-	Region tmp_reg(chrname, startRpos, endRPos, chrlen, startPos, endPos, baseArr+startRpos-startPos, regFlag, paras, fai);
-
-	// compute the abnormal signatures in a region
-	if(tmp_reg.wholeRefGapFlag==false){
-		// compute disagreements and save to vector
-		misAlnReg misAln_reg(tmp_reg.startMidPartPos, tmp_reg.endMidPartPos, chrlen, tmp_reg.regBaseArr+tmp_reg.startMidPartPos-tmp_reg.startRPos);
-		misAlnRegVector.push_back(misAln_reg);
-	}
-}
-
-// determine whether the region is a misAln region
-bool Block::isMisAlnReg(Region &reg){
-	bool flag = false;
-	if(paras->maskMisAlnRegFlag){
-		for(size_t i=0; i<misAlnRegVector.size(); i++){
-			if(misAlnRegVector.at(i).startPos==reg.startMidPartPos and misAlnRegVector.at(i).endPos==reg.endMidPartPos){
-				flag = true;
-				break;
-			}
-		}
-		//if(flag) cout << "\tmisAln reg: " << reg.chrname << ":" << reg.startMidPartPos << "-" << reg.endMidPartPos << endl;
-	}
-	return flag;
 }
 
 // update the coverage information for each base in this block
@@ -658,7 +504,7 @@ int Block::processSingleRegion(int64_t startRpos, int64_t endRPos, int64_t regFl
 		tmp_reg.setMeanBlockCov(meanCov);  // set the mean coverage
 
 		// compute the abnormal signatures in a region
-		if(tmp_reg.wholeRefGapFlag==false and isMisAlnReg(tmp_reg)==false and tmp_reg.isUltraHighCovReg()==false){
+		if(tmp_reg.wholeRefGapFlag==false and tmp_reg.isUltraHighCovReg()==false){
 			tmp_reg.computeRegAbSigs();
 
 			// detect clip regions
@@ -748,7 +594,6 @@ void Block::computeZeroCovReg(Region &reg){
 			reg_tmp->var_type = VAR_UNC;
 			reg_tmp->sv_len = 0;
 			reg_tmp->query_id = -1;
-			reg_tmp->blat_aln_id = -1;
 			reg_tmp->minimap2_aln_id = -1;
 			reg_tmp->call_success_status = false;
 			reg_tmp->short_sv_flag = false;
@@ -970,15 +815,6 @@ void Block::resetVarCandFiles(){
 	var_cand_clipReg_file = NULL;
 }
 
-// set misAln region file
-void Block::setMisAlnRegFile(ofstream *misAln_reg_file){
-	this->misAln_reg_file = misAln_reg_file;
-}
-// reset misAln region file
-void Block::resetMisAlnRegFile(){
-	misAln_reg_file = NULL;
-}
-
 // generate local consensus work
 void Block::blockGenerateLocalConsWorkOpt(){
 //	pthread_mutex_lock(&mutex_print);
@@ -992,7 +828,7 @@ void Block::blockGenerateLocalConsWorkOpt(){
 // generate local consensus work for indel regions
 void Block::blockGenerateLocalConsWorkOpt_Indel(){
 	int32_t i, j, k, beg_reg_id, end_reg_id, tmp_reg_id;
-	int32_t begPos, tmp_Pos;
+	int32_t begPos, tmp_Pos, dist;
 	vector<reg_t*> varVec;
 	string readsfilename, contigfilename, refseqfilename, tmpdir;
 	vector<simpleReg_t*> sub_limit_reg_vec_work;
@@ -1006,11 +842,32 @@ void Block::blockGenerateLocalConsWorkOpt_Indel(){
 		end_reg_id = tmp_reg_id = -1;
 		for(j=i+1; j<(int32_t)indelVector.size(); j++){
 			tmp_Pos = indelVector[j]->startRefPos;
-			//if(tmp_Pos-begPos<(int32_t)paras->slideSize*2){
 			if(tmp_Pos-begPos<paras->cnsChunkSize){
 				tmp_reg_id = j;
 			}else{
-//				if(j+1<(int32_t)indelVector.size() and abs(indelVector.at(j+1)->startRefPos-indelVector.at(j)->endRefPos)<MIN_AVER_SIZE_ALN_SEG){
+
+//				if(j+1<(int32_t)indelVector.size() and indelVector.at(j+1)->startRefPos>144896000){
+//					cout << "tmp_Pos=" << tmp_Pos << ", next_pos=" << indelVector.at(j+1)->startRefPos << endl;
+//				}
+
+				dist = tmp_Pos - indelVector.at(j-1)->endRefPos;
+				if(tmp_Pos-begPos<paras->cnsChunkSize*2){
+					if(dist<EXT_SIZE_CHK_VAR_LOC){
+						tmp_reg_id = j;
+					}else{
+						end_reg_id = tmp_reg_id;
+						break;
+					}
+				}else{
+					if(dist<EXT_SIZE_CHK_VAR_LOC_SMALL){
+						tmp_reg_id = j;
+					}else{
+						end_reg_id = tmp_reg_id;
+						break;
+					}
+				}
+
+//				if(j+1<(int32_t)indelVector.size() and abs(indelVector.at(j+1)->startRefPos-indelVector.at(j)->endRefPos)<MIN_AVER_SIZE_ALN_SEG)
 //					tmp_reg_id = j;
 //				if(tmp_Pos-indelVector[j-1]->endRefPos<EXT_SIZE_CHK_VAR_LOC){
 //					if(tmp_Pos-begPos<paras->cnsChunkSize*2)
@@ -1020,8 +877,8 @@ void Block::blockGenerateLocalConsWorkOpt_Indel(){
 //						break;
 //					}
 //				}else{
-					end_reg_id = tmp_reg_id;
-					break;
+					//end_reg_id = tmp_reg_id;
+					//break;
 //				}
 			}
 		}

@@ -32,7 +32,7 @@ typedef struct{
 	int32_t startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos, sv_len, dup_num: 24, gt_type; //, support_num, cov_num;
 	//int64_t ref_len, local_ref_len, query_len;
 	int8_t var_type, aln_orient, discover_level;
-	int8_t query_id, blat_aln_id, minimap2_aln_id;
+	int8_t query_id, minimap2_aln_id;
 	int32_t leftExtGapSize, rightExtGapSize;		// used for extended gap size on both sides of the region according to alignments
 	string refseq, altseq, gt_seq, PS;
 	int32_t supp_num, DP; // supp_num, total depth
@@ -89,12 +89,6 @@ struct MD_seg{
 	int32_t seglen: 26, opflag: 6;
 };
 
-// Genome.h
-typedef struct {
-	string refseqfilename, ctgfilename, alnfilename;
-}blat_aln_filename_t;
-
-
 // from Paras.h
 typedef struct {
 	string chrname;
@@ -137,7 +131,7 @@ struct fqSeqNode{
 typedef struct qcSigNode{
 	int32_t sig_id:24, cigar_op:8, cigar_op_len:28, aln_orient:4;
 	bool reg_contain_flag, have_next_clip, merge_flag, inv_flag, altseq_complete_flag;
-	int64_t ref_pos, end_ref_pos, query_pos, end_query_pos, dist_next_clip;
+	int64_t ref_pos, end_ref_pos, query_pos, end_query_pos: 48, clip_end_flag: 16, dist_next_clip;
 	string chrname, chrname_next_clip;
 	//int64_t start_ref_pos, end_ref_pos; // ------- not used
 	string refseq, altseq;
@@ -224,16 +218,6 @@ typedef struct{
 	int64_t startRpos, sv_len;
 }svpos_match_t;
 
-
-// from varCand.h
-typedef struct{
-	//string query_name, subject_name;
-	int32_t blat_aln_id, query_len, subject_len;
-	int32_t query_id:24, aln_orient:8;
-	bool head_hanging, tail_hanging, best_aln, valid_aln;  // default: false
-	vector<aln_seg_t*> aln_segs;
-}blat_aln_t;
-
 // from varCand.h
 typedef struct{
 	//string query_name, subject_name;
@@ -244,24 +228,6 @@ typedef struct{
 	vector<string> qname;
 	vector<struct pafalnSeg*> pafalnsegs;
 }minimap2_aln_t;
-
-// from varCand.h
-typedef struct{
-	reg_t *reg, *cand_reg;
-	aln_seg_t *aln_seg, *start_seg_extend, *end_seg_extend;  // for short variants
-	int64_t chrlen, startRefPos, endRefPos;
-	int32_t blat_aln_id, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
-	string ctgseq, refseq;
-	vector<string> alignResultVec;		// [0]: aligned ctgseq, [1]: match character, [2]: aligned refseq
-	int32_t overlapLen, queryLeftShiftLen, queryRightShiftLen, localRefLeftShiftLen, localRefRightShiftLen;
-	int32_t start_aln_idx_var, end_aln_idx_var;
-}localAln_t;
-
-typedef struct{
-	int32_t start_aln_idx, end_aln_idx, reg_size;
-	int64_t startRefPos, endRefPos, startLocalRefPos, endLocalRefPos, startQueryPos, endQueryPos;
-	bool gap_flag, valid_flag;
-}mismatchReg_t;
 
 // from Genome.h
 typedef struct BND_Node{
@@ -297,25 +263,13 @@ typedef struct{
 	vector<reg_t*> *clipRegVector;
 	vector<varCand*> *var_cand_clipReg_vec;
 	vector<Block*> *blockVector;
-	//vector<bool> *clip_processed_flag_vec;
 	pthread_mutex_t *p_mutex_mate_clip_reg;
-	//int32_t *p_mate_clip_reg_fail_num;
 }mateClipRegDetectWork_opt;
 
 typedef struct{
 	string work_finish_filename, monitoring_proc_names;
 	int32_t max_proc_running_minutes;
 }procMonitor_op;
-
-// for process monitor killed minimap2 work
-typedef struct{
-	string alnfilename, ctgfilename, refseqfilename;
-}killedMinimap2Work_t;
-
-// for process monitor killed blat work
-typedef struct{
-	string alnfilename, ctgfilename, refseqfilename;
-}killedBlatWork_t;
 
 // single signature for genotype
 typedef struct gtSigNode{
@@ -348,11 +302,5 @@ typedef struct phasing_reg_node{
 	bool chain_link_flag, redundant_flag;
 	vector<string> read_name_vec;
 }phasing_reg_t;
-
-//typedef struct hapNode{
-//	int64_t item_num: 16, ps_id: 48;
-//
-//	vector<phasing_reg_t*> phase_reg_vec;
-//}hap_t;
 
 #endif /* SRC_STRUCTURES_H_ */

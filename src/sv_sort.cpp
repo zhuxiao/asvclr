@@ -3,9 +3,9 @@
 
 extern pthread_mutex_t mutex_fai;
 
-SV_item *constructSVItem(string &line){
+SV_item *constructSVItemFromBed(string &line){
 	SV_item *item = NULL;
-	vector<string> str_vec;
+	vector<string> str_vec, str_vec_INFO, str_vec_AD, str_vec_AD2, str_vec2;
 	string str_tmp;
 
 	if(line.size()){
@@ -37,7 +37,7 @@ SV_item *constructSVItem(string &line){
 		}else if(str_tmp.compare("CNV")==0 or str_tmp.compare("cnv")==0){
 			item->sv_type = VAR_CNV;
 		}else{
-			if(str_vec.size()>=10 and (str_vec.at(7).compare("TRA")==0 or str_vec.at(7).compare("translocation")==0 or str_vec.at(7).compare("BND")==0)){
+			if(str_vec.size()>=MAX_BED_COLS_NUM and (str_vec.at(7).compare("TRA")==0 or str_vec.at(7).compare("translocation")==0 or str_vec.at(7).compare("BND")==0)){
 				item->chrname2 = str_vec.at(3);
 				if(str_vec.at(4).compare("-")==0) item->startPos2 = 0;
 				else item->startPos2 = stoi(str_vec.at(4));
@@ -53,6 +53,30 @@ SV_item *constructSVItem(string &line){
 			item->sv_len = stoi(str_vec.at(5));
 			item->altseq = str_vec.at(8);
 		}
+
+		if(str_vec.size()<MAX_BED_COLS_NUM){ // INFO
+			str_vec_INFO = split(str_vec.at(9), ";");
+			str_vec_AD = split(str_vec.at(10), ":");
+			str_vec_AD2 = split(str_vec.at(11), ":");
+		}else{
+			str_vec_INFO = split(str_vec.at(15), ";");
+			str_vec_AD = split(str_vec.at(16), ":");
+			str_vec_AD2 = split(str_vec.at(17), ":");
+		}
+
+		for(auto const& str : str_vec_INFO){
+			str_vec2 = split(str, "=");
+			if(str_vec2.at(0).compare("DP")==0) item->DP = stoi(str_vec2.at(1));
+			else if(str_vec2.at(0).compare("AF")==0) item->AF = stod(str_vec2.at(1));
+		}
+		for(size_t i=0; i< str_vec_AD.size(); i++){
+			str_tmp = str_vec_AD.at(i);
+			if(str_tmp.compare("AD")==0) {
+				str_vec2 = split(str_vec_AD2.at(i), ",");
+				item->supp_num = stoi(str_vec2.at(1));
+			}
+		}
+
 	}
 	return item;
 }
@@ -71,7 +95,7 @@ vector<SV_item*> loadDataBED(string &filename){
 	while(getline(infile, line)){
 		if(line.size()){
 			if(line.at(0)!='#'){
-				item = constructSVItem(line);
+				item = constructSVItemFromBed(line);
 				if(item) sv_vec.push_back(item);
 			}
 		}
@@ -272,7 +296,7 @@ vector<string> getSVType(vector<string> &str_vec){
 }
 
 // allocate SV item
-SV_item *allocateSVItem(string &chrname, size_t startPos, size_t endPos, string &chrname2, size_t startPos2, size_t endPos2, string &sv_type_str, size_t sv_len, string &altseq, string &line){
+SV_item *allocateSVItem(string &chrname, size_t startPos, size_t endPos, string &chrname2, size_t startPos2, size_t endPos2, string &sv_type_str, size_t sv_len, string &altseq, int64_t DP, int64_t supp_num, double AF, string &line){
 	size_t sv_type;
 
 	if(sv_type_str.compare("UNC")==0){
@@ -313,6 +337,9 @@ SV_item *allocateSVItem(string &chrname, size_t startPos, size_t endPos, string 
 	item->sv_type = sv_type;
 	item->sv_len = sv_len;
 	item->altseq = altseq;
+	item->supp_num = supp_num;
+	item->DP = DP;
+	item->AF = AF;
 	item->info = line;
 	item->valid_flag = true;
 	return item;
@@ -321,10 +348,12 @@ SV_item *allocateSVItem(string &chrname, size_t startPos, size_t endPos, string 
 vector<SV_item*> loadDataVcf(string &filename){
 	vector<SV_item*> sv_vec;
 	ifstream infile;
-	string line, chrname, start_pos_str, endpos_str, chrname2, start_pos_str2, endpos_str2, sv_type_str, sv_type_str1, sv_type_str2, sv_len_str, altseq, bnd_str, bnd_pos_str;
+	string line, chrname, start_pos_str, endpos_str, chrname2, start_pos_str2, endpos_str2, sv_type_str, sv_type_str1, sv_type_str2, sv_len_str, altseq, bnd_str, bnd_pos_str, str_tmp;
 	size_t i, start_pos, endpos, start_pos2, endpos2, sv_len;
-	vector<string> str_vec, sv_type_vec, info_vec, sub_info_vec, bnd_pos_vec;
+	vector<string> str_vec, sv_type_vec, info_vec, sub_info_vec, bnd_pos_vec, str_vec_AD, str_vec_AD2, str_vec2;
 	SV_item *sv_item;
+	int64_t DP, supp_num;
+	double AF;
 
 	infile.open(filename);
 	if(!infile.is_open()){
@@ -346,17 +375,23 @@ vector<SV_item*> loadDataVcf(string &filename){
 
 				chrname2 = endpos_str = sv_type_str = "";
 				info_vec = split(str_vec.at(7), ";");
+				str_vec_AD = split(str_vec.at(8), ":");
+				str_vec_AD2 = split(str_vec.at(9), ":");
 
 				for(i=0; i<info_vec.size(); i++){
 					sub_info_vec = split(info_vec.at(i), "=");
 					if(sub_info_vec.at(0).compare("CHR2")==0)
 						chrname2 = sub_info_vec.at(1);
-					if(sub_info_vec.at(0).compare("END")==0)
+					else if(sub_info_vec.at(0).compare("END")==0)
 						endpos_str = sub_info_vec.at(1);
-					if(sub_info_vec.at(0).compare("SVTYPE")==0)
+					else if(sub_info_vec.at(0).compare("SVTYPE")==0)
 						sv_type_str = sub_info_vec.at(1);
-					if(sub_info_vec.at(0).compare("SVLEN")==0)
+					else if(sub_info_vec.at(0).compare("SVLEN")==0)
 						sv_len_str = sub_info_vec.at(1);
+					else if(sub_info_vec.at(0).compare("DP")==0)
+						DP = stoi(sub_info_vec.at(1));
+					else if(sub_info_vec.at(0).compare("AF")==0)
+						AF = stod(sub_info_vec.at(1));
 				}
 
 				// get sv type
@@ -400,7 +435,17 @@ vector<SV_item*> loadDataVcf(string &filename){
 					endpos2 = stoi(endpos_str2);
 					if(sv_len_str.size()>0) sv_len = stoi(sv_len_str);
 					else sv_len = 0;
-					sv_item = allocateSVItem(chrname, start_pos, endpos, chrname2, start_pos2, endpos2, sv_type_str, sv_len, altseq, line);
+
+					supp_num = 0;
+					for(size_t i=0; i<str_vec_AD.size(); i++){
+						str_tmp = str_vec_AD.at(i);
+						if(str_tmp.compare("AD")==0){
+							str_vec2 = split(str_vec_AD2.at(i), ",");
+							supp_num = stoi(str_vec2.at(1));
+						}
+					}
+
+					sv_item = allocateSVItem(chrname, start_pos, endpos, chrname2, start_pos2, endpos2, sv_type_str, sv_len, altseq, DP, supp_num, AF, line);
 					sv_vec.push_back(sv_item);
 
 				}else{
@@ -622,7 +667,7 @@ void rmRedundantSVitem(vector<vector<SV_item*>> &subsets, int64_t max_ref_dist, 
 void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, int64_t max_ref_dist, double size_ratio_thres, double seqsim_thres, faidx_t *fai){
 	SV_item *item1, *item2;
 	double val, max_len, secmax_len, size_ratio, min_len;
-	bool overlap_flag;
+	bool overlap_flag, redundant_flag;
 	int64_t ref_dist;
 	string compseq1, compseq2;
 	vector<string> compseq_vec;
@@ -631,6 +676,13 @@ void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, int64_t max_ref_dist, dou
 		item1 = sv_vec.at(i-1);
 		item2 = sv_vec.at(i);
 		if (item1->sv_type == item2->sv_type and item1->chrname.compare(item2->chrname) == 0){
+
+			if(item1->startPos==152185728 and item2->startPos==152185728){
+				cout << "startPos1=" << item1->startPos << ", startPos2=" << item2->startPos << endl;
+			}
+
+			redundant_flag = false;
+
 			// check same region
 			ref_dist = abs(item2->startPos-item1->startPos);
 			if(ref_dist<=max_ref_dist){//MAX_DIST_MATCH_CLIP_POS
@@ -655,21 +707,30 @@ void rmRedundantSVitemSubset(vector<SV_item*> &sv_vec, int64_t max_ref_dist, dou
 					if(size_ratio>=size_ratio_thres){
 						if(item1->sv_type!=VAR_DEL){
 							if(abs(item1->sv_len)<=MAX_VAR_REG_SIZE or abs(item2->sv_len)<=MAX_VAR_REG_SIZE){
-								compseq_vec = getCompSeqs(item1, item2, fai);
-								compseq1 = compseq_vec.at(0);
-								compseq2 = compseq_vec.at(1);
+								if(item1->altseq.size()>0 and item2->altseq.size()>0){
+									compseq_vec = getCompSeqs(item1, item2, fai);
+									compseq1 = compseq_vec.at(0);
+									compseq2 = compseq_vec.at(1);
 
-//								if(compseq1.size()>MAX_VAR_REG_SIZE and compseq2.size()>MAX_VAR_REG_SIZE){
-//									cout << __func__ << ": " << item1->chrname << ":" << item1->startPos << "-" << item1->endPos << " <--> " << item2->chrname << ":" << item2->startPos << "-" << item2->endPos << ", sv_type=" << item1->sv_type << ", sv_len1=" << item1->sv_len << ", sv_len2=" << item2->sv_len << endl;
-//								}
+	//								if(compseq1.size()>MAX_VAR_REG_SIZE and compseq2.size()>MAX_VAR_REG_SIZE){
+	//									cout << __func__ << ": " << item1->chrname << ":" << item1->startPos << "-" << item1->endPos << " <--> " << item2->chrname << ":" << item2->startPos << "-" << item2->endPos << ", sv_type=" << item1->sv_type << ", sv_len1=" << item1->sv_len << ", sv_len2=" << item2->sv_len << endl;
+	//								}
 
-								val = computeVarseqSim(compseq1, compseq2);
-								//cout << "seqsim=" << val << endl << item1->altseq << endl << item2->altseq << endl;
-								min_len = min(abs(item1->sv_len), abs(item2->sv_len));
-								if(val>=seqsim_thres or (val>=QC_SEQSIM_RATIO_THRES_FACTOR*seqsim_thres and min_len<MAX_DIST_MERGE_ARBITARY)) item2->valid_flag = false;
+									val = computeVarseqSim(compseq1, compseq2);
+									//cout << "seqsim=" << val << endl << item1->altseq << endl << item2->altseq << endl;
+									min_len = min(abs(item1->sv_len), abs(item2->sv_len));
+									if(val>=seqsim_thres or (val>=QC_SEQSIM_RATIO_THRES_FACTOR*seqsim_thres and min_len<MAX_DIST_MERGE_ARBITARY)) redundant_flag = true;
+								}else{
+									redundant_flag = true;
+								}
 							}
 						}else{
-							item2->valid_flag = false;
+							redundant_flag = true;
+						}
+
+						if(redundant_flag){
+							if(item1->supp_num>=item2->supp_num) item2->valid_flag = false;
+							else item1->valid_flag = false;
 						}
 					}
 				}

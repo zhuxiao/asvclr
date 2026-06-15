@@ -132,7 +132,7 @@ vector<qcSigListVec_t*> clipRegCluster::queryClusterOp(vector<qcSigList_t*> &qcS
 				q_cluster_a.push_back(qcSigList_vec.at(k));
 
 				//initialize b_cluster: choose one that is most different query from a_cluster add in b_cluster
-				match_min = INT_MAX; //0.99
+				match_min = INT_MAX;
 				match_ratio_vec.clear();
 				match_id_vec.clear();
 				num = 0;
@@ -140,7 +140,7 @@ vector<qcSigListVec_t*> clipRegCluster::queryClusterOp(vector<qcSigList_t*> &qcS
 				match_ratio_vec.push_back(1);
 				match_id_vec.push_back(k);
 				for(i=1; i<qcSigList_vec.size(); i++){
-//					if(qcSigList_vec.at(i)->query_seqs_vec.at(0)->qname.compare("m84039_230415_002321_s3/222761402/ccs")==0){
+//					if(qcSigList_vec.at(i)->query_seqs_vec.at(0)->qname.compare("SRR8858467.1.57150")==0){
 //						cout << i << ", " << qcSigList_vec.at(i)->query_seqs_vec.at(0)->qname << endl;
 //					}
 					if(qcSigList_vec.at(i)->qcSig_vec.size()>0 and (qcSigList_vec.at(i)->entire_flanking_flag or qcSigList_vec.at(i)->single_aln_seg_flag)){ // prefer the items flanking the entire region, or the items with single align segment
@@ -355,6 +355,9 @@ vector<qcSigListVec_t*> clipRegCluster::queryClusterOp(vector<qcSigList_t*> &qcS
 										break;
 									}
 								}
+//								if(qname1.compare("SRR8858467.1.57150")==0){
+//									cout << "line=" << __LINE__ << ", i=" << i << ", " << qname1 << endl;
+//								}
 								if(mr_pair_idx!=-1) // found
 									match_ratio_b = mr_pair_vec.at(mr_pair_idx).MR;
 								else{
@@ -909,7 +912,7 @@ vector<qcSigList_t*> clipRegCluster::extractQcSigsClipReg(vector<struct querySeq
 		queryseq_node = query_seq_info_vec.at(i);
 		if(queryseq_node->selected_flag==false){
 
-//			if(queryseq_node->qname.compare("m84039_230414_235240_s2/162599892/ccs")==0){
+//			if(queryseq_node->qname.compare("SRR8858453.1.163596")==0){
 //				cout << "i=" << i << ", " << queryseq_node->qname << endl;
 //			}else continue;
 
@@ -921,7 +924,7 @@ vector<qcSigList_t*> clipRegCluster::extractQcSigsClipReg(vector<struct querySeq
 					//qcSigList_node->qcSig_merge_flag = mergeNeighbouringSigsFlagClipReg(qcSigList_node, qcSigList_node->qcSig_vec, MAX_DIST_MERGE_ARBITARY, var_endRefPos-var_startRefPos, CNS_MIN_SEQSIM_MERGE_THRES2, MIN_VALID_SIG_SIZE_RATIO_THRES, fai);
 					qcSigList_node->qcSig_merge_flag = mergeNeighbouringSigsFlagClipReg(qcSigList_node, qcSigList_node->qcSig_vec, MAX_DIST_MERGE_ARBITARY, max_merge_span, CNS_MIN_SEQSIM_MERGE_THRES2, MIN_VALID_SIG_SIZE_RATIO_THRES, fai);
 				}
-				filterSmallSigs(qcSigList_node->qcSig_vec, MIN_SIG_SIZE_RATIO_FILTER_THRES);
+				filterSmallSigs(qcSigList_node->qcSig_vec, MIN_SIG_SIZE_RATIO_FILTER_THRES, MAX_INNER_MISSING_IGNORE_SIZE);
 
 				qcSigList_vec.push_back(qcSigList_node);
 			}
@@ -1025,6 +1028,8 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 //					if(queryseq_node->query_alnSegs.at(0)->opflag==BAM_CSOFT_CLIP) qc_sig->query_pos = end_query_pos;
 //					else if(queryseq_node->query_alnSegs.at(0)->opflag==BAM_CHARD_CLIP) qc_sig->query_pos = queryseq_node->clip_aln->leftClipSize + end_query_pos;
 //					else qc_sig->query_pos = queryseq_node->query_alnSegs.at(0)->startQpos;
+					if(qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP) qc_sig->altseq = queryseq_whole.substr(0, qc_sig->cigar_op_len);
+					qc_sig->clip_end_flag = left_clip_end_flag;
 					qc_sig->chrname_next_clip = "";
 					qc_sig->dist_next_clip = 0;
 					qc_sig->have_next_clip = false;
@@ -1191,6 +1196,8 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 					qc_sig->ref_pos = queryseq_node->clip_aln->endRefPos;
 					if(queryseq_node->clip_aln->aln_orient==ALN_PLUS_ORIENT) qc_sig->query_pos = queryseq_node->clip_aln->endQueryPos;
 					else qc_sig->query_pos = queryseq_node->clip_aln->querylen - queryseq_node->clip_aln->endQueryPos + 1;
+					if(qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP) qc_sig->altseq = queryseq_whole.substr(qc_sig->query_pos-1);
+					qc_sig->clip_end_flag = right_clip_end_flag;
 					qc_sig->chrname_next_clip = "";
 					qc_sig->dist_next_clip = 0;
 					qc_sig->have_next_clip = false;
@@ -1336,6 +1343,8 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						qc_sig->ref_pos = queryseq_node->clip_aln->endRefPos;
 						if(queryseq_node->clip_aln->aln_orient==ALN_PLUS_ORIENT) qc_sig->query_pos = queryseq_node->clip_aln->endQueryPos;
 						else qc_sig->query_pos = queryseq_node->clip_aln->querylen - queryseq_node->clip_aln->endQueryPos + 1;
+						if(qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP) qc_sig->altseq = queryseq_whole.substr(qc_sig->query_pos-1);
+						qc_sig->clip_end_flag = right_clip_end_flag;
 						qc_sig->chrname_next_clip = "";
 						qc_sig->dist_next_clip = 0;
 						qc_sig->have_next_clip = false;
@@ -1390,6 +1399,8 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						//qc_sig->query_pos = queryseq_node->query_alnSegs.at(0)->startQpos;
 						if(queryseq_node->clip_aln->aln_orient==ALN_PLUS_ORIENT) qc_sig->query_pos = queryseq_node->clip_aln->startQueryPos;
 						else qc_sig->query_pos = queryseq_node->clip_aln->querylen - queryseq_node->clip_aln->startQueryPos + 1;
+						if(qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP) qc_sig->altseq = queryseq_whole.substr(0, qc_sig->cigar_op_len);
+						qc_sig->clip_end_flag = left_clip_end_flag;
 						qc_sig->chrname_next_clip = "";
 						qc_sig->dist_next_clip = 0;
 						qc_sig->have_next_clip = false;
@@ -1453,20 +1464,18 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 						overlap_flag = isOverlappedPos(mate_queryseq_node->clip_aln->startRefPos, mate_queryseq_node->clip_aln->endRefPos, var_startRefPos_tmp, var_endRefPos_tmp);
 
 						// prefer the segments on the same chromosome
-						//if((mate_arr_idx!=mate_arr_idx_same_chr and (abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag)) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(dist)>MAX_REF_DIST_SAME_CHR)){ // different chromosomes with near reference distance, deleted on 2024-02-25
-						//if((abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(dist)>MAX_REF_DIST_SAME_CHR)){ // different chromosomes with near reference distance, deleted on 2025-08-13
-						//if((abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag) or (mate_arr_idx==mate_arr_idx_same_chr and ((abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(dist)>MAX_REF_DIST_SAME_CHR) or (overlap_flag and min_ref_dist_same_chr<0 and mate_queryseq_node->clip_aln->querylen<abs(min_ref_dist_same_chr))))){ // DUP, different chromosomes with near reference distance
-						if(same_orient_flag and (abs(dist)>MAX_REF_DIST_SAME_CHR and ((abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR) or (overlap_flag and ((min_ref_dist_same_chr<0 and increase_direction==0) or (min_ref_dist_same_chr>0 and increase_direction==1)) and (self_overlap_flag==false or mate_queryseq_node->clip_aln->querylen<abs(min_ref_dist_same_chr)))))){ // DUP, different chromosomes with near reference distance
+						//if((mate_arr_idx!=mate_arr_idx_same_chr and (abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag)) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(dist)>MAX_REF_DIST_SAME_CHR)){ // different chromosomes with near reference distance
+						if(same_orient_flag and ((mate_arr_idx!=mate_arr_idx_same_chr and (abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag)) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and dist>MAX_REF_DIST_SAME_CHR))){ // different chromosomes with near reference distance
+						//if(abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR){ // different chromosomes with near reference distance
 							mate_arr_idx = mate_arr_idx_same_chr;
 							mate_clip_end_flag = mate_clip_end_flag_same_chr;
 							query_skip_flag = true;
-						}else if(same_orient_flag and (mate_arr_idx==mate_arr_idx_same_chr and mate_clip_end_flag==mate_clip_end_flag_same_chr and self_overlap_flag==false and abs(min_dist_same_chr)<=MAX_REF_DIST_SAME_CHR and abs(min_ref_dist_same_chr)>MAX_REF_DIST_SAME_CHR)){
+						}else if(same_orient_flag and mate_arr_idx==mate_arr_idx_same_chr and mate_clip_end_flag==mate_clip_end_flag_same_chr and self_overlap_flag==false and abs(min_dist_same_chr)<=MAX_REF_DIST_SAME_CHR and abs(min_ref_dist_same_chr)>MAX_REF_DIST_SAME_CHR){
 							mate_arr_idx = mate_arr_idx_same_chr;
 							mate_clip_end_flag = mate_clip_end_flag_same_chr;
 							ref_skip_flag = true;
 						}else{
-							//if(abs(dist)>MAX_REF_DIST_SAME_CHR and abs(min_dist_same_chr)>=MAX_REF_DIST_SAME_CHR and abs(min_dist_same_chr)<=maxVarRegSize and abs(min_ref_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(min_ref_dist_same_chr)<=maxVarRegSize){ // deleted on 2026-03-19
-							if((abs(dist)>=MAX_REF_DIST_SAME_CHR or abs(min_dist_same_chr)>=MAX_REF_DIST_SAME_CHR) and abs(min_dist_same_chr)<=maxVarRegSize and abs(min_ref_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(min_ref_dist_same_chr)<=maxVarRegSize){
+							if(abs(min_dist_same_chr)>=MAX_REF_DIST_SAME_CHR and abs(min_dist_same_chr)<=maxVarRegSize and abs(min_ref_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(min_ref_dist_same_chr)<=maxVarRegSize){
 								if(same_orient_flag){
 									if(abs(min_dist)>MAX_REF_DIST_SAME_CHR and abs(min_ref_dist)>MAX_REF_DIST_SAME_CHR){
 										if(dist>0){
@@ -1504,6 +1513,59 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 								}
 							}
 						}
+
+//						// prefer the segments on the same chromosome, deleted on 2026-05-11
+//						//if((mate_arr_idx!=mate_arr_idx_same_chr and (abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag)) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(dist)>MAX_REF_DIST_SAME_CHR)){ // different chromosomes with near reference distance, deleted on 2024-02-25
+//						//if((abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(dist)>MAX_REF_DIST_SAME_CHR)){ // different chromosomes with near reference distance, deleted on 2025-08-13
+//						//if((abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag) or (mate_arr_idx==mate_arr_idx_same_chr and ((abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(dist)>MAX_REF_DIST_SAME_CHR) or (overlap_flag and min_ref_dist_same_chr<0 and mate_queryseq_node->clip_aln->querylen<abs(min_ref_dist_same_chr))))){ // DUP, different chromosomes with near reference distance
+//						if(same_orient_flag and (abs(dist)>MAX_REF_DIST_SAME_CHR and ((abs(min_ref_dist_same_chr)<=MAX_REF_DIST_SAME_CHR or self_overlap_flag) or (mate_arr_idx==mate_arr_idx_same_chr and abs(min_dist_same_chr)>MAX_REF_DIST_SAME_CHR) or (overlap_flag and ((min_ref_dist_same_chr<0 and increase_direction==0) or (min_ref_dist_same_chr>0 and increase_direction==1)) and (self_overlap_flag==false or mate_queryseq_node->clip_aln->querylen<abs(min_ref_dist_same_chr)))))){ // DUP, different chromosomes with near reference distance
+//							mate_arr_idx = mate_arr_idx_same_chr;
+//							mate_clip_end_flag = mate_clip_end_flag_same_chr;
+//							query_skip_flag = true;
+//						}else if(same_orient_flag and (mate_arr_idx==mate_arr_idx_same_chr and mate_clip_end_flag==mate_clip_end_flag_same_chr and self_overlap_flag==false and abs(min_dist_same_chr)<=MAX_REF_DIST_SAME_CHR and abs(min_ref_dist_same_chr)>MAX_REF_DIST_SAME_CHR)){
+//							mate_arr_idx = mate_arr_idx_same_chr;
+//							mate_clip_end_flag = mate_clip_end_flag_same_chr;
+//							ref_skip_flag = true;
+//						}else{
+//							//if(abs(dist)>MAX_REF_DIST_SAME_CHR and abs(min_dist_same_chr)>=MAX_REF_DIST_SAME_CHR and abs(min_dist_same_chr)<=maxVarRegSize and abs(min_ref_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(min_ref_dist_same_chr)<=maxVarRegSize){ // deleted on 2026-03-19
+//							if((abs(dist)>=MAX_REF_DIST_SAME_CHR or abs(min_dist_same_chr)>=MAX_REF_DIST_SAME_CHR) and abs(min_dist_same_chr)<=maxVarRegSize and abs(min_ref_dist_same_chr)>MAX_REF_DIST_SAME_CHR and abs(min_ref_dist_same_chr)<=maxVarRegSize){
+//								if(same_orient_flag){
+//									if(abs(min_dist)>MAX_REF_DIST_SAME_CHR and abs(min_ref_dist)>MAX_REF_DIST_SAME_CHR){
+//										if(dist>0){
+//											mate_arr_idx = mate_arr_idx_same_chr;
+//											mate_clip_end_flag = mate_clip_end_flag_same_chr;
+//											query_skip_flag = true;
+//										}else{
+//											mate_arr_idx = mate_arr_idx_same_chr;
+//											mate_clip_end_flag = mate_clip_end_flag_same_chr;
+//											ref_skip_flag = true;
+//										}
+//									}
+//								}else{ // INV
+//									// get another segment
+//									if(mate_clip_end_flag==RIGHT_END){
+//										clip_end_flag3 = LEFT_END;
+//										clip_aln3 = mate_queryseq_node->clip_aln->left_aln;
+//									}else{
+//										clip_end_flag3 = RIGHT_END;
+//										clip_aln3 = mate_queryseq_node->clip_aln->right_aln;
+//									}
+//									if(clip_aln3){
+//										for(i=0; i<query_seqs.size(); i++){
+//											if(clip_aln3==query_seqs.at(i)->clip_aln and seq_id_arr[i]==0){
+//												id3 = i;
+//												break;
+//											}
+//										}
+//
+//										// if found, then update the variant signature
+//										if(id3!=-1 and queryseq_node->clip_aln->aln_orient==clip_aln3->aln_orient){
+//											inv_flag = true;
+//										}
+//									}
+//								}
+//							}
+//						}//
 					}
 				}
 
@@ -1746,7 +1808,7 @@ qcSigList_t* clipRegCluster::extractQcSigsSingleQueryClipReg(vector<struct query
 
 		return qcSigList_node;
 	}else{
-		for(i=1; i<qcSig_vec.size(); i++) delete qcSig_vec.at(i);
+		for(i=0; i<qcSig_vec.size(); i++) delete qcSig_vec.at(i);
 		vector<qcSig_t*>().swap(qcSig_vec);
 		return NULL;
 	}
@@ -1936,10 +1998,10 @@ vector<int8_t> clipRegCluster::computeQcMatchProfileSingleQueryClipReg(qcSigList
 	qcSig_t *qc_sig1, *qc_sig2;
 	bool matchFlag;
 
-	matchScore = GT_SIG_MATCH_SCORE;
-	mismatchScore = GT_SIG_MISMATCH_SCORE;
-	gapScore = GT_SIG_GAP_SCORE;
-	gapOpenScore = GT_SIG_GAP_OPEN_SCORE;
+	matchScore = MATCH_SCORE;
+	mismatchScore = MISMATCH_SCORE;
+	gapScore = GAP_SCORE;
+	gapOpenScore = GAP_OPEN_SCORE;
 
 	if(queryCluSig->qcSig_vec.size()>0 or seed_qcQuery->qcSig_vec.size()>0){
 		rowsNum = queryCluSig->qcSig_vec.size() + 1;
@@ -2018,8 +2080,9 @@ vector<int8_t> clipRegCluster::computeQcMatchProfileSingleQueryClipReg(qcSigList
 
 bool clipRegCluster::isQcSigMatchClipReg(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, int64_t var_startRefPos, int64_t var_endRefPos, int64_t max_dist_match_clip_pos, int32_t min_size_ignore_seqsim, double min_size_ratio_match_thres_clip, double size_ratio_match_thres, double seqsim_ratio_match_thres){
 	bool match_flag = false;
-	double size_ratio, overlap_ratio1, overlap_ratio2;
+	double size_ratio, overlap_ratio1, overlap_ratio2, seqsim_val;
 	int64_t ref_dist, ref_dist2, overlap_size;
+	vector<string> comp_seqs;
 
 	if(qc_sig and seed_qc_sig){
 		if((qc_sig->cigar_op==BAM_CINS and seed_qc_sig->cigar_op==BAM_CINS) or (qc_sig->cigar_op==BAM_CDEL and seed_qc_sig->cigar_op==BAM_CDEL)){ // indel
@@ -2042,10 +2105,21 @@ bool clipRegCluster::isQcSigMatchClipReg(qcSig_t *qc_sig, qcSig_t *seed_qc_sig, 
 						match_flag = true;
 					}
 				}else{ // pos
-					if(ref_dist<=max_dist_match_clip_pos){
+					if(ref_dist<=max_dist_match_clip_pos)
 						match_flag = true;
-					}
 				}
+			}
+		}else if(((qc_sig->cigar_op==BAM_CSOFT_CLIP or qc_sig->cigar_op==BAM_CHARD_CLIP) and (seed_qc_sig->cigar_op==BAM_CINS or seed_qc_sig->cigar_op==BAM_CDEL)) or ((seed_qc_sig->cigar_op==BAM_CSOFT_CLIP or seed_qc_sig->cigar_op==BAM_CHARD_CLIP) and (qc_sig->cigar_op==BAM_CINS or qc_sig->cigar_op==BAM_CDEL))){ // clipping vs indel
+			if(qc_sig->chrname.compare(seed_qc_sig->chrname)==0){
+				comp_seqs = extractQcSigCompSeqsClip(qc_sig, seed_qc_sig, MIN_CLIP_DIST_THRES, fai);
+				seqsim_val = computeVarseqSim(comp_seqs.at(0), comp_seqs.at(1));
+
+#if CLIP_REG_CLUSTER_DEBUG
+				cout << "clip vs indel: sim_val=" << seqsim_val << endl;
+#endif
+
+				if(seqsim_val>=seqsim_ratio_match_thres)
+					match_flag = true;
 			}
 		}else if(qc_sig->inv_flag and seed_qc_sig->inv_flag and qc_sig->cigar_op==CIGAR_OP_INV_CLIP and seed_qc_sig->cigar_op==CIGAR_OP_INV_CLIP){
 			if(qc_sig->chrname.compare(seed_qc_sig->chrname)==0){
