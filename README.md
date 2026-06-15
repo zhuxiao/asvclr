@@ -24,7 +24,7 @@ The main features of ASVCLR can be summarized as follows:
 * ASVCLR consists of three steps (or commands): `det`, `cns` and `call`. In `det` (detect) step, the indel regions and clipping regions are detected as candidate variant regions; and subsequently, in the `cns` (consensus) step, ASVCLR perform the consensus operation for each allele to generate the consensus sequences by using abPOA and wtdbg2 for these candidate indel regions and clipping regions, respectively; and finally, in the `call` step, these consensus sequences derived from indel regions and clipping regions are aligned back to local reference by using minimap2 to infer the variant locations and sequences.
 * ASVCLR extracts variant signatures in indel regions and clipping regions, respectively, and adopts an multi-allele-aware clustering for these regions to generate more accurate variant call results.
 * For clipping regions, ASVCLR uniforms the large INS/DEL and the clipping signatures prior to multi-allel-aware clustering for more accurate inference.
-* Split signatures are validated and merged to form the entire variant signature for more accurate multi-allele-aware clustering and variant calling.
+* Split signatures are validated and merged to form the entire variant signature for more accurate multi-allele-aware clustering and variant calling, and the soft-/hard- clipping signatures are allowed to match with large insertions (>=1kb).
 * ASVCLR perform the variant discovery according to multiple levels of data information, such as the alignment information of consensus sequences, the alignment information of re-consensused sequences, and the reads alignment information.
 
 For more detailed experiment information, please refer to [asvclr-experiments](https://github.com/zhuxiao/asvclr-experiments/).
@@ -91,7 +91,7 @@ $ asvclr all -x ccs --phasing -o out_dir ref.fa genome_sorted.bam
 Moreover, ASVCLR can be used to detect variants for some user-specified regions.
 ```sh
 # call variants in user-specified regions of reference: chr1, chr2:10000000-20000000, chr3:50000000-100000000
-$ asvclr all -x ccs -o out_dir ref.fa genome_sorted.bam chr1 chr2:10000000-20000000 chr3:50000000-100000000
+$ asvclr all -x ccs -o out_dir ref.fa genome_sorted.bam chr1 chr2:10000000-20000000 chr3:50m-100m
 ```
 Then, only the three regions `chr1`, `chr2:10000000-20000000` and `chr3:50000000-100000000` will be processed.
 
@@ -105,7 +105,7 @@ The help information can be shown:
 $ asvclr all
 Program: ASVCLR (multi-Allele-aware Structural Variant Caller for Long Reads)
 Version: 1.5.2 (using htslib 1.17)
-Compile: Apr 27 2026, 09:35:47
+Compile: Jun 15 2026, 15:24:08
 
 Usage: asvclr all [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -126,11 +126,11 @@ Options:
                  When it is not specified, -1 means the value will be
                  estimated to be max(2+floor(0.03*depth), 3).
    -x STR        sequencing technology preset: rs, ont, sq, ccs. [ccs]
-                         ccs: -i 0.9 -I 0.95 -N 0.1 -A 10 --gt-min-seqsim-merge 0.9
+                         ccs: -i 0.9 -I 0.95 -N 0.1 -A 15 --gt-min-seqsim-merge 0.9
                    sq/rs/ont: -i 0.75 -I 0.7 -N 0.2 -A 100 --gt-min-seqsim-merge 0.8
    -i FLOAT      minimal sequence similarity for variant match. [0.9]
-   -I FLOAT      minimal sequence similarity for merge [0.95]
-   -d INT        minimal reference distance for merge [300]
+   -I FLOAT      minimal sequence similarity for merge [0.7]
+   -d INT        minimal reference distance for merge [800]
                  Neighboring SVs with distance smaller than INT and sequence similarity
                  larger than FLOAT will be merged
    -r FLOAT      minimal ratio threshold of the largest split-alignment segment
@@ -178,7 +178,7 @@ Options:
                  Note that the process names should be comma-delimited and without blanks:
                  ["abpoa,wtdbg2"]
    --monitor_proc_names_call STR
-                 Process names to be monitored during BLAT alignment. These processes may
+                 Process names to be monitored during 'call' step. These processes may
                  have ultra-high CPU running time under some certain circumstances and
                  should be terminated in advance if they are computation intensive works.
                  Note that the process names should be comma-delimited and without blanks:
@@ -220,8 +220,8 @@ Example:
    # run the pipeline on the whole genome for PacBio CCS sequencing for tumor sample
    $ asvclr all -t 32 -x ccs -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam
 
-   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000
-   $ asvclr all -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000
+   # run the pipeline to analyze the user-specified regions: chr1, chr2:10000000-20000000, chr11-chrY
+   $ asvclr all -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10m-20m chr11-chrY
 ```
 where, the htslib version is the version of HTSlib installed on the machine.
 
@@ -231,7 +231,7 @@ Besides, the overall help information can be shown as below:
 $ asvclr
 Program: ASVCLR (multi-Allele-aware Structural Variant Caller for Long Reads)
 Version: 1.5.2 (using htslib 1.17)
-Compile: Apr 27 2026, 09:35:47
+Compile: Jun 15 2026, 15:24:08
 
 Usage:  asvclr <command> [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -256,8 +256,8 @@ Example:
    # run the pipeline for tumor sample
    $ asvclr all -x ccs -t 32 -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam
 
-   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000
-   $ asvclr all -x ccs -t 32 -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000
+   # run the pipeline to analyze user-specified regions: chr1, chr2:10000000-20000000, chr11-chrY
+   $ asvclr all -x ccs -t 32 -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10m-20m chr11-chrY
 ```
 
 
@@ -288,7 +288,7 @@ And the help information are shown below:
 $ asvclr det
 Program: ASVCLR (multi-Allele-aware Structural Variant Caller for Long Reads)
 Version: 1.5.2 (using htslib 1.17)
-Compile: Apr 27 2026, 09:35:47
+Compile: Jun 15 2026, 15:24:08
 
 Usage: asvclr det [options] <REF_FILE> <BAM_FILE> [Region ...]
 
@@ -343,8 +343,8 @@ Example:
    # run 'det' command for tumor sample
    $ asvclr det -t 32 -x ccs -m 20 -n 3 --tumor -o output ref.fa genome_sorted.bam
 
-   # run 'det' command to analyze the user-specified regions: chr1, chr2:10000000-20000000
-   $ asvclr det -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10000000-20000000
+   # run 'det' command to analyze the user-specified regions: chr1, chr2:10000000-20000000, chr11-chrY
+   $ asvclr det -t 32 -x ccs -m 20 -n 3 -o output ref.fa genome_sorted.bam chr1 chr2:10m-20m chr11-chrY
 ```
 
 ### `cns` Step
@@ -363,7 +363,7 @@ And the help information are shown below:
 $ asvclr cns
 Program: ASVCLR (multi-Allele-aware Structural Variant Caller for Long Reads)
 Version: 1.5.2 (using htslib 1.17)
-Compile: Apr 27 2026, 09:35:47
+Compile: Jun 15 2026, 15:24:08
 
 Usage: asvclr cns [options] <REF_FILE> <BAM_FILE>
 
@@ -379,7 +379,7 @@ Options:
                  When it is not specified, -1 means the value will be
                  estimated to be max(2+floor(0.03*depth), 3).
    -x STR        sequencing technology preset: rs, ont, sq, ccs. [ccs]
-                         ccs: -i 0.9 -I 0.95 -N 0.1 -A 10 --gt-min-seqsim-merge 0.9
+                         ccs: -i 0.9 -I 0.95 -N 0.1 -A 15 --gt-min-seqsim-merge 0.9
                    sq/rs/ont: -i 0.75 -I 0.7 -N 0.2 -A 100 --gt-min-seqsim-merge 0.8
    -i FLOAT      minimal sequence similarity for variant match. [0.9]
    -r FLOAT      minimal ratio threshold of the largest split-alignment segment
@@ -459,7 +459,7 @@ And the help information are shown below:
 $ asvclr call
 Program: ASVCLR (multi-Allele-aware Structural Variant Caller for Long Reads)
 Version: 1.5.2 (using htslib 1.17)
-Compile: Apr 27 2026, 09:35:47
+Compile: Jun 15 2026, 15:24:08
 
 Usage: asvclr call [options] <REF_FILE> <BAM_FILE>
 
@@ -475,11 +475,11 @@ Options:
                  When it is not specified, -1 means the value will be
                  estimated to be max(2+floor(0.03*depth), 3).
    -x STR        sequencing technology preset: rs, ont, sq, ccs. [ccs]
-                         ccs: -i 0.9 -I 0.95 -N 0.1 -A 10 --gt-min-seqsim-merge 0.9
+                         ccs: -i 0.9 -I 0.95 -N 0.1 -A 15 --gt-min-seqsim-merge 0.9
                    sq/rs/ont: -i 0.75 -I 0.7 -N 0.2 -A 100 --gt-min-seqsim-merge 0.8
    -i FLOAT      minimal sequence similarity for variant match. [0.9]
-   -I FLOAT      minimal sequence similarity for merge [0.95]
-   -d INT        minimal reference distance for merge [300]
+   -I FLOAT      minimal sequence similarity for merge [0.7]
+   -d INT        minimal reference distance for merge [800]
                  Neighboring SVs with distance smaller than INT and sequence similarity
                  larger than FLOAT will be merged
    -e INT        minimal clipping end size [200]. Clipping events
@@ -491,7 +491,7 @@ Options:
    -t INT        number of threads [0]. 0 for the maximal number
                  of threads in machine
    --monitor_proc_names_call STR
-                 Process names to be monitored during BLAT alignment. These processes may
+                 Process names to be monitored during 'call' step. These processes may
                  have ultra-high CPU running time under some certain circumstances and
                  should be terminated in advance if they are computation intensive works.
                  Note that the process names should be comma-delimited and without blanks:
