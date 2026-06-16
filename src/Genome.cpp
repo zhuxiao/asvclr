@@ -809,7 +809,7 @@ int Genome::processConsWork(){
 		// chr1_hg002_clr_20241218/2_cns/1/cns_1_1074689-1076105.fa, cns_1_3097653-3098167.fa, cns_1_670807-676101.fa, cns_1_1223650-1224865.fa, cns_1_7174821-7175786.fa, cns_1_8391251-8391639.fa
 		// cns_1_844226-845192.fa, cns_1_46679031-46679316.fa, cns_1_48187816-48187819, cns_1_44605948-44606254.fa, cns_1_30243897-30244578.fa
 		// clipReg_cns_chr1_114265459-114272005.fa
-//		if(cns_work_opt->contigfilename.compare("debug_tmp/2_cns/chr18/clipReg_cns_chr18_10929-11147.fa")==0){
+//		if(cns_work_opt->contigfilename.compare("debug_tmp/2_cns/X/cns_X_811154-811194.fa")==0){
 //			cout << "cnsfilename=" << cns_work_opt->contigfilename << endl;
 //		}else continue;
 

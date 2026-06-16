@@ -1668,7 +1668,6 @@ string getCallFileHeaderBed(string &sample){
 // get call file header line for INDEL which starts with '#'
 string getCallFileHeaderBedpe(string &sample){
 	string header_line;
-	// header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tSVType\tSVLen1\tSVLen2\tMateReg\tRef1\tAlt1\tRef2\tAlt2\tFORMAT\t" + sample;
 	header_line = "#Chr1\tStart1\tEnd1\tChr2\tStart2\tEnd2\tID\tSVType\tSVLen1\tSVLen2\tMateReg\tRef1\tAlt1\tRef2\tAlt2\tFORMAT\t" + sample;
 	return header_line;
 }
@@ -1682,6 +1681,7 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 	int32_t seq_len, bam_type;
 	char *p_seq;
 	vector<clipAlnData_t*> query_aln_segs;
+	clipAlnData_t *query_aln;
 	vector<string> query_seq_qual_vec;
 	struct querySeqInfoNode *q_node;
 	vector<struct alnSeg*> alnSegs;
@@ -1712,20 +1712,21 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 					qname = clipAlnDataVector.at(i)->queryname;
 					query_aln_segs = getQueryClipAlnSegs(qname, clipAlnDataVector);  // get query clip align segments
 
-	//				if(qname.compare("SRR8955953.6500851")==0){
-	//					cout << "i=" << i << ", qname=" << qname << endl;
-	//				}
+//					if(qname.compare("SRR8858465.1.77120")==0){
+//						cout << "i=" << i << ", qname=" << qname << endl;
+//					}
 
 					if(clip_reg_flag==false){
 						noHardClipIdx = getNoHardClipAlnItem(query_aln_segs, chrname, startRefPos_core, endRefPos_core);
 						if(noHardClipIdx!=-1){
-							query_seq_qual_vec = getQuerySeqWithSoftClipSeqs(query_aln_segs.at(noHardClipIdx), refseq, startRefPos, endRefPos, bam_type, clip_reg_flag);
-							query_aln_segs.at(noHardClipIdx)->query_checked_flag = true;
+							query_aln = query_aln_segs.at(noHardClipIdx);
+							query_seq_qual_vec = getQuerySeqWithSoftClipSeqs(query_aln, refseq, startRefPos, endRefPos, bam_type, clip_reg_flag);
+							query_aln->query_checked_flag = true;
 
-							if(query_seq_qual_vec.size()>0 and query_seq_qual_vec.at(0).length()>(size_t)minConReadLen and query_aln_segs.at(noHardClipIdx)->bam){
+							if(query_seq_qual_vec.size()>0 and query_seq_qual_vec.at(0).length()>(size_t)minConReadLen and query_aln->bam){
 								seq = query_seq_qual_vec.at(0);
 								q_node = new struct querySeqInfoNode();
-								q_node->clip_aln = query_aln_segs.at(noHardClipIdx);
+								q_node->clip_aln = query_aln;
 								q_node->qname = qname;
 								q_node->seq = seq;
 								q_node->selected_flag = true;
@@ -1734,13 +1735,13 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 								switch(bam_type){
 									case BAM_CIGAR_NO_DIFF_MD:
 										//alnSegs = generateAlnSegs(b);
-										alnSegs = generateAlnSegs2(query_aln_segs.at(noHardClipIdx)->bam, startRefPos, endRefPos);
+										alnSegs = generateAlnSegs2(query_aln->bam, startRefPos, endRefPos);
 										break;
 									case BAM_CIGAR_NO_DIFF_NO_MD:
 									case BAM_CIGAR_DIFF_MD:
 									case BAM_CIGAR_DIFF_NO_MD:
 										//alnSegs = generateAlnSegs_no_MD(b, refseq, startPos, endPos);
-										alnSegs = generateAlnSegs_no_MD2(query_aln_segs.at(noHardClipIdx)->bam, refseq, startRefPos, endRefPos);
+										alnSegs = generateAlnSegs_no_MD2(query_aln->bam, refseq, startRefPos, endRefPos);
 										break;
 									default:
 										cerr << __func__ << ": unknown bam type, error!" << endl;
@@ -1754,11 +1755,12 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 						}
 					}else{
 						for(j=0; j<query_aln_segs.size(); j++){
-							query_seq_qual_vec = getQuerySeqWithSoftClipSeqs(query_aln_segs.at(j), refseq, startRefPos, endRefPos, bam_type, clip_reg_flag);
-							if(query_seq_qual_vec.size()>0 and query_seq_qual_vec.at(0).length()>(size_t)minConReadLen and query_aln_segs.at(j)->bam){
+							query_aln = query_aln_segs.at(j);
+							query_seq_qual_vec = getQuerySeqWithSoftClipSeqs(query_aln, refseq, startRefPos, endRefPos, bam_type, clip_reg_flag);
+							if(query_seq_qual_vec.size()>0 and query_seq_qual_vec.at(0).length()>(size_t)minConReadLen and query_aln->bam){
 								seq = query_seq_qual_vec.at(0);
 								q_node = new struct querySeqInfoNode();
-								q_node->clip_aln = query_aln_segs.at(j);
+								q_node->clip_aln = query_aln;
 								q_node->qname = qname;
 								q_node->seq = seq;
 								q_node->selected_flag = true;
@@ -1766,12 +1768,12 @@ vector<struct querySeqInfoNode*> extractQueriesFromClipAlnDataVec(vector<clipAln
 								//q_node->seq_id = fq_node->seq_id;
 								switch(bam_type){
 									case BAM_CIGAR_NO_DIFF_MD:
-										alnSegs = generateAlnSegs2(query_aln_segs.at(j)->bam, startRefPos, endRefPos);
+										alnSegs = generateAlnSegs2(query_aln->bam, startRefPos, endRefPos);
 										break;
 									case BAM_CIGAR_NO_DIFF_NO_MD:
 									case BAM_CIGAR_DIFF_MD:
 									case BAM_CIGAR_DIFF_NO_MD:
-										alnSegs = generateAlnSegs_no_MD2(query_aln_segs.at(j)->bam, refseq, startRefPos, endRefPos);
+										alnSegs = generateAlnSegs_no_MD2(query_aln->bam, refseq, startRefPos, endRefPos);
 										break;
 									default:
 										cerr << __func__ << ": unknown bam type, error!" << endl;
@@ -4363,7 +4365,7 @@ vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, in
 		end_ref_pos = getEndRefPosAlnSeg(startRpos, op, tmp_cigar_len);
 		overlap_flag = isOverlappedPos(startRpos, end_ref_pos, startRefPos_paras, endRefPos_paras);
 
-//		if(startRpos>=1248050){
+//		if(startRpos>=startRefPos_paras){
 //			cout << "startRpos=" << startRpos << endl;
 //		}
 
@@ -4384,7 +4386,6 @@ vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, in
 					if(common_len==1 and seg_MD->opflag==BAM_CDIFF){
 						// change the mismatched reference base to query base
 						seg_MD->seg = "=ACMGRSVTWYHKDBN"[bam_seqi(seq_int, startQpos-1)];
-						//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, MD_MISMATCH, seg_MD->seg));
 						alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CDIFF, seg_MD->seg));
 					}else{
 						startmatch_idx = startRefPos_paras - startRpos;
@@ -4392,8 +4393,6 @@ vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, in
 						endmatch_idx = common_len - 1;
 						if(startRpos+common_len-1>endRefPos_paras)
 							endmatch_idx -= (startRpos+common_len-1) - endRefPos_paras;
-						//str_tmp = "";
-						//alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, common_len, BAM_CMATCH, str_tmp));
 						alnSegs.push_back(allocateAlnSeg(startRpos+startmatch_idx, startQpos+startmatch_idx, endmatch_idx-startmatch_idx+1, BAM_CEQUAL, ""));
 					}
 				}
@@ -4446,10 +4445,8 @@ vector<struct alnSeg*> generateAlnSegs2(bam1_t* b, int64_t startRefPos_paras, in
 				break;
 			case BAM_CSOFT_CLIP:
 			case BAM_CHARD_CLIP:
-				if(overlap_flag){
-					//str_tmp = to_string(tmp_cigar_len);
+				if(overlap_flag)
 					alnSegs.push_back(allocateAlnSeg(startRpos, startQpos, tmp_cigar_len, op, to_string(tmp_cigar_len)));
-				}
 				if(op==BAM_CSOFT_CLIP) startQpos += tmp_cigar_len;
 				if(++i<b->core.n_cigar){
 					op = bam_cigar_op(c[i]);
@@ -5658,13 +5655,13 @@ int64_t getEndRefPosAlnSeg(int64_t startRpos, int32_t opflag, int32_t op_len){
 
 	switch(opflag){
 		case BAM_CMATCH:
-			end_ref_pos = startRpos + op_len;
+			end_ref_pos = startRpos + op_len - 1;
 			break;
 		case BAM_CINS:
 			end_ref_pos = startRpos;
 			break;
 		case BAM_CDEL:
-			end_ref_pos = startRpos + op_len;
+			end_ref_pos = startRpos + op_len - 1;
 			break;
 		case BAM_CSOFT_CLIP:
 		case BAM_CHARD_CLIP:
@@ -5672,7 +5669,7 @@ int64_t getEndRefPosAlnSeg(int64_t startRpos, int32_t opflag, int32_t op_len){
 			break;
 		case BAM_CEQUAL:
 		case BAM_CDIFF:
-			end_ref_pos = startRpos + op_len;
+			end_ref_pos = startRpos + op_len - 1;
 			break;
 		case BAM_CREF_SKIP:
 			// unexpected events
@@ -5691,13 +5688,13 @@ int64_t getEndSubjectPosAlnSeg(int64_t startSubpos, int32_t opflag, int32_t op_l
 
 	switch(opflag){
 		case BAM_CMATCH:
-			end_sub_pos = startSubpos + op_len;
+			end_sub_pos = startSubpos + op_len - 1;
 			break;
 		case BAM_CINS:
 			end_sub_pos = startSubpos;
 			break;
 		case BAM_CDEL:
-			end_sub_pos = startSubpos + op_len;
+			end_sub_pos = startSubpos + op_len - 1;
 			break;
 		case BAM_CSOFT_CLIP:
 		case BAM_CHARD_CLIP:
@@ -5705,7 +5702,7 @@ int64_t getEndSubjectPosAlnSeg(int64_t startSubpos, int32_t opflag, int32_t op_l
 			break;
 		case BAM_CEQUAL:
 		case BAM_CDIFF:
-			end_sub_pos = startSubpos + op_len;
+			end_sub_pos = startSubpos + op_len - 1;
 			break;
 		case BAM_CREF_SKIP:
 			// unexpected events
@@ -5724,23 +5721,23 @@ int64_t getEndQueryPosAlnSeg(int64_t startQpos, int32_t opflag, int32_t op_len){
 
 	switch(opflag){
 		case BAM_CMATCH:
-			end_query_pos = startQpos + op_len;
+			end_query_pos = startQpos + op_len - 1;
 			break;
 		case BAM_CINS:
-			end_query_pos = startQpos + op_len;
+			end_query_pos = startQpos + op_len - 1;
 			break;
 		case BAM_CDEL:
 			end_query_pos = startQpos;
 			break;
 		case BAM_CSOFT_CLIP:
-			end_query_pos = startQpos + op_len;
+			end_query_pos = startQpos + op_len - 1;
 			break;
 		case BAM_CHARD_CLIP:
 			end_query_pos = startQpos;
 			break;
 		case BAM_CEQUAL:
 		case BAM_CDIFF:
-			end_query_pos = startQpos + op_len;
+			end_query_pos = startQpos + op_len - 1;
 			break;
 		case BAM_CREF_SKIP:
 			// unexpected events
@@ -6177,7 +6174,7 @@ struct seqsVec *smoothQuerySeqData(string &refseq, vector<struct querySeqInfoNod
 		seq = q_node->seq;
 		qname = q_node->qname;
 
-//		if(qname.compare("SRR11292123.1383556")==0){
+//		if(qname.compare("SRR8858465.1.77120")==0){
 //			cout << "i=" << i << ", qname=" << qname << endl;
 //		}
 
